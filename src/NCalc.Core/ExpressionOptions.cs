@@ -95,4 +95,9 @@ public enum ExpressionOptions
     /// Disables parsing of dates for faster parsing
     /// </summary>
     DontParseDates = 1 << 17,
+
+    /// <summary>
+    /// Support math operations (+/-) with DateTime and Timespan and between Timespans
+    /// </summary>
+    SupportTimeOperations = 1 << 18,
 }

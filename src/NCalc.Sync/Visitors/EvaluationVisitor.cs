@@ -2,6 +2,7 @@
 using NCalc.Exceptions;
 using NCalc.Handlers;
 using NCalc.Helpers;
+
 using static NCalc.Helpers.TypeHelper;
 
 namespace NCalc.Visitors;
@@ -102,9 +103,9 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 return Compare(left.Value, right.Value, ComparisonType.NotEqual);
 
             case BinaryExpressionType.Minus:
-                return MathHelper.Subtract(left.Value, right.Value, context);
+                return EvaluationHelper.Minus(left.Value, right.Value, context);
 
-            case BinaryExpressionType.Modulo:
+                case BinaryExpressionType.Modulo:
                 return MathHelper.Modulo(left.Value, right.Value, context);
 
             case BinaryExpressionType.Plus:
@@ -168,7 +169,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 return !EvaluationHelper.Like(leftValue, rightValue, context);
             }
         }
-		}
+        }
 
         return null;
     }

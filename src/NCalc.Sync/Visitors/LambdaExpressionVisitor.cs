@@ -1,10 +1,13 @@
 ﻿using System.Numerics;
 using System.Reflection;
+
 using ExtendedNumerics;
+
 using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Helpers;
 using NCalc.Reflection;
+
 using Linq = System.Linq.Expressions;
 using LinqExpression = System.Linq.Expressions.Expression;
 using LinqParameterExpression = System.Linq.Expressions.ParameterExpression;
@@ -106,8 +109,8 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 BinaryExpressionType.Lesser => WithCommonNumericType(left, right, LinqExpression.LessThan, expression.Type),
                 BinaryExpressionType.Greater => WithCommonNumericType(left, right, LinqExpression.GreaterThan, expression.Type),
                 BinaryExpressionType.Equal => WithCommonNumericType(left, right, LinqExpression.Equal, expression.Type),
-                BinaryExpressionType.Minus => _checked ? WithCommonNumericType(left, right, LinqExpression.SubtractChecked) : WithCommonNumericType(left, right, LinqExpression.Subtract),
-                BinaryExpressionType.Plus => _checked ? WithCommonNumericType(left, right, LinqExpression.AddChecked) : WithCommonNumericType(left, right, LinqExpression.Add),
+                BinaryExpressionType.Minus => _checked ? WithCommonNumericType(left, right, LinqExpression.SubtractChecked, BinaryExpressionType.Minus) : WithCommonNumericType(left, right, LinqExpression.Subtract, BinaryExpressionType.Minus),
+                BinaryExpressionType.Plus => _checked ? WithCommonNumericType(left, right, LinqExpression.AddChecked, BinaryExpressionType.Plus) : WithCommonNumericType(left, right, LinqExpression.Add, BinaryExpressionType.Plus),
                 BinaryExpressionType.Modulo => WithCommonNumericType(left, right, LinqExpression.Modulo),
                 BinaryExpressionType.Div => WithCommonNumericType(left, right, LinqExpression.Divide),
                 BinaryExpressionType.Times => _checked ? WithCommonNumericType(left, right, LinqExpression.MultiplyChecked) : WithCommonNumericType(left, right, LinqExpression.Multiply),
@@ -357,6 +360,53 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             if (right.Type == typeof(bool))
             {
                 right = LinqExpression.Condition(right, LinqExpression.Constant(1.0), LinqExpression.Constant(0.0));
+            }
+        }
+
+        if (_options.HasFlag(ExpressionOptions.SupportTimeOperations))
+        {
+            if ((left.Type == typeof(DateTime)) && (right.Type == typeof(TimeSpan)))
+            {
+                switch (expressionType)
+                {
+                    case BinaryExpressionType.Plus:
+                        MethodInfo? addMethod = typeof(DateTime).GetMethod("Add", [typeof(TimeSpan)]);
+                        if (addMethod != null)
+                        {
+                            return LinqExpression.Call(left, addMethod, right);
+                        }
+                        break;
+                    case BinaryExpressionType.Minus:
+                        MethodInfo? subtractMethod = typeof(DateTime).GetMethod("Subtract", [typeof(TimeSpan)]);
+                        if (subtractMethod != null)
+                        {
+                            return LinqExpression.Call(left, subtractMethod, right);
+                        }
+                        break;
+                }
+                return LinqExpression.Constant(0);
+            }
+            else
+            if ((left.Type == typeof(TimeSpan)) && (right.Type == typeof(TimeSpan)))
+            {
+                switch (expressionType)
+                {
+                    case BinaryExpressionType.Plus:
+                        MethodInfo? addMethod = typeof(TimeSpan).GetMethod("Add", [typeof(TimeSpan)]);
+                        if (addMethod != null)
+                        {
+                            return LinqExpression.Call(left, addMethod, right);
+                        }
+                        break;
+                    case BinaryExpressionType.Minus:
+                        MethodInfo? subtractMethod = typeof(TimeSpan).GetMethod("Subtract", [typeof(TimeSpan)]);
+                        if (subtractMethod != null)
+                        {
+                            return LinqExpression.Call(left, subtractMethod, right);
+                        }
+                        break;
+                }
+                return LinqExpression.Constant(0);
             }
         }
 

@@ -815,6 +815,84 @@ public class AdvFeatureTests
     }
 
     [Theory]
+    [InlineData("#2025/06/05# + #08:00:00#", new int[] { 2025, 6, 5, 8, 0, 0 })]
+    [InlineData("#2025/06/06# - #8:00:00#", new int[] { 2025, 6, 5, 16, 0, 0 })]
+    public void ShoudAddSubtractDateAndTime(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.SupportTimeOperations);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+        expression.AdvancedOptions.DateSeparator = "/";
+        expression.AdvancedOptions.DateOrder = AdvancedExpressionOptions.DateOrderKind.YMD;
+        var result = expression.Evaluate();
+
+        string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
+
+        DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4], expectedValue[5]);
+
+        Assert.Equal(expectedDate, result);
+    }
+
+    [Theory]
+    [InlineData("#2025/06/05# + #08:00:00#", new int[] { 2025, 6, 5, 8, 0, 0 })]
+    [InlineData("#2025/06/06# - #8:00:00#", new int[] { 2025, 6, 5, 16, 0, 0 })]
+    public void ShoudAddSubtractDateAndTimeLambda(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.SupportTimeOperations);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+        expression.AdvancedOptions.DateSeparator = "/";
+        expression.AdvancedOptions.DateOrder = AdvancedExpressionOptions.DateOrderKind.YMD;
+        var sut = expression.ToLambda<DateTime>();
+        var result = sut();
+
+        string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
+
+        DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4], expectedValue[5]);
+
+        Assert.Equal(expectedDate, result);
+    }
+
+    [Theory]
+    [InlineData("#8:00:00# + #08:00:00#", new int[] { 16, 0, 0 })]
+    [InlineData("#11:00:00# - #3:00:00#", new int[] { 8, 0, 0 })]
+    public void ShoudAddSubtractTimes(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.SupportTimeOperations);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+        expression.AdvancedOptions.TimeSeparator = ":";
+        expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
+        var result = expression.Evaluate();
+
+        string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
+
+        TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
+
+        Assert.Equal(expectedTime, result);
+    }
+
+    [Theory]
+    [InlineData("#8:00:00# + #08:00:00#", new int[] { 16, 0, 0 })]
+    [InlineData("#11:00:00# - #3:00:00#", new int[] { 8, 0, 0 })]
+    public void ShoudAddSubtractTimesLambda(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.SupportTimeOperations);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+        expression.AdvancedOptions.TimeSeparator = ":";
+        expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
+        var sut = expression.ToLambda<TimeSpan>();
+        var result = sut();
+
+        string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
+
+        TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
+
+        Assert.Equal(expectedTime, result);
+    }
+
+    [Theory]
     [InlineData("500.50", 0, 500.50)]
     [InlineData("500.50", 1, 500.50)]
     [InlineData("500.50", 2, 500.50)]
@@ -823,7 +901,6 @@ public class AdvFeatureTests
     [InlineData("500", 1, 500)]
     [InlineData("500", 2, 500)]
     [InlineData("500", 3, 500)]
-
     public void ShouldAcceptCurrencyCulture(string input, int position, double expectedValue)
     {
         string sym = CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol;
