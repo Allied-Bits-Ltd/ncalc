@@ -3,6 +3,8 @@
 Some of the behavior and support for advanced parsing features is controlled by the advanced options. This includes
 
 * Advanced date and time parsing
+* Parsing of humane period expressions
+* Basic calculations with dates and time spans
 * Currency support
 * Underscores in numbers and currency
 * Custom decimal and group separators in numbers and currency
@@ -73,11 +75,82 @@ The `HoursFormat` property lets you choose between
 
 When handling the 12-hour format, the parser will try values with and without a space before the am/pm value and with short (a/p) and normal (am/pm forms). This algorithm applies to all types of date formats including the built-in parsing.
 
-## Currency support 
+## Parsing of Humane Period Expressions
 
-This version of NCalc supports parsing of currency values (i.e., the numbers accompanied by the currency symbol or, in the case of Euro, by "EUR"). 
+AdvancedExpressionOptions makes it possible to write time periods in a humane form as a set of numbers and period identifiers. Example: "#321 yr 3 weeks 35 s#" (spaces are ignored). 
+
+The result of such parsing is expressed as a TimeSpan, suitable for date and timespan operations (see the next section).
+
+To enable Humane Period Expressions, include the `ParseHumanePeriods ` flag to the `Flags` property of an instance of the `AdvancedExpressionOptions` class:
+```c#
+var expression = new NCalc.Expression("$10000000 / 2");
+expression.AdvancedOptions = new NCalc.AdvancedExpressionOptions();
+expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+```
+
+You can use standard english words and abbreviations for periods:
+```c#
+readonly List<string> _periodYearIndicators = ["years", "year", "yrs", "yr", "y"];
+readonly List<string> _periodMonthIndicators = ["months", "month", "mon", "mos", "mo"];
+readonly List<string> _periodWeekIndicators = ["weeks", "week", "wks", "wk", "w"];
+readonly List<string> _periodDayIndicators = ["days", "day", "d"];
+readonly List<string> _periodHourIndicators = ["hours", "hour", "hrs", "hr", "h"];
+readonly List<string> _periodMinuteIndicators = ["minutes", "minute", "mins", "min", "m"];
+readonly List<string> _periodSecondIndicators = ["seconds", "second", "secs", "sec", "s"];
+readonly List<string> _periodMSecIndicators = ["msec", "ms"];
+```
+
+And you can also replace or amend those indicators with localized ones. Notes:
+1. More "complete" words must have precedence over abbreviations. Otherwise, the parser will match a shorter form and leave the rest to the next parser, which will fail.
+2. Use all lowercase - the parser will take a lowercase form of the parsed text and compare it with indicators in a case-sensitive manner for efficiency.
+3. Don't use the ending dot in abbreviations - the parser is aware of it and will skip it if the dot is present at the end. 
+
+Here's how to add German indicators and their abbreviations:
+```c#
+expression.AdvancedOptions.PeriodYearIndicators.Add("jahre"); 
+expression.AdvancedOptions.PeriodYearIndicators.Add("jahr");
+expression.AdvancedOptions.PeriodYearIndicators.Add("j");
+expression.AdvancedOptions.PeriodMonthIndicators.Add("monate");
+expression.AdvancedOptions.PeriodMonthIndicators.Add("monat");
+expression.AdvancedOptions.PeriodMonthIndicators.Add("mon");
+expression.AdvancedOptions.PeriodMonthIndicators.Add("m");
+expression.AdvancedOptions.PeriodWeekIndicators.Add("wochen");
+expression.AdvancedOptions.PeriodWeekIndicators.Add("woche");
+expression.AdvancedOptions.PeriodWeekIndicators.Add("wo");
+expression.AdvancedOptions.PeriodWeekIndicators.Add("w");
+expression.AdvancedOptions.PeriodDayIndicators.Add("tage");
+expression.AdvancedOptions.PeriodDayIndicators.Add("tag");
+expression.AdvancedOptions.PeriodDayIndicators.Add("tg");
+expression.AdvancedOptions.PeriodDayIndicators.Add("t");
+expression.AdvancedOptions.PeriodHourIndicators.Add("stunden");
+expression.AdvancedOptions.PeriodHourIndicators.Add("stunde");
+expression.AdvancedOptions.PeriodHourIndicators.Add("std");
+expression.AdvancedOptions.PeriodMinuteIndicators.Add("minuten");
+expression.AdvancedOptions.PeriodMinuteIndicators.Add("minute");
+expression.AdvancedOptions.PeriodMinuteIndicators.Add("min");
+expression.AdvancedOptions.PeriodSecondIndicators.Add("sekunden");
+expression.AdvancedOptions.PeriodSecondIndicators.Add("sekunde");
+expression.AdvancedOptions.PeriodSecondIndicators.Add("sek");
+expression.AdvancedOptions.PeriodSecondIndicators.Add("s");
+expression.AdvancedOptions.PeriodMSecIndicators.Add("ms");
+```
+
+## Basic Calculations with Dates and Time Spans
+
+This version of NCalc supports basic operations (add, subtract) between a DateTime and a TimeSpan, as well as between two TimeSpans. 
+To enable date and timespan calculations, include the `SupportTimeOperations ` flag to the `Flags` property of an instance of the `AdvancedExpressionOptions` class:
+```c#
+var expression = new NCalc.Expression("$10000000 / 2");
+expression.AdvancedOptions = new NCalc.AdvancedExpressionOptions();
+expression.AdvancedOptions.Flags |= NCalc.AdvExpressionOptions.SupportTimeOperations;
+```
+
+When the calculations are enabled, you can write expressions like "#11:00:00# - #3:00:00#" or "#01/01/2001# + #1yr 3mon 5days#", and they will produce a new TimeSpan or DateTime depending on the type of the left operand.
+
+## Currency Support 
+
+This version of NCalc supports parsing of currency values (i.e., the numbers accompanied by the currency symbol, the currency name, and, in the case of Euro, by "EUR" specifically). 
 To enable currency support, include the `AcceptCurrencySymbol ` flag to the `Flags` property of an instance of the `AdvancedExpressionOptions` class:
-
 ```c#
 var expression = new NCalc.Expression("$10000000 / 2");
 expression.AdvancedOptions = new NCalc.AdvancedExpressionOptions();
@@ -91,11 +164,11 @@ The `CurrencySymbolsType` type property lets you choose between
 * `FromCulture` : The symbol defined in the current culture (which is either CultureInfo.CurrentCulture or a custom culture that you specify in the constructor or the `CultureInfo` property) is used. If the symbol is for Euro and EUR is not detected as a second symbol, "EUR" is used as a third symbol.
 * `Custom` : Two symbols can be set via the `CurrencySymbol`, `CurrencySymbol2`, and `CurrencySymbol3`.
 
-## Underscores in numbers and currency
+## Underscores in Numbers and Currency
 
 This version of NCalc supports underscore characters (`_`) in numeric literals. Such characters are treated as whitespace and are stripped when the value is converted into a number. Modern programming languages support this notation for better readability of large numbers.
 
-**NOTE:** Support for underscores requires [a custom version of the Parlot parser as provided by Allied Bits Ltd](https://github.com/Allied-Bits-Ltd/parlot).
+**NOTE:** Support for underscores requires [a custom version of the Parlot parser as provided by Allied Bits Ltd](https://github.com/Allied-Bits-Ltd/parlot) in the `ws_in_num2` or `ABCalc` branches.
 
 To enable underscores in numbers, include the `AcceptUnderscoresInNumbers` flag to the `Flags` property of an instance of the `AdvancedExpressionOptions` class:
 
@@ -147,7 +220,7 @@ expression.AdvancedOptions.Flags |= AdvExpressionOptions.UseResultReference;
 expression.EvaluateFunction += (string name, NCalc.Handlers.FunctionArgs args) => { if (name.Equals("@")) args.Result = 42; };
 ```
 
-## Percent calculations
+## Percent Calculations
 This version of NCalc supports operations with percent. To enable percent calculations, include the `CalculatePercent` flag to the `Flags` property of an instance of the `AdvancedExpressionOptions` class:
 
 ```c#

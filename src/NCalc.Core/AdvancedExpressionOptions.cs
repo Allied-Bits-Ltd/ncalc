@@ -41,6 +41,11 @@
         /// When set, the current locale's currency symbol is accepted to indicate a decimal number (the symbol itself is skipped).
         /// </summary>
         AcceptCurrencySymbol = 1 << 6,
+
+        /// <summary>
+        /// When enabled, supports parsing of periods expressed in a humane form like 3y7mo5w7d3h2min18s
+        /// </summary>
+        ParseHumanePeriods = 1 << 7
     }
 
     public class AdvancedExpressionOptions : IFormatProvider
@@ -87,10 +92,34 @@
         string _decimalSeparator = ".";
         string _numberGroupSeparator = "";
         string _currencyDecimalSeparator = ".";
-        string _currencyNumberGroupSeparator = "";
-        string _currencySymbol = "";
-        string _currencySymbol2 = "";
-        string _currencySymbol3 = "";
+        string _currencyNumberGroupSeparator = string.Empty;
+        string _currencySymbol = string.Empty;
+        string _currencySymbol2 = string.Empty;
+        string _currencySymbol3 = string.Empty;
+
+        readonly List<string> _periodYearIndicators = ["years", "year", "yrs", "yr", "y"];
+        readonly List<string> _periodMonthIndicators = ["months", "month", "mon", "mos", "mo"];
+        readonly List<string> _periodWeekIndicators = ["weeks", "week", "wks", "wk", "w"];
+        readonly List<string> _periodDayIndicators = ["days", "day", "d"];
+        readonly List<string> _periodHourIndicators = ["hours", "hour", "hrs", "hr", "h"];
+        readonly List<string> _periodMinuteIndicators = ["minutes", "minute", "mins", "min", "m"];
+        readonly List<string> _periodSecondIndicators = ["seconds", "second", "secs", "sec", "s"];
+        readonly List<string> _periodMSecIndicators = ["msec", "ms"];
+
+        //
+        // Period*Indicators contain the lists of literals recognized as a period indicator for a certain type of period
+        // When adding custom / localized indicators to the lists, add them in all lowercase -
+        // the comparer in the parser compares a lowercase user-provided value with the indicators case-sensitively (for performance)
+        //
+
+        public List<string> PeriodYearIndicators => _periodYearIndicators;
+        public List<string> PeriodMonthIndicators => _periodMonthIndicators;
+        public List<string> PeriodWeekIndicators => _periodWeekIndicators;
+        public List<string> PeriodDayIndicators => _periodDayIndicators;
+        public List<string> PeriodHourIndicators => _periodHourIndicators;
+        public List<string> PeriodMinuteIndicators => _periodMinuteIndicators;
+        public List<string> PeriodSecondIndicators => _periodSecondIndicators;
+        public List<string> PeriodMSecIndicators => _periodMSecIndicators;
 
         CultureInfo? _cultureInfo;
 
