@@ -1,5 +1,4 @@
-﻿
-namespace NCalc
+﻿namespace NCalc
 {
     [Flags]
     public enum AdvExpressionOptions
@@ -7,14 +6,14 @@ namespace NCalc
         None = 0,
 
         /// <summary>
-        /// When extended options are used, disables the use of the '/' character during parsing of dates.
-        /// When the flag is not set and extended options are used, both the '/' and the date separator specified in the extended options ('.', usually) is used.
+        /// When extended options are used, disables the use of the date separator character of the current culture during parsing of dates.
+        /// When the flag is not set and extended options are used, both the date separator character of the current culture and the date separator specified in the extended options ('.', usually) is used.
         /// </summary>
         SkipBuiltInDateSeparator = 1 << 0,
 
         /// <summary>
-        /// When extended options are used, disables the use of the ':' character during parsing of times.
-        /// When the flag is not set and extended options are used, both the ':' and the time separator specified in the extended options' CultureInfo is used.
+        /// When extended options are used, disables the use of the time separator character of the current culture during parsing of times.
+        /// When the flag is not set and extended options are used, both the time separator character of the current culture and the time separator specified in the extended options is used.
         /// </summary>
         SkipBuiltInTimeSeparator = 1 << 1,
 
@@ -387,23 +386,32 @@ namespace NCalc
             currencySymbol = string.Empty;
             currencySymbol2 = string.Empty;
             currencySymbol3 = string.Empty;
-            if (CurrencySymbolsType == CurrencySymbolType.CurrentCulture)
+            if ((CurrencySymbolsType == CurrencySymbolType.CurrentCulture) || (CurrencySymbolsType == CurrencySymbolType.FromCulture))
             {
+                CultureInfo culture;
+                if ((CurrencySymbolsType == CurrencySymbolType.FromCulture) && (_cultureInfo != null))
+                    culture = _cultureInfo;
+                else
+                    culture = CultureInfo.CurrentCulture;
+
                 currencySymbol = CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol;
-                var ri = new RegionInfo(CultureInfo.CurrentCulture.LCID);
-                currencySymbol2 = ri.ISOCurrencySymbol;
-                if ((currencySymbol.Length > 0) && (currencySymbol[0] == '\x20ac') && !"EUR".Equals(currencySymbol2)) // Euro character
-                    currencySymbol3 = "EUR";
-            }
-            else
-            if (CurrencySymbolsType == CurrencySymbolType.FromCulture)
-            {
-                var culture = ((_cultureInfo is not null) ? _cultureInfo : CultureInfo.CurrentCulture);
-                currencySymbol = culture.NumberFormat.CurrencySymbol;
-                var ri = new RegionInfo(culture.LCID);
-                currencySymbol2 = ri.ISOCurrencySymbol;
-                if ((currencySymbol.Length > 0) && (currencySymbol[0] == '\x20ac') && !"EUR".Equals(currencySymbol2)) // Euro character
-                    currencySymbol3 = "EUR";
+
+                try
+                {
+                    RegionInfo ri;
+                    int lcid = culture.LCID;
+                    if (!culture.IsNeutralCulture && !string.IsNullOrEmpty(culture.Name))
+                    {
+                        ri = new RegionInfo(culture.LCID);
+                        currencySymbol2 = ri.ISOCurrencySymbol;
+                    }
+                    if ((currencySymbol.Length > 0) && (currencySymbol[0] == '\x20ac') && !"EUR".Equals(currencySymbol2)) // Euro character
+                        currencySymbol3 = "EUR";
+                }
+                catch (ArgumentException)
+                {
+                    // ignore the exception related to the culture being CultureInfo.LOCALE_INVARIANT, CultureInfo.LOCALE_NEUTRAL, CultureInfo.LOCALE_CUSTOM_DEFAULT, or CultureInfo.LOCALE_CUSTOM_UNSPECIFIED
+                }
             }
             else
             if (CurrencySymbolsType == CurrencySymbolType.Custom)
