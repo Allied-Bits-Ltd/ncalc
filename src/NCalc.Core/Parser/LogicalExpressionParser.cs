@@ -82,9 +82,10 @@ public static class LogicalExpressionParser
          * relational     => shift ( ( ">=" | ">" | ... ) shift )* ;
          * shift          => additive ( ( "<<" | ">>" ) additive )* ;
          * additive       => multiplicative ( ( "-" | "+" ) multiplicative )* ;
-         * multiplicative => exponential ( "/" | "*" | "%") exponential )* ;
-         * exponential    => unary ( "**" ) unary )* ;
-         * unary          => ( "-" | "not" | "!" ) primary
+         * multiplicative => unary ( "/" | "*" | "%") unary )* ;
+         * unary          => ( "-" | "not" | "!" ) exponential ;
+         * exponential    => factorial ( "**" ) factorial )* ;
+         * factorial      => primary ( "!" )* ;
          *
          * primary        => NUMBER
          *                  | STRING
