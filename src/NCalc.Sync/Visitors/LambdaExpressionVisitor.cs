@@ -119,7 +119,8 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 BinaryExpressionType.BitwiseXOr => LinqExpression.ExclusiveOr(left, right),
                 BinaryExpressionType.LeftShift => LinqExpression.LeftShift(left, right),
                 BinaryExpressionType.RightShift => LinqExpression.RightShift(left, right),
-                BinaryExpressionType.Exponentiation => LinqExpression.Power(left, right),
+                BinaryExpressionType.Exponentiation => LinqExpression.Power(LinqExpression.Convert(left, typeof(double)), LinqExpression.Convert(right, typeof(double))),
+                BinaryExpressionType.Factorial => Factorial(left, right),
                 BinaryExpressionType.Unknown => throw new ArgumentOutOfRangeException(),
                 _ => throw new ArgumentOutOfRangeException()
             };
@@ -343,6 +344,107 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         return null;
     }
 
+    /*private static Expression<Func<T, BigInteger>> ConvertToBigInteger<T>(Expression<Func<T, long>> longExpr)
+    {
+        // Get the parameter (x)
+        var param = longExpr.Parameters[0];
+
+        // Create the constructor call: new BigInteger(longExpr.Body)
+        var constructor = typeof(BigInteger).GetConstructor(new[] { typeof(long) });
+        var newExpr = LinqExpression.New(constructor!, longExpr.Body);
+
+        // Build the new lambda expression
+        return LinqExpression.Lambda<Func<T, BigInteger>>(newExpr, param);
+    }
+*/
+
+    private static Linq.Expression<Func<BigInteger>> ConvertToBigInteger(LinqExpression intExpr)
+    {
+        if (intExpr.Type != typeof(int) && intExpr.Type != typeof(long) && intExpr.Type != typeof(uint) && intExpr.Type != typeof(ulong) && intExpr.Type != typeof(string) && intExpr.Type != typeof(decimal) && intExpr.Type != typeof(double) && intExpr.Type != typeof(float))
+            throw new InvalidOperationException("Expression must return a signed or unsigned int or long.");
+
+        // Create the constructor call: new BigInteger(longExpr.Body)
+        if (intExpr.Type == typeof(string))
+        {
+            MethodInfo? methodInfo = typeof(BigInteger).GetMethod("Parse", [typeof(string)]);
+            if (methodInfo == null)
+                throw new InvalidOperationException($"Could not find a BigInteger Parse method that takes a parameter of type '{intExpr.Type}'");
+            var newExpr = LinqExpression.Call(methodInfo, intExpr);
+
+            // Build the new lambda expression
+            return LinqExpression.Lambda<Func<BigInteger>>(newExpr);
+        }
+        else
+        {
+            ConstructorInfo? constructor = null;
+            if (intExpr.Type == typeof(Int32))
+                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(int) });
+            if (intExpr.Type == typeof(UInt32))
+                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(uint) });
+            if (intExpr.Type == typeof(Int64))
+                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(long) });
+            if (intExpr.Type == typeof(UInt64))
+                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(ulong) });
+            if (intExpr.Type == typeof(decimal))
+                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(decimal) });
+            if (intExpr.Type == typeof(double))
+                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(double) });
+            if (intExpr.Type == typeof(float))
+                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(float) });
+
+            if (constructor == null)
+                throw new InvalidOperationException($"Could not find a BigInteger constructor that takes a parameter of type '{intExpr.Type}'");
+            var newExpr = LinqExpression.New(constructor!, intExpr);
+
+            // Build the new lambda expression
+            return LinqExpression.Lambda<Func<BigInteger>>(newExpr);
+        }
+    }
+
+    private LinqExpression Factorial(LinqExpression left, LinqExpression right)
+    {
+        left = LinqUtils.UnwrapNullable(left);
+        right = LinqUtils.UnwrapNullable(right);
+
+        if (left.Type == typeof(BigInteger) && right.Type == typeof(BigInteger))
+        {
+            MethodInfo? factorialMethod = typeof(MathHelper).GetMethod("Factorial", [typeof(object), typeof(object), typeof(MathHelperOptions)]);
+            if (factorialMethod != null)
+            {
+                return LinqExpression.Call(factorialMethod, left, right, LinqExpression.Constant(new MathHelperOptions()));
+            }
+        }
+        else
+        if (left.Type == typeof(BigInteger))
+        {
+            MethodInfo? factorialMethod = typeof(MathHelper).GetMethod("Factorial", [typeof(object), typeof(object), typeof(MathHelperOptions)]);
+            if (factorialMethod != null)
+            {
+                Linq.Expression<Func<long, BigInteger>> expr = x => new BigInteger(x);
+                return LinqExpression.Call(factorialMethod, left, ConvertToBigInteger(right), LinqExpression.Constant(new MathHelperOptions()));
+            }
+        }
+        else
+        if (right.Type == typeof(BigInteger))
+        {
+            MethodInfo? factorialMethod = typeof(MathHelper).GetMethod("Factorial", [typeof(object), typeof(object), typeof(MathHelperOptions)]);
+            if (factorialMethod != null)
+            {
+                Linq.Expression<Func<long, BigInteger>> expr = x => new BigInteger(x);
+                return LinqExpression.Call(factorialMethod, ConvertToBigInteger(left), right, LinqExpression.Constant(new MathHelperOptions()));
+            }
+        }
+        else
+        {
+            MethodInfo? factorialMethod = typeof(MathHelper).GetMethod("Factorial", [typeof(long), typeof(long), typeof(MathHelperOptions)]);
+            if (factorialMethod != null)
+            {
+                return LinqExpression.Call(factorialMethod, LinqExpression.Convert(left, typeof(long)), LinqExpression.Convert(right, typeof(long)), LinqExpression.Constant(new MathHelperOptions()));
+            }
+        }
+        return LinqExpression.Constant(0);
+    }
+
     private LinqExpression WithCommonNumericType(LinqExpression left, LinqExpression right,
         Func<LinqExpression, LinqExpression, LinqExpression> action,
         BinaryExpressionType expressionType = BinaryExpressionType.Unknown)
@@ -515,8 +617,8 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                         return action(LinqExpression.Multiply(left, cents), right);
                 case BinaryExpressionType.Plus:
                 case BinaryExpressionType.Minus:
-                    LinqExpression multiplyResult = LinqExpression.Divide(_checked ? LinqExpression.MultiplyChecked(left, right) : LinqExpression.Multiply(left, right), cents);
-                    return action(left, multiplyResult);
+                    LinqExpression actionResult = action(cents, right);
+                    return LinqExpression.Divide(_checked ? LinqExpression.MultiplyChecked(left, actionResult) : LinqExpression.Multiply(left, actionResult), cents);
             }
             return action(left, right);
         }
