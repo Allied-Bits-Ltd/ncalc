@@ -1,7 +1,9 @@
 using NCalc.Domain;
 using NCalc.Factories;
 using NCalc.Tests.TestData;
+
 using Newtonsoft.Json;
+
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace NCalc.Tests;

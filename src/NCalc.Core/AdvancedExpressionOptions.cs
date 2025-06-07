@@ -198,8 +198,6 @@
             }
         }
 
-        public static AdvancedExpressionOptions DefaultOptions = new();
-
         public AdvancedExpressionOptions() : this(CultureInfo.CurrentCulture)
         {
         }
@@ -258,7 +256,11 @@
             _decimalSeparator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
             if (string.IsNullOrEmpty(_decimalSeparator))
                 _decimalSeparator = Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator.ToString();
+
             _numberGroupSeparator = CultureInfo.CurrentCulture.NumberFormat.NumberGroupSeparator;
+            if (string.IsNullOrEmpty(_numberGroupSeparator))
+                _numberGroupSeparator = Parlot.Fluent.NumberLiterals.DefaultGroupSeparator.ToString();
+
             _currencyDecimalSeparator = CultureInfo.CurrentCulture.NumberFormat.CurrencyDecimalSeparator;
             _currencyNumberGroupSeparator = CultureInfo.CurrentCulture.NumberFormat.CurrencyGroupSeparator;
         }

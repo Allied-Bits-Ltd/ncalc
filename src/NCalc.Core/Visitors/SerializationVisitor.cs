@@ -1,4 +1,5 @@
 ﻿using NCalc.Domain;
+
 using ValueType = NCalc.Domain.ValueType;
 
 namespace NCalc.Visitors;
@@ -27,37 +28,54 @@ public class SerializationVisitor : ILogicalExpressionVisitor<string>
     public string Visit(BinaryExpression expression)
     {
         var resultBuilder = new StringBuilder();
-        resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression));
 
-        resultBuilder.Append(expression.Type switch
+        if (expression.Type == BinaryExpressionType.Factorial)
         {
-            BinaryExpressionType.And => "and ",
-            BinaryExpressionType.Or => "or ",
-            BinaryExpressionType.Div => "/ ",
-            BinaryExpressionType.Equal => "= ",
-            BinaryExpressionType.Greater => "> ",
-            BinaryExpressionType.GreaterOrEqual => ">= ",
-            BinaryExpressionType.Lesser => "< ",
-            BinaryExpressionType.LesserOrEqual => "<= ",
-            BinaryExpressionType.Minus => "- ",
-            BinaryExpressionType.Modulo => "% ",
-            BinaryExpressionType.NotEqual => "!= ",
-            BinaryExpressionType.Plus => "+ ",
-            BinaryExpressionType.Times => "* ",
-            BinaryExpressionType.BitwiseAnd => "& ",
-            BinaryExpressionType.BitwiseOr => "| ",
-            BinaryExpressionType.BitwiseXOr => "^ ",
-            BinaryExpressionType.LeftShift => "<< ",
-            BinaryExpressionType.RightShift => ">> ",
-            BinaryExpressionType.Exponentiation => "** ",
-            BinaryExpressionType.In => "in ",
-            BinaryExpressionType.NotIn => "not in ",
-            BinaryExpressionType.Like => "like ",
-            BinaryExpressionType.NotLike => "not like ",
-            BinaryExpressionType.Unknown => "unknown ",
-            _ => throw new ArgumentOutOfRangeException()
-        });
+            if ((expression.RightExpression is ValueExpression valueExpression) && (valueExpression.Type == ValueType.Integer) && (valueExpression.Value != null))
+            {
+                resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, false));
 
+                var step = (int)valueExpression.Value;
+                StringBuilder builder = new StringBuilder(step + 1);
+                for (int i = 0; i < step; i++)
+                    builder.Append('!');
+                resultBuilder.Append(builder);
+                return resultBuilder.ToString();
+            }
+        }
+        else
+        {
+            resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression));
+
+            resultBuilder.Append(expression.Type switch
+            {
+                BinaryExpressionType.And => "and ",
+                BinaryExpressionType.Or => "or ",
+                BinaryExpressionType.Div => "/ ",
+                BinaryExpressionType.Equal => "= ",
+                BinaryExpressionType.Greater => "> ",
+                BinaryExpressionType.GreaterOrEqual => ">= ",
+                BinaryExpressionType.Lesser => "< ",
+                BinaryExpressionType.LesserOrEqual => "<= ",
+                BinaryExpressionType.Minus => "- ",
+                BinaryExpressionType.Modulo => "% ",
+                BinaryExpressionType.NotEqual => "!= ",
+                BinaryExpressionType.Plus => "+ ",
+                BinaryExpressionType.Times => "* ",
+                BinaryExpressionType.BitwiseAnd => "& ",
+                BinaryExpressionType.BitwiseOr => "| ",
+                BinaryExpressionType.BitwiseXOr => "^ ",
+                BinaryExpressionType.LeftShift => "<< ",
+                BinaryExpressionType.RightShift => ">> ",
+                BinaryExpressionType.Exponentiation => "** ",
+                BinaryExpressionType.In => "in ",
+                BinaryExpressionType.NotIn => "not in ",
+                BinaryExpressionType.Like => "like ",
+                BinaryExpressionType.NotLike => "not like ",
+                BinaryExpressionType.Unknown => "unknown ",
+                _ => throw new ArgumentOutOfRangeException()
+            });
+        }
         resultBuilder.Append(EncapsulateNoValue(expression.RightExpression));
         return resultBuilder.ToString();
     }
@@ -153,18 +171,42 @@ public class SerializationVisitor : ILogicalExpressionVisitor<string>
         return resultBuilder.ToString();
     }
 
-    protected virtual string EncapsulateNoValue(LogicalExpression expression)
+    protected virtual string EncapsulateNoValue(LogicalExpression expression, bool appendSpace = true)
     {
         if (expression is ValueExpression valueExpression)
-            return valueExpression.Accept(this);
+        {
+            string result = valueExpression.Accept(this);
+            if (!appendSpace)
+                result = result.TrimEnd();
+            return result;
+        }
 
-        var resultBuilder = new StringBuilder().Append('(');
+        var resultBuilder = new StringBuilder();
+
+        // Factorials don't need parenthesis around them
+        bool parensNeeded = true;
+
+        if (((expression is BinaryExpression binaryExpression) && (binaryExpression.Type == BinaryExpressionType.Factorial)) || (expression is PercentExpression))
+            parensNeeded = false;
+
+        if (parensNeeded)
+            resultBuilder.Append('(');
         resultBuilder.Append(expression.Accept(this));
 
         while (resultBuilder[^1] == ' ')
             resultBuilder.Length--;
 
-        resultBuilder.Append(") ");
+        if (parensNeeded)
+        {
+            if (appendSpace)
+                resultBuilder.Append(") ");
+            else
+                resultBuilder.Append(')');
+        }
+        else
+        if (appendSpace)
+            resultBuilder.Append(' ');
+
         return resultBuilder.ToString();
     }
 }

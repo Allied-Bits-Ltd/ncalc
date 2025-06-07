@@ -21,6 +21,7 @@ public enum BinaryExpressionType
     LeftShift,
     RightShift,
     Exponentiation,
+    Factorial,
     In,
     NotIn,
     Like,

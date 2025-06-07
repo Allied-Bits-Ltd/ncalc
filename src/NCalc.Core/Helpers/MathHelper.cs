@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+
 using ExtendedNumerics;
 
 namespace NCalc.Helpers;
@@ -14,8 +15,8 @@ public static class MathHelper
     private static readonly Func<dynamic, dynamic, object> MultiplyFunc = (a, b) => a * b;
     private static readonly Func<dynamic, dynamic, object> DivideFunc = (a, b) => a / b;
 
-    private static readonly Func<dynamic, dynamic, object> AddPercentFunc = (a, b) => a + (a * b/100);
-    private static readonly Func<dynamic, dynamic, object> SubtractPercentFunc = (a, b) => a - (a * b / 100);
+    private static readonly Func<dynamic, dynamic, object> AddPercentFunc = (a, b) => a * (100 + b) / 100; // a + (a * b/100);
+    private static readonly Func<dynamic, dynamic, object> SubtractPercentFunc = (a, b) => a * (100 - b) / 100; //a - (a * b / 100);
     private static readonly Func<dynamic, dynamic, object> MultiplyPercentFunc = (a, b) => a * b / 100;
     private static readonly Func<dynamic, dynamic, object> DividePercentFunc = (a, b) => a * 100 / b;
 
@@ -32,7 +33,7 @@ public static class MathHelper
 
     private static readonly Func<dynamic, dynamic, object> AddPercentFuncChecked = (a, b) =>
     {
-        var res = checked(a + (a * b / 100));
+        var res = checked(a * (100 + b) / 100); //checked(a + (a * b / 100));
         CheckOverflow(res);
 
         return res;
@@ -48,7 +49,7 @@ public static class MathHelper
 
     private static readonly Func<dynamic, dynamic, object> SubtractPercentFuncChecked = (a, b) =>
     {
-        var res = checked(a - (a * b / 100));
+        var res = checked(a * (100 - b) / 100); //checked(a + (a * b / 100));
         CheckOverflow(res);
 
         return res;
@@ -468,6 +469,64 @@ public static class MathHelper
         return Math.Pow(ConvertToDouble(a, options), ConvertToDouble(b, options));
     }
 
+    public static object Factorial(object a, object b, MathHelperOptions options)
+    {
+        var value = new BigInteger(ConvertToLong(a, options));
+        if (value <= 0)
+            throw new NotImplementedException("Factorial operation is not implemented for negative or zero values");
+
+        var result = value;
+        var stepLong = ConvertToLong(b, options);
+        if (stepLong > 0)
+        {
+            var step = new BigInteger(stepLong);
+            value = value - step;
+            while (value > 1)
+            {
+                result = result * value;
+                value = value - step;
+            }
+        }
+
+        long longResult = -1;
+        try
+        {
+            longResult = (long) result;
+            return longResult;
+        }
+        catch (OverflowException)
+        {
+            return result;
+        }
+    }
+
+    public static long Factorial(long a, long b, MathHelperOptions options)
+    {
+        var value = ConvertToLong(a, options);
+        if (value <= 0)
+            throw new NotImplementedException("Factorial operation is not implemented for negative or zero values");
+
+        var result = value;
+        var step = ConvertToLong(b, options);
+        if (step > 0)
+        {
+            value = value - step;
+            while (value > 1)
+            {
+                try
+                {
+                    result = result * value;
+                }
+                catch (OverflowException)
+                {
+                    return -1;
+                }
+                value = value - step;
+            }
+        }
+        return result;
+    }
+
     public static object Round(object? a, object? b, MidpointRounding rounding, MathHelperOptions options)
     {
         if (options.DecimalAsDefault)
@@ -547,6 +606,16 @@ public static class MathHelper
             int i => i,
             char => Convert.ToInt32(value.ToString(), options.CultureInfo),
             _ => Convert.ToInt32(value, options.CultureInfo)
+        };
+    }
+
+    private static long ConvertToLong(object? value, MathHelperOptions options)
+    {
+        return value switch
+        {
+            int i => i,
+            char => Convert.ToInt64(value.ToString(), options.CultureInfo),
+            _ => Convert.ToInt64(value, options.CultureInfo)
         };
     }
 

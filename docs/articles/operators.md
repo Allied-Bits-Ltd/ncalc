@@ -4,12 +4,13 @@ Expressions can be combined using operators, each with a specific precedence pri
 
 1. **Primary**
 2. **Unary**
-3. **Percent**
-4. **Exponential**
-5. **Multiplicative**
-6. **Additive**
-7. **Relational**
-8. **Logical**
+3. **Factorial**
+4. **Percent**
+5. **Exponential**
+6. **Multiplicative**
+7. **Additive**
+8. **Relational**
+9. **Logical**
 
 ## Primary
 
@@ -50,6 +51,21 @@ Unary operators operate on a single operand.
 ```csharp
 not true
 !(1 != 2)
+```
+
+## Factorial
+
+Factorial ('!') is a special post-operator that is applicable to a value or expression that evaluates to an integer value. The resulting expression is binary, and the number of exclamation marks determines the type of factorial (standard, double, triple etc.). 
+
+* `!`: standard factorial
+* `!!`: double factorial
+* `!!!`: triple factorial
+* `!....!`: some multifactorial
+
+**Example**:
+```
+(1+2)!
+20!!!
 ```
 
 ## Percent

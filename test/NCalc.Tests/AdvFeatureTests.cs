@@ -1,5 +1,9 @@
 #nullable enable
 
+using System.Numerics;
+
+using NCalc.Domain;
+
 namespace NCalc.Tests;
 
 [Trait("Category", "Advanced")]
@@ -752,8 +756,9 @@ public class AdvFeatureTests
     [InlineData("20/5%", 400)]
     [InlineData("20/2.5%", 800)]
     [InlineData("100+5%", 105)]
+    [InlineData("100+(3+2)%", 105)]
     [InlineData("100-5%", 95)]
-    public void ShouldCalculatePercentAsNumber(string input, double expectedValue)
+    public void ShouldCalculatePercentAsNumber(string input, int expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
@@ -761,7 +766,13 @@ public class AdvFeatureTests
 
         var result = expression.Evaluate();
 
-        Assert.Equal(expectedValue, result);
+        if (result?.GetType() == typeof(System.Double))
+        {
+            double dResult = (double)result;
+            Assert.Equal(expectedValue, (int) dResult);
+        }
+        else
+            Assert.Equal(expectedValue, result);
     }
 
     [Theory]
@@ -788,6 +799,7 @@ public class AdvFeatureTests
     [InlineData("20/2.5%", 800)]
     [InlineData("100+5%", 105)]
     [InlineData("100-5%", 95)]
+    [InlineData("100+(3+2)%", 105)]
     public void ShouldCalculatePercentAsNumberLambda(string input, double expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
@@ -970,5 +982,104 @@ public class AdvFeatureTests
         var result = expression.Evaluate();
 
         Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("5!", 120)]
+    [InlineData("5!!", 15)]
+    [InlineData("10!!!", 280)]
+    [InlineData("20!!!", 4188800)]
+
+    public void ShouldCalculateSmallFactorials(string input, long expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        var result = expression.Evaluate();
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("22!", "1124000727777607680000")]
+    [InlineData("50!!!", "13106744139423334400000")]
+    public void ShouldCalculateLargeFactorials(string input, string expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        var result = expression.Evaluate();
+        var expected = BigInteger.Parse(expectedValue);
+        Assert.Equal(expectedValue, result?.ToString());
+    }
+
+    [Theory]
+    [InlineData("2+5!", 122)]
+    [InlineData("2*4!", 48)]
+    [InlineData("(2+1)!", 6)]
+    [InlineData("2**3!", 64)]
+    public void ShouldCalculateOperationsWithFactorials(string input, long expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        var result = expression.Evaluate();
+        if (result?.GetType() == typeof(System.Double))
+        {
+            double dResult = (double) result;
+            Assert.Equal(expectedValue, (long)dResult);
+        }
+        else
+            Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("5!", 120)]
+    [InlineData("5!!", 15)]
+    [InlineData("10!!!", 280)]
+    [InlineData("20!!!", 4188800)]
+
+    public void ShouldCalculateSmallFactorialsLambda(string input, long expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        var sut = expression.ToLambda<long>();
+        var result = sut();
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("2+5!", 122)]
+    [InlineData("2*4!", 48)]
+    [InlineData("(2+1)!", 6)]
+    [InlineData("2**3!", 64)]
+    public void ShouldCalculateOperationsWithFactorialsLambda(string input, long expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        var sut = expression.ToLambda <long>();
+        var result = sut();
+        if (result.GetType() == typeof(System.Double))
+        {
+            double dResult = (double)result;
+            Assert.Equal(expectedValue, (long)dResult);
+        }
+        else
+            Assert.Equal(expectedValue, result);
+    }
+
+    [Fact]
+    public void SerializeFactorialExpressionsTest()
+    {
+        Assert.Equal("2!!",
+            new BinaryExpression(BinaryExpressionType.Factorial, new ValueExpression(2), new ValueExpression(2)).ToString());
+        Assert.Equal("(2 + 2)!",
+            new BinaryExpression(BinaryExpressionType.Factorial, new BinaryExpression(BinaryExpressionType.Plus, new ValueExpression(2), new ValueExpression(2)), new ValueExpression(1)).ToString());
+        Assert.Equal("2 + 2!",
+            new BinaryExpression(BinaryExpressionType.Plus, new ValueExpression(2), new BinaryExpression(BinaryExpressionType.Factorial, new ValueExpression(2), new ValueExpression(1))).ToString());
+    }
+
+    [Fact]
+    public void SerializePercentExpressionsTest()
+    {
+        Assert.Equal("2 + 2%",
+            new BinaryExpression(BinaryExpressionType.Plus, new ValueExpression(2), new PercentExpression(new ValueExpression(2))).ToString());
+        Assert.Equal("2 * 2%",
+            new BinaryExpression(BinaryExpressionType.Times, new ValueExpression(2), new PercentExpression(new ValueExpression(2))).ToString());
+        Assert.Equal("2% + 2%",
+            new BinaryExpression(BinaryExpressionType.Plus, new PercentExpression(new ValueExpression(2)), new PercentExpression(new ValueExpression(2))).ToString());
+        Assert.Equal("2% * 2",
+            new BinaryExpression(BinaryExpressionType.Times, new PercentExpression(new ValueExpression(2)), new ValueExpression(2)).ToString());
     }
 }

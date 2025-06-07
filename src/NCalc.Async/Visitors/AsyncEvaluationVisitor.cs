@@ -144,6 +144,16 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
             case BinaryExpressionType.Exponentiation:
                 return MathHelper.Pow(await left.Value, await right.Value, context);
 
+            case BinaryExpressionType.Factorial:
+                    var rValue = (await right.Value);
+                    var lValue = (await left.Value);
+
+                    if (rValue == null || lValue == null)
+                    {
+                        return false;
+                    }
+                    return MathHelper.Factorial(lValue, rValue, context);
+
             case BinaryExpressionType.In:
                 return EvaluationHelper.In(await right.Value, await left.Value, context);
 

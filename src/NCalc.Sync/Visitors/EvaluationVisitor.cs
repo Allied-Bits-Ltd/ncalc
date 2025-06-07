@@ -137,6 +137,13 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             case BinaryExpressionType.Exponentiation:
                 return MathHelper.Pow(left.Value, right.Value, context);
 
+            case BinaryExpressionType.Factorial:
+                    if (right.Value == null || left.Value == null)
+                    {
+                        return false;
+                    }
+                    return MathHelper.Factorial(left.Value!, right.Value!, context);
+
             case BinaryExpressionType.In:
                 return EvaluationHelper.In(right.Value, left.Value, context);
 
