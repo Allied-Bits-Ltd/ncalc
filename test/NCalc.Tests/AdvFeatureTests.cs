@@ -1266,15 +1266,57 @@ public class AdvFeatureTests
         Assert.Equal(expectedExprValue, result);
     }
 
+    class AssignmentLambdaTestsContext
+    {
+        public int a { get; set; }
+
+        public int length(string x)
+        {
+            return x?.Length ?? 0;
+        }
+    }
+
+    [Theory]
+    [InlineData("a := 2", 2, 2)]
+    [InlineData("a := 2 + 2", 4, 4)]
+    [InlineData("{a} := (2 + 2)", 4, 4)]
+    public void ShouldHandleAssignmentLambda(string input, int expectedVarValue, int expectedExprValue)
+    {
+        bool eventFired = false;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments);
+        expression.UpdateParameter += (name, args) =>
+        {
+            eventFired = true;
+            Assert.Equal("a", name.ToLowerInvariant());
+            Assert.Equal(expectedVarValue, args.Value);
+        };
+
+        Func<InLowercaseLambdaTestsContext, object> function = expression.ToLambda<InLowercaseLambdaTestsContext, object>();
+
+        var context = new InLowercaseLambdaTestsContext { };
+        var result = function(context);
+
+        Assert.True(eventFired);
+        Assert.Equal(expectedExprValue, result);
+        Assert.Equal(expectedVarValue, context.a);
+    }
+
     [Theory]
     [InlineData("2 + 2; 3 + 3", 6)]
     [InlineData("(2 + 2); 3 + 3", 6)]
     [InlineData("Max(2, 5); 3 + 3", 6)]
     [InlineData("Max(2; 5)", 5)]
     [InlineData("Max(2; 5); 3 + 3", 6)]
+    [InlineData("Length('12;45')", 5)]
+    [InlineData("'Text data with ; (semicolon)'; 3 + 3", 6)]
     public void ShouldHandleStatementSequence(string input, int expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
+        expression.Functions["Length"] = (args) =>
+        {
+            return ((string)args[0].Evaluate()!).Length;
+        };
         var result = expression.Evaluate();
         Assert.Equal(expectedValue, result);
     }
@@ -1324,7 +1366,13 @@ public class AdvFeatureTests
     [InlineData("{a} := (2 + 2)", 4, 4)]
     [InlineData("a := 2; a + 2", 2, 4)]
     [InlineData("a := 2; {a} + 2", 2, 4)]
+    [InlineData("a := 2; a + Max(2, 4)", 2, 6)]
+    [InlineData("a := 2; b := 4; Max(a, b)", 2, 4)]
     [InlineData("a := 2; a + Max(2; 4)", 2, 6)]
+    [InlineData("a := if (true, 2, 4); a + Max(2; 4)", 2, 6)]
+    [InlineData("if (true, a := 2, a := 4); a + Max(2; 4)", 2, 6)]
+    [InlineData("a := if (true; 2; 4); a + Max(2; 4)", 2, 6)]
+    [InlineData("if (true; a := 2; a := 4); a + Max(2; 4)", 2, 6)]
     public void ShouldHandleStatementSequenceWithAssignment(string input, int expectedVarValue, int expectedExprValue)
     {
         bool eventFired = false;
@@ -1334,8 +1382,11 @@ public class AdvFeatureTests
         {
             eventFired = true;
 
-            Assert.Equal("a", name);
-            Assert.Equal(expectedVarValue, args.Value);
+            if (name == "a")
+            {
+                Assert.Equal("a", name);
+                Assert.Equal(expectedVarValue, args.Value);
+            }
         };
         var result = expression.Evaluate();
         Assert.True(eventFired);
@@ -1343,12 +1394,89 @@ public class AdvFeatureTests
     }
 
     [Theory]
-    //[InlineData("2 > (3 + 5)", false)]
     [ClassData(typeof(EvaluationTestData))]
     public void ShouldHandleStatementsWithAssignmentsEnabled(string input, object expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | /*ExpressionOptions.UseAssignments | */ExpressionOptions.UseStatementSequences);
         var result = expression.Evaluate();
         Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("LENgth('xyz')", 3)]
+    public void ShouldHandleFunctionsInLowercase(string input, object expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.LowerCaseIdentifierLookup);
+        expression.Functions.Add("length", (x) => x[0].Evaluate()?.ToString()?.Length ?? 0);
+        var result = expression.Evaluate();
+        Assert.Equal(expectedValue, result);
+    }
+
+    class InLowercaseLambdaTestsContext
+    {
+        public int a { get; set; }
+
+        public int length(string x)
+        {
+            return x?.Length ?? 0;
+        }
+    }
+
+    [Theory]
+    [InlineData("LENgth('xyz')", 3)]
+    public void ShouldHandleFunctionsInLowercaseLambda(string input, object expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.LowerCaseIdentifierLookup);
+
+        Func<InLowercaseLambdaTestsContext, int> function = expression.ToLambda<InLowercaseLambdaTestsContext, int>();
+
+        var context = new InLowercaseLambdaTestsContext {  };
+        var result = function(context);
+
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("A := if (true, 2, 4); a + Max(2; 4) + A", 2, 8)]
+    public void ShouldHandleAssignmentInLowercase(string input, int expectedVarValue, int expectedExprValue)
+    {
+        bool eventFired = false;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.LowerCaseIdentifierLookup);
+        expression.UpdateParameter += (name, args) =>
+        {
+            eventFired = true;
+            Assert.Equal("a", name.ToLowerInvariant());
+            Assert.Equal(expectedVarValue, args.Value);
+        };
+
+        var result = expression.Evaluate();
+
+        Assert.True(eventFired);
+        Assert.Equal(expectedExprValue, result);
+    }
+
+    [Theory]
+    [InlineData("A := if (true, 2, 4); a + Max(2; 4) + A", 2, 8)]
+    public void ShouldHandleAssignmentInLowercaseLambda(string input, int expectedVarValue, int expectedExprValue)
+    {
+        bool eventFired = false;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.LowerCaseIdentifierLookup);
+        expression.UpdateParameter += (name, args) =>
+        {
+            eventFired = true;
+            Assert.Equal("a", name.ToLowerInvariant());
+            Assert.Equal(expectedVarValue, args.Value);
+        };
+
+        Func<InLowercaseLambdaTestsContext, int> function = expression.ToLambda<InLowercaseLambdaTestsContext, int>();
+
+        var context = new InLowercaseLambdaTestsContext { };
+        var result = function(context);
+
+        Assert.True(eventFired);
+        Assert.Equal(expectedExprValue, result);
+        Assert.Equal(expectedVarValue, context.a);
     }
 }

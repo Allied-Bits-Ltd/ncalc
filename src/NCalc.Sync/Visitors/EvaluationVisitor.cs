@@ -40,7 +40,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 return value;
             }
 
-            context.StaticParameters[identifierName] = value;
+            context.StaticParameters[context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName] = value;
         }
         return value;
     }
@@ -252,7 +252,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
         if (functionArgs.HasResult)
             return functionArgs.Result;
 
-        if (context.Functions.TryGetValue(functionName, out var expressionFunction))
+        if (context.Functions.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? functionName.ToLowerInvariant() : functionName, out var expressionFunction))
         {
             return expressionFunction(new ExpressionFunctionData(function.Identifier.Id, args, context));
         }
@@ -273,7 +273,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             return parameterArgs.Result;
         }
 
-        if (context.StaticParameters.TryGetValue(identifierName, out var parameter))
+        if (context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var parameter))
         {
             if (parameter is Expression expression)
             {
@@ -294,7 +294,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             return parameter;
         }
 
-        if (context.DynamicParameters.TryGetValue(identifierName, out var dynamicParameter))
+        if (context.DynamicParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var dynamicParameter))
         {
             return dynamicParameter(new ExpressionParameterData(identifier.Id, context));
         }

@@ -44,7 +44,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 return value;
             }
 
-            context.StaticParameters[identifierName] = value;
+            context.StaticParameters[context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName] = value;
         }
         return value;
     }
@@ -241,7 +241,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
         // Don't call parameters right now, instead let the function do it as needed.
         // Some parameters shouldn't be called, for instance, in a if(), the "not" value might be a division by zero
-        // Evaluating every value could produce unexpected behaviour
+        // Evaluating every value could produce unexpected behavior
         for (var i = 0; i < argsCount; i++)
         {
             args[i] = new AsyncExpression(function.Parameters[i], context);
@@ -257,7 +257,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
             return functionArgs.Result;
         }
 
-        if (context.Functions.TryGetValue(functionName, out var expressionFunction))
+        if (context.Functions.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? functionName.ToLowerInvariant() : functionName, out var expressionFunction))
         {
             return await expressionFunction(new AsyncExpressionFunctionData(function.Identifier.Id, args, context));
         }
@@ -278,7 +278,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
             return parameterArgs.Result;
         }
 
-        if (context.StaticParameters.TryGetValue(identifierName, out var parameter))
+        if (context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var parameter))
         {
             if (parameter is AsyncExpression expression)
             {
@@ -298,7 +298,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
             return parameter;
         }
 
-        if (context.DynamicParameters.TryGetValue(identifierName, out var dynamicParameter))
+        if (context.DynamicParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var dynamicParameter))
         {
             return await dynamicParameter(new AsyncExpressionParameterData(identifier.Id, context));
         }

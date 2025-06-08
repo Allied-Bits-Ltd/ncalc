@@ -102,6 +102,11 @@ public enum ExpressionOptions
     SupportTimeOperations = 1 << 18,
 
     /// <summary>
+    /// Convert identifiers to lowercase before looking up in the parameter and functions dictionary
+    /// </summary>
+    LowerCaseIdentifierLookup = 1 << 19,
+
+    /// <summary>
     /// Disables using `&`, `|`, `^`, `~` characters for logical and bitwise operations; opting for AND, OR, XOR, NOT, as well as BIT_AND, BIT_OR, BIT_XOR, and BIT_NOT instead. When this flag is enabled, `^` is used for powers (together with `**`)
     /// </summary>
     SkipLogicalAndBitwiseOpChars = 1 << 20,

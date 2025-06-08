@@ -1368,26 +1368,6 @@ public static class LogicalExpressionParser
         var logical = OneOf(orParser, xorParser).And(ZeroOrMany(xorTypeParser.And(orParser)))
             .Then(ParseBinaryExpression);
 
-/* Original:
-        var andTypeParser = and.Then(BinaryExpressionType.And)
-           .Or(bitwiseAnd.Then(BinaryExpressionType.BitwiseAnd));
-
-        var orTypeParser = or.Then(BinaryExpressionType.Or)
-            .Or(bitwiseOr.Then(BinaryExpressionType.BitwiseOr));
-
-        var xorTypeParser = bitwiseXOr.Then(BinaryExpressionType.BitwiseXOr);
-
-        // "and" has higher precedence than "or"
-        var andParser = equality.And(ZeroOrMany(andTypeParser.And(equality)))
-            .Then(ParseBinaryExpression);
-
-        var orParser = andParser.And(ZeroOrMany(orTypeParser.And(andParser)))
-            .Then(ParseBinaryExpression);
-
-        // logical => equality ( ( "and" | "or" | "xor" ) equality )* ;
-        var logical = orParser.And(ZeroOrMany(xorTypeParser.And(orParser)))
-            .Then(ParseBinaryExpression);*/
-
         // ternary => logical("?" logical ":" logical) ?
         var ternary = logical.And(ZeroOrOne(questionMark.SkipAnd(logical).AndSkip(colon).And(logical)))
             .Then(static x => x.Item2.Item1 == null
@@ -1405,20 +1385,13 @@ public static class LogicalExpressionParser
 
         List<Parser<LogicalExpression>> statements = [operatorSequence];
 
-        Parser<LogicalExpression>? topLevel = operatorSequence;
+        Parser<LogicalExpression>? topLevel = null;
 
         if (options.HasFlag(ExpressionOptions.UseAssignments))
         {
             var assignmentTypeParser = assignmentOperator.Then(BinaryExpressionType.Assignment);
 
-            /*var assignment = identifierExpression.AndSkip(assignmentOperator).And(operatorSequence)
-            .Then<LogicalExpression>(x =>
-                (BinaryExpression)(new BinaryExpression(BinaryExpressionType.Assignment, x.Item1, x.Item2)).SetOptions(options, cultureInfo, extOptions)
-            );*/
-            //var assignment = identifier.And(ZeroOrMany(assignmentTypeParser.And(ternary)))
-            //    .Then(ParseBinaryExpression);
-
-            var assignment = identifierExpression.AndSkip(assignmentOperator).And(ZeroOrMany(operatorSequence))
+            var assignment = identifierExpression.AndSkip(assignmentOperator).And(OneOrMany(operatorSequence))
             .Then<LogicalExpression>(x =>
                 {
                     LogicalExpression result = null!;
@@ -1429,16 +1402,13 @@ public static class LogicalExpressionParser
                             result = x.Item1;
                             break;
                         case 1:
-                            //result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]);
                             result = (BinaryExpression)(new BinaryExpression(BinaryExpressionType.Assignment, x.Item1, x.Item2[0])).SetOptions(options, cultureInfo, extOptions);
                             break;
                         default:
                         {
-                            //result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]);
                             result = (BinaryExpression)(new BinaryExpression(BinaryExpressionType.Assignment, x.Item1, x.Item2[0])).SetOptions(options, cultureInfo, extOptions);
                             for (int i = 1; i < x.Item2.Count - 1; i++)
                             {
-                                //result = new BinaryExpression(BinaryExpressionType.StatementSequence, result, x.Item2[i]);
                                 result = (BinaryExpression)(new BinaryExpression(BinaryExpressionType.Assignment, result, x.Item2[i])).SetOptions(options, cultureInfo, extOptions);
                             }
                             break;
@@ -1448,17 +1418,17 @@ public static class LogicalExpressionParser
                 }
             );
 
-            statements.Insert(0, assignment); //OneOf(statement, assignment);
-            topLevel = assignment;
+            statements.Insert(0, assignment);
         }
 
-        //Parser<LogicalExpression>? statementSequence = null;
+        var statementsArray = statements.ToArray();
+
+        topLevel = OneOf(statementsArray);
+        var expressionOrAssignment = OneOf(statementsArray);
 
         if (options.HasFlag(ExpressionOptions.UseStatementSequences))
         {
-            //statementSequence = statement.And(ZeroOrMany(statementEnd.SkipAnd(statement)))
-            var statementsArray = statements.ToArray();
-            var statementSequence = OneOf(statementsArray).And(ZeroOrMany(Terms.Pattern((c) => c == ';').SkipAnd(OneOf(statementsArray))))
+            var statementSequence = expressionOrAssignment.And(ZeroOrMany(Terms.Pattern((c) => c == ';').SkipAnd(expressionOrAssignment)))
                 .Then(x =>
                 {
                     LogicalExpression result = null!;
@@ -1487,13 +1457,10 @@ public static class LogicalExpressionParser
             topLevel = statementSequence;
         }
 
-        //List<Parser<LogicalExpression>> topLevelParsers = new List<Parser<LogicalExpression>>();
-        //topLevelParsers.Add(topLevel);
-
-        expression.Parser = operatorSequence;
+        expression.Parser = OneOf(statementsArray);
 
         var expressionParser = topLevel.AndSkip(ZeroOrMany(Literals.WhiteSpace(true))).Eof()
-            .ElseError(InvalidTokenMessage);
+                .ElseError(InvalidTokenMessage);
 
         AppContext.TryGetSwitch("NCalc.EnableParlotParserCompilation", out var enableParserCompilation);
 

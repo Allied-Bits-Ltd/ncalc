@@ -192,7 +192,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         }
 
         //Context methods take precedence over built-in functions because they're user-customizable.
-        var mi = FindMethod(function.Identifier.Name, args);
+        var mi = FindMethod(_expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? function.Identifier.Name.ToLowerInvariant() : function.Identifier.Name, args);
         if (mi != null)
         {
             return LinqExpression.Call(_context, mi.MethodInfo, mi.PreparedArguments);
@@ -287,14 +287,14 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(Identifier identifier)
     {
-        var identifierName = identifier.Name;
+        var identifierName = _expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? identifier.Name.ToLowerInvariant() : identifier.Name;
 
         if (_context == null)
         {
             if (_parameters != null && _parameters.TryGetValue(identifierName, out var param))
                 return LinqExpression.Constant(param);
 
-            throw new NCalcParameterNotDefinedException(identifierName);
+            throw new NCalcParameterNotDefinedException(identifier.Name);
         }
 
         return LinqExpression.PropertyOrField(_context, identifierName);
@@ -410,57 +410,54 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         return block;
     }
 
-    private Linq.Expression<Func<T>> UpdateParameter<T>(LogicalExpression leftExpression, LinqExpression valueExpr)
+    private LinqExpression UpdateParameter<T>(LogicalExpression leftExpression, LinqExpression valueExpr)
     {
         if (leftExpression is Identifier identifier)
         {
             var identifierName = identifier.Name;
 
-            if (valueExpr.Type != typeof(T))
-                throw new ArgumentException("Type mismatch between expression and expected value", nameof(valueExpr));
-
-            var sideEffect = new Action<T>((value) =>
+            var sideEffect = new Func<T, bool>((value) =>
             {
                 var parameterArgs = new NCalc.Handlers.UpdateParameterArgs(identifierName, identifier.Id, value);
                 OnUpdateParameter(identifierName, parameterArgs);
 
-                if (parameterArgs.UpdateParameterLists && _parameters != null)
-                    _parameters[identifierName] = value;
+                if (parameterArgs.UpdateParameterLists)
+                {
+                    if (_parameters != null)
+                        _parameters[_expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? identifierName.ToLowerInvariant() : identifierName] = value;
+
+                    if (_context != null)
+                        return true;
+                }
+                return false;
             });
 
-            // Compile the side-effect as a constant expression
-            var sideEffectExpr = LinqExpression.Constant(sideEffect);
+            var convertToT = LinqExpression.Convert(valueExpr, typeof(T));
 
-            // Call: sideEffect(originalBody)
-            var invokeSideEffect = LinqExpression.Invoke(sideEffectExpr, valueExpr);
+            Linq.LambdaExpression sideEffectFunc = bool (T x) => sideEffect(x);
+
+            var invokeSideEffect = LinqExpression.Invoke(sideEffectFunc, convertToT);
 
             // Variable to store evaluated result
             var valueVar = LinqExpression.Variable(typeof(T), "value");
+            var needUpdateParamsVar = LinqExpression.Variable(typeof(bool), "needUpdateParams");
 
-            // Assign original to variable
-            var assign = LinqExpression.Assign(valueVar, valueExpr);
+            // If required, update parameters
+            LinqExpression maybeUpdateParameters = (_context != null) ? LinqExpression.Assign(LinqExpression.PropertyOrField(_context, identifierName), valueExpr) : LinqExpression.Empty();
 
             // Sequence: run side-effect, then return value
             var block = LinqExpression.Block(
-                new[] { valueVar },
-                assign,
-                invokeSideEffect,
+                [valueVar, needUpdateParamsVar],
+                LinqExpression.Assign(valueVar, convertToT),
+                LinqExpression.Assign(needUpdateParamsVar, invokeSideEffect),
+                LinqExpression.IfThen(needUpdateParamsVar, maybeUpdateParameters),
                 valueVar
             );
-            return LinqExpression.Lambda<Func<T>>(block);
+            return block;
         }
         else
         {
-            // Variable to store evaluated result
-            var valueVar = LinqExpression.Variable(typeof(T), "value");
-
-            // Assign original to variable
-            var assign = LinqExpression.Assign(valueVar, valueExpr);
-
-            var block = LinqExpression.Block(
-                valueVar
-            );
-            return LinqExpression.Lambda<Func<T>>(block);
+            return valueExpr;
         }
     }
 
