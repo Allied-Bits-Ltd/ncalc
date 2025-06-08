@@ -1072,7 +1072,6 @@ public static class LogicalExpressionParser
         // factorial => primary ("!")* ;
         // A factorial includes any primary
         var factorial = primary.And(ZeroOrMany(exclamationMark.AndSkip(Not(equal))))
-
             .Then(static x =>
             {
                 if (x.Item2.Count == 0)
