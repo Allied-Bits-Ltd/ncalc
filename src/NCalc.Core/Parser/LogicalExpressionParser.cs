@@ -277,32 +277,41 @@ public static class LogicalExpressionParser
 
         // Add percent support
 
+        bool useCharsForOps = !options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars);
+        bool useUnicodeForOps = options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations);
+
         var percentChar = Terms.Char('%'); // CultureInfo defines a percent character, but we are yet to see another character than '%'
 
         var comma = Terms.Char(',');
-        var divided = Terms.Text("/");
-        var times = Terms.Text("*");
+        var divided = useUnicodeForOps ? OneOf(Terms.Text("/"), Terms.Text(":"), Terms.Text("\u00F7")) : Terms.Text("/");
+        var times = useUnicodeForOps ? OneOf(Terms.Text("*"), Terms.Text("\u00D7"), Terms.Text("\u2219")) : Terms.Text("*");
         var modulo = (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent)) ? Terms.Text("mod", true) : Terms.Text("%");
         var minus = Terms.Text("-");
         var plus = Terms.Text("+");
 
         var equal = OneOf(Terms.Text("=="), Terms.Text("="));
-        var notEqual = OneOf(Terms.Text("<>"), Terms.Text("!="));
-        var @in = Terms.Text("in", true);
-        var notIn = Terms.Text("not in", true);
+        var notEqual = useUnicodeForOps ? OneOf(Terms.Text("<>"), Terms.Text("!="), Terms.Text("\u2260")) : OneOf(Terms.Text("<>"), Terms.Text("!="));
+        var @in = useUnicodeForOps ? OneOf(Terms.Text("in", true), Terms.Text("\u2208")) : Terms.Text("in", true);
+        var notIn = useUnicodeForOps ? OneOf(Terms.Text("not in", true), Terms.Text("\u2209")) : Terms.Text("not in", true);
 
         var like = Terms.Text("like", true);
         var notLike = Terms.Text("not like", true);
 
         var greater = Terms.Text(">");
-        var greaterOrEqual = Terms.Text(">=");
-        var lesser = Terms.Text("<");
-        var lesserOrEqual = Terms.Text("<=");
+        var greaterOrEqual = useUnicodeForOps ? OneOf(Terms.Text(">="), Terms.Text("\u2265")) : Terms.Text(">=");
+        var less = Terms.Text("<");
+        var lessOrEqual = useUnicodeForOps ? OneOf(Terms.Text("<="), Terms.Text("\u2264")) : Terms.Text("<=");
 
         var leftShift = Terms.Text("<<");
         var rightShift = Terms.Text(">>");
 
-        var exponent = Terms.Text("**");
+        var exponent = useUnicodeForOps
+            ? (useCharsForOps
+                    ? OneOf(Terms.Text("**"), Terms.Text("\u2291"))
+                    : OneOf(Terms.Text("**"), Terms.Text("^"), Terms.Text("\u2291")))
+            : (useCharsForOps
+                    ? Terms.Text("**")
+                    : OneOf(Terms.Text("**"), Terms.Text("^"))); // when useCharsForOps is true, caret is used for bitwise XOR
         var openParen = Terms.Char('(');
         var closeParen = Terms.Char(')');
         var openBrace = Terms.Char('[');
@@ -314,20 +323,43 @@ public static class LogicalExpressionParser
         var colon = Terms.Char(':');
         var semicolon = Terms.Char(';');
 
+        Parser<string>? root2 = useCharsForOps ? Terms.Text("\u221A") : null;
+#if NET8_0_OR_GREATER
+        Parser<string>? root3 = useCharsForOps ? Terms.Text("\u221B") : null;
+#endif
+        Parser<string>? root4 = useCharsForOps ? Terms.Text("\u221C") : null;
+
         var resultRefChar = Terms.Char('@');
 
         var identifier = Terms.Identifier();
 
-        var not = OneOf(
-            Terms.Text("NOT", true).AndSkip(OneOf(Literals.WhiteSpace().Or(Not(AnyCharBefore(openParen))))),
-            Terms.Text("!"));
-        var and = OneOf(Terms.Text("AND", true), Terms.Text("&&"));
-        var or = OneOf(Terms.Text("OR", true), Terms.Text("||"));
+        Parser<string>? not;
+        Parser<string>? and;
+        Parser<string>? or;
+        Parser<string>? xor;
 
-        var bitwiseAnd = Terms.Text("&");
-        var bitwiseOr = Terms.Text("|");
-        var bitwiseXOr = Terms.Text("^");
-        var bitwiseNot = Terms.Text("~");
+        if (useCharsForOps)
+        {
+            and = useUnicodeForOps ? OneOf(Terms.Text("AND", true), Terms.Text("&&"), Terms.Text("\u2227")) : OneOf(Terms.Text("AND", true), Terms.Text("&&"));
+            or = useUnicodeForOps ? OneOf(Terms.Text("OR", true), Terms.Text("||"), Terms.Text("\u2228")) : OneOf(Terms.Text("OR", true), Terms.Text("||"));
+            not = useUnicodeForOps
+                ? OneOf(Terms.Text("NOT", true).AndSkip(OneOf(Literals.WhiteSpace().Or(Not(AnyCharBefore(openParen))))), Terms.Text("!"), Terms.Text("\u00ac"))
+                : OneOf(Terms.Text("NOT", true).AndSkip(OneOf(Literals.WhiteSpace().Or(Not(AnyCharBefore(openParen))))), Terms.Text("!"));
+        }
+        else
+        {
+            and = useUnicodeForOps ? OneOf(Terms.Text("AND", true), Terms.Text("\u2227")) : Terms.Text("AND", true);
+            or = useUnicodeForOps ? OneOf(Terms.Text("OR", true), Terms.Text("\u2228")) : Terms.Text("OR", true);
+            not = useUnicodeForOps
+                ? OneOf(Terms.Text("NOT", true).AndSkip(OneOf(Literals.WhiteSpace().Or(Not(AnyCharBefore(openParen))))), Terms.Text("\u00ac"))
+                : Terms.Text("NOT", true).AndSkip(OneOf(Literals.WhiteSpace().Or(Not(AnyCharBefore(openParen)))));
+        }
+        xor = useUnicodeForOps ? OneOf(Terms.Text("XOR", true), Terms.Text("\u2295"), Terms.Text("\u22BB")) : Terms.Text("XOR", true);
+
+        var bitwiseAnd = useCharsForOps ? OneOf(Terms.Text("BIT_AND", true), Terms.Text("&")) : Terms.Text("BIT_AND", true);
+        var bitwiseOr = useCharsForOps ? OneOf(Terms.Text("BIT_OR", true), Terms.Text("|"))  : Terms.Text("BIT_OR", true);
+        var bitwiseXOr = useCharsForOps ? OneOf(Terms.Text("BIT_XOR", true), Terms.Text("^")) : Terms.Text("BIT_XOR", true);
+        var bitwiseNot = useCharsForOps ? OneOf(Terms.Text("BIT_NOT", true), Terms.Text("~")) : Terms.Text("BIT_NOT", true);
 
         // "(" expression ")"
         var groupExpression = Between(openParen, expression, closeParen);
@@ -1133,13 +1165,22 @@ public static class LogicalExpressionParser
                 return result;
             });
 
-        // ( "-" | "not" ) factorial | exponential | primary;
-        var unary = exponential.Unary(
+        // ( "-" | "!" | "not" | "~" | root2 | root3 | root4 ) factorial | exponential | primary;
+        List<(Parser<string>, Func<LogicalExpression, LogicalExpression>)> unaryOps =
+        [
             (not, static value => new UnaryExpression(UnaryExpressionType.Not, value)),
             (minus, static value => new UnaryExpression(UnaryExpressionType.Negate, value)),
-            (bitwiseNot, static value => new UnaryExpression(UnaryExpressionType.BitwiseNot, value))
-
-        );
+            (bitwiseNot, static value => new UnaryExpression(UnaryExpressionType.BitwiseNot, value)),
+        ];
+        if (root2 != null)
+            unaryOps.Add((root2, static value => new UnaryExpression(UnaryExpressionType.SqRoot, value)));
+#if NET8_0_OR_GREATER
+        if (root3 != null)
+            unaryOps.Add((root3, static value => new UnaryExpression(UnaryExpressionType.CbRoot, value)));
+#endif
+        if (root4 != null)
+            unaryOps.Add((root4, static value => new UnaryExpression(UnaryExpressionType.FourthRoot, value)));
+        var unary = exponential.Unary(unaryOps.ToArray());
 
         // multiplicative => unary ( ( "/" | "*" | "%" ) unary )* ;
         var multiplicative = unary.LeftAssociative(
@@ -1163,8 +1204,8 @@ public static class LogicalExpressionParser
         // relational => shift ( ( ">=" | "<=" | "<" | ">" | "in" | "not in" ) shift )* ;
         var relational = shift.And(ZeroOrMany(OneOf(
                     greaterOrEqual.Then(BinaryExpressionType.GreaterOrEqual),
-                    lesserOrEqual.Then(BinaryExpressionType.LesserOrEqual),
-                    lesser.Then(BinaryExpressionType.Lesser),
+                    lessOrEqual.Then(BinaryExpressionType.LesserOrEqual),
+                    less.Then(BinaryExpressionType.Lesser),
                     greater.Then(BinaryExpressionType.Greater),
                     @in.Then(BinaryExpressionType.In),
                     notIn.Then(BinaryExpressionType.NotIn),
@@ -1210,7 +1251,7 @@ public static class LogicalExpressionParser
             (OneOrMany(OneOf(
                     divided, times, modulo, plus,
                     minus, leftShift, rightShift, greaterOrEqual,
-                    lesserOrEqual, greater, lesser, equal,
+                    lessOrEqual, greater, less, equal,
                     notEqual)),
                 static (_, _) => throw new InvalidOperationException("Unknown operator sequence.")));
 

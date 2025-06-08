@@ -89,6 +89,11 @@ public class SerializationVisitor : ILogicalExpressionVisitor<string>
             UnaryExpressionType.Not => "!",
             UnaryExpressionType.Negate => "-",
             UnaryExpressionType.BitwiseNot => "~",
+            UnaryExpressionType.SqRoot => "\u221a",
+#if NET8_0_OR_GREATER
+            UnaryExpressionType.CbRoot => "\u221b",
+#endif
+            UnaryExpressionType.FourthRoot => "\u221c",
             _ => string.Empty
         });
 

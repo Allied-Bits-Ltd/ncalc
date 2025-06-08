@@ -548,10 +548,37 @@ public static class MathHelper
         return Math.Sin(ConvertToDouble(a, options));
     }
 
-    public static object Sqrt(object? a, MathHelperOptions options)
+    public static object? Sqrt(object? a, MathHelperOptions options)
     {
-        return Math.Sqrt(ConvertToDouble(a, options));
+        if (a == null)
+            return null;
+
+        var d = ConvertToDouble(a, options);
+
+        return Math.Sqrt(d);
     }
+
+    public static object? Fthrt(object? a, MathHelperOptions options)
+    {
+        if (a == null)
+            return null;
+
+        var d = ConvertToDouble(a, options);
+
+        return Math.Sqrt(Math.Sqrt(d));
+    }
+
+#if NET8_0_OR_GREATER
+    public static object? Cbrt(object? a, MathHelperOptions options)
+    {
+        if (a == null)
+            return null;
+
+        var d = ConvertToDouble(a, options);
+
+        return Math.Cbrt(d);
+    }
+#endif
 
     public static object Tan(object? a, MathHelperOptions options)
     {

@@ -136,6 +136,11 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             UnaryExpressionType.Not => LinqExpression.Not(operand),
             UnaryExpressionType.Negate => LinqExpression.Negate(operand),
             UnaryExpressionType.BitwiseNot => LinqExpression.Not(operand),
+            UnaryExpressionType.SqRoot => Sqrt(operand),
+#if NET8_0_OR_GREATER
+            UnaryExpressionType.CbRoot => Cbrt(operand),
+#endif
+            UnaryExpressionType.FourthRoot => Frthrt(operand),
             UnaryExpressionType.Positive => operand,
             _ => throw new ArgumentOutOfRangeException()
         };
@@ -445,7 +450,41 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         return LinqExpression.Constant(0);
     }
 
-    private LinqExpression WithCommonNumericType(LinqExpression left, LinqExpression right,
+    private LinqExpression Sqrt(LinqExpression left)
+    {
+        left = LinqUtils.UnwrapNullable(left);
+        MethodInfo? sqrtMethod = typeof(Math).GetMethod("Sqrt");
+        if (sqrtMethod != null)
+        {
+            return LinqExpression.Call(sqrtMethod, LinqExpression.Convert(left, typeof(double)));
+        }
+        return LinqExpression.Constant(0);
+    }
+
+    private LinqExpression Frthrt(LinqExpression left)
+    {
+        left = LinqUtils.UnwrapNullable(left);
+        MethodInfo? sqrtMethod = typeof(Math).GetMethod("Sqrt");
+        if (sqrtMethod != null)
+        {
+            return LinqExpression.Call(sqrtMethod, LinqExpression.Call(sqrtMethod, LinqExpression.Convert(left, typeof(double))));
+        }
+        return LinqExpression.Constant(0);
+    }
+
+#if NET8_0_OR_GREATER
+    private LinqExpression Cbrt(LinqExpression left)
+    {
+        left = LinqUtils.UnwrapNullable(left);
+        MethodInfo? cbrtMethod = typeof(Math).GetMethod("Cbrt");
+        if (cbrtMethod != null)
+        {
+            return LinqExpression.Call(cbrtMethod, LinqExpression.Convert(left, typeof(double)));
+        }
+        return LinqExpression.Constant(0);
+    }
+#endif
+        private LinqExpression WithCommonNumericType(LinqExpression left, LinqExpression right,
         Func<LinqExpression, LinqExpression, LinqExpression> action,
         BinaryExpressionType expressionType = BinaryExpressionType.Unknown)
     {
