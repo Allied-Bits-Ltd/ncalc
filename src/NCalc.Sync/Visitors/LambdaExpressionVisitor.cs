@@ -104,9 +104,9 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 BinaryExpressionType.And => LinqExpression.AndAlso(left, right),
                 BinaryExpressionType.Or => LinqExpression.OrElse(left, right),
                 BinaryExpressionType.NotEqual => WithCommonNumericType(left, right, LinqExpression.NotEqual, expression.Type),
-                BinaryExpressionType.LesserOrEqual => WithCommonNumericType(left, right, LinqExpression.LessThanOrEqual, expression.Type),
+                BinaryExpressionType.LessOrEqual => WithCommonNumericType(left, right, LinqExpression.LessThanOrEqual, expression.Type),
                 BinaryExpressionType.GreaterOrEqual => WithCommonNumericType(left, right, LinqExpression.GreaterThanOrEqual, expression.Type),
-                BinaryExpressionType.Lesser => WithCommonNumericType(left, right, LinqExpression.LessThan, expression.Type),
+                BinaryExpressionType.Less => WithCommonNumericType(left, right, LinqExpression.LessThan, expression.Type),
                 BinaryExpressionType.Greater => WithCommonNumericType(left, right, LinqExpression.GreaterThan, expression.Type),
                 BinaryExpressionType.Equal => WithCommonNumericType(left, right, LinqExpression.Equal, expression.Type),
                 BinaryExpressionType.Minus => _checked ? WithCommonNumericType(left, right, LinqExpression.SubtractChecked, BinaryExpressionType.Minus) : WithCommonNumericType(left, right, LinqExpression.Subtract, BinaryExpressionType.Minus),
@@ -136,6 +136,11 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             UnaryExpressionType.Not => LinqExpression.Not(operand),
             UnaryExpressionType.Negate => LinqExpression.Negate(operand),
             UnaryExpressionType.BitwiseNot => LinqExpression.Not(operand),
+            UnaryExpressionType.SqRoot => Sqrt(operand),
+#if NET8_0_OR_GREATER
+            UnaryExpressionType.CbRoot => Cbrt(operand),
+#endif
+            UnaryExpressionType.FourthRoot => Frthrt(operand),
             UnaryExpressionType.Positive => operand,
             _ => throw new ArgumentOutOfRangeException()
         };
@@ -445,7 +450,41 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         return LinqExpression.Constant(0);
     }
 
-    private LinqExpression WithCommonNumericType(LinqExpression left, LinqExpression right,
+    private LinqExpression Sqrt(LinqExpression left)
+    {
+        left = LinqUtils.UnwrapNullable(left);
+        MethodInfo? sqrtMethod = typeof(Math).GetMethod("Sqrt");
+        if (sqrtMethod != null)
+        {
+            return LinqExpression.Call(sqrtMethod, LinqExpression.Convert(left, typeof(double)));
+        }
+        return LinqExpression.Constant(0);
+    }
+
+    private LinqExpression Frthrt(LinqExpression left)
+    {
+        left = LinqUtils.UnwrapNullable(left);
+        MethodInfo? sqrtMethod = typeof(Math).GetMethod("Sqrt");
+        if (sqrtMethod != null)
+        {
+            return LinqExpression.Call(sqrtMethod, LinqExpression.Call(sqrtMethod, LinqExpression.Convert(left, typeof(double))));
+        }
+        return LinqExpression.Constant(0);
+    }
+
+#if NET8_0_OR_GREATER
+    private LinqExpression Cbrt(LinqExpression left)
+    {
+        left = LinqUtils.UnwrapNullable(left);
+        MethodInfo? cbrtMethod = typeof(Math).GetMethod("Cbrt");
+        if (cbrtMethod != null)
+        {
+            return LinqExpression.Call(cbrtMethod, LinqExpression.Convert(left, typeof(double)));
+        }
+        return LinqExpression.Constant(0);
+    }
+#endif
+        private LinqExpression WithCommonNumericType(LinqExpression left, LinqExpression right,
         Func<LinqExpression, LinqExpression, LinqExpression> action,
         BinaryExpressionType expressionType = BinaryExpressionType.Unknown)
     {
@@ -551,7 +590,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 return LinqExpression.GreaterThanOrEqual(
                     LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
                     LinqExpression.Constant(0));
-            case BinaryExpressionType.LesserOrEqual:
+            case BinaryExpressionType.LessOrEqual:
                 return LinqExpression.LessThanOrEqual(
                     LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
                     LinqExpression.Constant(0));
@@ -559,7 +598,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 return LinqExpression.GreaterThan(
                     LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
                     LinqExpression.Constant(0));
-            case BinaryExpressionType.Lesser:
+            case BinaryExpressionType.Less:
                 return LinqExpression.LessThan(
                     LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
                     LinqExpression.Constant(0));

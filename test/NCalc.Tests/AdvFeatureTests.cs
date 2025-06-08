@@ -989,7 +989,6 @@ public class AdvFeatureTests
     [InlineData("5!!", 15)]
     [InlineData("10!!!", 280)]
     [InlineData("20!!!", 4188800)]
-
     public void ShouldCalculateSmallFactorials(string input, long expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
@@ -1031,7 +1030,6 @@ public class AdvFeatureTests
     [InlineData("5!!", 15)]
     [InlineData("10!!!", 280)]
     [InlineData("20!!!", 4188800)]
-
     public void ShouldCalculateSmallFactorialsLambda(string input, long expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
@@ -1081,5 +1079,37 @@ public class AdvFeatureTests
             new BinaryExpression(BinaryExpressionType.Plus, new PercentExpression(new ValueExpression(2)), new PercentExpression(new ValueExpression(2))).ToString());
         Assert.Equal("2% * 2",
             new BinaryExpression(BinaryExpressionType.Times, new PercentExpression(new ValueExpression(2)), new ValueExpression(2)).ToString());
+    }
+
+    [Theory]
+    [InlineData("\u221A4", 2)]
+    [InlineData("\u221A(2+2)", 2)]
+
+#if NET8_0_OR_GREATER
+    [InlineData("\u221B8", 2)]
+    [InlineData("\u221B(4+4)", 2)]
+#endif
+    [InlineData("\u221C(4*4)", 2)]
+    public void ShouldCalculateRoots(string input, double expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseUnicodeCharsForOperations);
+        var result = expression.Evaluate();
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("\u221A4", 2)]
+    [InlineData("\u221A(2+2)", 2)]
+#if NET8_0_OR_GREATER
+    [InlineData("\u221B8", 2)]
+    [InlineData("\u221B(4+4)", 2)]
+#endif
+    [InlineData("\u221C(4*4)", 2)]
+    public void ShouldCalculateRootsLambda(string input, double expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseUnicodeCharsForOperations);
+        var sut = expression.ToLambda<long>();
+        var result = sut();
+        Assert.Equal(expectedValue, result);
     }
 }

@@ -55,8 +55,8 @@ public class SerializationVisitor : ILogicalExpressionVisitor<string>
                 BinaryExpressionType.Equal => "= ",
                 BinaryExpressionType.Greater => "> ",
                 BinaryExpressionType.GreaterOrEqual => ">= ",
-                BinaryExpressionType.Lesser => "< ",
-                BinaryExpressionType.LesserOrEqual => "<= ",
+                BinaryExpressionType.Less => "< ",
+                BinaryExpressionType.LessOrEqual => "<= ",
                 BinaryExpressionType.Minus => "- ",
                 BinaryExpressionType.Modulo => "% ",
                 BinaryExpressionType.NotEqual => "!= ",
@@ -89,6 +89,11 @@ public class SerializationVisitor : ILogicalExpressionVisitor<string>
             UnaryExpressionType.Not => "!",
             UnaryExpressionType.Negate => "-",
             UnaryExpressionType.BitwiseNot => "~",
+            UnaryExpressionType.SqRoot => "\u221a",
+#if NET8_0_OR_GREATER
+            UnaryExpressionType.CbRoot => "\u221b",
+#endif
+            UnaryExpressionType.FourthRoot => "\u221c",
             _ => string.Empty
         });
 

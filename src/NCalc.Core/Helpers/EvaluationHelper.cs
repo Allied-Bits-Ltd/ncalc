@@ -153,6 +153,11 @@ public static class EvaluationHelper
             UnaryExpressionType.Not => !Convert.ToBoolean(result, context.CultureInfo),
             UnaryExpressionType.Negate => MathHelper.Subtract(0, result, context),
             UnaryExpressionType.BitwiseNot => ~Convert.ToUInt64(result, context.CultureInfo),
+            UnaryExpressionType.SqRoot => MathHelper.Sqrt(result, context.CultureInfo),
+#if NET8_0_OR_GREATER
+            UnaryExpressionType.CbRoot => MathHelper.Cbrt(result, context.CultureInfo),
+#endif
+            UnaryExpressionType.FourthRoot => MathHelper.Fthrt(result, context.CultureInfo),
             UnaryExpressionType.Positive => result,
             _ => throw new InvalidOperationException("Unknown UnaryExpressionType")
         };

@@ -100,10 +100,10 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
             case BinaryExpressionType.GreaterOrEqual:
                 return Compare(await left.Value, await right.Value, ComparisonType.GreaterOrEqual);
 
-            case BinaryExpressionType.Lesser:
+            case BinaryExpressionType.Less:
                 return Compare(await left.Value, await right.Value, ComparisonType.Lesser);
 
-            case BinaryExpressionType.LesserOrEqual:
+            case BinaryExpressionType.LessOrEqual:
                 return Compare(await left.Value, await right.Value, ComparisonType.LesserOrEqual);
 
             case BinaryExpressionType.NotEqual:

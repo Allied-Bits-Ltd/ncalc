@@ -100,4 +100,14 @@ public enum ExpressionOptions
     /// Support math operations (+/-) with DateTime and Timespan and between Timespans
     /// </summary>
     SupportTimeOperations = 1 << 18,
+
+    /// <summary>
+    /// Disables using `&`, `|`, `^`, `~` characters for logical and bitwise operations; opting for AND, OR, XOR, NOT, as well as BIT_AND, BIT_OR, BIT_XOR, and BIT_NOT instead. When this flag is enabled, `^` is used for powers (together with `**`)
+    /// </summary>
+    SkipLogicalAndBitwiseOpChars = 1 << 19,
+
+    /// <summary>
+    /// Enables the use of certain Unicode characters to denote some math operations
+    /// </summary>
+    UseUnicodeCharsForOperations = 1 << 20
 }
