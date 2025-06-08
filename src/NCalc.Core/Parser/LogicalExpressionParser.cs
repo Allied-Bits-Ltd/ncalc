@@ -1104,7 +1104,7 @@ public static class LogicalExpressionParser
 
         // factorial => primary ("!")* ;
         // A factorial includes any primary
-        var factorial = primary.And(ZeroOrMany(exclamationMark))
+        var factorial = primary.And(ZeroOrMany(exclamationMark.AndSkip(Not(equal))))
             .Then(static x =>
             {
                 if (x.Item2.Count == 0)
@@ -1205,8 +1205,8 @@ public static class LogicalExpressionParser
         // relational => shift ( ( ">=" | "<=" | "<" | ">" | "in" | "not in" ) shift )* ;
         var relational = shift.And(ZeroOrMany(OneOf(
                     greaterOrEqual.Then(BinaryExpressionType.GreaterOrEqual),
-                    lessOrEqual.Then(BinaryExpressionType.LesserOrEqual),
-                    less.Then(BinaryExpressionType.Lesser),
+                    lessOrEqual.Then(BinaryExpressionType.LessOrEqual),
+                    less.Then(BinaryExpressionType.Less),
                     greater.Then(BinaryExpressionType.Greater),
                     @in.Then(BinaryExpressionType.In),
                     notIn.Then(BinaryExpressionType.NotIn),

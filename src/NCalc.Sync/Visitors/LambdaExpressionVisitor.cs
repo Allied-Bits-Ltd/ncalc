@@ -104,9 +104,9 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 BinaryExpressionType.And => LinqExpression.AndAlso(left, right),
                 BinaryExpressionType.Or => LinqExpression.OrElse(left, right),
                 BinaryExpressionType.NotEqual => WithCommonNumericType(left, right, LinqExpression.NotEqual, expression.Type),
-                BinaryExpressionType.LesserOrEqual => WithCommonNumericType(left, right, LinqExpression.LessThanOrEqual, expression.Type),
+                BinaryExpressionType.LessOrEqual => WithCommonNumericType(left, right, LinqExpression.LessThanOrEqual, expression.Type),
                 BinaryExpressionType.GreaterOrEqual => WithCommonNumericType(left, right, LinqExpression.GreaterThanOrEqual, expression.Type),
-                BinaryExpressionType.Lesser => WithCommonNumericType(left, right, LinqExpression.LessThan, expression.Type),
+                BinaryExpressionType.Less => WithCommonNumericType(left, right, LinqExpression.LessThan, expression.Type),
                 BinaryExpressionType.Greater => WithCommonNumericType(left, right, LinqExpression.GreaterThan, expression.Type),
                 BinaryExpressionType.Equal => WithCommonNumericType(left, right, LinqExpression.Equal, expression.Type),
                 BinaryExpressionType.Minus => _checked ? WithCommonNumericType(left, right, LinqExpression.SubtractChecked, BinaryExpressionType.Minus) : WithCommonNumericType(left, right, LinqExpression.Subtract, BinaryExpressionType.Minus),
@@ -590,7 +590,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 return LinqExpression.GreaterThanOrEqual(
                     LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
                     LinqExpression.Constant(0));
-            case BinaryExpressionType.LesserOrEqual:
+            case BinaryExpressionType.LessOrEqual:
                 return LinqExpression.LessThanOrEqual(
                     LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
                     LinqExpression.Constant(0));
@@ -598,7 +598,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 return LinqExpression.GreaterThan(
                     LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
                     LinqExpression.Constant(0));
-            case BinaryExpressionType.Lesser:
+            case BinaryExpressionType.Less:
                 return LinqExpression.LessThan(
                     LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
                     LinqExpression.Constant(0));

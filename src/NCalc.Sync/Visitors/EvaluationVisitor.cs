@@ -93,10 +93,10 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             case BinaryExpressionType.GreaterOrEqual:
                 return Compare(left.Value, right.Value, ComparisonType.GreaterOrEqual);
 
-            case BinaryExpressionType.Lesser:
+            case BinaryExpressionType.Less:
                 return Compare(left.Value, right.Value, ComparisonType.Lesser);
 
-            case BinaryExpressionType.LesserOrEqual:
+            case BinaryExpressionType.LessOrEqual:
                 return Compare(left.Value, right.Value, ComparisonType.LesserOrEqual);
 
             case BinaryExpressionType.NotEqual:

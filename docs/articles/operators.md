@@ -262,8 +262,6 @@ By default, when the `SkipLogicalAndBitwiseOpChars` flag is not set in  _Express
 * `|` : Bitwise OR
 * `&` : Bitwise AND
 * `^` : Bitwise XOR
-* `<<` : Left shift
-* `>>` : Right shift
 
 **Example:**
 ```csharp
