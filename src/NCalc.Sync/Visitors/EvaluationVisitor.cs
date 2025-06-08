@@ -25,6 +25,26 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
         return expression.RightExpression.Accept(this);
     }
 
+    private object? UpdateParameter(LogicalExpression leftExpression, object? value)
+    {
+        if (leftExpression is Identifier identifier)
+        {
+            var identifierName = identifier.Name;
+
+            var parameterArgs = new UpdateParameterArgs(identifierName, identifier.Id, value);
+
+            OnUpdateParameter(identifierName, parameterArgs);
+
+            if (!parameterArgs.UpdateParameterLists)
+            {
+                return value;
+            }
+
+            context.StaticParameters[context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName] = value;
+        }
+        return value;
+    }
+
     public virtual object? Visit(BinaryExpression expression)
     {
         var left = new Lazy<object?>(() => Evaluate(expression.LeftExpression), LazyThreadSafetyMode.None);
@@ -52,30 +72,44 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             }
         }
         else
-        if (expression.RightExpression is PercentExpression)
+        if ((expression.RightExpression is PercentExpression) && (expression.Type != BinaryExpressionType.Assignment))
         {
-            switch (expression.Type)
-            {
-                case BinaryExpressionType.Minus:
-                    return MathHelper.SubtractPercent(left.Value, right.Value, context);
-                case BinaryExpressionType.Plus:
-                    return MathHelper.AddPercent(left.Value, right.Value, context);
-                case BinaryExpressionType.Times:
-                    return MathHelper.MultiplyPercent(left.Value, right.Value, context);
-                case BinaryExpressionType.Div:
-                    return MathHelper.DividePercent(left.Value, right.Value, context);
-            }
+            if (expression.Type == BinaryExpressionType.Assignment)
+                return UpdateParameter(expression.LeftExpression, right.Value);
+            else
+                switch (expression.Type)
+                {
+                    case BinaryExpressionType.Minus:
+                        return MathHelper.SubtractPercent(left.Value, right.Value, context);
+                    case BinaryExpressionType.Plus:
+                        return MathHelper.AddPercent(left.Value, right.Value, context);
+                    case BinaryExpressionType.Times:
+                        return MathHelper.MultiplyPercent(left.Value, right.Value, context);
+                    case BinaryExpressionType.Div:
+                        return MathHelper.DividePercent(left.Value, right.Value, context);
+                }
         }
         else
         {
             switch (expression.Type)
             {
+                case BinaryExpressionType.StatementSequence:
+                    _ = left.Value;
+                    return right.Value;
+
+                case BinaryExpressionType.Assignment:
+                    return UpdateParameter(expression.LeftExpression, right.Value);
+
                 case BinaryExpressionType.And:
                     return Convert.ToBoolean(left.Value, context.CultureInfo) &&
                            Convert.ToBoolean(right.Value, context.CultureInfo);
 
             case BinaryExpressionType.Or:
                 return Convert.ToBoolean(left.Value, context.CultureInfo) ||
+                       Convert.ToBoolean(right.Value, context.CultureInfo);
+
+            case BinaryExpressionType.XOr:
+                return Convert.ToBoolean(left.Value, context.CultureInfo) ^
                        Convert.ToBoolean(right.Value, context.CultureInfo);
 
             case BinaryExpressionType.Div:
@@ -94,10 +128,10 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 return Compare(left.Value, right.Value, ComparisonType.GreaterOrEqual);
 
             case BinaryExpressionType.Less:
-                return Compare(left.Value, right.Value, ComparisonType.Lesser);
+                return Compare(left.Value, right.Value, ComparisonType.Less);
 
             case BinaryExpressionType.LessOrEqual:
-                return Compare(left.Value, right.Value, ComparisonType.LesserOrEqual);
+                return Compare(left.Value, right.Value, ComparisonType.LessOrEqual);
 
             case BinaryExpressionType.NotEqual:
                 return Compare(left.Value, right.Value, ComparisonType.NotEqual);
@@ -218,7 +252,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
         if (functionArgs.HasResult)
             return functionArgs.Result;
 
-        if (context.Functions.TryGetValue(functionName, out var expressionFunction))
+        if (context.Functions.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? functionName.ToLowerInvariant() : functionName, out var expressionFunction))
         {
             return expressionFunction(new ExpressionFunctionData(function.Identifier.Id, args, context));
         }
@@ -239,7 +273,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             return parameterArgs.Result;
         }
 
-        if (context.StaticParameters.TryGetValue(identifierName, out var parameter))
+        if (context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var parameter))
         {
             if (parameter is Expression expression)
             {
@@ -252,6 +286,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
 
                 expression.EvaluateFunction += context.EvaluateFunctionHandler;
                 expression.EvaluateParameter += context.EvaluateParameterHandler;
+                expression.UpdateParameter += context.UpdateParameterHandler;
 
                 return expression.Evaluate();
             }
@@ -259,7 +294,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             return parameter;
         }
 
-        if (context.DynamicParameters.TryGetValue(identifierName, out var dynamicParameter))
+        if (context.DynamicParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var dynamicParameter))
         {
             return dynamicParameter(new ExpressionParameterData(identifier.Id, context));
         }
@@ -291,8 +326,8 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             ComparisonType.Equal => result == 0,
             ComparisonType.Greater => result > 0,
             ComparisonType.GreaterOrEqual => result >= 0,
-            ComparisonType.Lesser => result < 0,
-            ComparisonType.LesserOrEqual => result <= 0,
+            ComparisonType.Less => result < 0,
+            ComparisonType.LessOrEqual => result <= 0,
             ComparisonType.NotEqual => result != 0,
             _ => throw new ArgumentOutOfRangeException(nameof(comparisonType), comparisonType, null)
         };
@@ -306,6 +341,11 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
     protected void OnEvaluateParameter(string name, ParameterArgs args)
     {
         context.EvaluateParameterHandler?.Invoke(name, args);
+    }
+
+    protected void OnUpdateParameter(string name, UpdateParameterArgs args)
+    {
+        context.UpdateParameterHandler?.Invoke(name, args);
     }
 
     protected object? Evaluate(LogicalExpression expression)

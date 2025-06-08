@@ -2,8 +2,11 @@ namespace NCalc.Domain;
 
 public enum BinaryExpressionType
 {
+    StatementSequence,
+    Assignment,
     And,
     Or,
+    XOr,
     NotEqual,
     LessOrEqual,
     GreaterOrEqual,

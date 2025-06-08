@@ -23,28 +23,27 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
     private readonly bool _caseInsensitiveStringComparer;
     private readonly bool _checked;
 
+    private ExpressionContext? _expressionContext;
+
     private static readonly MethodInfo StringComparerEqualsMethod =
         typeof(StringComparer).GetMethod("Equals", [typeof(string), typeof(string)])!;
 
     private static readonly MethodInfo StringComparerCompareMethod =
         typeof(StringComparer).GetMethod("Compare", [typeof(string), typeof(string)])!;
 
-    private LambdaExpressionVisitor(ExpressionOptions options)
+    public LambdaExpressionVisitor(LinqParameterExpression? context, ExpressionContext? expressionContext, IDictionary<string, object?>? parameters, ExpressionOptions options)
     {
+        if (context != null)
+            _context = context;
+        if (expressionContext != null)
+            _expressionContext = expressionContext;
+        if (parameters != null)
+            _parameters = parameters;
+
         _options = options;
         _ordinalStringComparer = _options.HasFlag(ExpressionOptions.OrdinalStringComparer);
         _checked = _options.HasFlag(ExpressionOptions.OverflowProtection);
         _caseInsensitiveStringComparer = _options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer);
-    }
-
-    public LambdaExpressionVisitor(IDictionary<string, object?> parameters, ExpressionOptions options) : this(options)
-    {
-        _parameters = parameters;
-    }
-
-    public LambdaExpressionVisitor(LinqParameterExpression context, ExpressionOptions options) : this(options)
-    {
-        _context = context;
     }
 
     public LinqExpression Visit(TernaryExpression expression)
@@ -85,7 +84,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             };
         }
         else
-        if (expression.RightExpression is PercentExpression)
+        if ((expression.RightExpression is PercentExpression) && (expression.Type != BinaryExpressionType.Assignment))
         {
             return expression.Type switch
             {
@@ -101,8 +100,11 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         {
             return expression.Type switch
             {
+                BinaryExpressionType.Assignment => UpdateParameter<object?>(expression.LeftExpression, right),
+                BinaryExpressionType.StatementSequence => SkipAndReturn(left, right),
                 BinaryExpressionType.And => LinqExpression.AndAlso(left, right),
                 BinaryExpressionType.Or => LinqExpression.OrElse(left, right),
+                BinaryExpressionType.XOr => BooleanXOr(left, right),
                 BinaryExpressionType.NotEqual => WithCommonNumericType(left, right, LinqExpression.NotEqual, expression.Type),
                 BinaryExpressionType.LessOrEqual => WithCommonNumericType(left, right, LinqExpression.LessThanOrEqual, expression.Type),
                 BinaryExpressionType.GreaterOrEqual => WithCommonNumericType(left, right, LinqExpression.GreaterThanOrEqual, expression.Type),
@@ -190,7 +192,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         }
 
         //Context methods take precedence over built-in functions because they're user-customizable.
-        var mi = FindMethod(function.Identifier.Name, args);
+        var mi = FindMethod(_expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? function.Identifier.Name.ToLowerInvariant() : function.Identifier.Name, args);
         if (mi != null)
         {
             return LinqExpression.Call(_context, mi.MethodInfo, mi.PreparedArguments);
@@ -285,14 +287,14 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(Identifier identifier)
     {
-        var identifierName = identifier.Name;
+        var identifierName = _expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? identifier.Name.ToLowerInvariant() : identifier.Name;
 
         if (_context == null)
         {
             if (_parameters != null && _parameters.TryGetValue(identifierName, out var param))
                 return LinqExpression.Constant(param);
 
-            throw new NCalcParameterNotDefinedException(identifierName);
+            throw new NCalcParameterNotDefinedException(identifier.Name);
         }
 
         return LinqExpression.PropertyOrField(_context, identifierName);
@@ -349,20 +351,6 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         return null;
     }
 
-    /*private static Expression<Func<T, BigInteger>> ConvertToBigInteger<T>(Expression<Func<T, long>> longExpr)
-    {
-        // Get the parameter (x)
-        var param = longExpr.Parameters[0];
-
-        // Create the constructor call: new BigInteger(longExpr.Body)
-        var constructor = typeof(BigInteger).GetConstructor(new[] { typeof(long) });
-        var newExpr = LinqExpression.New(constructor!, longExpr.Body);
-
-        // Build the new lambda expression
-        return LinqExpression.Lambda<Func<T, BigInteger>>(newExpr, param);
-    }
-*/
-
     private static Linq.Expression<Func<BigInteger>> ConvertToBigInteger(LinqExpression intExpr)
     {
         if (intExpr.Type != typeof(int) && intExpr.Type != typeof(long) && intExpr.Type != typeof(uint) && intExpr.Type != typeof(ulong) && intExpr.Type != typeof(string) && intExpr.Type != typeof(decimal) && intExpr.Type != typeof(double) && intExpr.Type != typeof(float))
@@ -404,6 +392,89 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             // Build the new lambda expression
             return LinqExpression.Lambda<Func<BigInteger>>(newExpr);
         }
+    }
+
+    private void OnUpdateParameter(string name, NCalc.Handlers.UpdateParameterArgs args)
+    {
+        _expressionContext?.UpdateParameterHandler?.Invoke(name, args);
+    }
+
+    private LinqExpression SkipAndReturn(LinqExpression left, LinqExpression right)
+    {
+        // Combine into a block: evaluate both, return right
+        var block = LinqExpression.Block(
+            LinqExpression.Convert(left, typeof(object)), // Evaluate and discard
+            right // Result returned
+        );
+
+        return block;
+    }
+
+    private LinqExpression UpdateParameter<T>(LogicalExpression leftExpression, LinqExpression valueExpr)
+    {
+        if (leftExpression is Identifier identifier)
+        {
+            var identifierName = identifier.Name;
+
+            var sideEffect = new Func<T, bool>((value) =>
+            {
+                var parameterArgs = new NCalc.Handlers.UpdateParameterArgs(identifierName, identifier.Id, value);
+                OnUpdateParameter(identifierName, parameterArgs);
+
+                if (parameterArgs.UpdateParameterLists)
+                {
+                    if (_parameters != null)
+                        _parameters[_expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? identifierName.ToLowerInvariant() : identifierName] = value;
+
+                    if (_context != null)
+                        return true;
+                }
+                return false;
+            });
+
+            var convertToT = LinqExpression.Convert(valueExpr, typeof(T));
+
+            Linq.LambdaExpression sideEffectFunc = bool (T x) => sideEffect(x);
+
+            var invokeSideEffect = LinqExpression.Invoke(sideEffectFunc, convertToT);
+
+            // Variable to store evaluated result
+            var valueVar = LinqExpression.Variable(typeof(T), "value");
+            var needUpdateParamsVar = LinqExpression.Variable(typeof(bool), "needUpdateParams");
+
+            // If required, update parameters
+            LinqExpression maybeUpdateParameters = (_context != null) ? LinqExpression.Assign(LinqExpression.PropertyOrField(_context, identifierName), valueExpr) : LinqExpression.Empty();
+
+            // Sequence: run side-effect, then return value
+            var block = LinqExpression.Block(
+                [valueVar, needUpdateParamsVar],
+                LinqExpression.Assign(valueVar, convertToT),
+                LinqExpression.Assign(needUpdateParamsVar, invokeSideEffect),
+                LinqExpression.IfThen(needUpdateParamsVar, maybeUpdateParameters),
+                valueVar
+            );
+            return block;
+        }
+        else
+        {
+            return valueExpr;
+        }
+    }
+
+    private LinqExpression BooleanXOr(LinqExpression left, LinqExpression right)
+    {
+        if (left == null) throw new ArgumentNullException(nameof(left));
+        if (right == null) throw new ArgumentNullException(nameof(right));
+
+        // Convert each to boolean: true if not default(T), false if default(T)
+        LinqExpression leftIsDefault = LinqExpression.Equal(left, LinqExpression.Default(left.Type));
+        LinqExpression leftAsBool = LinqExpression.Not(leftIsDefault);
+
+        LinqExpression rightIsDefault = LinqExpression.Equal(right, LinqExpression.Default(right.Type));
+        LinqExpression rightAsBool = LinqExpression.Not(rightIsDefault);
+
+        // Apply boolean XOR: A ^ B
+        return LinqExpression.ExclusiveOr(leftAsBool, rightAsBool);
     }
 
     private LinqExpression Factorial(LinqExpression left, LinqExpression right)
