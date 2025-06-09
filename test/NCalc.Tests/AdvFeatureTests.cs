@@ -839,8 +839,6 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DateOrder = AdvancedExpressionOptions.DateOrderKind.YMD;
         var result = expression.Evaluate();
 
-        string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
-
         DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4], expectedValue[5]);
 
         Assert.Equal(expectedDate, result);
@@ -859,8 +857,6 @@ public class AdvFeatureTests
         var sut = expression.ToLambda<DateTime>();
         var result = sut();
 
-        string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
-
         DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4], expectedValue[5]);
 
         Assert.Equal(expectedDate, result);
@@ -877,8 +873,6 @@ public class AdvFeatureTests
         expression.AdvancedOptions.TimeSeparator = ":";
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
         var result = expression.Evaluate();
-
-        string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -898,9 +892,143 @@ public class AdvFeatureTests
         var sut = expression.ToLambda<TimeSpan>();
         var result = sut();
 
-        string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
-
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
+
+        Assert.Equal(expectedTime, result);
+    }
+
+    [Theory]
+    [InlineData("#1day3hrs356ms#", new int[] { 1, 3, 0, 0, 356 })]
+    [InlineData("#1y2wks21day#", new int[] { 400, 0, 0, 0, 0 })]
+    [InlineData("#1day 3hrs 356ms#", new int[] { 1, 3, 0, 0, 356 })]
+    [InlineData("#1y 2wks 21day#", new int[] { 400, 0, 0, 0, 0 })]
+    [InlineData("#1 day 3 hrs 356 ms#", new int[] { 1, 3, 0, 0, 356 })]
+    [InlineData("#1 y 2 wks 21 day#", new int[] { 400, 0, 0, 0, 0 })]
+    public void ShoudRecognizeHumanePeriods(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+        expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+        expression.AdvancedOptions.TimeSeparator = ":";
+        expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
+        var result = expression.Evaluate();
+
+        TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4]);
+
+        Assert.Equal(expectedTime, result);
+    }
+
+    [Theory]
+    [InlineData("#1tag3std.356ms#", new int[] { 1, 3, 0, 0, 356 })]
+    [InlineData("#1j.2woche21tag#", new int[] { 400, 0, 0, 0, 0 })]
+    public void ShoudRecognizeHumanePeriodsCustom(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+        expression.AdvancedOptions.TimeSeparator = ":";
+        expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+        expression.AdvancedOptions.PeriodYearIndicators.Add("jahre"); // must be lowercase
+        expression.AdvancedOptions.PeriodYearIndicators.Add("jahr"); // must be lowercase
+        expression.AdvancedOptions.PeriodYearIndicators.Add("j");
+        expression.AdvancedOptions.PeriodMonthIndicators.Add("monate");
+        expression.AdvancedOptions.PeriodMonthIndicators.Add("monat");
+        expression.AdvancedOptions.PeriodMonthIndicators.Add("mon");
+        expression.AdvancedOptions.PeriodMonthIndicators.Add("m");
+        expression.AdvancedOptions.PeriodWeekIndicators.Add("wochen");
+        expression.AdvancedOptions.PeriodWeekIndicators.Add("woche");
+        expression.AdvancedOptions.PeriodWeekIndicators.Add("wo");
+        expression.AdvancedOptions.PeriodWeekIndicators.Add("w");
+        expression.AdvancedOptions.PeriodDayIndicators.Add("tage");
+        expression.AdvancedOptions.PeriodDayIndicators.Add("tag");
+        expression.AdvancedOptions.PeriodDayIndicators.Add("tg");
+        expression.AdvancedOptions.PeriodDayIndicators.Add("t");
+        expression.AdvancedOptions.PeriodHourIndicators.Add("stunden");
+        expression.AdvancedOptions.PeriodHourIndicators.Add("stunde");
+        expression.AdvancedOptions.PeriodHourIndicators.Add("std");
+        expression.AdvancedOptions.PeriodMinuteIndicators.Add("minuten");
+        expression.AdvancedOptions.PeriodMinuteIndicators.Add("minute");
+        expression.AdvancedOptions.PeriodMinuteIndicators.Add("min");
+        expression.AdvancedOptions.PeriodSecondIndicators.Add("sekunden");
+        expression.AdvancedOptions.PeriodSecondIndicators.Add("sekunde");
+        expression.AdvancedOptions.PeriodSecondIndicators.Add("sek");
+        expression.AdvancedOptions.PeriodSecondIndicators.Add("s");
+        expression.AdvancedOptions.PeriodMSecIndicators.Add("ms");
+
+        var result = expression.Evaluate();
+
+        TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4]);
+
+        Assert.Equal(expectedTime, result);
+    }
+
+    [Theory]
+    [InlineData("#1day3hrs356ms#", new int[] { 1, 3, 0, 0, 356 })]
+    [InlineData("#1y2wks21day#", new int[] { 400, 0, 0, 0, 0 })]
+    [InlineData("#1day 3hrs 356ms#", new int[] { 1, 3, 0, 0, 356 })]
+    [InlineData("#1y 2wks 21day#", new int[] { 400, 0, 0, 0, 0 })]
+    [InlineData("#1 day 3 hrs 356 ms#", new int[] { 1, 3, 0, 0, 356 })]
+    [InlineData("#1 y 2 wks 21 day#", new int[] { 400, 0, 0, 0, 0 })]
+    public void ShoudRecognizeHumanePeriodsLambda(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+        expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+        expression.AdvancedOptions.TimeSeparator = ":";
+        expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
+        var sut = expression.ToLambda<TimeSpan>();
+        var result = sut();
+
+        TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4]);
+
+        Assert.Equal(expectedTime, result);
+    }
+
+    [Theory]
+    [InlineData("#1tag3std.356ms#", new int[] { 1, 3, 0, 0, 356 })]
+    [InlineData("#1j.2woche21tag#", new int[] { 400, 0, 0, 0, 0 })]
+    public void ShoudRecognizeHumanePeriodsCustomLambda(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+        expression.AdvancedOptions.TimeSeparator = ":";
+        expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+        expression.AdvancedOptions.PeriodYearIndicators.Add("jahre"); // must be lowercase
+        expression.AdvancedOptions.PeriodYearIndicators.Add("jahr"); // must be lowercase
+        expression.AdvancedOptions.PeriodYearIndicators.Add("j");
+        expression.AdvancedOptions.PeriodMonthIndicators.Add("monate");
+        expression.AdvancedOptions.PeriodMonthIndicators.Add("monat");
+        expression.AdvancedOptions.PeriodMonthIndicators.Add("mon");
+        expression.AdvancedOptions.PeriodMonthIndicators.Add("m");
+        expression.AdvancedOptions.PeriodWeekIndicators.Add("wochen");
+        expression.AdvancedOptions.PeriodWeekIndicators.Add("woche");
+        expression.AdvancedOptions.PeriodWeekIndicators.Add("wo");
+        expression.AdvancedOptions.PeriodWeekIndicators.Add("w");
+        expression.AdvancedOptions.PeriodDayIndicators.Add("tage");
+        expression.AdvancedOptions.PeriodDayIndicators.Add("tag");
+        expression.AdvancedOptions.PeriodDayIndicators.Add("tg");
+        expression.AdvancedOptions.PeriodDayIndicators.Add("t");
+        expression.AdvancedOptions.PeriodHourIndicators.Add("stunden");
+        expression.AdvancedOptions.PeriodHourIndicators.Add("stunde");
+        expression.AdvancedOptions.PeriodHourIndicators.Add("std");
+        expression.AdvancedOptions.PeriodMinuteIndicators.Add("minuten");
+        expression.AdvancedOptions.PeriodMinuteIndicators.Add("minute");
+        expression.AdvancedOptions.PeriodMinuteIndicators.Add("min");
+        expression.AdvancedOptions.PeriodSecondIndicators.Add("sekunden");
+        expression.AdvancedOptions.PeriodSecondIndicators.Add("sekunde");
+        expression.AdvancedOptions.PeriodSecondIndicators.Add("sek");
+        expression.AdvancedOptions.PeriodSecondIndicators.Add("s");
+        expression.AdvancedOptions.PeriodMSecIndicators.Add("ms");
+
+        var sut = expression.ToLambda<TimeSpan>();
+        var result = sut();
+
+        TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4]);
 
         Assert.Equal(expectedTime, result);
     }

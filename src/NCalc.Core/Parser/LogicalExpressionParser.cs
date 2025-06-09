@@ -1035,21 +1035,133 @@ public static class LogicalExpressionParser
                     });
             }
 
+            Parser<LogicalExpression>? humaneTimeSpan = null;
+
+            if (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.ParseHumanePeriods))
+            {
+                Parser<string>? alphaText = Terms.Pattern(c => char.IsLetter(c)).Then<string>(x => x.ToString() ?? string.Empty);
+
+                var intNumberForPeriod = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
+                    .AndSkip(Not(OneOf(Terms.Text(decimalSeparator.ToString()), Terms.Text("E", true))))
+                    .Then<int>(d => d);
+
+                humaneTimeSpan = OneOrMany(intNumberForPeriod.And(alphaText.AndSkip(ZeroOrOne(Terms.Char('.'))))).Then<LogicalExpression>(val =>
+                {
+                    string indicator;
+                    int elemValue;
+                    int yearValue = 0;
+                    int monthValue = 0;
+                    int weekValue = 0;
+                    int dayValue = 0;
+                    int hourValue = 0;
+                    int minuteValue = 0;
+                    int secondValue = 0;
+                    int msecValue = 0;
+
+                    const string errFailedToParsePeriodIndicator = "Failed to parse the element '{0}' of a period definition.";
+                    const string errDuplicatePeriodIndicator = "Period indicator '{0}' has been already used in the period definition";
+                    const string errUnrecognizedPeriodIndicator = "Unrecognized period indicator '{0}' in the period definition.";
+
+                    foreach (var entry in val)
+                    {
+                        elemValue = entry.Item1;
+                        indicator = entry.Item2;
+
+                        if (string.IsNullOrEmpty(indicator))
+                            throw new Exception(string.Format(errFailedToParsePeriodIndicator, entry.ToString()));
+
+                        indicator = indicator.ToLower();
+                        if (extOptions.PeriodYearIndicators.Contains(indicator))
+                        {
+                            if (yearValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            yearValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodMonthIndicators.Contains(indicator))
+                        {
+                            if (monthValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            monthValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodWeekIndicators.Contains(indicator))
+                        {
+                            if (weekValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            weekValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodDayIndicators.Contains(indicator))
+                        {
+                            if (dayValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            dayValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodHourIndicators.Contains(indicator))
+                        {
+                            if (hourValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            hourValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodMinuteIndicators.Contains(indicator))
+                        {
+                            if (minuteValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            minuteValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodSecondIndicators.Contains(indicator))
+                        {
+                            if (secondValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            secondValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodMSecIndicators.Contains(indicator))
+                        {
+                            if (msecValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            msecValue = elemValue;
+                        }
+                        else
+                            throw new FormatException(string.Format(errUnrecognizedPeriodIndicator, entry.Item2.ToString()));
+                    }
+                    DateTime current = DateTime.UtcNow;
+                    DateTime dt = current;
+                    if (yearValue != 0)
+                        dt = dt.AddYears(yearValue);
+                    if (monthValue != 0)
+                        dt = dt.AddMonths(monthValue);
+                    if (weekValue != 0)
+                        dt = dt.AddDays(weekValue * 7);
+                    if (dayValue != 0)
+                        dt = dt.AddDays(dayValue);
+                    if (hourValue != 0)
+                        dt = dt.AddHours(hourValue);
+                    if (minuteValue != 0)
+                        dt = dt.AddMinutes(minuteValue);
+                    if (secondValue != 0)
+                        dt = dt.AddSeconds(secondValue);
+                    if (msecValue != 0)
+                        dt = dt.AddMilliseconds(msecValue);
+                    return new ValueExpression(dt - current);
+                });
+            }
+            List<Parser<LogicalExpression>> timeParts = use12HourTime
+                ? [dateAndTime12!, dateAndShortTime12!, dateAndTime, dateAndShortTime, date, time12!, shortTime12!, time, shortTime]
+                : [dateAndTime, dateAndShortTime, date, time, shortTime];
+
+            if (humaneTimeSpan != null)
+                timeParts.Add(humaneTimeSpan);
+
             // datetime => '#' dateAndTime | date | shortTime | time  '#';
-            if (use12HourTime)
-            {
-                dateTime = Terms
+            dateTime = Terms
                 .Char('#')
-                .SkipAnd(OneOf(dateAndTime12!, dateAndShortTime12!, dateAndTime, dateAndShortTime, date, time12!, shortTime12!, time, shortTime))
+                .SkipAnd(OneOf(timeParts.ToArray()))
                 .AndSkip(Literals.Char('#'));
-            }
-            else
-            {
-                dateTime = Terms
-                    .Char('#')
-                    .SkipAnd(OneOf(dateAndTime, dateAndShortTime, date, time, shortTime))
-                    .AndSkip(Literals.Char('#'));
-            }
         }
 
         var isHexDigit = Character.IsHexDigit;
