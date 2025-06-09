@@ -29,6 +29,26 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
         return await expression.RightExpression.Accept(this);
     }
 
+    private async Task<object?> UpdateParameterAsync(LogicalExpression leftExpression, object? value)
+    {
+        if (leftExpression is Identifier identifier)
+        {
+            var identifierName = identifier.Name;
+
+            var parameterArgs = new AsyncUpdateParameterArgs(identifierName, identifier.Id, value);
+
+            await OnUpdateParameterAsync(identifierName, parameterArgs);
+
+            if (!parameterArgs.UpdateParameterLists)
+            {
+                return value;
+            }
+
+            context.StaticParameters[identifierName] = value;
+        }
+        return value;
+    }
+
     public virtual async ValueTask<object?> Visit(BinaryExpression expression)
     {
         var left = new Lazy<ValueTask<object?>>(() => EvaluateAsync(expression.LeftExpression),
@@ -58,7 +78,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
             }
         }
         else
-        if (expression.RightExpression is PercentExpression)
+        if ((expression.RightExpression is PercentExpression) && (expression.Type != BinaryExpressionType.Assignment))
         {
             switch (expression.Type)
             {
@@ -74,14 +94,25 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
         }
         else
         {
-        switch (expression.Type)
-        {
+            switch (expression.Type)
+            {
+            case BinaryExpressionType.StatementSequence:
+                    _ = await left.Value;
+                return await right.Value;
+
+            case BinaryExpressionType.Assignment:
+                    return await UpdateParameterAsync(expression.LeftExpression, await right.Value);
+
             case BinaryExpressionType.And:
                 return Convert.ToBoolean(await left.Value, context.CultureInfo) &&
                        Convert.ToBoolean(await right.Value, context.CultureInfo);
 
             case BinaryExpressionType.Or:
                 return Convert.ToBoolean(await left.Value, context.CultureInfo) ||
+                       Convert.ToBoolean(await right.Value, context.CultureInfo);
+
+            case BinaryExpressionType.XOr:
+                return Convert.ToBoolean(await left.Value, context.CultureInfo) ^
                        Convert.ToBoolean(await right.Value, context.CultureInfo);
 
             case BinaryExpressionType.Div:
@@ -101,10 +132,10 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 return Compare(await left.Value, await right.Value, ComparisonType.GreaterOrEqual);
 
             case BinaryExpressionType.Less:
-                return Compare(await left.Value, await right.Value, ComparisonType.Lesser);
+                return Compare(await left.Value, await right.Value, ComparisonType.Less);
 
             case BinaryExpressionType.LessOrEqual:
-                return Compare(await left.Value, await right.Value, ComparisonType.LesserOrEqual);
+                return Compare(await left.Value, await right.Value, ComparisonType.LessOrEqual);
 
             case BinaryExpressionType.NotEqual:
                 return Compare(await left.Value, await right.Value, ComparisonType.NotEqual);
@@ -304,8 +335,8 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
             ComparisonType.Equal => result == 0,
             ComparisonType.Greater => result > 0,
             ComparisonType.GreaterOrEqual => result >= 0,
-            ComparisonType.Lesser => result < 0,
-            ComparisonType.LesserOrEqual => result <= 0,
+            ComparisonType.Less => result < 0,
+            ComparisonType.LessOrEqual => result <= 0,
             ComparisonType.NotEqual => result != 0,
             _ => throw new ArgumentOutOfRangeException(nameof(comparisonType), comparisonType, null)
         };
@@ -319,6 +350,10 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
     protected ValueTask OnEvaluateParameterAsync(string name, AsyncParameterArgs args)
     {
         return context.AsyncEvaluateParameterHandler?.Invoke(name, args) ?? default;
+    }
+    protected ValueTask OnUpdateParameterAsync(string name, AsyncUpdateParameterArgs args)
+    {
+        return context.AsyncUpdateParameterHandler?.Invoke(name, args) ?? default;
     }
 
     protected ValueTask<object?> EvaluateAsync(LogicalExpression expression)

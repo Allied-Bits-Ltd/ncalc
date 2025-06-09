@@ -23,9 +23,31 @@ namespace NCalc.Domain;
 #endif
 public abstract class LogicalExpression
 {
+    protected ExpressionOptions _options;
+    protected CultureInfo? _cultureInfo;
+    protected AdvancedExpressionOptions? _advancedOptions;
+
+    public LogicalExpression()
+    {
+        _options = ExpressionOptions.None;
+    }
+
+    public LogicalExpression(ExpressionOptions options, CultureInfo? cultureInfo, AdvancedExpressionOptions? advancedOptions)
+    {
+        SetOptions(options, cultureInfo, advancedOptions);
+    }
+
+    public LogicalExpression SetOptions(ExpressionOptions options, CultureInfo? cultureInfo, AdvancedExpressionOptions? advancedOptions)
+    {
+        _options = options;
+        _cultureInfo = cultureInfo;
+        _advancedOptions = advancedOptions;
+        return this;
+    }
+
     public override string ToString()
     {
-        var serializer = new SerializationVisitor();
+        var serializer = new SerializationVisitor(new SerializationContext(_options, _cultureInfo, _advancedOptions));
         return Accept(serializer).TrimEnd(' ');
     }
 

@@ -3,6 +3,7 @@
 using System.Numerics;
 
 using NCalc.Domain;
+using NCalc.Tests.TestData;
 
 namespace NCalc.Tests;
 
@@ -304,40 +305,40 @@ public class AdvFeatureTests
     [InlineData("#1/12/2025 10:1:12#", "de-DE", new int[] { 2025, 12, 1, 10, 1, 12 })]
 
     [InlineData("#1/6/2025 1:2:3#", "de-DE", new int[] { 2025, 6, 1, 1, 2, 3 })]
-    [InlineData("#1/12/2025 1:2:3#", "de-DE", new int[] { 2025, 12, 1, 1, 2, 3})]
+    [InlineData("#1/12/2025 1:2:3#", "de-DE", new int[] { 2025, 12, 1, 1, 2, 3 })]
 
     [InlineData("#1/6/2025 1:1:1#", "en-US", new int[] { 2025, 6, 1, 1, 1, 1 })]
-    [InlineData("#1/12/2025 1:1:1#", "en-US", new int[] { 2025, 12, 1, 1, 1, 1})]
+    [InlineData("#1/12/2025 1:1:1#", "en-US", new int[] { 2025, 12, 1, 1, 1, 1 })]
 
     [InlineData("#1/6/2025 10:11:12#", "en-US", new int[] { 2025, 6, 1, 10, 11, 12 })]
-    [InlineData("#1/12/2025 10:11:12#", "en-US", new int[] { 2025, 12, 1, 10, 11, 12})]
+    [InlineData("#1/12/2025 10:11:12#", "en-US", new int[] { 2025, 12, 1, 10, 11, 12 })]
 
     [InlineData("#1/6/2025 10:11:12p#", "en-US", new int[] { 2025, 6, 1, 22, 11, 12 })]
-    [InlineData("#1/12/2025 10:11:12p#", "en-US", new int[] { 2025, 12, 1, 22, 11, 12})]
+    [InlineData("#1/12/2025 10:11:12p#", "en-US", new int[] { 2025, 12, 1, 22, 11, 12 })]
 
     [InlineData("#1/6/2025 10:11:12pm#", "en-US", new int[] { 2025, 6, 1, 22, 11, 12 })]
-    [InlineData("#1/12/2025 10:11:12pm#", "en-US", new int[] { 2025, 12, 1, 22, 11, 12})]
+    [InlineData("#1/12/2025 10:11:12pm#", "en-US", new int[] { 2025, 12, 1, 22, 11, 12 })]
 
     [InlineData("#1/6/2025 10:11:12 p#", "en-US", new int[] { 2025, 6, 1, 22, 11, 12 })]
-    [InlineData("#1/12/2025 10:11:12 p#", "en-US", new int[] { 2025, 12, 1, 22, 11, 12})]
+    [InlineData("#1/12/2025 10:11:12 p#", "en-US", new int[] { 2025, 12, 1, 22, 11, 12 })]
 
     [InlineData("#1/6/2025 10:11:12 pm#", "en-US", new int[] { 2025, 6, 1, 22, 11, 12 })]
-    [InlineData("#1/12/2025 10:11:12 pm#", "en-US", new int[] { 2025, 12, 1, 22, 11, 12})]
+    [InlineData("#1/12/2025 10:11:12 pm#", "en-US", new int[] { 2025, 12, 1, 22, 11, 12 })]
 
     [InlineData("#1/6/2025 10:11#", "en-US", new int[] { 2025, 6, 1, 10, 11, 0 })]
-    [InlineData("#1/12/2025 10:11#", "en-US", new int[] { 2025, 12, 1, 10, 11, 0})]
+    [InlineData("#1/12/2025 10:11#", "en-US", new int[] { 2025, 12, 1, 10, 11, 0 })]
 
     [InlineData("#1/6/2025 10:11p#", "en-US", new int[] { 2025, 6, 1, 22, 11, 0 })]
-    [InlineData("#1/12/2025 10:11p#", "en-US", new int[] { 2025, 12, 1, 22, 11, 0})]
+    [InlineData("#1/12/2025 10:11p#", "en-US", new int[] { 2025, 12, 1, 22, 11, 0 })]
 
     [InlineData("#1/6/2025 10:11pm#", "en-US", new int[] { 2025, 6, 1, 22, 11, 0 })]
-    [InlineData("#1/12/2025 10:11pm#", "en-US", new int[] { 2025, 12, 1, 22, 11, 0})]
+    [InlineData("#1/12/2025 10:11pm#", "en-US", new int[] { 2025, 12, 1, 22, 11, 0 })]
 
     [InlineData("#1/6/2025 10:11 p#", "en-US", new int[] { 2025, 6, 1, 22, 11, 0 })]
-    [InlineData("#1/12/2025 10:11 p#", "en-US", new int[] { 2025, 12, 1, 22, 11, 0})]
+    [InlineData("#1/12/2025 10:11 p#", "en-US", new int[] { 2025, 12, 1, 22, 11, 0 })]
 
     [InlineData("#1/6/2025 10:11 pm#", "en-US", new int[] { 2025, 6, 1, 22, 11, 0 })]
-    [InlineData("#1/12/2025 10:11 pm#", "en-US", new int[] { 2025, 12, 1, 22, 11, 0})]
+    [InlineData("#1/12/2025 10:11 pm#", "en-US", new int[] { 2025, 12, 1, 22, 11, 0 })]
     public void ShouldParseDatesBuiltinTimesCulture(string input, string cultureName, int[] expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
@@ -400,7 +401,7 @@ public class AdvFeatureTests
     [InlineData("#1/6/2025 22:11:12#", "en-US", new int[] { 2025, 1, 6, 22, 11, 12 })]
 
     [InlineData("#1.6.2025 10:11#", "de-DE", new int[] { 2025, 6, 1, 10, 11, 00 })]
-    [InlineData("#1.6.2025 10:11:12#", "de-DE", new int[] { 2025, 6, 1, 10, 11, 12})]
+    [InlineData("#1.6.2025 10:11:12#", "de-DE", new int[] { 2025, 6, 1, 10, 11, 12 })]
     [InlineData("#1.6.2025 22:11#", "de-DE", new int[] { 2025, 6, 1, 22, 11, 00 })]
     [InlineData("#1.6.2025 22:11:12#", "de-DE", new int[] { 2025, 6, 1, 22, 11, 12 })]
 
@@ -509,7 +510,7 @@ public class AdvFeatureTests
     [Theory]
 
     [InlineData("#1/6/2025 10@11@12#", "en-US", "@", new int[] { 2025, 1, 6, 10, 11, 12 })]
-    [InlineData("#1/6/2025 10@11@12pm#", "en-US",  "@", new int[] { 2025, 1, 6, 22, 11, 12 })] // custom time will follow 12-hour format of the specified culture
+    [InlineData("#1/6/2025 10@11@12pm#", "en-US", "@", new int[] { 2025, 1, 6, 22, 11, 12 })] // custom time will follow 12-hour format of the specified culture
 
     [InlineData("#1.6.2025 1@11@12#", "de-DE", "@", new int[] { 2025, 6, 1, 1, 11, 12 })]
     [InlineData("#1.6.2025 22@11@12#", "de-DE", "@", new int[] { 2025, 6, 1, 22, 11, 12 })]
@@ -769,7 +770,7 @@ public class AdvFeatureTests
         if (result?.GetType() == typeof(System.Double))
         {
             double dResult = (double)result;
-            Assert.Equal(expectedValue, (int) dResult);
+            Assert.Equal(expectedValue, (int)dResult);
         }
         else
             Assert.Equal(expectedValue, result);
@@ -1011,6 +1012,7 @@ public class AdvFeatureTests
     [InlineData("2+5!", 122)]
     [InlineData("2*4!", 48)]
     [InlineData("(2+1)!", 6)]
+    [InlineData("(2+1) +2!", 5)]
     [InlineData("2**3!", 64)]
     public void ShouldCalculateOperationsWithFactorials(string input, long expectedValue)
     {
@@ -1018,7 +1020,7 @@ public class AdvFeatureTests
         var result = expression.Evaluate();
         if (result?.GetType() == typeof(System.Double))
         {
-            double dResult = (double) result;
+            double dResult = (double)result;
             Assert.Equal(expectedValue, (long)dResult);
         }
         else
@@ -1042,11 +1044,12 @@ public class AdvFeatureTests
     [InlineData("2+5!", 122)]
     [InlineData("2*4!", 48)]
     [InlineData("(2+1)!", 6)]
+    [InlineData("(2+1) +2!", 5)]
     [InlineData("2**3!", 64)]
     public void ShouldCalculateOperationsWithFactorialsLambda(string input, long expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
-        var sut = expression.ToLambda <long>();
+        var sut = expression.ToLambda<long>();
         var result = sut();
         if (result.GetType() == typeof(System.Double))
         {
@@ -1110,6 +1113,114 @@ public class AdvFeatureTests
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseUnicodeCharsForOperations);
         var sut = expression.ToLambda<long>();
         var result = sut();
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("a := 2", 2, 2)]
+    [InlineData("a := 2 + 2", 4, 4)]
+    [InlineData("{a} := (2 + 2)", 4, 4)]
+    public void ShouldHandleAssignment(string input, int expectedVarValue, int expectedExprValue)
+    {
+        bool eventFired = false;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments);
+        expression.UpdateParameter += (name, args) =>
+        {
+            eventFired = true;
+            Assert.Equal("a", name);
+            Assert.Equal(expectedVarValue, args.Value);
+        };
+
+        var result = expression.Evaluate();
+
+        Assert.True(eventFired);
+        Assert.Equal(expectedExprValue, result);
+    }
+
+    [Theory]
+    [InlineData("2 + 2; 3 + 3", 6)]
+    [InlineData("(2 + 2); 3 + 3", 6)]
+    [InlineData("Max(2, 5); 3 + 3", 6)]
+    [InlineData("Max(2; 5)", 5)]
+    [InlineData("Max(2; 5); 3 + 3", 6)]
+    public void ShouldHandleStatementSequence(string input, int expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
+        var result = expression.Evaluate();
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("2 + 2; 3 + 3", 6)]
+    [InlineData("(2 + 2); 3 + 3", 6)]
+    [InlineData("Max(2, 5); 3 + 3", 6)]
+    [InlineData("Max(2; 5)", 5)]
+    [InlineData("Max(2; 5); 3 + 3", 6)]
+    public void ShouldHandleStatementSequenceLambda(string input, int expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
+        var sut = expression.ToLambda<long>();
+        var result = sut();
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("2 * 2 ",  4)]
+    [InlineData("2 ** 2 ", 4)]
+    [InlineData("2 || 2 ", true)]
+    [InlineData("2 == 2 ", true)]
+    public void ShouldHandleBinaryStatements(string input, object expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache  /*| ExpressionOptions.UseAssignments*/ | ExpressionOptions.UseStatementSequences);
+        var result = expression.Evaluate();
+
+        if (result.GetType() == typeof(System.Double))
+        {
+            double dResult = (double)result;
+            Assert.Equal(expectedValue, (int)dResult);
+        }
+        else
+        if (result.GetType() == typeof(System.Boolean))
+        {
+            bool bResult = (bool)result;
+            Assert.Equal(expectedValue, bResult);
+        }
+        else
+            Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("a := 2", 2, 2)]
+    [InlineData("a := 2 + 2", 4, 4)]
+    [InlineData("{a} := (2 + 2)", 4, 4)]
+    [InlineData("a := 2; a + 2", 2, 4)]
+    [InlineData("a := 2; {a} + 2", 2, 4)]
+    [InlineData("a := 2; a + Max(2; 4)", 2, 6)]
+    public void ShouldHandleStatementSequenceWithAssignment(string input, int expectedVarValue, int expectedExprValue)
+    {
+        bool eventFired = false;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        expression.UpdateParameter += (name, args) =>
+        {
+            eventFired = true;
+
+            Assert.Equal("a", name);
+            Assert.Equal(expectedVarValue, args.Value);
+        };
+        var result = expression.Evaluate();
+        Assert.True(eventFired);
+        Assert.Equal(expectedExprValue, result);
+    }
+
+    [Theory]
+    //[InlineData("2 > (3 + 5)", false)]
+    [ClassData(typeof(EvaluationTestData))]
+    public void ShouldHandleStatementsWithAssignmentsEnabled(string input, object expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | /*ExpressionOptions.UseAssignments | */ExpressionOptions.UseStatementSequences);
+        var result = expression.Evaluate();
         Assert.Equal(expectedValue, result);
     }
 }

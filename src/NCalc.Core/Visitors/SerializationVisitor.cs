@@ -7,15 +7,17 @@ namespace NCalc.Visitors;
 /// <summary>
 /// Class responsible to converting a <see cref="LogicalExpression"/> into a <see cref="string"/> representation.
 /// </summary>
-public class SerializationVisitor : ILogicalExpressionVisitor<string>
+public class SerializationVisitor(SerializationContext context) : ILogicalExpressionVisitor<string>
 {
     private readonly NumberFormatInfo _numberFormatInfo = new()
     {
-        NumberDecimalSeparator = "."
+        NumberDecimalSeparator = (context.AdvancedOptions == null) ? "." : context.AdvancedOptions.GetDecimalSeparatorChar().ToString()
     };
 
     public string Visit(TernaryExpression expression)
     {
+        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
+
         var resultBuilder = new StringBuilder();
         resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression));
         resultBuilder.Append("? ");
@@ -27,6 +29,8 @@ public class SerializationVisitor : ILogicalExpressionVisitor<string>
 
     public string Visit(BinaryExpression expression)
     {
+        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
+
         var resultBuilder = new StringBuilder();
 
         if (expression.Type == BinaryExpressionType.Factorial)
@@ -49,27 +53,29 @@ public class SerializationVisitor : ILogicalExpressionVisitor<string>
 
             resultBuilder.Append(expression.Type switch
             {
+                BinaryExpressionType.Assignment => context.Options.HasFlag(ExpressionOptions.UseCStyleAssignments) ? "= " : ":= ",
                 BinaryExpressionType.And => "and ",
                 BinaryExpressionType.Or => "or ",
-                BinaryExpressionType.Div => "/ ",
-                BinaryExpressionType.Equal => "= ",
+                BinaryExpressionType.XOr => "xor ",
+                BinaryExpressionType.Div => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u00F7 " : "/ ",
+                BinaryExpressionType.Equal => context.Options.HasFlag(ExpressionOptions.UseCStyleAssignments) ? "== " : "= ",
                 BinaryExpressionType.Greater => "> ",
-                BinaryExpressionType.GreaterOrEqual => ">= ",
+                BinaryExpressionType.GreaterOrEqual => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2265 " : ">= ",
                 BinaryExpressionType.Less => "< ",
-                BinaryExpressionType.LessOrEqual => "<= ",
+                BinaryExpressionType.LessOrEqual => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2264 " : "<= ",
                 BinaryExpressionType.Minus => "- ",
-                BinaryExpressionType.Modulo => "% ",
-                BinaryExpressionType.NotEqual => "!= ",
+                BinaryExpressionType.Modulo => (context.AdvancedOptions != null && context.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent)) ? "mod " : "% ",
+                BinaryExpressionType.NotEqual => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2260 " : "!= ",
                 BinaryExpressionType.Plus => "+ ",
-                BinaryExpressionType.Times => "* ",
-                BinaryExpressionType.BitwiseAnd => "& ",
-                BinaryExpressionType.BitwiseOr => "| ",
-                BinaryExpressionType.BitwiseXOr => "^ ",
+                BinaryExpressionType.Times => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u00D7 " :  "* ",
+                BinaryExpressionType.BitwiseAnd => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_and " :  "& ",
+                BinaryExpressionType.BitwiseOr => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_or " : "| ",
+                BinaryExpressionType.BitwiseXOr => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_xor " : "^ ",
                 BinaryExpressionType.LeftShift => "<< ",
                 BinaryExpressionType.RightShift => ">> ",
-                BinaryExpressionType.Exponentiation => "** ",
-                BinaryExpressionType.In => "in ",
-                BinaryExpressionType.NotIn => "not in ",
+                BinaryExpressionType.Exponentiation => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? (context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2291 " : "^ ") : "** ",
+                BinaryExpressionType.In => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2208 " : "in ",
+                BinaryExpressionType.NotIn => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2209 " : "not in ",
                 BinaryExpressionType.Like => "like ",
                 BinaryExpressionType.NotLike => "not like ",
                 BinaryExpressionType.Unknown => "unknown ",
@@ -82,13 +88,15 @@ public class SerializationVisitor : ILogicalExpressionVisitor<string>
 
     public string Visit(UnaryExpression expression)
     {
+        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
+
         var resultBuilder = new StringBuilder();
 
         resultBuilder.Append(expression.Type switch
         {
             UnaryExpressionType.Not => "!",
             UnaryExpressionType.Negate => "-",
-            UnaryExpressionType.BitwiseNot => "~",
+            UnaryExpressionType.BitwiseNot => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_xor " : "~",
             UnaryExpressionType.SqRoot => "\u221a",
 #if NET8_0_OR_GREATER
             UnaryExpressionType.CbRoot => "\u221b",
@@ -104,11 +112,15 @@ public class SerializationVisitor : ILogicalExpressionVisitor<string>
 
     public string Visit(PercentExpression expression)
     {
+        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
+
         return EncapsulateNoValue(expression.Expression).TrimEnd() + "%";
     }
 
     public string Visit(ValueExpression expression)
     {
+        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
+
         var resultBuilder = new StringBuilder();
 
         switch (expression.Type)
@@ -136,6 +148,8 @@ public class SerializationVisitor : ILogicalExpressionVisitor<string>
 
     public string Visit(Function function)
     {
+        function.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
+
         var resultBuilder = new StringBuilder();
         resultBuilder.Append(function.Identifier.Name).Append('(');
 
@@ -163,6 +177,8 @@ public class SerializationVisitor : ILogicalExpressionVisitor<string>
 
     public string Visit(LogicalExpressionList list)
     {
+        list.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
+
         var resultBuilder = new StringBuilder().Append('(');
         for (var i = 0; i < list.Count; i++)
         {

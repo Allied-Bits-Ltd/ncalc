@@ -104,10 +104,25 @@ public enum ExpressionOptions
     /// <summary>
     /// Disables using `&`, `|`, `^`, `~` characters for logical and bitwise operations; opting for AND, OR, XOR, NOT, as well as BIT_AND, BIT_OR, BIT_XOR, and BIT_NOT instead. When this flag is enabled, `^` is used for powers (together with `**`)
     /// </summary>
-    SkipLogicalAndBitwiseOpChars = 1 << 19,
+    SkipLogicalAndBitwiseOpChars = 1 << 20,
 
     /// <summary>
     /// Enables the use of certain Unicode characters to denote some math operations
     /// </summary>
-    UseUnicodeCharsForOperations = 1 << 20
+    UseUnicodeCharsForOperations = 1 << 21,
+
+    /// <summary>
+    /// When enabled, supports assignment statements and update of parameters. By default, the feature is disabled for performance.
+    /// </summary>
+    UseAssignments = 1 << 22,
+
+    /// <summary>
+    /// Enables the use of "=" for assignments and "==" for the equality operator. When not enabled, both "=" and "==" are used for the equality operator and assignment is done with ":="
+    /// </summary>
+    UseCStyleAssignments = 1 << 23,
+
+    /// <summary>
+    /// When enabled, supports sequences of statements separated by ';'
+    /// </summary>
+    UseStatementSequences = 1 << 24,
 }
