@@ -42,10 +42,10 @@ secret_operation("my_db", 2) // Function arguments are actually a list!
 
 Unary operators operate on a single operand.
 
-* `!` : Logical NOT  (unless the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
+* `!` : Logical NOT  (unless the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
 * `not` : Logical NOT
 * `-` : Negation
-* `~` : Bitwise NOT (unless the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
+* `~` : Bitwise NOT (unless the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
 * `bit_not` : Bitwise NOT
 
 **Examples:**
@@ -54,9 +54,9 @@ not true
 !(1 != 2)
 ```
 
-When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
+When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
 
-* `¬` (U+00AC) : Logical NOT
+* `¬` (U+00AC) : Logical NOT
 * `√` (U+221A) : Square root
 * `∛` (U+221B) : Cube root
 * `∜` (U+221C) : Fourth root
@@ -101,8 +101,8 @@ Percent calculations must be enabled via the [AdvancedOptions](advanced_value_fo
 
 Exponential operators perform exponentiation.
 
-* `**` : Exponentiation  (default, when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is not set in  <xref:NCalc.ExpressionOptions>)
-* `^` : Exponentiation  (when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
+* `**` : Exponentiation  (default, when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is not set in  <xref:NCalc.ExpressionOptions>)
+* `^` : Exponentiation  (when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
 
 **Example:**
 ```csharp
@@ -126,6 +126,12 @@ When Unicode Characters are enabled for operations using the <xref:NCalc.Express
 * `:` : Division
 * `÷` (U+00F7) : Division
 
+When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignments> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
+* `*=` : Multiplication with assignment of the result to the left operand
+* `/=` : Division with assignment of the result to the left operand
+
+When unicode characters are enabled, they can also be used for multiplication with assignment and division with assignment.
+
 **Example:**
 ```csharp
 1 * 2 % 3
@@ -142,6 +148,9 @@ Additive operators perform addition and subtraction.
 ```csharp
 1 + 2 - 3
 ```
+When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignments> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
+* `+=` : Addition with assignment of the result to the left operand
+* `-=` : Subtraction with assignment of the result to the left operand
 
 ## Relational
 
@@ -193,7 +202,7 @@ The `IN` and `NOT IN` operators check whether a value is present or absent withi
 * `IN` : Returns `true` if the left operand is found in the right operand (which can be a collection or string).
 * `NOT IN` : Returns `true` if the left operand is not found in the right operand.
 
-When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
+When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
 * `∈` (U+2208) : Returns `true` if the left operand is found in the right operand (which can be a collection or string). 
 * `∉` (U+2209) : Returns `true` if the left operand is not found in the right operand.
 
@@ -234,8 +243,7 @@ Logical operators perform logical comparisons between expressions.
 
 * `or`, `||` : Logical OR
 * `and`, `&&` : Logical AND
-* `xor` : Logical XOR
-
+* `xor` : Logical XOR
 **Examples:**
 ```csharp
 true or false and true    // Evaluates to true
@@ -257,7 +265,7 @@ Bitwise operators perform bitwise operations on integers.
 * `<<` : Left shift
 * `>>` : Right shift
 
-By default, when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is not set in <xref:NCalc.ExpressionOptions>, the following operator symbols are used:
+By default, when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is not set in <xref:NCalc.ExpressionOptions>, the following operator symbols are used:
 
 * `|` : Bitwise OR
 * `&` : Bitwise AND
@@ -268,7 +276,12 @@ By default, when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars
 2 >> 3
 ```
 
-When the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in <xref:NCalc.ExpressionOptions>, the following operators are used:
+When the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in <xref:NCalc.ExpressionOptions>, the following operators are used:
 * `BIT_OR` : Bitwise OR
 * `BIT_AND` : Bitwise AND
 * `BIT_XOR` : Bitwise XOR
+
+When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignments> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported (regardless of the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag):
+* `&=` : Bitwise AND with assignment of the result to the left operand
+* `|=` : Bitwise OR with assignment of the result to the left operand
+* `^=` : Bitwise XOR with assignment of the result to the left operand 
