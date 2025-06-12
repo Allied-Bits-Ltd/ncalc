@@ -31,6 +31,10 @@ public static class LogicalExpressionParser
 
     private static readonly bool _hasAllowUnderscore = Enum.GetNames(typeof(NumberOptions)).Contains("AllowUnderscore");
 
+    const string errFailedToParsePeriodIndicator = "Failed to parse the element '{0}' of a period definition.";
+    const string errDuplicatePeriodIndicator = "Period indicator '{0}' has been already used in the period definition";
+    const string errUnrecognizedPeriodIndicator = "Unrecognized period indicator '{0}' in the period definition.";
+
     class CurrentCultureDateTimeFormatProvider : IFormatProvider
     {
         public object GetFormat(Type? formatType)
@@ -280,6 +284,7 @@ public static class LogicalExpressionParser
 
         bool useCharsForOps = !options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars);
         bool useUnicodeForOps = options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations);
+        bool useAssignments = options.HasFlag(ExpressionOptions.UseAssignments);
 
         var percentChar = Terms.Char('%'); // CultureInfo defines a percent character, but we are yet to see another character than '%'
 
@@ -305,15 +310,6 @@ public static class LogicalExpressionParser
 
         var leftShift = Terms.Text("<<");
         var rightShift = Terms.Text(">>");
-
-        var assignmentOperator = useUnicodeForOps
-                                    ? OneOf(Terms.Text("\u2254"),
-                                            (options.HasFlag(ExpressionOptions.UseCStyleAssignments)
-                                                ? Terms.Text("=")
-                                                : Terms.Text(":=")))
-                                    : options.HasFlag(ExpressionOptions.UseCStyleAssignments)
-                                                ? Terms.Text("=")
-                                                : Terms.Text(":=");
 
         var exponent = useUnicodeForOps
             ? (useCharsForOps
@@ -372,6 +368,23 @@ public static class LogicalExpressionParser
         var bitwiseOr = useCharsForOps ? OneOf(Terms.Text("BIT_OR", true), Terms.Text("|"))  : Terms.Text("BIT_OR", true);
         var bitwiseXOr = useCharsForOps ? OneOf(Terms.Text("BIT_XOR", true), Terms.Text("^")) : Terms.Text("BIT_XOR", true);
         var bitwiseNot = useCharsForOps ? OneOf(Terms.Text("BIT_NOT", true), Terms.Text("~")) : Terms.Text("BIT_NOT", true);
+
+        var assignmentOperator = useUnicodeForOps
+                                    ? OneOf(Terms.Text("\u2254"),
+                                            (options.HasFlag(ExpressionOptions.UseCStyleAssignments)
+                                                ? Terms.Text("=")
+                                                : Terms.Text(":=")))
+                                    : options.HasFlag(ExpressionOptions.UseCStyleAssignments)
+                                                ? Terms.Text("=")
+                                                : Terms.Text(":=");
+
+        var plusAssign = Terms.Text("+=");
+        var minusAssign = Terms.Text("-=");
+        var multiplyAssign = useUnicodeForOps ? OneOf(Terms.Text("*="), Terms.Text("\u00D7="), Terms.Text("\u2219=")) : Terms.Text("*=");
+        var divAssign = Terms.Text("/=");
+        var orAssign = Terms.Text("|=");
+        var andAssign = Terms.Text("&=");
+        var xorAssign = Terms.Text("^=");
 
         // "(" expression ")"
         var groupExpression = Between(openParen, expression, closeParen);
@@ -1058,10 +1071,6 @@ public static class LogicalExpressionParser
                     int secondValue = 0;
                     int msecValue = 0;
 
-                    const string errFailedToParsePeriodIndicator = "Failed to parse the element '{0}' of a period definition.";
-                    const string errDuplicatePeriodIndicator = "Period indicator '{0}' has been already used in the period definition";
-                    const string errUnrecognizedPeriodIndicator = "Unrecognized period indicator '{0}' in the period definition.";
-
                     foreach (var entry in val)
                     {
                         elemValue = entry.Item1;
@@ -1391,27 +1400,47 @@ public static class LogicalExpressionParser
         {
             var assignmentTypeParser = assignmentOperator.Then(BinaryExpressionType.Assignment);
 
-            var assignment = identifierExpression.AndSkip(assignmentOperator).And(OneOrMany(operatorSequence))
+            var assignment = identifierExpression.And(OneOf(assignmentOperator, plusAssign, minusAssign, multiplyAssign, divAssign, orAssign, xorAssign, andAssign)).And(OneOrMany(operatorSequence))
             .Then<LogicalExpression>(x =>
                 {
                     LogicalExpression result = null!;
-
-                    switch (x.Item2.Count)
+                    BinaryExpressionType expressionType;
+                    switch (x.Item2)
                     {
-                        case 0:
-                            result = x.Item1;
+                        case "+=":
+                            expressionType = BinaryExpressionType.PlusAssignment;
                             break;
-                        case 1:
-                            result = (BinaryExpression)(new BinaryExpression(BinaryExpressionType.Assignment, x.Item1, x.Item2[0])).SetOptions(options, cultureInfo, extOptions);
+                        case "-=":
+                            expressionType = BinaryExpressionType.MinusAssignment;
+                            break;
+                        case "\u00D7=":
+                        case "\u2219=":
+                        case "*=":
+                            expressionType = BinaryExpressionType.MultiplyAssignment;
+                            break;
+                        case "/=":
+                            expressionType = BinaryExpressionType.DivAssignment;
+                            break;
+                        case "&=":
+                            expressionType = BinaryExpressionType.AndAssignment;
+                            break;
+                        case "|=":
+                            expressionType = BinaryExpressionType.OrAssignment;
+                            break;
+                        case "^=":
+                            expressionType = BinaryExpressionType.XOrAssignment;
                             break;
                         default:
-                        {
-                            result = (BinaryExpression)(new BinaryExpression(BinaryExpressionType.Assignment, x.Item1, x.Item2[0])).SetOptions(options, cultureInfo, extOptions);
-                            for (int i = 1; i < x.Item2.Count - 1; i++)
-                            {
-                                result = (BinaryExpression)(new BinaryExpression(BinaryExpressionType.Assignment, result, x.Item2[i])).SetOptions(options, cultureInfo, extOptions);
-                            }
+                            expressionType = BinaryExpressionType.Assignment;
                             break;
+                    }
+
+                    result = (BinaryExpression)(new BinaryExpression(expressionType, x.Item1, x.Item3[0])).SetOptions(options, cultureInfo, extOptions);
+                    if (x.Item3.Count > 1)
+                    {
+                        for (int i = 1; i < x.Item3.Count - 1; i++)
+                        {
+                            result = (BinaryExpression)(new BinaryExpression(expressionType, result, x.Item3[i])).SetOptions(options, cultureInfo, extOptions);
                         }
                     }
                     return result;
