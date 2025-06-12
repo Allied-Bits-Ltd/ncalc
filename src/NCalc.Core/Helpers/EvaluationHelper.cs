@@ -66,6 +66,11 @@ public static class EvaluationHelper
     {
         if (context.Options.HasFlag(ExpressionOptions.SupportTimeOperations))
         {
+            if (leftValue is DateTime && (rightValue is DateTime))
+            {
+                return ((DateTime)leftValue).Subtract((DateTime)rightValue);
+            }
+            else
             if (leftValue is DateTime && (rightValue is TimeSpan))
             {
                 return ((DateTime)leftValue).Subtract((TimeSpan)rightValue);

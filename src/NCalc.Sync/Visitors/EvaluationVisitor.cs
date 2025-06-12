@@ -1,9 +1,5 @@
-﻿using NCalc.Domain;
-using NCalc.Exceptions;
-using NCalc.Handlers;
+﻿using NCalc.Handlers;
 using NCalc.Helpers;
-
-using static NCalc.Helpers.TypeHelper;
 
 namespace NCalc.Visitors;
 
