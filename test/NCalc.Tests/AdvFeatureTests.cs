@@ -1164,9 +1164,9 @@ public class AdvFeatureTests
             Assert.Equal(expectedVarValue, args.Value);
         };
 
-        Func<InLowercaseLambdaTestsContext, object> function = expression.ToLambda<InLowercaseLambdaTestsContext, object>();
+        Func<AssignmentLambdaTestsContext, object> function = expression.ToLambda<AssignmentLambdaTestsContext, object>();
 
-        var context = new InLowercaseLambdaTestsContext { };
+        var context = new AssignmentLambdaTestsContext { };
         var result = function(context);
 
         Assert.True(eventFired);
@@ -1263,6 +1263,89 @@ public class AdvFeatureTests
         var result = expression.Evaluate();
         Assert.True(eventFired);
         Assert.Equal(expectedExprValue, result);
+    }
+
+    public class StatementSequenceWithAssignment2TestData : TheoryData<string, int>
+    {
+        public StatementSequenceWithAssignment2TestData()
+        {
+            Add("a := 2; a += 2", 4);
+            Add("a := 4; a -= 2", 2);
+            Add("a := 2; a *= 2", 4);
+            Add("a := 4; a /= 2", 2);
+            Add("a := 3; a &= 2", 2);
+            Add("a := 1; a |= 2", 3);
+            Add("a := 3; a ^= 2", 1);
+            Add("a := 3; a ^= 1", 2);
+            Add("a := 2; a ^= 1", 3);
+        }
+    }
+
+    [Theory]
+    [ClassData(typeof(StatementSequenceWithAssignment2TestData))]
+    public void ShouldHandleStatementSequenceWithAssignment2(string input, int expectedExprValue)
+    {
+        bool eventFired = false;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        expression.UpdateParameter += (name, args) => eventFired = true;
+        var result = expression.Evaluate();
+
+        Assert.True(eventFired);
+
+        Assert.NotNull(result);
+        if (result.GetType() == typeof(System.UInt64))
+        {
+            ulong uResult = (ulong)result;
+            Assert.Equal(expectedExprValue, (int)uResult);
+        }
+        else
+            Assert.Equal(expectedExprValue, result);
+
+        Assert.NotNull(expression.Parameters["a"]);
+        if (expression.Parameters["a"]!.GetType() == typeof(System.UInt64))
+        {
+            ulong uResult = (ulong)expression.Parameters["a"]!;
+            Assert.Equal(expectedExprValue, (int)uResult);
+        }
+        else
+            Assert.Equal(expectedExprValue, expression.Parameters["a"]!);
+    }
+
+    [Theory]
+    [ClassData(typeof(StatementSequenceWithAssignment2TestData))]
+    public void ShouldHandleStatementSequenceWithAssignment2Lambda(string input, int expectedExprValue)
+    {
+        bool eventFired = false;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        expression.UpdateParameter += (name, args) => eventFired = true;
+
+        Func<AssignmentLambdaTestsContext, object> function = expression.ToLambda<AssignmentLambdaTestsContext, object>();
+
+        var context = new AssignmentLambdaTestsContext { };
+        var result = function(context);
+
+        Assert.True(eventFired);
+
+        Assert.NotNull(result);
+        if (result.GetType() == typeof(System.UInt64))
+        {
+            ulong uResult = (ulong)result;
+            Assert.Equal(expectedExprValue, (int)uResult);
+        }
+        else
+            Assert.Equal(expectedExprValue, result);
+
+        /*Assert.NotNull(expression.Parameters["a"]);
+        if (expression.Parameters["a"]!.GetType() == typeof(System.UInt64))
+        {
+            ulong uResult = (ulong)expression.Parameters["a"]!;
+            Assert.Equal(expectedExprValue, (int)uResult);
+        }
+        else
+            Assert.Equal(expectedExprValue, expression.Parameters["a"]!);*/
+        Assert.Equal(expectedExprValue, context.a);
     }
 
     [Theory]

@@ -100,8 +100,19 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         {
             return expression.Type switch
             {
-                BinaryExpressionType.Assignment => UpdateParameter<object?>(expression.LeftExpression, right),
                 BinaryExpressionType.StatementSequence => SkipAndReturn(left, right),
+                BinaryExpressionType.Assignment => UpdateParameter<object?>(expression.LeftExpression, right),
+
+                BinaryExpressionType.PlusAssignment => UpdateParameter<object?>(expression.LeftExpression, _checked ? WithCommonNumericType(left, right, LinqExpression.AddChecked, BinaryExpressionType.Plus) : WithCommonNumericType(left, right, LinqExpression.Add, BinaryExpressionType.Plus)),
+                BinaryExpressionType.MinusAssignment => UpdateParameter<object?>(expression.LeftExpression, _checked ? WithCommonNumericType(left, right, LinqExpression.SubtractChecked, BinaryExpressionType.Minus) : WithCommonNumericType(left, right, LinqExpression.Subtract, BinaryExpressionType.Minus)),
+
+                BinaryExpressionType.MultiplyAssignment => UpdateParameter<object?>(expression.LeftExpression, _checked ? WithCommonNumericType(left, right, LinqExpression.MultiplyChecked) : WithCommonNumericType(left, right, LinqExpression.Multiply)),
+                BinaryExpressionType.DivAssignment => UpdateParameter<object?>(expression.LeftExpression, WithCommonNumericType(left, right, LinqExpression.Divide)),
+
+                BinaryExpressionType.AndAssignment => UpdateParameter<object?>(expression.LeftExpression, LinqExpression.And(left, right)),
+                BinaryExpressionType.OrAssignment => UpdateParameter<object?>(expression.LeftExpression, LinqExpression.Or(left, right)),
+                BinaryExpressionType.XOrAssignment => UpdateParameter<object?>(expression.LeftExpression, LinqExpression.ExclusiveOr(left, right)),
+
                 BinaryExpressionType.And => LinqExpression.AndAlso(left, right),
                 BinaryExpressionType.Or => LinqExpression.OrElse(left, right),
                 BinaryExpressionType.XOr => BooleanXOr(left, right),

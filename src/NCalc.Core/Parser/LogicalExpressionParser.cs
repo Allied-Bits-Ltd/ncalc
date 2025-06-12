@@ -31,6 +31,10 @@ public static class LogicalExpressionParser
 
     private static readonly bool _hasAllowUnderscore = Enum.GetNames(typeof(NumberOptions)).Contains("AllowUnderscore");
 
+    const string errFailedToParsePeriodIndicator = "Failed to parse the element '{0}' of a period definition.";
+    const string errDuplicatePeriodIndicator = "Period indicator '{0}' has been already used in the period definition";
+    const string errUnrecognizedPeriodIndicator = "Unrecognized period indicator '{0}' in the period definition.";
+
     class CurrentCultureDateTimeFormatProvider : IFormatProvider
     {
         public object GetFormat(Type? formatType)
@@ -82,9 +86,10 @@ public static class LogicalExpressionParser
          * relational     => shift ( ( ">=" | ">" | ... ) shift )* ;
          * shift          => additive ( ( "<<" | ">>" ) additive )* ;
          * additive       => multiplicative ( ( "-" | "+" ) multiplicative )* ;
-         * multiplicative => exponential ( "/" | "*" | "%") exponential )* ;
-         * exponential    => unary ( "**" ) unary )* ;
-         * unary          => ( "-" | "not" | "!" ) primary
+         * multiplicative => unary ( "/" | "*" | "%") unary )* ;
+         * unary          => ( "-" | "not" | "!" ) exponential ;
+         * exponential    => factorial ( "**" ) factorial )* ;
+         * factorial      => primary ( "!" )* ;
          *
          * primary        => NUMBER
          *                  | STRING
@@ -279,6 +284,7 @@ public static class LogicalExpressionParser
 
         bool useCharsForOps = !options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars);
         bool useUnicodeForOps = options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations);
+        bool useAssignments = options.HasFlag(ExpressionOptions.UseAssignments);
 
         var percentChar = Terms.Char('%'); // CultureInfo defines a percent character, but we are yet to see another character than '%'
 
@@ -304,15 +310,6 @@ public static class LogicalExpressionParser
 
         var leftShift = Terms.Text("<<");
         var rightShift = Terms.Text(">>");
-
-        var assignmentOperator = useUnicodeForOps
-                                    ? OneOf(Terms.Text("\u2254"),
-                                            (options.HasFlag(ExpressionOptions.UseCStyleAssignments)
-                                                ? Terms.Text("=")
-                                                : Terms.Text(":=")))
-                                    : options.HasFlag(ExpressionOptions.UseCStyleAssignments)
-                                                ? Terms.Text("=")
-                                                : Terms.Text(":=");
 
         var exponent = useUnicodeForOps
             ? (useCharsForOps
@@ -371,6 +368,23 @@ public static class LogicalExpressionParser
         var bitwiseOr = useCharsForOps ? OneOf(Terms.Text("BIT_OR", true), Terms.Text("|"))  : Terms.Text("BIT_OR", true);
         var bitwiseXOr = useCharsForOps ? OneOf(Terms.Text("BIT_XOR", true), Terms.Text("^")) : Terms.Text("BIT_XOR", true);
         var bitwiseNot = useCharsForOps ? OneOf(Terms.Text("BIT_NOT", true), Terms.Text("~")) : Terms.Text("BIT_NOT", true);
+
+        var assignmentOperator = useUnicodeForOps
+                                    ? OneOf(Terms.Text("\u2254"),
+                                            (options.HasFlag(ExpressionOptions.UseCStyleAssignments)
+                                                ? Terms.Text("=")
+                                                : Terms.Text(":=")))
+                                    : options.HasFlag(ExpressionOptions.UseCStyleAssignments)
+                                                ? Terms.Text("=")
+                                                : Terms.Text(":=");
+
+        var plusAssign = Terms.Text("+=");
+        var minusAssign = Terms.Text("-=");
+        var multiplyAssign = useUnicodeForOps ? OneOf(Terms.Text("*="), Terms.Text("\u00D7="), Terms.Text("\u2219=")) : Terms.Text("*=");
+        var divAssign = Terms.Text("/=");
+        var orAssign = Terms.Text("|=");
+        var andAssign = Terms.Text("&=");
+        var xorAssign = Terms.Text("^=");
 
         // "(" expression ")"
         var groupExpression = Between(openParen, expression, closeParen);
@@ -1034,21 +1048,129 @@ public static class LogicalExpressionParser
                     });
             }
 
+            Parser<LogicalExpression>? humaneTimeSpan = null;
+
+            if (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.ParseHumanePeriods))
+            {
+                Parser<string>? alphaText = Terms.Pattern(c => char.IsLetter(c)).Then<string>(x => x.ToString() ?? string.Empty);
+
+                var intNumberForPeriod = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
+                    .AndSkip(Not(OneOf(Terms.Text(decimalSeparator.ToString()), Terms.Text("E", true))))
+                    .Then<int>(d => d);
+
+                humaneTimeSpan = OneOrMany(intNumberForPeriod.And(alphaText.AndSkip(ZeroOrOne(Terms.Char('.'))))).Then<LogicalExpression>(val =>
+                {
+                    string indicator;
+                    int elemValue;
+                    int yearValue = 0;
+                    int monthValue = 0;
+                    int weekValue = 0;
+                    int dayValue = 0;
+                    int hourValue = 0;
+                    int minuteValue = 0;
+                    int secondValue = 0;
+                    int msecValue = 0;
+
+                    foreach (var entry in val)
+                    {
+                        elemValue = entry.Item1;
+                        indicator = entry.Item2;
+
+                        if (string.IsNullOrEmpty(indicator))
+                            throw new Exception(string.Format(errFailedToParsePeriodIndicator, entry.ToString()));
+
+                        indicator = indicator.ToLower();
+                        if (extOptions.PeriodYearIndicators.Contains(indicator))
+                        {
+                            if (yearValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            yearValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodMonthIndicators.Contains(indicator))
+                        {
+                            if (monthValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            monthValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodWeekIndicators.Contains(indicator))
+                        {
+                            if (weekValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            weekValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodDayIndicators.Contains(indicator))
+                        {
+                            if (dayValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            dayValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodHourIndicators.Contains(indicator))
+                        {
+                            if (hourValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            hourValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodMinuteIndicators.Contains(indicator))
+                        {
+                            if (minuteValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            minuteValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodSecondIndicators.Contains(indicator))
+                        {
+                            if (secondValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            secondValue = elemValue;
+                        }
+                        else
+                        if (extOptions.PeriodMSecIndicators.Contains(indicator))
+                        {
+                            if (msecValue != 0)
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                            msecValue = elemValue;
+                        }
+                        else
+                            throw new FormatException(string.Format(errUnrecognizedPeriodIndicator, entry.Item2.ToString()));
+                    }
+                    DateTime current = DateTime.UtcNow;
+                    DateTime dt = current;
+                    if (yearValue != 0)
+                        dt = dt.AddYears(yearValue);
+                    if (monthValue != 0)
+                        dt = dt.AddMonths(monthValue);
+                    if (weekValue != 0)
+                        dt = dt.AddDays(weekValue * 7);
+                    if (dayValue != 0)
+                        dt = dt.AddDays(dayValue);
+                    if (hourValue != 0)
+                        dt = dt.AddHours(hourValue);
+                    if (minuteValue != 0)
+                        dt = dt.AddMinutes(minuteValue);
+                    if (secondValue != 0)
+                        dt = dt.AddSeconds(secondValue);
+                    if (msecValue != 0)
+                        dt = dt.AddMilliseconds(msecValue);
+                    return new ValueExpression(dt - current);
+                });
+            }
+            List<Parser<LogicalExpression>> timeParts = use12HourTime
+                ? [dateAndTime12!, dateAndShortTime12!, dateAndTime, dateAndShortTime, date, time12!, shortTime12!, time, shortTime]
+                : [dateAndTime, dateAndShortTime, date, time, shortTime];
+
+            if (humaneTimeSpan != null)
+                timeParts.Add(humaneTimeSpan);
+
             // datetime => '#' dateAndTime | date | shortTime | time  '#';
-            if (use12HourTime)
-            {
-                dateTime = Terms
+            dateTime = Terms
                 .Char('#')
-                .SkipAnd(OneOf(dateAndTime12!, dateAndShortTime12!, dateAndTime, dateAndShortTime, date, time12!, shortTime12!, time, shortTime))
+                .SkipAnd(OneOf(timeParts.ToArray()))
                 .AndSkip(Literals.Char('#'));
-            }
-            else
-            {
-                dateTime = Terms
-                    .Char('#')
-                    .SkipAnd(OneOf(dateAndTime, dateAndShortTime, date, time, shortTime))
-                    .AndSkip(Literals.Char('#'));
-            }
         }
 
         var isHexDigit = Character.IsHexDigit;
@@ -1255,26 +1377,6 @@ public static class LogicalExpressionParser
         var logical = OneOf(orParser, xorParser).And(ZeroOrMany(xorTypeParser.And(orParser)))
             .Then(ParseBinaryExpression);
 
-/* Original:
-        var andTypeParser = and.Then(BinaryExpressionType.And)
-           .Or(bitwiseAnd.Then(BinaryExpressionType.BitwiseAnd));
-
-        var orTypeParser = or.Then(BinaryExpressionType.Or)
-            .Or(bitwiseOr.Then(BinaryExpressionType.BitwiseOr));
-
-        var xorTypeParser = bitwiseXOr.Then(BinaryExpressionType.BitwiseXOr);
-
-        // "and" has higher precedence than "or"
-        var andParser = equality.And(ZeroOrMany(andTypeParser.And(equality)))
-            .Then(ParseBinaryExpression);
-
-        var orParser = andParser.And(ZeroOrMany(orTypeParser.And(andParser)))
-            .Then(ParseBinaryExpression);
-
-        // logical => equality ( ( "and" | "or" | "xor" ) equality )* ;
-        var logical = orParser.And(ZeroOrMany(xorTypeParser.And(orParser)))
-            .Then(ParseBinaryExpression);*/
-
         // ternary => logical("?" logical ":" logical) ?
         var ternary = logical.And(ZeroOrOne(questionMark.SkipAnd(logical).AndSkip(colon).And(logical)))
             .Then(static x => x.Item2.Item1 == null
@@ -1293,40 +1395,52 @@ public static class LogicalExpressionParser
         List<Parser<LogicalExpression>> statements = [operatorSequence];
 
         Parser<LogicalExpression>? topLevel = null;
-        //Parser<LogicalExpression>? statement = operatorSequence;
 
         if (options.HasFlag(ExpressionOptions.UseAssignments))
         {
             var assignmentTypeParser = assignmentOperator.Then(BinaryExpressionType.Assignment);
 
-            /*var assignment = identifierExpression.AndSkip(assignmentOperator).And(operatorSequence)
-            .Then<LogicalExpression>(x =>
-                (BinaryExpression)(new BinaryExpression(BinaryExpressionType.Assignment, x.Item1, x.Item2)).SetOptions(options, cultureInfo, extOptions)
-            );*/
-            //var assignment = identifier.And(ZeroOrMany(assignmentTypeParser.And(ternary)))
-            //    .Then(ParseBinaryExpression);
-
-            var assignment = identifierExpression.AndSkip(assignmentOperator).And(OneOrMany(operatorSequence))
+            var assignment = identifierExpression.And(OneOf(assignmentOperator, plusAssign, minusAssign, multiplyAssign, divAssign, orAssign, xorAssign, andAssign)).And(OneOrMany(operatorSequence))
             .Then<LogicalExpression>(x =>
                 {
                     LogicalExpression result = null!;
-
-                    switch (x.Item2.Count)
+                    BinaryExpressionType expressionType;
+                    switch (x.Item2)
                     {
-                        case 0:
-                            result = x.Item1;
+                        case "+=":
+                            expressionType = BinaryExpressionType.PlusAssignment;
                             break;
-                        case 1:
-                            result = (BinaryExpression)(new BinaryExpression(BinaryExpressionType.Assignment, x.Item1, x.Item2[0])).SetOptions(options, cultureInfo, extOptions);
+                        case "-=":
+                            expressionType = BinaryExpressionType.MinusAssignment;
+                            break;
+                        case "\u00D7=":
+                        case "\u2219=":
+                        case "*=":
+                            expressionType = BinaryExpressionType.MultiplyAssignment;
+                            break;
+                        case "/=":
+                            expressionType = BinaryExpressionType.DivAssignment;
+                            break;
+                        case "&=":
+                            expressionType = BinaryExpressionType.AndAssignment;
+                            break;
+                        case "|=":
+                            expressionType = BinaryExpressionType.OrAssignment;
+                            break;
+                        case "^=":
+                            expressionType = BinaryExpressionType.XOrAssignment;
                             break;
                         default:
-                        {
-                            result = (BinaryExpression)(new BinaryExpression(BinaryExpressionType.Assignment, x.Item1, x.Item2[0])).SetOptions(options, cultureInfo, extOptions);
-                            for (int i = 1; i < x.Item2.Count - 1; i++)
-                            {
-                                result = (BinaryExpression)(new BinaryExpression(BinaryExpressionType.Assignment, result, x.Item2[i])).SetOptions(options, cultureInfo, extOptions);
-                            }
+                            expressionType = BinaryExpressionType.Assignment;
                             break;
+                    }
+
+                    result = (BinaryExpression)(new BinaryExpression(expressionType, x.Item1, x.Item3[0])).SetOptions(options, cultureInfo, extOptions);
+                    if (x.Item3.Count > 1)
+                    {
+                        for (int i = 1; i < x.Item3.Count - 1; i++)
+                        {
+                            result = (BinaryExpression)(new BinaryExpression(expressionType, result, x.Item3[i])).SetOptions(options, cultureInfo, extOptions);
                         }
                     }
                     return result;
@@ -1334,16 +1448,12 @@ public static class LogicalExpressionParser
             );
 
             statements.Insert(0, assignment);
-            //topLevel = assignment;
-            //statement = assignment;
         }
 
         var statementsArray = statements.ToArray();
 
         topLevel = OneOf(statementsArray);
         var expressionOrAssignment = OneOf(statementsArray);
-
-        //Parser<LogicalExpression>? statementSequence = null;
 
         if (options.HasFlag(ExpressionOptions.UseStatementSequences))
         {
@@ -1376,18 +1486,7 @@ public static class LogicalExpressionParser
             topLevel = statementSequence;
         }
 
-        //List<Parser<LogicalExpression>> topLevelParsers = new List<Parser<LogicalExpression>>();
-        //topLevelParsers.Add(topLevel);
-
-/*        if (options.HasFlag(ExpressionOptions.UseStatementSequences))
-            expression.Parser = operatorSequence.AndSkip(ZeroOrOne(semicolon));
-        else
-            expression.Parser = operatorSequence;
-*/
-        /*if (options.HasFlag(ExpressionOptions.UseStatementSequences))
-            expression.Parser = OneOf(statementsArray).AndSkip(ZeroOrOne(semicolon));
-        else
-            */expression.Parser = OneOf(statementsArray);
+        expression.Parser = OneOf(statementsArray);
 
         var expressionParser = topLevel.AndSkip(ZeroOrMany(Literals.WhiteSpace(true))).Eof()
                 .ElseError(InvalidTokenMessage);

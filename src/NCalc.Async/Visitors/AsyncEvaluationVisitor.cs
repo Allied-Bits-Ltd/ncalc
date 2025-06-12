@@ -96,14 +96,49 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
         {
             switch (expression.Type)
             {
-            case BinaryExpressionType.StatementSequence:
+                case BinaryExpressionType.StatementSequence:
                     _ = await left.Value;
-                return await right.Value;
+                    return await right.Value;
 
-            case BinaryExpressionType.Assignment:
+                case BinaryExpressionType.Assignment:
                     return await UpdateParameterAsync(expression.LeftExpression, await right.Value);
 
-            case BinaryExpressionType.And:
+                case BinaryExpressionType.PlusAssignment:
+                    return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Plus(await left.Value, await right.Value, context));
+
+                case BinaryExpressionType.MinusAssignment:
+                    return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Minus(await left.Value, await right.Value, context));
+
+                case BinaryExpressionType.MultiplyAssignment:
+                    return await UpdateParameterAsync(expression.LeftExpression, MathHelper.Multiply(await left.Value, await right.Value, context));
+
+                case BinaryExpressionType.DivAssignment:
+                    return await UpdateParameterAsync(expression.LeftExpression,
+                        IsReal(await left.Value) || IsReal(await right.Value)
+                        ? MathHelper.Divide(await left.Value, await right.Value, context)
+                        : MathHelper.Divide(Convert.ToDouble(await left.Value, context.CultureInfo), await right.Value,
+                            context)
+                        );
+
+                case BinaryExpressionType.AndAssignment:
+                    return await UpdateParameterAsync(expression.LeftExpression,
+                        Convert.ToUInt64(await left.Value, context.CultureInfo) &
+                        Convert.ToUInt64(await right.Value, context.CultureInfo)
+                        );
+
+                case BinaryExpressionType.OrAssignment:
+                    return await UpdateParameterAsync(expression.LeftExpression,
+                        Convert.ToUInt64(await left.Value, context.CultureInfo) |
+                        Convert.ToUInt64(await right.Value, context.CultureInfo)
+                        );
+
+                case BinaryExpressionType.XOrAssignment:
+                    return await UpdateParameterAsync(expression.LeftExpression,
+                        Convert.ToUInt64(await left.Value, context.CultureInfo) ^
+                        Convert.ToUInt64(await right.Value, context.CultureInfo)
+                        );
+
+                case BinaryExpressionType.And:
                 return Convert.ToBoolean(await left.Value, context.CultureInfo) &&
                        Convert.ToBoolean(await right.Value, context.CultureInfo);
 

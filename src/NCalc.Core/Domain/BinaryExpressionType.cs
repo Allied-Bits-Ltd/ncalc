@@ -4,6 +4,13 @@ public enum BinaryExpressionType
 {
     StatementSequence,
     Assignment,
+    PlusAssignment,
+    MinusAssignment,
+    MultiplyAssignment,
+    DivAssignment,
+    AndAssignment,
+    OrAssignment,
+    XOrAssignment,
     And,
     Or,
     XOr,

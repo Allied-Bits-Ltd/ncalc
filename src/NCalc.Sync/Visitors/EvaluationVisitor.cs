@@ -100,6 +100,41 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 case BinaryExpressionType.Assignment:
                     return UpdateParameter(expression.LeftExpression, right.Value);
 
+                case BinaryExpressionType.PlusAssignment:
+                    return UpdateParameter(expression.LeftExpression, EvaluationHelper.Plus(left.Value, right.Value, context));
+
+                case BinaryExpressionType.MinusAssignment:
+                    return UpdateParameter(expression.LeftExpression, EvaluationHelper.Minus(left.Value, right.Value, context));
+
+                case BinaryExpressionType.MultiplyAssignment:
+                    return UpdateParameter(expression.LeftExpression, MathHelper.Multiply(left.Value, right.Value, context));
+
+                case BinaryExpressionType.DivAssignment:
+                    return UpdateParameter(expression.LeftExpression,
+                        IsReal(left.Value) || IsReal(right.Value)
+                        ? MathHelper.Divide(left.Value, right.Value, context)
+                        : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value,
+                            context)
+                        );
+
+                case BinaryExpressionType.AndAssignment:
+                    return UpdateParameter(expression.LeftExpression,
+                        Convert.ToUInt64(left.Value, context.CultureInfo) &
+                        Convert.ToUInt64(right.Value, context.CultureInfo)
+                        );
+
+                case BinaryExpressionType.OrAssignment:
+                    return UpdateParameter(expression.LeftExpression,
+                        Convert.ToUInt64(left.Value, context.CultureInfo) |
+                        Convert.ToUInt64(right.Value, context.CultureInfo)
+                        );
+
+                case BinaryExpressionType.XOrAssignment:
+                    return UpdateParameter(expression.LeftExpression,
+                        Convert.ToUInt64(left.Value, context.CultureInfo) ^
+                        Convert.ToUInt64(right.Value, context.CultureInfo)
+                        );
+
                 case BinaryExpressionType.And:
                     return Convert.ToBoolean(left.Value, context.CultureInfo) &&
                            Convert.ToBoolean(right.Value, context.CultureInfo);
