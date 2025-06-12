@@ -121,3 +121,19 @@ var parameters = expression.GetParametersNames();
 
 ## Case Sensitivity
 See [case_sensitivity](case_sensitivity.md) for more info.
+
+## Assigning and Updating Parameters 
+
+Parameters can be assigned in expressions. 
+Support for assignments must be enabled by including the <xref:NCalc.ExpressionOptions.UseAssignments> flag into <xref:NCalc.ExpressionOptions> of an <xref:NCalc.Expression>.
+
+When a parameter is assigned, first the <xref:NCalc.Expression.OnUpdateParameter> event is fired. An event handler may tell the evaluation engine to update the static parameter table or bypass this step by setting the UpdateParameterArgs.<xref:NCalc.Handlers.UpdateParameterArgs.UpdateParameterLists> or AsyncUpdateParameterArgs.<xref:NCalc.Handlers.AsyncUpdateParameterArgs.UpdateParameterLists> property to `true` or `false` respectively.
+
+An assignment is an expression, so it can be used wherever a value is accepted. E.g., the following operations are equivalent:
+
+```
+if (true, a := 2, a := 4); a + Max(2; 4)
+a := if (true; 2; 4); a + Max(2; 4)
+```
+
+Assignment can be combined with an operator (such as "+=" for addition with assignment); please, see the [Operators](operators.md) topic for the list of supported operators with assignment.
