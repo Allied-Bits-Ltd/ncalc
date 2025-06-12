@@ -54,16 +54,17 @@ Must be enclosed between sharps.
 #2008/01/31# // for en-US culture
 #08/08/2001 09:30:00# 
 ```
-NCalc uses the current Culture to evaluate them. When [Advanced Value Formats and Operations](advanced_value_formats.md) are used, the format of dates and times is much more flexible and adjustable.
+By default, NCalc uses current Culture to evaluate DateTime values. When [Advanced Value Formats and Operations](advanced_value_formats.md) are used, the format of date and time values can be customized to a large extent.
 
-## TimeSpan
+## Time
 
-Must be enclosed between sharps.
+Includes Hours, minutes, and seconds. 
+The value must be enclosed between sharps.
 ```
 #20:42:00#
 ```
 
-When [Advanced Value Formats and Operations](advanced_value_formats.md) are used, the format of times is much more flexible and adjustable.
+When [Advanced Value Formats and Operations](advanced_value_formats.md) are used, the format of time values can be customized to a large extent.
 
 Additionally, it is possible to define periods in a humane form (e.g. #5 weeks 3 days 28 hours#) as described in the [Advanced Value Formats and Operations](advanced_value_formats.md) topic.
 

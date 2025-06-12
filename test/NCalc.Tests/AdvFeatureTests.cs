@@ -898,6 +898,39 @@ public class AdvFeatureTests
     }
 
     [Theory]
+    [InlineData("#2025/06/05# - #2025/06/02#", new int[] { 72, 0, 0 })]
+    public void ShoudSubtractDates(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.SupportTimeOperations);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+        expression.AdvancedOptions.DateSeparator = "/";
+        expression.AdvancedOptions.DateOrder = AdvancedExpressionOptions.DateOrderKind.YMD;
+        var result = expression.Evaluate();
+
+        TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
+
+        Assert.Equal(expectedTime, result);
+    }
+
+    [Theory]
+    [InlineData("#2025/06/05# - #2025/06/02#", new int[] { 72, 0, 0 })]
+    public void ShoudAddSubtractDatesLambda(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.SupportTimeOperations);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+        expression.AdvancedOptions.DateSeparator = "/";
+        expression.AdvancedOptions.DateOrder = AdvancedExpressionOptions.DateOrderKind.YMD;
+        var sut = expression.ToLambda<TimeSpan>();
+        var result = sut();
+
+        TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
+
+        Assert.Equal(expectedTime, result);
+    }
+
+    [Theory]
     [InlineData("#1day3hrs356ms#", new int[] { 1, 3, 0, 0, 356 })]
     [InlineData("#1y2wks21day#", new int[] { 400, 0, 0, 0, 0 })]
     [InlineData("#1day 3hrs 356ms#", new int[] { 1, 3, 0, 0, 356 })]
@@ -1422,6 +1455,12 @@ public class AdvFeatureTests
         Assert.True(eventFired);
 
         Assert.NotNull(result);
+        if (result.GetType() == typeof(System.Double))
+        {
+            double dResult = (double)result;
+            Assert.Equal(expectedExprValue, (double)dResult);
+        }
+        else
         if (result.GetType() == typeof(System.UInt64))
         {
             ulong uResult = (ulong)result;
@@ -1435,6 +1474,12 @@ public class AdvFeatureTests
         {
             ulong uResult = (ulong)expression.Parameters["a"]!;
             Assert.Equal(expectedExprValue, (int)uResult);
+        }
+        else
+        if (expression.Parameters["a"]!.GetType() == typeof(System.Double))
+        {
+            double dResult = (double)expression.Parameters["a"]!;
+            Assert.Equal(expectedExprValue, (int)dResult);
         }
         else
             Assert.Equal(expectedExprValue, expression.Parameters["a"]!);

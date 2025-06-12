@@ -588,6 +588,19 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
         if (_options.HasFlag(ExpressionOptions.SupportTimeOperations))
         {
+            if ((left.Type == typeof(DateTime)) && (right.Type == typeof(DateTime)))
+            {
+                if (expressionType == BinaryExpressionType.Minus)
+                {
+                    MethodInfo? subtractMethod = typeof(DateTime).GetMethod("Subtract", [typeof(DateTime)]);
+                    if (subtractMethod != null)
+                    {
+                        return LinqExpression.Call(left, subtractMethod, right);
+                    }
+                }
+                return LinqExpression.Constant(0);
+            }
+            else
             if ((left.Type == typeof(DateTime)) && (right.Type == typeof(TimeSpan)))
             {
                 switch (expressionType)

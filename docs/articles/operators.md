@@ -148,6 +148,9 @@ Additive operators perform addition and subtraction.
 ```csharp
 1 + 2 - 3
 ```
+
+When [Advanced Value Formats and Operations](advanced_value_formats.md) are used and time operations are enabled, it is possible to add a time value (Timespan) to a date or another time value. Also, it is possible to subtract a time value from another time value or a time value from a date or a date from a date.
+
 When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignments> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
 * `+=` : Addition with assignment of the result to the left operand
 * `-=` : Subtraction with assignment of the result to the left operand
