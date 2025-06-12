@@ -157,7 +157,7 @@ expression.AdvancedOptions = new NCalc.AdvancedExpressionOptions();
 expression.AdvancedOptions.Flags |= NCalc.AdvExpressionOptions.AcceptCurrencySymbol;
 ```
 
-The parser supports three currency symbols (used for a currency symbol, a currency name, and optionally, for a currency name with a dot).
+The parser supports three currency symbols (used for a currency symbol, a currency name, and optionally, for a currency name with a dot). Characters are matched case-insensitively, i.e. "Eur", "EUR" and "eur" will all work equally.
 
 The <xref:NCalc.AdvancedExpressionOptions.CurrencySymbolsType> type property lets you choose between 
 * `CurrentCulture` : The symbol defined in CultureInfo.CurrentCulture is used. If the symbol is for Euro and EUR is not detected as a second symbol, "EUR" is used as a third symbol.
