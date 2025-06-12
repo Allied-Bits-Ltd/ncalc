@@ -54,7 +54,7 @@ Must be enclosed between sharps.
 #2008/01/31# // for en-US culture
 #08/08/2001 09:30:00# 
 ```
-NCalc uses the current Culture to evaluate them.
+NCalc uses the current Culture to evaluate them. When [Advanced Value Formats and Operations](advanced_value_formats.md) are used, the format of dates and times is much more flexible and adjustable.
 
 ## TimeSpan
 
@@ -62,6 +62,10 @@ Must be enclosed between sharps.
 ```
 #20:42:00#
 ```
+
+When [Advanced Value Formats and Operations](advanced_value_formats.md) are used, the format of times is much more flexible and adjustable.
+
+Additionally, it is possible to define periods in a humane form (e.g. #5 weeks 3 days 28 hours#) as described in the [Advanced Value Formats and Operations](advanced_value_formats.md) topic.
 
 ## Booleans
 Booleans can be either `true` or `false`.
@@ -113,7 +117,7 @@ Please read the [functions page](functions.md) for details.
 
 ## Parameters
 
-A parameter as a name, and can be optionally contained inside brackets or double quotes.
+A parameter is a name that can be optionally contained inside brackets or double quotes.
 
 ```
 2 + x, 2 + [x]
