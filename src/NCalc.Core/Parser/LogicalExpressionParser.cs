@@ -1180,10 +1180,10 @@ public static class LogicalExpressionParser
                         prefix = prefix?.ToLowerInvariant();
                         suffix = suffix?.ToLowerInvariant();
 
-                        if (extOptions.PeriodPastIndicators.Contains(prefix) || extOptions.PeriodPastIndicators.Contains(suffix))
+                        if ((prefix != null && extOptions.PeriodPastIndicators.Contains(prefix)) || (suffix != null && extOptions.PeriodPastIndicators.Contains(suffix)))
                             pastTime = true;
                         else
-                        if (extOptions.PeriodFutureIndicators.Contains(prefix) || extOptions.PeriodFutureIndicators.Contains(suffix))
+                        if ((prefix != null && extOptions.PeriodFutureIndicators.Contains(prefix)) || (suffix != null && extOptions.PeriodFutureIndicators.Contains(suffix)))
                             pastTime = false;
                         else
                             throw new FormatException(string.Format(errUnrecognizedTimeRelationIndicator, prefix));
