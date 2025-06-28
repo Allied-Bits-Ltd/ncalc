@@ -184,6 +184,7 @@ public static class LogicalExpressionParser
             });
 
         char decimalSeparator = (extOptions != null) ? extOptions.GetDecimalSeparatorChar() : Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator; // this method will return the default separator, if needed
+        char decimalSeparator2 = (extOptions != null) ? extOptions.GetSecondaryDecimalSeparatorChar() : '\0';
         char numGroupSeparator = (extOptions != null) ? extOptions.GetNumberGroupSeparatorChar() : Parlot.Fluent.NumberLiterals.DefaultGroupSeparator; // this method will return the default separator, if needed
 
         NumberOptions useNumberGroupSeparatorFlag = ((extOptions != null) && (numGroupSeparator != '\0')) ? NumberOptions.AllowGroupSeparators : NumberOptions.None;
@@ -197,7 +198,9 @@ public static class LogicalExpressionParser
             .AndSkip(Not(OneOf(Terms.Text(decimalSeparator.ToString()), Terms.Text("E", true))))
             .Then<LogicalExpression>(d => new ValueExpression(d));
 
-        var decimalNumber = Terms.Number<decimal>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
+        if (decimalSeparator2 != '\0' && decimalSeparator2 == numGroupSeparator)
+            useNumberGroupSeparatorFlag = 0; // decimalSeparator2 takes precedence when it is specified.
+        var decimalNumber = Terms.Number<decimal>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator, decimalSeparator2)
             .Then<LogicalExpression>(static (ctx, val) =>
             {
                 bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
@@ -207,7 +210,7 @@ public static class LogicalExpressionParser
                 return new ValueExpression((double)val);
             });
 
-        var doubleNumber = Terms.Number<double>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
+        var doubleNumber = Terms.Number<double>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator, decimalSeparator2)
             .Then<LogicalExpression>(static (ctx, val) =>
             {
                 bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
@@ -256,7 +259,7 @@ public static class LogicalExpressionParser
                 Parser<LogicalExpression>? currency1 = null;
                 Parser<LogicalExpression>? currency2 = null;
 
-                var decimalCurrencyNumber = Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | useNumberGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator)
+                var decimalCurrencyNumber = Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | useNumberGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator, decimalSeparator2)
                 .Then<LogicalExpression>(static (ctx, val) =>
                 {
                     bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
@@ -1137,7 +1140,6 @@ public static class LogicalExpressionParser
                     .Then<int>(d => d);
 
                 humaneTimeSpan = ZeroOrOne(alphaText).And(ZeroOrMany(intNumberForPeriod.And(alphaText.AndSkip(ZeroOrOne(Terms.Char('.')))))).And(ZeroOrOne(alphaText)).Then<LogicalExpression>(val =>
-                //humaneTimeSpan = OneOrMany(intNumberForPeriod.And(alphaText.AndSkip(ZeroOrOne(Terms.Char('.'))))).Then<LogicalExpression>(val =>
                 {
                     string indicator;
                     int elemValue;
@@ -1361,7 +1363,9 @@ public static class LogicalExpressionParser
                 .Then<LogicalExpression>(static g =>
                         new ValueExpression(Guid.Parse(g.Item1.ToString() + g.Item2 + g.Item3 + g.Item4 + g.Item5)));
 
-            var guidWithoutHyphens = thirtyTwoHexSequence
+            Parser<LogicalExpression> guidWithoutHyphens;
+
+            guidWithoutHyphens = thirtyTwoHexSequence
                 .AndSkip(Not(decimalOrDoubleNumber))
                 .Then<LogicalExpression>(static g => new ValueExpression(Guid.Parse(g.ToString()!)));
 
@@ -1377,9 +1381,9 @@ public static class LogicalExpressionParser
         enabledParsers.Add(hexOctBinNumber);
         if (currency != null)
             enabledParsers.Add(currency);
+        enabledParsers.Add(decimalOrDoubleNumber);
         enabledParsers.Add(intNumber);
         enabledParsers.Add(longNumber);
-        enabledParsers.Add(decimalOrDoubleNumber);
         enabledParsers.Add(booleanTrue);
         enabledParsers.Add(booleanFalse);
         if (dateTime != null) // dateTime will be initialized unless options.HasFlag(ExpressionOptions.DontParseDates)

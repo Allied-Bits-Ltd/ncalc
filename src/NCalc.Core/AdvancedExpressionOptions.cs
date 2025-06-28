@@ -90,6 +90,7 @@
         string _dateSeparator = "/";
         string _timeSeparator = ":";
         string _decimalSeparator = ".";
+        string _secondaryDecimalSeparator = "\0";
         string _numberGroupSeparator = "";
         string _currencyDecimalSeparator = ".";
         string _currencyNumberGroupSeparator = string.Empty;
@@ -179,6 +180,16 @@
             {
                 if (!string.IsNullOrEmpty(value))
                     _decimalSeparator = value;
+            }
+        }
+
+        public string SecondaryDecimalSeparator
+        {
+            get => _secondaryDecimalSeparator;
+            set
+            {
+                if (!string.IsNullOrEmpty(value))
+                    _secondaryDecimalSeparator = value;
             }
         }
 
@@ -349,6 +360,16 @@
                     separatorString = _decimalSeparator;
                     break;
             }
+            if (string.IsNullOrEmpty(separatorString))
+                return '\0';
+            else
+                return separatorString[0];
+        }
+
+        internal char GetSecondaryDecimalSeparatorChar()
+        {
+            string? separatorString = "";
+            separatorString = _secondaryDecimalSeparator;
             if (string.IsNullOrEmpty(separatorString))
                 return '\0';
             else
