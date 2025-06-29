@@ -190,12 +190,17 @@ public static class LogicalExpressionParser
         NumberOptions useNumberGroupSeparatorFlag = ((extOptions != null) && (numGroupSeparator != '\0')) ? NumberOptions.AllowGroupSeparators : NumberOptions.None;
         NumberOptions useUnderscoreFlag = (_hasAllowUnderscore && extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.AcceptUnderscoresInNumbers)) ? (NumberOptions)16 : NumberOptions.None;
 
+        Parser<string>[] floatNumExclusions =
+            (decimalSeparator2 != '\0')
+            ? [Terms.Text(decimalSeparator.ToString()), Terms.Text(decimalSeparator2.ToString()), Terms.Text("E", true)]
+            : [Terms.Text(decimalSeparator.ToString()), Terms.Text("E", true)];
+
         var intNumber = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
-            .AndSkip(Not(OneOf(Terms.Text(decimalSeparator.ToString()), Terms.Text("E", true))))
+            .AndSkip(Not(OneOf(floatNumExclusions)))
             .Then<LogicalExpression>(d => new ValueExpression(d));
 
         var longNumber = Terms.Number<long>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
-            .AndSkip(Not(OneOf(Terms.Text(decimalSeparator.ToString()), Terms.Text("E", true))))
+            .AndSkip(Not(OneOf(floatNumExclusions)))
             .Then<LogicalExpression>(d => new ValueExpression(d));
 
         if (decimalSeparator2 != '\0' && decimalSeparator2 == numGroupSeparator)
@@ -1136,7 +1141,7 @@ public static class LogicalExpressionParser
                 Parser<string>? alphaText = Terms.Pattern(c => char.IsLetter(c) || c == '\'').Then<string>(x => x.ToString() ?? string.Empty);
 
                 var intNumberForPeriod = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
-                    .AndSkip(Not(OneOf(Terms.Text(decimalSeparator.ToString()), Terms.Text("E", true))))
+                    .AndSkip(Not(OneOf(floatNumExclusions)))
                     .Then<int>(d => d);
 
                 humaneTimeSpan = ZeroOrOne(alphaText).And(ZeroOrMany(intNumberForPeriod.And(alphaText.AndSkip(ZeroOrOne(Terms.Char('.')))))).And(ZeroOrOne(alphaText)).Then<LogicalExpression>(val =>
@@ -1381,9 +1386,9 @@ public static class LogicalExpressionParser
         enabledParsers.Add(hexOctBinNumber);
         if (currency != null)
             enabledParsers.Add(currency);
-        enabledParsers.Add(decimalOrDoubleNumber);
         enabledParsers.Add(intNumber);
         enabledParsers.Add(longNumber);
+        enabledParsers.Add(decimalOrDoubleNumber);
         enabledParsers.Add(booleanTrue);
         enabledParsers.Add(booleanFalse);
         if (dateTime != null) // dateTime will be initialized unless options.HasFlag(ExpressionOptions.DontParseDates)

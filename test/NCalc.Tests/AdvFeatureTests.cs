@@ -1370,10 +1370,12 @@ public class AdvFeatureTests
     }
 
     [Theory]
-    [InlineData("a := 2", 2, 2)]
-    [InlineData("a := 2 + 2", 4, 4)]
-    [InlineData("{a} := (2 + 2)", 4, 4)]
-    public void ShouldHandleAssignment(string input, int expectedVarValue, int expectedExprValue)
+    [InlineData("a := 2", "a", 2, 2)]
+    [InlineData("a24 := 2", "a24", 2, 2)]
+    [InlineData("mc5 := 2", "mc5", 2, 2)]
+    [InlineData("a := 2 + 2", "a", 4, 4)]
+    [InlineData("{a} := (2 + 2)", "a" ,4, 4)]
+    public void ShouldHandleAssignment(string input, string expectedVar, int expectedVarValue, int expectedExprValue)
     {
         bool eventFired = false;
 
@@ -1381,14 +1383,33 @@ public class AdvFeatureTests
         expression.UpdateParameter += (name, args) =>
         {
             eventFired = true;
-            Assert.Equal("a", name);
-            Assert.Equal(expectedVarValue, args.Value);
+            Assert.Equal(expectedVar, name);
+            long iValue;
+            if (args.Value is double dValue)
+            {
+                iValue = (long)dValue;
+            }
+            else
+            {
+                iValue = (long) args.Value;
+            }
+            Assert.Equal(expectedVarValue, iValue);
         };
 
+        long iResult;
         var result = expression.Evaluate();
+        if (result is double dResult)
+        {
+            iResult = (long)dResult;
+        }
+        else
+        {
+            iResult = (long)result;
+        }
 
         Assert.True(eventFired);
-        Assert.Equal(expectedExprValue, result);
+
+        Assert.Equal(expectedExprValue, iResult);
     }
 
     class AssignmentLambdaTestsContext

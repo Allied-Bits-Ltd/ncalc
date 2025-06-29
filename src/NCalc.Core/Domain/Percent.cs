@@ -6,7 +6,8 @@ namespace NCalc.Domain
 {
     public class Percent
     {
-        public object? Value { get; }
+        public object Value { get; }
+
         public ValueType Type { get; }
 
         public Type OriginalType { get; }
