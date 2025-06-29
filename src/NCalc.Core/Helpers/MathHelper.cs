@@ -650,6 +650,11 @@ public static class MathHelper
         return Math.Tan(ConvertToDouble(a, options));
     }
 
+    public static object Cot(object? a, MathHelperOptions options)
+    {
+        return 1 / Math.Tan(ConvertToDouble(a, options));
+    }
+
     public static object Truncate(object? a, MathHelperOptions options)
     {
         if (options.DecimalAsDefault)
