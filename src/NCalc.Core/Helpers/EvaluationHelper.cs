@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Text.RegularExpressions;
 
 using NCalc.Domain;
@@ -148,6 +149,47 @@ public static class EvaluationHelper
             noStringTypeCoercion ? EqualityComparer<object?>.Default : StringCoercionComparer.Default);
     }
 
+    public static bool Compare(object? a, object? b, ComparisonType comparisonType, ComparisonOptions options)
+    {
+        int result;
+        if (a == null || b == null)
+        {
+            if (a == null && b == null)
+                result = 0;
+            else
+            if (a == null)
+                result = 1;
+            else
+                result = -1;
+        }
+        else
+        if (a is BigInteger || b is BigInteger)
+        {
+            if (a is BigInteger biA)
+            {
+                if (b is BigInteger biB)
+                    result = biA.CompareTo(biB);
+                else
+                    result = biA.CompareTo(MathHelper.ConvertToBigInteger(b));
+            }
+            else
+                result = ((BigInteger)b).CompareTo(MathHelper.ConvertToBigInteger(a));
+        }
+        else
+            result = TypeHelper.CompareUsingMostPreciseType(a, b, options);
+
+        return comparisonType switch
+        {
+            ComparisonType.Equal => result == 0,
+            ComparisonType.Greater => result > 0,
+            ComparisonType.GreaterOrEqual => result >= 0,
+            ComparisonType.Less => result < 0,
+            ComparisonType.LessOrEqual => result <= 0,
+            ComparisonType.NotEqual => result != 0,
+            _ => throw new ArgumentOutOfRangeException(nameof(comparisonType), comparisonType, null)
+        };
+    }
+
     /// <summary>
     /// Evaluates a unary expression.
     /// </summary>
@@ -161,8 +203,10 @@ public static class EvaluationHelper
         return expression.Type switch
         {
             UnaryExpressionType.Not => !Convert.ToBoolean(result, context.CultureInfo),
-            UnaryExpressionType.Negate => MathHelper.Subtract(0, result, context),
-            UnaryExpressionType.BitwiseNot => ~Convert.ToUInt64(result, context.CultureInfo),
+            UnaryExpressionType.Negate =>
+                (result is BigInteger) ? MathHelper.Subtract((object)(long)0, (BigInteger) result) : MathHelper.Subtract(0, result, context),
+            UnaryExpressionType.BitwiseNot =>
+                (result is BigInteger) ? MathHelper.BitwiseNot((BigInteger) result) : ~Convert.ToUInt64(result, context.CultureInfo),
             UnaryExpressionType.SqRoot => MathHelper.Sqrt(result, context.CultureInfo),
 #if NET8_0_OR_GREATER
             UnaryExpressionType.CbRoot => MathHelper.Cbrt(result, context.CultureInfo),

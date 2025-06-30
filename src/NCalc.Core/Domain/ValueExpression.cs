@@ -1,3 +1,4 @@
+using System.Numerics;
 using NCalc.Exceptions;
 using NCalc.Visitors;
 
@@ -22,7 +23,7 @@ public sealed class ValueExpression : LogicalExpression
             Guid => ValueType.Guid,
             char => ValueType.Char,
             decimal or double or float => ValueType.Float,
-            byte or sbyte or short or int or long or ushort or uint or ulong => ValueType.Integer,
+            byte or sbyte or short or int or long or ushort or uint or ulong or BigInteger => ValueType.Integer,
             string => ValueType.String,
             _ => throw new NCalcException("This value could not be handled: " + value)
         };

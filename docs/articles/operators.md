@@ -97,6 +97,8 @@ Percent calculations must be enabled via the [AdvancedOptions](advanced_value_fo
 200 - 5%
 ```
 
+If the result of an operation is percent, an instance of <xref:NCalc.Domain.Percent> is returned as a result of the expression evaluation. 
+
 ## Exponential
 
 Exponential operators perform exponentiation.

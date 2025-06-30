@@ -1,3 +1,4 @@
+using System.Numerics;
 using NCalc.Domain;
 using NCalc.Exceptions;
 
@@ -108,80 +109,171 @@ public static class LogicalExpressionParser
         // The Deferred helper creates a parser that can be referenced by others before it is defined
         var expression = Deferred<LogicalExpression>();
 
-        Parser<long> hexNumber;
+        bool useBigInteger = options.HasFlag(ExpressionOptions.UseBigInteger);
+
+        bool unsignedHexBinOct = options.HasFlag(ExpressionOptions.HexBinOctAreUnsigned);
 
         bool acceptUnderscores = (extOptions != null) && extOptions.Flags.HasFlag(AdvExpressionOptions.AcceptUnderscoresInNumbers);
 
-        if (acceptUnderscores)
-        {
-            hexNumber = Terms.Text("0x")
-            .SkipAnd(Terms.Pattern(c => "0123456789abcdefABCDEF_".Contains(c)))
-            .Then(x => Convert.ToInt64(x.ToString()?.Replace("_", ""), 16));
-        }
-        else
-        {
-            hexNumber = Terms.Text("0x")
-            .SkipAnd(Terms.Pattern(c => "0123456789abcdefABCDEF".Contains(c)))
-            .Then(x => Convert.ToInt64(x.ToString(), 16));
-        }
+        string acceptableHexChars = acceptUnderscores ? "0123456789abcdefABCDEF_" : "0123456789abcdefABCDEF";
 
-        Parser<long> octalNumber;
-        if (acceptUnderscores)
-        {
-            octalNumber = Terms.Text("0o")
-                .SkipAnd(Terms.Pattern(c => "01234567_".Contains(c)))
-                .Then(x => Convert.ToInt64(x.ToString()?.Replace("_", ""), 8));
-        }
-        else
-        {
-            octalNumber = Terms.Text("0o")
-                .SkipAnd(Terms.Pattern(c => "01234567".Contains(c)))
-                .Then(x => Convert.ToInt64(x.ToString(), 8));
-        }
-
-        Parser<long> octalNumberCStyle;
-
-        if (acceptUnderscores)
-        {
-            octalNumberCStyle = Terms.Text("0")//. And(Terms.AnyOf("01234567_"))
-                .And(Terms.Pattern(c => "01234567_".Contains(c)))
-                .Then(x => Convert.ToInt64(x.Item2.ToString()?.Replace("_", ""), 8));
-        }
-        else
-        {
-            octalNumberCStyle = Terms.Text("0")
-                .And(Terms.Pattern(c => "01234567".Contains(c)))
-                .Then(x => Convert.ToInt64(x.Item2.ToString(), 8));
-        }
-
-        Parser<long> binaryNumber;
-        if (acceptUnderscores)
-        {
-            binaryNumber = Terms.Text("0b")
-                .SkipAnd(Terms.Pattern(c => c == '0' || c == '1' || c == '_'))
-                .Then(x => Convert.ToInt64(x.ToString()?.Replace("_", ""), 2));
-        }
-        else
-        {
-            binaryNumber = Terms.Text("0b")
-                .SkipAnd(Terms.Pattern(c => c == '0' || c == '1'))
-                .Then(x => Convert.ToInt64(x.ToString(), 2));
-        }
-
-        Parser<long> hexOctBinNumberParser;
-
-        if (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.AcceptCStyleOctals))
-            hexOctBinNumberParser = OneOf(octalNumberCStyle, hexNumber, octalNumber, binaryNumber);
-        else
-            hexOctBinNumberParser = OneOf(hexNumber, octalNumber, binaryNumber);
-
-        var hexOctBinNumber = hexOctBinNumberParser.Then<LogicalExpression>(d =>
+        var hexNumber = Terms.Text("0x")
+            .SkipAnd(Terms.Pattern(c => acceptableHexChars.Contains(c)))
+            .Then<LogicalExpression>((x) =>
             {
-                if (d is > int.MaxValue or < int.MinValue)
-                    return new ValueExpression(d);
+                string? stringValue = x.ToString();
 
-                return new ValueExpression((int)d);
+                if (string.IsNullOrEmpty(stringValue))
+                    throw new ArgumentException($"{stringValue} is not a valid hex number");
+
+                if (acceptUnderscores)
+                    stringValue = stringValue!.Replace("_", string.Empty);
+
+                try
+                {
+                    if (unsignedHexBinOct)
+                    {
+                        ulong converted = Convert.ToUInt64(stringValue, 16);
+                        if (converted <= uint.MaxValue)
+                            return new ValueExpression((object)(uint)converted);
+                        else
+                            return new ValueExpression((object)converted);
+                    }
+                    else
+                    {
+                        long converted = Convert.ToInt64(stringValue, 16);
+                        if (converted >= int.MinValue && converted <= int.MaxValue)
+                            return new ValueExpression((object)(int)converted);
+                        else
+                            return new ValueExpression((object)converted);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (useBigInteger && (ex is OverflowException))
+                    {
+                        // do nothing and try to convert to BigInteger below
+                    }
+                    else
+                        throw;
+                }
+
+                // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
+                BigInteger result;
+
+                if (!BigIntegerParser.TryParseBigInteger(stringValue!, 16, out result))
+                    throw new ArgumentException($"{stringValue} is not a valid hex number");
+
+                return new ValueExpression((object) result);
             });
+
+        string acceptableOctalChars = acceptUnderscores ? "01234567_" : "01234567";
+
+        Parser<string> octalPrefixParser = (extOptions != null) && extOptions.Flags.HasFlag(AdvExpressionOptions.AcceptCStyleOctals) ? OneOf(Terms.Text("0o"), Terms.Text("0")) : Terms.Text("0o");
+
+        var octalNumber = octalPrefixParser
+            .SkipAnd(Terms.Pattern(c => acceptableOctalChars.Contains(c)))
+            .Then<LogicalExpression>((x) =>
+            {
+                string? stringValue = x.ToString();
+
+                if (string.IsNullOrEmpty(stringValue))
+                    throw new ArgumentException($"{stringValue} is not a valid octal number");
+
+                if (acceptUnderscores)
+                    stringValue = stringValue!.Replace("_", string.Empty);
+
+                try
+                {
+                    if (unsignedHexBinOct)
+                    {
+                        ulong converted = Convert.ToUInt64(stringValue, 8);
+                        if (converted <= uint.MaxValue)
+                            return new ValueExpression((object)(uint)converted);
+                        else
+                            return new ValueExpression((object)converted);
+                    }
+                    else
+                    {
+                        long converted = Convert.ToInt64(stringValue, 8);
+                        if (converted >= int.MinValue && converted <= int.MaxValue)
+                            return new ValueExpression((object)(int)converted);
+                        else
+                            return new ValueExpression((object)converted);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (useBigInteger && (ex is OverflowException))
+                    {
+                        // do nothing and try to convert to BigInteger below
+                    }
+                    else
+                        throw;
+                }
+
+                // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
+                BigInteger result;
+
+                if (!BigIntegerParser.TryParseBigInteger(stringValue!, 8, out result))
+                    throw new ArgumentException($"{stringValue} is not a valid octal number");
+
+                return new ValueExpression((object)result);
+            });
+
+        var binaryNumber = Terms.Text("0b")
+            .SkipAnd(Terms.Pattern(c => c == '0' || c == '1' || (acceptUnderscores && c == '_')))
+            .Then<LogicalExpression>((x) =>
+            {
+                string? stringValue = x.ToString();
+
+                if (string.IsNullOrEmpty(stringValue))
+                    throw new ArgumentException($"{stringValue} is not a valid binary number");
+
+                if (acceptUnderscores)
+                    stringValue = stringValue!.Replace("_", string.Empty);
+
+                try
+                {
+                    if (unsignedHexBinOct)
+                    {
+                        ulong converted = Convert.ToUInt64(stringValue, 2);
+                        if (converted <= uint.MaxValue)
+                            return new ValueExpression((object)(uint)converted);
+                        else
+                            return new ValueExpression((object)converted);
+                    }
+                    else
+                    {
+                        long converted = Convert.ToInt64(stringValue, 2);
+                        if (converted >= int.MinValue && converted <= int.MaxValue)
+                            return new ValueExpression((object)(int)converted);
+                        else
+                            return new ValueExpression((object)converted);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (useBigInteger && (ex is OverflowException))
+                    {
+                        // do nothing and try to convert to BigInteger below
+                    }
+                    else
+                        throw;
+                }
+
+                // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
+                BigInteger result;
+
+                if (!BigIntegerParser.TryParseBigInteger(stringValue!, 2, out result))
+                    throw new ArgumentException($"{stringValue} is not a valid hex number");
+
+                return new ValueExpression((object)result);
+            });
+
+        Parser<LogicalExpression> hexOctBinNumber;
+
+        hexOctBinNumber = OneOf(hexNumber!, octalNumber!, binaryNumber!);
 
         char decimalSeparator = (extOptions != null) ? extOptions.GetDecimalSeparatorChar() : Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator; // this method will return the default separator, if needed
         char decimalSeparator2 = (extOptions != null) ? extOptions.GetSecondaryDecimalSeparatorChar() : '\0';
@@ -202,6 +294,21 @@ public static class LogicalExpressionParser
         var longNumber = Terms.Number<long>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
             .AndSkip(Not(OneOf(floatNumExclusions)))
             .Then<LogicalExpression>(d => new ValueExpression(d));
+
+        Parser<LogicalExpression>? bigIntNumber = null;
+
+        if (useBigInteger)
+        {
+            bigIntNumber = Terms.Number<BigInteger>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
+                .AndSkip(Not(OneOf(floatNumExclusions)))
+                .Then<LogicalExpression>(d =>
+                    {
+                        if (d >= ulong.MinValue && d <= ulong.MaxValue)
+                            return new ValueExpression((object)(ulong)d);
+                        else
+                            return new ValueExpression(d);
+                    });
+        }
 
         if (decimalSeparator2 != '\0' && decimalSeparator2 == numGroupSeparator)
             useNumberGroupSeparatorFlag = 0; // decimalSeparator2 takes precedence when it is specified.
@@ -275,11 +382,7 @@ public static class LogicalExpressionParser
                 var decimalCurrencyNumber = Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | useNumberGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator, currencyDecimalSeparator2)
                 .Then<LogicalExpression>(static (ctx, val) =>
                 {
-                    bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
-                    if (useDecimal)
-                        return new ValueExpression(val);
-
-                    return new ValueExpression((double)val);
+                    return new ValueExpression(val);
                 });
 
                 currency1 = OneOf(currencyCharsArray).SkipAnd(SkipWhiteSpace(OneOf(decimalCurrencyNumber, intNumber, longNumber)))
@@ -1385,7 +1488,7 @@ public static class LogicalExpressionParser
             guid = OneOf(guidWithHyphens, guidWithoutHyphens);
         }
 
-        // primary => GUID | Percent | NUMBER | identifier| DateTime | string | resultReference | function | boolean | groupExpression | identifier | list ;
+        // primary => GUID | Percent | NUMBER | identifier | DateTime | string | resultReference | function | boolean | groupExpression | identifier | list ;
 
         List<Parser<LogicalExpression>> enabledParsers = new List<Parser<LogicalExpression>>();
 
@@ -1396,6 +1499,8 @@ public static class LogicalExpressionParser
             enabledParsers.Add(currency);
         enabledParsers.Add(intNumber);
         enabledParsers.Add(longNumber);
+        if (bigIntNumber != null)
+            enabledParsers.Add(bigIntNumber);
         enabledParsers.Add(decimalOrDoubleNumber);
         enabledParsers.Add(booleanTrue);
         enabledParsers.Add(booleanFalse);

@@ -134,5 +134,15 @@ public enum ExpressionOptions
     /// <summary>
     /// When enabled and during the Divide operation, there is no remainder to the division, an integer type is used for a result; otherwise, the result is always float (double or extended)
     /// </summary>
-    ReduceDivResultToInteger = 1 << 25
+    ReduceDivResultToInteger = 1 << 25,
+
+    /// <summary>
+    /// BigInteger is to be used as the last resort when parsing numbers
+    /// </summary>
+    UseBigInteger = 1 << 26,
+
+    /// <summary>
+    /// Specifies that values expressed as hex, binary, or octal are treated as unsigned values. This has meaning only for the values above long.MaxValue.
+    /// </summary>
+    HexBinOctAreUnsigned = 1 << 27,
 }

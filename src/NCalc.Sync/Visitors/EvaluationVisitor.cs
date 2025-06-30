@@ -1,4 +1,5 @@
-﻿using NCalc.Domain;
+﻿using System.Numerics;
+using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Handlers;
 using NCalc.Helpers;
@@ -134,25 +135,31 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
 
             case BinaryExpressionType.DivAssignment:
                 return UpdateParameter(expression.LeftExpression,
-                    IsReal(left.Value) || IsReal(right.Value)
+                    IsReal(left.Value) || IsReal(right.Value) || left.Value is BigInteger || right.Value is BigInteger
                     ? MathHelper.Divide(left.Value, right.Value, context)
                     : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value,
                         context)
                     );
 
             case BinaryExpressionType.AndAssignment:
+                if (left.Value is BigInteger || right.Value is BigInteger)
+                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(left.Value, right.Value));
                 return UpdateParameter(expression.LeftExpression,
                     Convert.ToUInt64(left.Value, context.CultureInfo) &
                     Convert.ToUInt64(right.Value, context.CultureInfo)
                     );
 
             case BinaryExpressionType.OrAssignment:
+                if (left.Value is BigInteger || right.Value is BigInteger)
+                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(left.Value, right.Value));
                 return UpdateParameter(expression.LeftExpression,
                     Convert.ToUInt64(left.Value, context.CultureInfo) |
                     Convert.ToUInt64(right.Value, context.CultureInfo)
                     );
 
             case BinaryExpressionType.XOrAssignment:
+                if (left.Value is BigInteger || right.Value is BigInteger)
+                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(left.Value, right.Value));
                 return UpdateParameter(expression.LeftExpression,
                     Convert.ToUInt64(left.Value, context.CultureInfo) ^
                     Convert.ToUInt64(right.Value, context.CultureInfo)
@@ -171,7 +178,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                         Convert.ToBoolean(right.Value, context.CultureInfo);
 
             case BinaryExpressionType.Div:
-                return IsReal(left.Value) || IsReal(right.Value)
+                return IsReal(left.Value) || IsReal(right.Value) || left.Value is BigInteger || right.Value is BigInteger
                     ? MathHelper.Divide(left.Value, right.Value, context)
                     : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value,
                         context);
@@ -207,22 +214,32 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 return MathHelper.Multiply(left.Value, right.Value, context);
 
             case BinaryExpressionType.BitwiseAnd:
+                if (left.Value is BigInteger || right.Value is BigInteger)
+                    return MathHelper.BitwiseAnd(left.Value, right.Value);
                 return Convert.ToUInt64(left.Value, context.CultureInfo) &
                         Convert.ToUInt64(right.Value, context.CultureInfo);
 
             case BinaryExpressionType.BitwiseOr:
+                if (left.Value is BigInteger || right.Value is BigInteger)
+                    return MathHelper.BitwiseOr(left.Value, right.Value);
                 return Convert.ToUInt64(left.Value, context.CultureInfo) |
                         Convert.ToUInt64(right.Value, context.CultureInfo);
 
             case BinaryExpressionType.BitwiseXOr:
+                if (left.Value is BigInteger || right.Value is BigInteger)
+                    return MathHelper.BitwiseXOr(left.Value, right.Value);
                 return Convert.ToUInt64(left.Value, context.CultureInfo) ^
                         Convert.ToUInt64(right.Value, context.CultureInfo);
 
             case BinaryExpressionType.LeftShift:
+                if (left.Value is BigInteger)
+                    return MathHelper.LeftShift((BigInteger) left.Value, right.Value, context);
                 return Convert.ToUInt64(left.Value, context.CultureInfo) <<
                         Convert.ToInt32(right.Value, context.CultureInfo);
 
             case BinaryExpressionType.RightShift:
+                if (left.Value is BigInteger)
+                    return MathHelper.RightShift((BigInteger)left.Value, right.Value, context);
                 return Convert.ToUInt64(left.Value, context.CultureInfo) >>
                         Convert.ToInt32(right.Value, context.CultureInfo);
 
@@ -376,21 +393,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
         if (context.Options.HasFlag(ExpressionOptions.StrictTypeMatching) && a?.GetType() != b?.GetType())
             return false;
 
-        if ((a == null || b == null) && !(a == null && b == null))
-            return false;
-
-        var result = CompareUsingMostPreciseType(a, b, context);
-
-        return comparisonType switch
-        {
-            ComparisonType.Equal => result == 0,
-            ComparisonType.Greater => result > 0,
-            ComparisonType.GreaterOrEqual => result >= 0,
-            ComparisonType.Less => result < 0,
-            ComparisonType.LessOrEqual => result <= 0,
-            ComparisonType.NotEqual => result != 0,
-            _ => throw new ArgumentOutOfRangeException(nameof(comparisonType), comparisonType, null)
-        };
+        return EvaluationHelper.Compare(a, b, comparisonType, context);
     }
 
     protected void OnEvaluateFunction(string name, FunctionArgs args)
