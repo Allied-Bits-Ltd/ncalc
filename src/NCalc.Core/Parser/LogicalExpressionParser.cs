@@ -251,9 +251,17 @@ public static class LogicalExpressionParser
             {
                 char currencyDecimalSeparator = extOptions.GetCurrencyDecimalSeparatorChar(); // this method will return the default separator, if needed
                 char currencyNumGroupSeparator = extOptions.GetCurrencyNumberGroupSeparatorChar(); // this method will return the default separator, if needed
+                char currencyDecimalSeparator2 = decimalSeparator2;
+                if (currencyDecimalSeparator2 == currencyDecimalSeparator)
+                {
+                    if (decimalSeparator != currencyDecimalSeparator) // decimal separators for currency and numbers are inverted
+                    {
+                        currencyDecimalSeparator2 = decimalSeparator;
+                    }
+                }
 
                 //Parser<string> currencyChar;
-                List<Parser<string>> currencyChars = new List<Parser<string>>();
+                List <Parser<string>> currencyChars = new List<Parser<string>>();
 
                 if (!string.IsNullOrEmpty(currencySymbol)) currencyChars.Add(Terms.Text(currencySymbol, true));
                 if (!string.IsNullOrEmpty(currencySymbol2)) currencyChars.Add(Terms.Text(currencySymbol2, true));
@@ -264,7 +272,7 @@ public static class LogicalExpressionParser
                 Parser<LogicalExpression>? currency1 = null;
                 Parser<LogicalExpression>? currency2 = null;
 
-                var decimalCurrencyNumber = Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | useNumberGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator, decimalSeparator2)
+                var decimalCurrencyNumber = Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | useNumberGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator, currencyDecimalSeparator2)
                 .Then<LogicalExpression>(static (ctx, val) =>
                 {
                     bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
