@@ -2,8 +2,9 @@
 
 A value is a terminal token representing a concrete element. This can be:
 
-- An <xref:System.Int32>
+- An <xref:System.Int32> or <xref:System.Int64>
 - Any floating point number, like <xref:System.Double>
+- A <xref:NCalc.Domain.Percent>
 - A <xref:System.DateTime> or <xref:System.TimeSpan>
 - A <xref:System.Boolean>
 - A <xref:System.String>
@@ -14,25 +15,37 @@ A value is a terminal token representing a concrete element. This can be:
 
 ## Integers
 
-They are represented using numbers. 
+They are represented using numbers. Numbers may be presented in decimal, hexadecimal, octal, and binary forms using a prefix:
 
 ```
 123456
+0xFFFF // hex
+0o1777 // octal
+0177   // octal, only when UseCStyleOctals option is enabled
+0b01010101 // binary
 ```
 
-They are evaluated as <xref:System.Int32>. If the value is too big, it will be evaluated as <xref:System.Int64>.
+Numbers in decimal format may include a leading sign ('-') character to indicate negative numbers.
+
+Numbers are normally evaluated as <xref:System.Int32> or, if the value is too big, as <xref:System.Int64>. When the <xref:NCalc.ExpressionOptions.UseBigInteger> flag in set in <xref:NCalc.ExpressionOptions>, <xref:System.Numerics.BigInteger> may be used in expressions and may be returned by certain math operations.
+
+A number may contain number group separators. Comma (',') is the default separator, and when [Advanced Options](advanced_value_formats.md) are used, it is possible to use a culture-specific or custom separator.
+
+Additionally, when [Advanced Options](advanced_value_formats.md) are used, a number may contain underscores for readability. Underscore support in binary, octal, and hex numbers is built-in, while support in decimals requires a patch in Parlot or a [custom branch of Parlot](https://github.com/Allied-Bits-Ltd/parlot/tree/ABCalc). 
 
 ## Floating point numbers
 
-Use the dot to define the decimal part. 
+Use '.' (dot) to separate an interer and a fractional part. When [Advanced Options](advanced_value_formats.md) are used, it is possible to use a culture-specific or custom separator and even use two separators (e.g., use both ',' and '.').
 
 ```
 123.456
 .123
 ```
-They are evaluated as <xref:System.Double>, unless you use <xref:NCalc.ExpressionOptions.DecimalAsDefault>.
+They are evaluated as <xref:System.Double>, or, if the <xref:NCalc.ExpressionOptions.DecimalAsDefault> flag in set in <xref:NCalc.ExpressionOptions>, as <xref:System.Decimal>.
 
-## Scientific notation
+Additionally, when [Advanced Options](advanced_value_formats.md) are used, a number may contain a currency symbol or identifier before or after the numeric value. Such a symbol is ignored in calculations. However, currency values are evaluated as <xref:System.Decimal> regardless of whether decimal is the default type for floating-point numbers.
+
+### Scientific notation
 
 You can use the e to define power of ten (10^).
 ```
@@ -44,19 +57,23 @@ You can use the e to define power of ten (10^).
 .1e-2
 1e10
 ```
-They are evaluated as <xref:System.Double>, unless you use <xref:NCalc.ExpressionOptions.DecimalAsDefault>.
+Such floating-point numbers are evaluated as <xref:System.Double>, or, if the <xref:NCalc.ExpressionOptions.DecimalAsDefault> flag in set in <xref:NCalc.ExpressionOptions>, as <xref:System.Decimal>.
+
+## Percent
+
+When percent calculation is enabled in [Advanced Options](advanced_value_formats.md), the parser will recognize the '%' character and treat the parsed value as percent. Percent participates in expression evaluation. It can be the result of an operation (e.g., in operations like "5% + 2%"), in which case, an instance of <xref:NCalc.Domain.Percent> is returned. 
 
 ## DateTime
 
-Must be enclosed between sharps. 
+Must be enclosed between '#' (sharp) characters. 
 
 ```
 #2008/01/31# // for en-US culture
 #08/08/2001 09:30:00# 
 ```
-By default, NCalc uses current Culture to evaluate DateTime values. When [Advanced Value Formats and Operations](advanced_value_formats.md) are used, the format of date and time values can be customized to a large extent.
+By default, NCalc uses current Culture to evaluate DateTime values. When [Advanced Options](advanced_value_formats.md) are used, the format of date and time values can be customized to a large extent.
 
-Additionally, it is possible to define dates relative to current moment in a humane form (e.g. #3 weeks ago# or #in 5 days#)  as described in the [Advanced Value Formats and Operations](advanced_value_formats.md) topic.
+Additionally, it is possible to define dates relative to current moment in a humane form (e.g. #today#, #3 weeks ago# or #in 5 days#) as described in the [Advanced Value Formats and Operations](advanced_value_formats.md) topic.
 
 ## Time
 
@@ -66,7 +83,7 @@ The value must be enclosed between sharps.
 #20:42:00#
 ```
 
-When [Advanced Value Formats and Operations](advanced_value_formats.md) are used, the format of time values can be customized to a large extent.
+When [Advanced Options](advanced_value_formats.md) are used, the format of time values can be customized to a large extent.
 
 Additionally, it is possible to define periods in a humane form (e.g. #5 weeks 3 days 28 hours#) as described in the [Advanced Value Formats and Operations](advanced_value_formats.md) topic.
 

@@ -1,4 +1,5 @@
-﻿using NCalc.Domain;
+﻿using System.Numerics;
+using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Handlers;
 using NCalc.Helpers;
@@ -146,29 +147,48 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 object? leftValue = await left.Value;
                 object? rightValue = await right.Value;
                 return await UpdateParameterAsync(expression.LeftExpression,
-                    IsReal(leftValue) || IsReal(rightValue)
+                    IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger
                     ? MathHelper.Divide(leftValue, rightValue, context)
                     : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo), rightValue, context)
                     );
             }
             case BinaryExpressionType.AndAssignment:
+            {
+                object? leftValue = await left.Value;
+                object? rightValue = await right.Value;
+                if (leftValue is BigInteger || rightValue is BigInteger)
+                    return await UpdateParameterAsync(expression.LeftExpression,
+                        MathHelper.BitwiseAnd(leftValue, rightValue));
                 return await UpdateParameterAsync(expression.LeftExpression,
-                    Convert.ToUInt64(await left.Value, context.CultureInfo) &
-                    Convert.ToUInt64(await right.Value, context.CultureInfo)
+                    Convert.ToUInt64(leftValue, context.CultureInfo) &
+                    Convert.ToUInt64(rightValue, context.CultureInfo)
                     );
-
+            }
             case BinaryExpressionType.OrAssignment:
+            {
+                object? leftValue = await left.Value;
+                object? rightValue = await right.Value;
+                if (leftValue is BigInteger || rightValue is BigInteger)
+                    return await UpdateParameterAsync(expression.LeftExpression,
+                        MathHelper.BitwiseOr(leftValue, rightValue));
                 return await UpdateParameterAsync(expression.LeftExpression,
-                    Convert.ToUInt64(await left.Value, context.CultureInfo) |
-                    Convert.ToUInt64(await right.Value, context.CultureInfo)
+                    Convert.ToUInt64(leftValue, context.CultureInfo) |
+                    Convert.ToUInt64(rightValue, context.CultureInfo)
                     );
-
+            }
             case BinaryExpressionType.XOrAssignment:
-                return await UpdateParameterAsync(expression.LeftExpression,
-                    Convert.ToUInt64(await left.Value, context.CultureInfo) ^
-                    Convert.ToUInt64(await right.Value, context.CultureInfo)
-                    );
+            {
+                object? leftValue = await left.Value;
+                object? rightValue = await right.Value;
+                if (leftValue is BigInteger || rightValue is BigInteger)
+                    return await UpdateParameterAsync(expression.LeftExpression,
+                        MathHelper.BitwiseXOr(leftValue, rightValue));
 
+                return await UpdateParameterAsync(expression.LeftExpression,
+                    Convert.ToUInt64(leftValue, context.CultureInfo) ^
+                    Convert.ToUInt64(rightValue, context.CultureInfo)
+                    );
+            }
             case BinaryExpressionType.And:
             return Convert.ToBoolean(await left.Value, context.CultureInfo) &&
                     Convert.ToBoolean(await right.Value, context.CultureInfo);
@@ -182,12 +202,17 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                     Convert.ToBoolean(await right.Value, context.CultureInfo);
 
         case BinaryExpressionType.Div:
-            return IsReal(await left.Value) || IsReal(await right.Value)
-                ? MathHelper.Divide(await left.Value, await right.Value, context)
-                : MathHelper.Divide(Convert.ToDouble(await left.Value, context.CultureInfo),
-                    await right.Value,
-                    context);
+            {
+                object? leftValue = await left.Value;
+                object? rightValue = await right.Value;
 
+                return
+                    IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger
+                    ? MathHelper.Divide(leftValue, rightValue, context)
+                    : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo),
+                        await right.Value,
+                        context);
+            }
         case BinaryExpressionType.Equal:
             return Compare(await left.Value, await right.Value, ComparisonType.Equal);
 
@@ -219,39 +244,65 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
             return MathHelper.Multiply(await left.Value, await right.Value, context);
 
         case BinaryExpressionType.BitwiseAnd:
-            return Convert.ToUInt64(await left.Value, context.CultureInfo) &
-                    Convert.ToUInt64(await right.Value, context.CultureInfo);
+        {
+            object? leftValue = await left.Value;
+            object? rightValue = await right.Value;
 
+            if (leftValue is BigInteger || rightValue is BigInteger)
+                return MathHelper.BitwiseAnd(leftValue, rightValue);
+            return Convert.ToUInt64(leftValue, context.CultureInfo) &
+                Convert.ToUInt64(rightValue, context.CultureInfo);
+        }
         case BinaryExpressionType.BitwiseOr:
-            return Convert.ToUInt64(await left.Value, context.CultureInfo) |
-                    Convert.ToUInt64(await right.Value, context.CultureInfo);
+        {
+            object? leftValue = await left.Value;
+            object? rightValue = await right.Value;
 
+            if (leftValue is BigInteger || rightValue is BigInteger)
+                return MathHelper.BitwiseOr(leftValue, rightValue);
+            return Convert.ToUInt64(leftValue, context.CultureInfo) |
+                    Convert.ToUInt64(rightValue, context.CultureInfo);
+        }
         case BinaryExpressionType.BitwiseXOr:
-            return Convert.ToUInt64(await left.Value, context.CultureInfo) ^
-                    Convert.ToUInt64(await right.Value, context.CultureInfo);
+        {
+            object? leftValue = await left.Value;
+            object? rightValue = await right.Value;
 
+            if (leftValue is BigInteger || rightValue is BigInteger)
+                return MathHelper.BitwiseXOr(leftValue, rightValue);
+            return Convert.ToUInt64(leftValue, context.CultureInfo) ^
+                    Convert.ToUInt64(rightValue, context.CultureInfo);
+        }
         case BinaryExpressionType.LeftShift:
-            return Convert.ToUInt64(await left.Value, context.CultureInfo) <<
+        {
+            object? leftValue = await left.Value;
+            if (leftValue is BigInteger)
+                return MathHelper.LeftShift((BigInteger)leftValue, await right.Value, context);
+            return Convert.ToUInt64(leftValue, context.CultureInfo) <<
                     Convert.ToInt32(await right.Value, context.CultureInfo);
-
+        }
         case BinaryExpressionType.RightShift:
-            return Convert.ToUInt64(await left.Value, context.CultureInfo) >>
+        {
+            object? leftValue = await left.Value;
+            if (leftValue is BigInteger)
+                return MathHelper.RightShift((BigInteger)leftValue, await right.Value, context);
+            return Convert.ToUInt64(leftValue, context.CultureInfo) >>
                     Convert.ToInt32(await right.Value, context.CultureInfo);
-
+        }
         case BinaryExpressionType.Exponentiation:
             return MathHelper.Pow(await left.Value, await right.Value, context);
 
         case BinaryExpressionType.Factorial:
-            {
-                var leftValue = (await left.Value);
-                var rightValue = (await right.Value);
+        {
+            var leftValue = (await left.Value);
+            var rightValue = (await right.Value);
 
-                if (leftValue == null || rightValue == null)
-                {
-                    return false;
-                }
-                return MathHelper.Factorial(leftValue, rightValue, context);
+            if (leftValue == null || rightValue == null)
+            {
+                return false;
             }
+            return MathHelper.Factorial(leftValue, rightValue, context);
+        }
         case BinaryExpressionType.In:
             return EvaluationHelper.In(await right.Value, await left.Value, context);
 
@@ -394,21 +445,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
         if (context.Options.HasFlag(ExpressionOptions.StrictTypeMatching) && a?.GetType() != b?.GetType())
             return false;
 
-        if ((a == null || b == null) && !(a == null && b == null))
-            return false;
-
-        var result = CompareUsingMostPreciseType(a, b, context);
-
-        return comparisonType switch
-        {
-            ComparisonType.Equal => result == 0,
-            ComparisonType.Greater => result > 0,
-            ComparisonType.GreaterOrEqual => result >= 0,
-            ComparisonType.Less => result < 0,
-            ComparisonType.LessOrEqual => result <= 0,
-            ComparisonType.NotEqual => result != 0,
-            _ => throw new ArgumentOutOfRangeException(nameof(comparisonType), comparisonType, null)
-        };
+        return EvaluationHelper.Compare(a, b, comparisonType, context);
     }
 
     protected ValueTask OnEvaluateFunctionAsync(string name, AsyncFunctionArgs args)

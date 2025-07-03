@@ -10,6 +10,54 @@ namespace NCalc.Tests;
 [Trait("Category", "Advanced")]
 public class AdvFeatureTests
 {
+    [Fact]
+    public void ShouldParseBigInteger()
+    {
+        var expectedValue = new BigInteger(ulong.MaxValue);
+        expectedValue = expectedValue * 3;
+        var expression = new Expression("55340232221128654845", ExpressionOptions.UseBigInteger);
+        var result = expression.Evaluate();
+
+        Assert.True(result is BigInteger);
+        Assert.Equal(expectedValue, (BigInteger) result);
+    }
+
+    [Theory]
+    [InlineData("0xFFFFFFFFFFFFFFFE")]
+    [InlineData("01777777777777777777776")]
+    [InlineData("0o1777777777777777777776")]
+    [InlineData("0b1111111111111111111111111111111111111111111111111111111111111110")]
+    public void ShouldParseUnsignedLong(string input)
+    {
+        var expression = new Expression(input, ExpressionOptions.HexBinOctAreUnsigned);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.AcceptCStyleOctals;
+        var result = expression.Evaluate();
+
+        Assert.True(result is ulong);
+
+        Assert.Equal(ulong.MaxValue - 1, (ulong) result);
+    }
+
+    [Theory]
+    [InlineData("110680464442257309690 + 1", "110680464442257309691")]
+    [InlineData("1 + 110680464442257309690 + 1", "110680464442257309692")]
+    [InlineData("110680464442257309690 - 1", "110680464442257309689")]
+    [InlineData("1 - 110680464442257309690", "-110680464442257309689")]
+    [InlineData("0x2FFFFFFFFFFFFFFFD * 2", "110680464442257309690")]
+    [InlineData("2 * 0x2FFFFFFFFFFFFFFFD", "110680464442257309690")]
+    [InlineData("110680464442257309690 / 2", "55340232221128654845")]
+    [InlineData("110680464442257309690 / 55340232221128654845", "2")]
+    public void ShouldCalculateBigIntegers(string input, string expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.UseBigInteger);
+        var result = expression.Evaluate();
+
+        Assert.True(result is BigInteger || result is long);
+
+        Assert.Equal(expectedValue, result.ToString());
+    }
+
     [Theory]
     [InlineData("#1@6@2025#", "@", AdvancedExpressionOptions.DateOrderKind.MDY, new int[] { 2025, 1, 6 })]
     [InlineData("#1/6/2025#", "/", AdvancedExpressionOptions.DateOrderKind.DMY, new int[] { 2025, 6, 1 })]
@@ -1335,6 +1383,9 @@ public class AdvFeatureTests
             new BinaryExpression(BinaryExpressionType.Plus, new PercentExpression(new ValueExpression(2)), new PercentExpression(new ValueExpression(2))).ToString());
         Assert.Equal("2% * 2",
             new BinaryExpression(BinaryExpressionType.Times, new PercentExpression(new ValueExpression(2)), new ValueExpression(2)).ToString());
+        Assert.Equal("(2 + 2)%",
+            new PercentExpression(new BinaryExpression(BinaryExpressionType.Plus, new ValueExpression(2), new ValueExpression(2))).ToString());
+
     }
 
     [Theory]
@@ -1370,10 +1421,12 @@ public class AdvFeatureTests
     }
 
     [Theory]
-    [InlineData("a := 2", 2, 2)]
-    [InlineData("a := 2 + 2", 4, 4)]
-    [InlineData("{a} := (2 + 2)", 4, 4)]
-    public void ShouldHandleAssignment(string input, int expectedVarValue, int expectedExprValue)
+    [InlineData("a := 2", "a", 2, 2)]
+    [InlineData("a24 := 2", "a24", 2, 2)]
+    [InlineData("mc5 := 2", "mc5", 2, 2)]
+    [InlineData("a := 2 + 2", "a", 4, 4)]
+    [InlineData("{a} := (2 + 2)", "a" ,4, 4)]
+    public void ShouldHandleAssignment(string input, string expectedVar, int expectedVarValue, int expectedExprValue)
     {
         bool eventFired = false;
 
@@ -1381,14 +1434,44 @@ public class AdvFeatureTests
         expression.UpdateParameter += (name, args) =>
         {
             eventFired = true;
-            Assert.Equal("a", name);
-            Assert.Equal(expectedVarValue, args.Value);
+            Assert.Equal(expectedVar, name);
+            int iValue;
+            Assert.NotNull(args.Value);
+
+            if (args.Value is double dValue)
+            {
+                iValue = (int)(long)dValue;
+            }
+            else
+            if (args.Value is long lValue)
+            {
+                iValue = (int) lValue;
+            }
+            else
+                iValue = (int) args.Value;
+
+            Assert.Equal(expectedVarValue, iValue);
         };
 
+        long iResult;
         var result = expression.Evaluate();
 
+        Assert.NotNull(result);
+
+        if (result is double dResult)
+        {
+            iResult = (long)dResult;
+        }
+        if (result is long lResult)
+        {
+            iResult = (int)lResult;
+        }
+        else
+            iResult = (int)result;
+
         Assert.True(eventFired);
-        Assert.Equal(expectedExprValue, result);
+
+        Assert.Equal(expectedExprValue, iResult);
     }
 
     class AssignmentLambdaTestsContext
