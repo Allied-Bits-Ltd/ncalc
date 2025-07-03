@@ -1,9 +1,9 @@
 ﻿<Project>
   <PropertyGroup>
     <PackageIcon>NCalc.png</PackageIcon>
-    <Authors>Sebastien Ros and contributors</Authors>
-    <Copyright>Sebastien Ros and contributors</Copyright>
-    <Company>https://github.com/ncalc</Company>
+    <Authors>Sebastien Ros and contributors, Eugene Mayevski</Authors>
+    <Copyright>Sebastien Ros and contributors, Allied Bits Ltd.</Copyright>
+    <Company>https://github.com/Allied-Bits-ltd/ncalc</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
