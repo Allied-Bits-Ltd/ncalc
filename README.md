@@ -2,7 +2,7 @@
 
 # NCalc
 
-[![GitHub Actions Workflow Status](https://github.com/Allied-Bits-ltd/ncalc/actions/workflows/build-test.yml "GitHub Actions Workflow Status")](https://img.shields.io/github/actions/workflow/status/Allied-Bits-ltd/ncalc/build-test.yml)
+[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/Allied-Bits-ltd/ncalc/build-test.yml "GitHub Actions Workflow Status")](https://img.shields.io/github/actions/workflow/status/Allied-Bits-ltd/ncalc/build-test.yml)
 
 [![NuGet](https://img.shields.io/nuget/v/AlliedBits.NCalc.svg)](https://www.nuget.org/packages/AlliedBits.NCalc) [![downloads](https://img.shields.io/nuget/dt/AlliedBits.NCalc)](https://www.nuget.org/packages/AlliedBits.NCalc)
 
