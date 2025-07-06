@@ -1206,9 +1206,11 @@ public static class MathHelper
                     return (bdA.IsNegative()) ? bdA.WholeValue - 1 : bdA.WholeValue + 1;
                 }
                 else
+#if NET6_0_OR_GREATER
                 if (rounding == MidpointRounding.ToZero)
                     return (bdA.IsNegative()) ? bdA.WholeValue + 1 : bdA.WholeValue - 1;
                 else
+#endif
                 if (rounding == MidpointRounding.ToEven)
                 {
                     if (bdA.WholeValue.IsEven)
