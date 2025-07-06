@@ -1,6 +1,6 @@
 using System.Numerics;
 using System.Text.RegularExpressions;
-
+using ExtendedNumerics;
 using NCalc.Domain;
 using NCalc.Exceptions;
 
@@ -154,13 +154,33 @@ public static class EvaluationHelper
         int result;
         if (a == null || b == null)
         {
-            if (a == null && b == null)
-                result = 0;
+            if (options.CompareNullValues)
+            {
+                if (a == null && b == null)
+                    result = 0;
+                else
+                if (a == null)
+                    result = -1;
+                else
+                    result = 1;
+            }
             else
-            if (a == null)
-                result = 1;
+                return a == b; // true if null == null
+        }
+        else
+        if (a is BigDecimal || b is BigDecimal)
+        {
+            if (a is BigDecimal bdA)
+            {
+                if (b is BigDecimal bdB)
+                    result = bdA.CompareTo(bdB);
+                else
+                    result = bdA.CompareTo(MathHelper.ConvertToBigDecimal(b));
+            }
             else
-                result = -1;
+            {
+                result = ((BigDecimal)b).CompareTo(MathHelper.ConvertToBigDecimal(a));
+            }
         }
         else
         if (a is BigInteger || b is BigInteger)
@@ -173,7 +193,9 @@ public static class EvaluationHelper
                     result = biA.CompareTo(MathHelper.ConvertToBigInteger(b));
             }
             else
+            {
                 result = ((BigInteger)b).CompareTo(MathHelper.ConvertToBigInteger(a));
+            }
         }
         else
             result = TypeHelper.CompareUsingMostPreciseType(a, b, options);
@@ -204,9 +226,9 @@ public static class EvaluationHelper
         {
             UnaryExpressionType.Not => !Convert.ToBoolean(result, context.CultureInfo),
             UnaryExpressionType.Negate =>
-                (result is BigInteger) ? MathHelper.Subtract((object)(long)0, (BigInteger) result) : MathHelper.Subtract(0, result, context),
+                (result is BigInteger) ? MathHelper.TryReduceToUInt64(MathHelper.Subtract((object)(long)0, (BigInteger) result)) : MathHelper.Subtract(0, result, context),
             UnaryExpressionType.BitwiseNot =>
-                (result is BigInteger) ? MathHelper.BitwiseNot((BigInteger) result) : ~Convert.ToUInt64(result, context.CultureInfo),
+                (result is BigInteger) ? MathHelper.TryReduceToUInt64(MathHelper.BitwiseNot(result)) : ~Convert.ToUInt64(result, context.CultureInfo),
             UnaryExpressionType.SqRoot => MathHelper.Sqrt(result, context.CultureInfo),
 #if NET8_0_OR_GREATER
             UnaryExpressionType.CbRoot => MathHelper.Cbrt(result, context.CultureInfo),

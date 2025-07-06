@@ -24,6 +24,8 @@ public enum BinaryExpressionType
     Plus,
     Modulo,
     Div,
+    IntDivB,
+    IntDivP,
     Times,
     BitwiseOr,
     BitwiseAnd,

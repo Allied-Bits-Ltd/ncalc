@@ -7,4 +7,6 @@ public readonly struct ComparisonOptions(CultureInfo cultureInfo, ExpressionOpti
     public bool IsCaseInsensitive { get; } = options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer);
 
     public bool IsOrdinal { get; } = options.HasFlag(ExpressionOptions.OrdinalStringComparer);
+
+    public bool CompareNullValues { get; } = options.HasFlag(ExpressionOptions.CompareNullValues);
 }

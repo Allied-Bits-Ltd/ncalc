@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using ExtendedNumerics;
 using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Handlers;
@@ -28,7 +29,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
 
     private object? UpdateParameter(LogicalExpression leftExpression, object? value)
     {
-        if (leftExpression is Identifier identifier)
+        if (leftExpression is Identifier identifier && (value is not null || context.Options.HasFlag(ExpressionOptions.AllowNullParameter)))
         {
             var identifierName = identifier.Name;
 
@@ -135,10 +136,11 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
 
             case BinaryExpressionType.DivAssignment:
                 return UpdateParameter(expression.LeftExpression,
-                    IsReal(left.Value) || IsReal(right.Value) || left.Value is BigInteger || right.Value is BigInteger
+                    IsReal(left.Value) || IsReal(right.Value) || left.Value is BigInteger || right.Value is BigInteger || left.Value is BigDecimal || right.Value is BigDecimal
                     ? MathHelper.Divide(left.Value, right.Value, context)
-                    : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value,
-                        context)
+                    : ((left.Value is null)
+                        ? null
+                        : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value, context))
                     );
 
             case BinaryExpressionType.AndAssignment:
@@ -178,11 +180,14 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                         Convert.ToBoolean(right.Value, context.CultureInfo);
 
             case BinaryExpressionType.Div:
-                return IsReal(left.Value) || IsReal(right.Value) || left.Value is BigInteger || right.Value is BigInteger
+                return IsReal(left.Value) || IsReal(right.Value) || left.Value is BigInteger || right.Value is BigInteger || left.Value is BigDecimal || right.Value is BigDecimal
                     ? MathHelper.Divide(left.Value, right.Value, context)
-                    : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value,
-                        context);
-
+                    : ((left.Value is null)
+                        ? null
+                        : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value, context));
+            case BinaryExpressionType.IntDivB:
+            case BinaryExpressionType.IntDivP:
+                return MathHelper.IntegerDivide(left.Value, right.Value, (expression.Type == BinaryExpressionType.IntDivB), context);
             case BinaryExpressionType.Equal:
                 return Compare(left.Value, right.Value, ComparisonType.Equal);
 
@@ -392,6 +397,12 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
     {
         if (context.Options.HasFlag(ExpressionOptions.StrictTypeMatching) && a?.GetType() != b?.GetType())
             return false;
+
+        if (!context.Options.HasFlag(ExpressionOptions.CompareNullValues))
+        {
+            if ((a == null || b == null) && !(a == null && b == null))
+                return false;
+        }
 
         return EvaluationHelper.Compare(a, b, comparisonType, context);
     }

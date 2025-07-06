@@ -36,10 +36,10 @@ public readonly struct MathHelperOptions(CultureInfo cultureInfo, ExpressionOpti
         get => options.HasFlag(ExpressionOptions.ReduceDivResultToInteger);
     }
 
-    public bool UseBigInteger
+    public bool UseBigNumbers
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        get => options.HasFlag(ExpressionOptions.UseBigInteger);
+        get => options.HasFlag(ExpressionOptions.UseBigNumbers);
     }
 
     public static implicit operator MathHelperOptions(CultureInfo cultureInfo)

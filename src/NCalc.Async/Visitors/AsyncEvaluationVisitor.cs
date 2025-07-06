@@ -1,11 +1,10 @@
 ﻿using System.Numerics;
+using ExtendedNumerics;
 using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Handlers;
 using NCalc.Helpers;
-
 using static NCalc.Helpers.TypeHelper;
-
 using BinaryExpression = NCalc.Domain.BinaryExpression;
 using UnaryExpression = NCalc.Domain.UnaryExpression;
 
@@ -147,7 +146,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 object? leftValue = await left.Value;
                 object? rightValue = await right.Value;
                 return await UpdateParameterAsync(expression.LeftExpression,
-                    IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger
+                    IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal
                     ? MathHelper.Divide(leftValue, rightValue, context)
                     : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo), rightValue, context)
                     );
@@ -207,11 +206,16 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 object? rightValue = await right.Value;
 
                 return
-                    IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger
+                    IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal
                     ? MathHelper.Divide(leftValue, rightValue, context)
-                    : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo),
-                        await right.Value,
-                        context);
+                    : ((leftValue is null)
+                        ? null
+                        : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo), rightValue, context));
+            }
+        case BinaryExpressionType.IntDivB:
+        case BinaryExpressionType.IntDivP:
+            {
+                return MathHelper.IntegerDivide(await left.Value, await right.Value, (expression.Type == BinaryExpressionType.IntDivB), context);
             }
         case BinaryExpressionType.Equal:
             return Compare(await left.Value, await right.Value, ComparisonType.Equal);
@@ -445,6 +449,11 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
         if (context.Options.HasFlag(ExpressionOptions.StrictTypeMatching) && a?.GetType() != b?.GetType())
             return false;
 
+        if (!context.Options.HasFlag(ExpressionOptions.CompareNullValues))
+        {
+            if ((a == null || b == null) && !(a == null && b == null))
+                return false;
+        }
         return EvaluationHelper.Compare(a, b, comparisonType, context);
     }
 

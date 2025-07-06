@@ -187,7 +187,8 @@ public class EvaluationTests
     public void ShouldAllowOperatorsWithNulls(string expression, object expected)
     {
         var e = new Expression(expression, ExpressionOptions.AllowNullParameter);
-        Assert.Equal(expected, e.Evaluate());
+        var result = e.Evaluate();
+        Assert.Equal(expected, result);
     }
 
     [Fact]

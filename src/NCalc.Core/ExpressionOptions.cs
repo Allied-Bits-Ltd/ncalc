@@ -137,12 +137,17 @@ public enum ExpressionOptions
     ReduceDivResultToInteger = 1 << 25,
 
     /// <summary>
-    /// BigInteger is to be used as the last resort when parsing numbers
+    /// BigInteger is to be used as the last resort when parsing numbers. BigDecimal will be used when dividing two BigIntegers or two BigDecimals.
     /// </summary>
-    UseBigInteger = 1 << 26,
+    UseBigNumbers = 1 << 26,
 
     /// <summary>
     /// Specifies that values expressed as hex, binary, or octal are treated as unsigned values. This has meaning only for the values above long.MaxValue.
     /// </summary>
     HexBinOctAreUnsigned = 1 << 27,
+
+    /// <summary>
+    /// Specifies that comparison of null values should take place (a non-null value has precedence) instead of shortcutting to false.
+    /// </summary>
+    CompareNullValues = 1 << 28
 }

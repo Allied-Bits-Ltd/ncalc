@@ -15,7 +15,7 @@ public class AdvFeatureTests
     {
         var expectedValue = new BigInteger(ulong.MaxValue);
         expectedValue = expectedValue * 3;
-        var expression = new Expression("55340232221128654845", ExpressionOptions.UseBigInteger);
+        var expression = new Expression("55340232221128654845", ExpressionOptions.UseBigNumbers);
         var result = expression.Evaluate();
 
         Assert.True(result is BigInteger);
@@ -50,7 +50,7 @@ public class AdvFeatureTests
     [InlineData("110680464442257309690 / 55340232221128654845", "2")]
     public void ShouldCalculateBigIntegers(string input, string expectedValue)
     {
-        var expression = new Expression(input, ExpressionOptions.UseBigInteger);
+        var expression = new Expression(input, ExpressionOptions.UseBigNumbers);
         var result = expression.Evaluate();
 
         Assert.True(result is BigInteger || result is long);
@@ -1215,7 +1215,7 @@ public class AdvFeatureTests
     [InlineData("500", 1, 500)]
     [InlineData("500", 2, 500)]
     [InlineData("500", 3, 500)]
-    public void ShouldAcceptCurrencyCulture(string input, int position, double expectedValue)
+    public void ShouldAcceptCurrencyCulture(string input, int position, decimal expectedValue)
     {
         string sym = CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol;
         switch (position)
@@ -1231,7 +1231,6 @@ public class AdvFeatureTests
         expression.AdvancedOptions.CurrencySymbolsType = AdvancedExpressionOptions.CurrencySymbolType.FromCulture;
 
         var result = expression.Evaluate();
-
         Assert.Equal(expectedValue, result);
     }
 
@@ -1246,7 +1245,7 @@ public class AdvFeatureTests
     [InlineData("500.50", "\x20ac", "$", 2, 500.50)]
     [InlineData("500.50", "\x20ac", "$", 3, 500.50)]
 
-    public void ShouldAcceptCurrencyCustom(string input, string currencySymbol, string currencySymbol2, int position, double expectedValue)
+    public void ShouldAcceptCurrencyCustom(string input, string currencySymbol, string currencySymbol2, int position, decimal expectedValue)
     {
         string sym = currencySymbol2.Length > 0 ? currencySymbol2 : currencySymbol;
         switch (position)
@@ -1273,7 +1272,7 @@ public class AdvFeatureTests
     [InlineData("500EUR", 500)]
     [InlineData("500\x20ac", 500)] // \x20ac stands for the euro symbol
     [InlineData("500 EUR", 500)]
-    public void ShouldAcceptCurrencyEUR(string input, double expectedValue)
+    public void ShouldAcceptCurrencyEUR(string input, decimal expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
@@ -1303,7 +1302,7 @@ public class AdvFeatureTests
     [InlineData("50!!!", "13106744139423334400000")]
     public void ShouldCalculateLargeFactorials(string input, string expectedValue)
     {
-        var expression = new Expression(input, ExpressionOptions.NoCache);
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseBigNumbers);
         var result = expression.Evaluate();
         var expected = BigInteger.Parse(expectedValue);
         Assert.Equal(expectedValue, result?.ToString());
@@ -1841,6 +1840,18 @@ public class AdvFeatureTests
         Assert.Equal(expectedExprValue, result);
         Assert.Equal(expectedVarValue, context.a);
     }
+
+    [Theory]
+    [InlineData("8.5 \\ 2.5", (long) 4)]
+    [InlineData("8.5 div 2.5", (long)4)]
+    [InlineData("8.5 // 2.5", (long) 3)]
+    public void ShouldCalculateIntegerDiv(string input, long expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        var result = expression.Evaluate();
+
+        Assert.Equal(expectedValue.ToString(), result?.ToString());
+    }
 }
 
 [Trait("Category", "Advanced")]
@@ -1967,7 +1978,7 @@ public class AsyncAdvFeatureTests
     [InlineData("50!!!", "13106744139423334400000")]
     public async Task ShouldCalculateLargeFactorialsAsync(string input, string expectedValue)
     {
-        var expression = new AsyncExpression(input, ExpressionOptions.NoCache);
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseBigNumbers);
 
         var result = await expression.EvaluateAsync();
 
@@ -2141,4 +2152,17 @@ public class AsyncAdvFeatureTests
         Assert.True(eventFired);
         Assert.Equal(expectedExprValue, result);
     }
+
+    [Theory]
+    [InlineData("8.5 \\ 2.5", (long)4)]
+    [InlineData("8.5 div 2.5", (long)4)]
+    [InlineData("8.5 // 2.5", (long)3)]
+    public async Task ShouldCalculateIntegerDivAsync(string input, long expectedValue)
+    {
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache);
+        var result = await expression.EvaluateAsync();
+
+        Assert.Equal(expectedValue.ToString(), result?.ToString());
+    }
+
 }
