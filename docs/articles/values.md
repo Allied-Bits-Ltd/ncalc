@@ -3,6 +3,7 @@
 A value is a terminal token representing a concrete element. This can be:
 
 - An <xref:System.Int32> or <xref:System.Int64>
+- A <xref:System.Numerics.BigInteger> or <xref:ExtendedNumerics.BigDecimal>
 - Any floating point number, like <xref:System.Double>
 - A <xref:NCalc.Domain.Percent>
 - A <xref:System.DateTime> or <xref:System.TimeSpan>
@@ -27,7 +28,7 @@ They are represented using numbers. Numbers may be presented in decimal, hexadec
 
 Numbers in decimal format may include a leading sign ('-') character to indicate negative numbers.
 
-Numbers are normally evaluated as <xref:System.Int32> or, if the value is too big, as <xref:System.Int64>. When the <xref:NCalc.ExpressionOptions.UseBigInteger> flag in set in <xref:NCalc.ExpressionOptions>, <xref:System.Numerics.BigInteger> may be used in expressions and may be returned by certain math operations.
+Integer numbers are normally evaluated as <xref:System.Int32> or, if the value is too big, as <xref:System.Int64>. When the <xref:NCalc.ExpressionOptions.UseBigNumbers> flag in set in <xref:NCalc.ExpressionOptions>, <xref:System.Numerics.BigInteger> may be used in expressions and may be returned by certain math operations.
 
 A number may contain number group separators. Comma (',') is the default separator, and when [Advanced Options](advanced_value_formats.md) are used, it is possible to use a culture-specific or custom separator.
 
@@ -37,17 +38,23 @@ Additionally, when [Advanced Options](advanced_value_formats.md) are used, a num
 
 Use '.' (dot) to separate an interer and a fractional part. When [Advanced Options](advanced_value_formats.md) are used, it is possible to use a culture-specific or custom separator and even use two separators (e.g., use both ',' and '.').
 
-```
-123.456
-.123
-```
-They are evaluated as <xref:System.Double>, or, if the <xref:NCalc.ExpressionOptions.DecimalAsDefault> flag in set in <xref:NCalc.ExpressionOptions>, as <xref:System.Decimal>.
+Note, that the fractional part (the one after the dot) must be present for the number to be recognized as a floating point one.
+
+Floating point numbers are evaluated either as <xref:System.Double> or, if the <xref:NCalc.ExpressionOptions.DecimalAsDefault> flag in set in <xref:NCalc.ExpressionOptions>, as <xref:System.Decimal>. When the <xref:NCalc.ExpressionOptions.UseBigNumbers> flag in set in <xref:NCalc.ExpressionOptions>, <xref:ExtendedNumerics.BigDecimal> may be used in expressions and may be returned by certain math operations.
 
 Additionally, when [Advanced Options](advanced_value_formats.md) are used, a number may contain a currency symbol or identifier before or after the numeric value. Such a symbol is ignored in calculations. However, currency values are evaluated as <xref:System.Decimal> regardless of whether decimal is the default type for floating-point numbers.
 
+### Common notation
+
+```
+123.456
+.123
+123.0
+```
+
 ### Scientific notation
 
-You can use the e to define power of ten (10^).
+You can use the scientific notation, i.e., insert a letter "e" followed by an integer number to denote a power of ten (10^).
 ```
 1.22e1
 1e2
@@ -57,7 +64,6 @@ You can use the e to define power of ten (10^).
 .1e-2
 1e10
 ```
-Such floating-point numbers are evaluated as <xref:System.Double>, or, if the <xref:NCalc.ExpressionOptions.DecimalAsDefault> flag in set in <xref:NCalc.ExpressionOptions>, as <xref:System.Decimal>.
 
 ## Percent
 
