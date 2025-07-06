@@ -1,4 +1,5 @@
 using System.Numerics;
+using ExtendedNumerics;
 using NCalc.Domain;
 using NCalc.Exceptions;
 
@@ -340,7 +341,78 @@ public static class LogicalExpressionParser
                 return new ValueExpression(val);
             });
 
-        var decimalOrDoubleNumber = OneOf(decimalNumber, doubleNumber);
+        Parser<LogicalExpression>? bigDecimalNumber = null;
+        if (useBigNumbers)
+        {
+            string acceptableDecChars = acceptUnderscores ? "0123456789_" : "0123456789";
+
+            string decimalSeparators;
+            if (decimalSeparator2 != '\0')
+                decimalSeparators = string.Concat(decimalSeparator, decimalSeparator2);
+            else
+                decimalSeparators = decimalSeparator.ToString();
+
+            Parser<LogicalExpression> bigIntNumberD = Terms.Number<BigInteger>((NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag), decimalSeparator, numGroupSeparator)
+                //.AndSkip(Not(OneOf(floatNumExclusions)))
+                .Then<LogicalExpression>(d =>
+                {
+                    if (d >= ulong.MinValue && d <= ulong.MaxValue)
+                        return new ValueExpression((object)(ulong)d);
+                    else
+                        return new ValueExpression(d);
+                });
+            Parser<LogicalExpression> bigUIntNumberD = Terms.Number<BigInteger>((NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag) & (~NumberOptions.AllowLeadingSign), decimalSeparator, numGroupSeparator)
+                //.AndSkip(Not(OneOf(floatNumExclusions)))
+                .Then<LogicalExpression>(d =>
+                {
+                    if (d >= ulong.MinValue && d <= ulong.MaxValue)
+                        return new ValueExpression((object)(ulong)d);
+                    else
+                        return new ValueExpression(d);
+                });
+
+            bigDecimalNumber =
+                ZeroOrOne(bigIntNumberD)
+                .And(Terms.AnyOf(decimalSeparators))
+                .And(bigUIntNumberD)
+                .And(ZeroOrOne(Terms.AnyOf("Ee")))
+                .And(ZeroOrOne(bigIntNumberD))
+                .When((ctx, val) => TryParseDecimal(val) != null)
+                .Then<LogicalExpression>(static (ctx, val) =>
+                {
+                    bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
+
+                    BigDecimal? value = TryParseDecimal(val);
+
+                    if (value == null)
+                        return new ValueExpression(null);  // never happens - the When condition ensures that val can be parsed
+
+                    if (useDecimal && (value >= decimal.MinValue && value <= decimal.MaxValue))
+                    {
+                        decimal decValue = (decimal)value;
+                        if (value == decValue)
+                            return new ValueExpression(decValue);
+                    }
+
+                    if (value >= double.MinValue && value <= double.MaxValue)
+                    {
+                        double dValue = (double)value;
+                        if (value == dValue)
+                            return new ValueExpression(dValue);
+                    }
+
+                    if (!useDecimal && (value >= decimal.MinValue && value <= decimal.MaxValue))
+                    {
+                        decimal decValue = (decimal)value;
+                        if (value == decValue)
+                            return new ValueExpression(decValue);
+                    }
+
+                    return new ValueExpression(value);
+                });
+        }
+
+        var decimalOrDoubleNumber = (bigDecimalNumber is not null) ? OneOf(bigDecimalNumber, decimalNumber, doubleNumber) : OneOf(decimalNumber, doubleNumber);
 
         // Add currency support
 
@@ -1784,6 +1856,36 @@ public static class LogicalExpressionParser
         AppContext.TryGetSwitch("NCalc.EnableParlotParserCompilation", out var enableParserCompilation);
 
         return enableParserCompilation ? expressionParser.Compile() : expressionParser;
+    }
+
+    private static BigDecimal? TryParseDecimal((LogicalExpression, TextSpan, LogicalExpression, TextSpan, LogicalExpression) val)
+    {
+        StringBuilder sb = new StringBuilder();
+        if (val.Item1 != null)
+            sb.Append(val.Item1.ToString());
+        else
+            sb.Append('0');
+
+        sb.Append(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator); // BigDecimal uses the current culture's separator
+        sb.Append(val.Item3.ToString()); // fractional part
+        if (val.Item4.Length == 0)
+        {
+            if (val.Item5 != null)
+                return null;
+        }
+
+        if (val.Item4.Length != 0)
+        {
+            if (val.Item5 == null)
+                return null;
+            sb.Append('E');
+            sb.Append(val.Item5.ToString()); // fractional part
+        }
+        BigDecimal result;
+        if (BigDecimal.TryParse(sb.ToString(), out result))
+            return result;
+        else
+            return null;
     }
 
     private static Parser<LogicalExpression> GetOrCreateExpressionParser(CultureInfo cultureInfo, LogicalExpressionParserContext context)

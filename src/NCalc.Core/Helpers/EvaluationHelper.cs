@@ -226,7 +226,11 @@ public static class EvaluationHelper
         {
             UnaryExpressionType.Not => !Convert.ToBoolean(result, context.CultureInfo),
             UnaryExpressionType.Negate =>
-                (result is BigInteger) ? MathHelper.TryReduceToUInt64(MathHelper.Subtract((object)(long)0, (BigInteger) result)) : MathHelper.Subtract(0, result, context),
+                (result is BigDecimal)
+                    ? MathHelper.Subtract((object)(long)0, (BigDecimal) result)
+                    : ((result is BigInteger)
+                        ? MathHelper.TryReduceToUInt64(MathHelper.Subtract((object)(long)0, (BigInteger) result))
+                        : MathHelper.Subtract(0, result, context)),
             UnaryExpressionType.BitwiseNot =>
                 (result is BigInteger) ? MathHelper.TryReduceToUInt64(MathHelper.BitwiseNot(result)) : ~Convert.ToUInt64(result, context.CultureInfo),
             UnaryExpressionType.SqRoot => MathHelper.Sqrt(result, context.CultureInfo),

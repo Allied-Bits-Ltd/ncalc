@@ -1,7 +1,7 @@
 #nullable enable
 
 using System.Numerics;
-
+using ExtendedNumerics;
 using NCalc.Domain;
 using NCalc.Tests.TestData;
 
@@ -21,6 +21,23 @@ public class AdvFeatureTests
         Assert.True(result is BigInteger);
         Assert.Equal(expectedValue, (BigInteger) result);
     }
+
+    [Theory]
+    [InlineData("123456789012345678901234567890.123456789012345678901234567890")]
+    [InlineData("123456789012345678901234567890.12345678901E2890")]
+    [InlineData("-123456789012345678901234567890.12345678901E-90")]
+    [InlineData(".1234567890567890123459876543210")]
+    [InlineData(".123456789011234567890E2890")]
+    [InlineData(".1234567890112345678901234567890e-29")]
+    public void ShouldParseBigDecimal(string input)
+    {
+        var expression = new Expression(input, ExpressionOptions.UseBigNumbers | ExpressionOptions.DecimalAsDefault);
+        var result = expression.Evaluate();
+
+        Assert.True(result is BigDecimal);
+
+    }
+
 
     [Theory]
     [InlineData("0xFFFFFFFFFFFFFFFE")]
