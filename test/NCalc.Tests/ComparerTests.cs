@@ -104,11 +104,26 @@ public class ComparerTests
     [Theory]
     [InlineData("(10/null)<0")]
     [InlineData("(10/null)>0")]
+    [InlineData("(10/x)<0")]
+    [InlineData("(10/x)>0")]
     public void CompareWithNullShouldReturnFalse(string expression)
     {
         var e = new Expression(expression, ExpressionOptions.AllowNullParameter);
         e.Parameters["x"] = null;
 
         Assert.False((bool)e.Evaluate());
+    }
+
+    [Theory]
+    [InlineData("(10/null)<0", true)]
+    [InlineData("(10/null)>0", false)]
+    [InlineData("(10/x)<0", true)]
+    [InlineData("(10/x)>0", false)]
+    public void CompareWithNullShouldEvaluate(string expression, bool expected)
+    {
+        var e = new Expression(expression, ExpressionOptions.AllowNullParameter | ExpressionOptions.CompareNullValues);
+        e.Parameters["x"] = null;
+
+        Assert.Equal((bool)e.Evaluate(), expected);
     }
 }

@@ -58,7 +58,8 @@ public class OperatorsTests
     [InlineData("if(false, 0, 1)", 1)]
     public void ShouldEvaluateOperators(string expression, object expected)
     {
-        Assert.Equal(expected, new Expression(expression).Evaluate());
+        var result = new Expression(expression).Evaluate();
+        Assert.Equal(expected, result);
     }
 
     [Theory]

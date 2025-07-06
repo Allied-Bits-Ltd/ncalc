@@ -105,11 +105,21 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigInteger)
+        if (options.UseBigNumbers)
         {
             if (a == null || b == null)
                 return null;
 
+            if (a is BigDecimal bdA)
+            {
+                return Add(bdA, b);
+            }
+            else
+            if (b is BigDecimal bdB)
+            {
+                return Add(bdB, a);
+            }
+            else
             if (a is BigInteger biA)
             {
                 return Add(biA, b);
@@ -119,7 +129,7 @@ public static class MathHelper
             {
                 return Add(biB, a);
             }
-
+            else
             if (a is long || a is ulong || b is long || b is ulong)
             {
                 BigInteger result;
@@ -185,42 +195,82 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigInteger)
+        if (options.UseBigNumbers)
         {
             if (a == null || b == null)
                 return null;
 
             BigInteger? result = null;
+            BigDecimal? bdResult = null;
 
-            if (a is BigInteger biA)
+            // If any of the arguments are BigDecimal, calculate the result and either reduce it to minimal size
+            if (a is BigDecimal bdA)
             {
-                result = Subtract(biA, b);
+                bdResult = Subtract(bdA, b);
             }
             else
-            if (b is BigInteger biB)
+            if (b is BigDecimal bdB)
             {
-                result = Subtract(a, biB);
+                bdResult = Subtract(a, bdB);
             }
 
-            if (a is long || a is ulong || b is long || b is ulong)
+            if (bdResult != null)
             {
-                if (a is long || a is ulong)
+                if (bdResult.Value.GetFractionalPart().IsZero())
                 {
-                    if (a is long la)
-                        result = new BigInteger(la);
-                    else
-                        result = new BigInteger((ulong)a);
-
-                    result = Subtract(result.Value, b);
+                    result = bdResult.Value.WholeValue;
                 }
                 else
                 {
-                    if (b is long lb)
-                        result = new BigInteger(lb);
+                    if (options.DecimalAsDefault && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
+                        return (decimal)bdResult;
                     else
-                        result = new BigInteger((ulong)b);
+                    if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
+                        return (float)bdResult;
+                    else
+                    if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
+                        return (double)bdResult;
+                    else
+                    if (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
+                        return (decimal)bdResult;
 
-                    result = Subtract(a, result.Value);
+                    return bdResult;
+                }
+            }
+
+            // If there was no BigDecimal calculation performed, proceed with the operation
+            if (result == null)
+            {
+                if (a is BigInteger biA)
+                {
+                    result = Subtract(biA, b);
+                }
+                else
+                if (b is BigInteger biB)
+                {
+                    result = Subtract(a, biB);
+                }
+                else
+                if (a is long || a is ulong || b is long || b is ulong)
+                {
+                    if (a is long || a is ulong)
+                    {
+                        if (a is long la)
+                            result = new BigInteger(la);
+                        else
+                            result = new BigInteger((ulong)a);
+
+                        result = Subtract(result.Value, b);
+                    }
+                    else
+                    {
+                        if (b is long lb)
+                            result = new BigInteger(lb);
+                        else
+                            result = new BigInteger((ulong)b);
+
+                        result = Subtract(a, result.Value);
+                    }
                 }
             }
 
@@ -270,11 +320,21 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigInteger)
+        if (options.UseBigNumbers)
         {
             if (a == null || b == null)
                 return null;
 
+            if (a is BigDecimal bdA)
+            {
+                return Multiply(bdA, b);
+            }
+            else
+            if (b is BigDecimal bdB)
+            {
+                return Multiply(bdB, a);
+            }
+            else
             if (a is BigInteger biA)
             {
                 return Multiply(biA, b);
@@ -284,7 +344,7 @@ public static class MathHelper
             {
                 return Multiply(biB, a);
             }
-
+            else
             if (a is long || a is ulong || b is long || b is ulong)
             {
                 BigInteger result;
@@ -346,21 +406,31 @@ public static class MathHelper
 
         bool useInteger = false;
 
-        if (options.UseBigInteger)
+        if (options.UseBigNumbers)
         {
             if (a == null || b == null)
                 return null;
 
-            BigInteger? result = null;
+            BigDecimal? bdResult = null;
 
+            if (a is BigDecimal bdA)
+            {
+                bdResult = Divide(bdA, b);
+            }
+            else
+            if (b is BigDecimal bdB)
+            {
+                bdResult = Divide(a, bdB);
+            }
+            else
             if (a is BigInteger biA)
             {
-                result = Divide(biA, b);
+                bdResult = Divide(new BigDecimal(biA), b);
             }
             else
             if (b is BigInteger biB)
             {
-                result = Divide(a, biB);
+                bdResult = Divide(a, new BigDecimal(biB));
             }
             else
             if (a is long || a is ulong || b is long || b is ulong)
@@ -368,36 +438,55 @@ public static class MathHelper
                 if (a is long || a is ulong)
                 {
                     if (a is long la)
-                        result = new BigInteger(la);
+                        bdResult = new BigDecimal(new BigInteger(la));
                     else
-                        result = new BigInteger((ulong)a);
+                        bdResult = new BigDecimal(new BigInteger((ulong)a));
 
-                    result = Divide(result.Value, b);
+                    bdResult = Divide(bdResult.Value, b);
                 }
                 else
                 {
                     if (b is long lb)
-                        result = new BigInteger(lb);
+                        bdResult = new BigDecimal(new BigInteger(lb));
                     else
-                        result = new BigInteger((ulong)b);
+                        bdResult = new BigDecimal(new BigInteger((ulong)b));
 
-                    result = Divide(a, result.Value);
+                    bdResult = Divide(a, bdResult.Value);
                 }
             }
 
-            if (result != null)
+            if (bdResult != null)
             {
-                if (result >= long.MinValue && result <= long.MaxValue)
-                    return (long)result;
-                else
-                if (result >= ulong.MinValue && result <= ulong.MaxValue)
-                    return (ulong)result;
+                if ((a is BigInteger || IsBoxedIntegerNumber(a) || options.ReduceDivResultToInteger) && bdResult.Value.GetFractionalPart().IsZero())
+                {
+                    BigInteger biResult = bdResult.Value.WholeValue;
 
-                return result;
+                    if (biResult >= long.MinValue && biResult <= long.MaxValue)
+                        return (long)biResult;
+                    else
+                    if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
+                        return (ulong)biResult;
+
+                    return biResult;
+                }
+                else
+                if (options.DecimalAsDefault && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
+                    return (decimal)bdResult;
+                else
+                if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
+                    return (float)bdResult;
+                else
+                if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
+                    return (double)bdResult;
+                else
+                if (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
+                    return (decimal)bdResult;
+
+                return bdResult;
             }
         }
 
-        if (options.ReduceDivResultToInteger)
+        if (IsBoxedIntegerNumber(a) || options.ReduceDivResultToInteger)
         {
             if (a is decimal || b is decimal)
             {
@@ -432,38 +521,168 @@ public static class MathHelper
             }
         }
 
-        {
-            var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
-            object? result = ExecuteOperation(a, b, '/', func);
-            if (result == null || !useInteger)
-                return result;
-
-            if (result is decimal decResult)
-            {
-                long lResult = (long)decResult;
-                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                    return (int)lResult;
-                else
-                    return lResult;
-            }
-            if (result is double dResult)
-            {
-                long lResult = (long)dResult;
-                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                    return (int)lResult;
-                else
-                    return lResult;
-            }
-            if (result is float fResult)
-            {
-                long lResult = (long)fResult;
-                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                    return (int)lResult;
-                else
-                    return lResult;
-            }
+        var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
+        object? result = ExecuteOperation(a, b, '/', func);
+        if (result == null || !useInteger)
             return result;
+
+        if (result is decimal decResult)
+        {
+            long lResult = (long)decResult;
+            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                return (int)lResult;
+            else
+                return lResult;
         }
+        if (result is double dResult)
+        {
+            long lResult = (long)dResult;
+            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                return (int)lResult;
+            else
+                return lResult;
+        }
+        if (result is float fResult)
+        {
+            long lResult = (long)fResult;
+            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                return (int)lResult;
+            else
+                return lResult;
+        }
+        return result;
+    }
+
+    public static object? IntegerDivide(object? a, object? b, bool truncateFirst, MathHelperOptions options)
+    {
+        if (a == null || b == null)
+            return null;
+
+        a = ConvertIfNeeded(a, options);
+        b = ConvertIfNeeded(b, options);
+
+        if (options.UseBigNumbers)
+        {
+            if (a == null || b == null)
+                return null;
+
+            BigInteger? biResult = null;
+            if (a is BigDecimal bdA)
+            {
+                if (truncateFirst)
+                {
+                    BigInteger biA = bdA.WholeValue;
+                    if (!((b is BigInteger) || (b is BigDecimal)))
+                        b = ConvertToLong(b, options);
+                    biResult = IntegerDivide(biA, b);
+                }
+                else
+                {
+                    biResult = IntegerDivide(bdA, b);
+                }
+            }
+            else
+            if (b is BigDecimal bdB)
+            {
+                if (truncateFirst)
+                {
+                    BigInteger biB = bdB.WholeValue;
+                    if (!((a is BigInteger) || (a is BigDecimal)))
+                        a = ConvertToLong(a, options);
+                    biResult = IntegerDivide(a, biB);
+                }
+                else
+                {
+                    biResult = IntegerDivide(a, bdB);
+                }
+            }
+            else
+            if (a is BigInteger biA)
+            {
+                if (truncateFirst)
+                    b = ConvertToLong(b, options);
+
+                biResult = IntegerDivide(biA, b);
+            }
+            else
+            if (b is BigInteger biB)
+            {
+                if (truncateFirst)
+                    a = ConvertToLong(a, options);
+
+                biResult = IntegerDivide(a, biB);
+            }
+            else
+            if (a is long || a is ulong || b is long || b is ulong)
+            {
+                if (a is long || a is ulong)
+                {
+                    if (a is long la)
+                        biResult = new BigInteger(la);
+                    else
+                        biResult = new BigInteger((ulong)a);
+
+                    biResult = IntegerDivide(biResult.Value, b);
+                }
+                else
+                {
+                    if (b is long lb)
+                        biResult = new BigInteger(lb);
+                    else
+                        biResult = new BigInteger((ulong)b);
+
+                    biResult = IntegerDivide(a, biResult.Value);
+                }
+            }
+
+            if (biResult != null)
+            {
+                if (biResult >= long.MinValue && biResult <= long.MaxValue)
+                    return (long)biResult;
+                else
+                if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
+                    return (ulong)biResult;
+
+                return biResult;
+            }
+        }
+
+        if (truncateFirst)
+        {
+            a = ConvertToLong(a, options);
+            b = ConvertToLong(b, options);
+        }
+
+        var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
+        object? result = ExecuteOperation(a, b, '/', func);
+        if (result == null || IsBoxedIntegerNumber(result))
+            return result;
+
+        if (result is decimal decResult)
+        {
+            long lResult = (long)Math.Truncate(decResult);
+            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                return (int)lResult;
+            else
+                return lResult;
+        }
+        if (result is double dResult)
+        {
+            long lResult = (long)Math.Truncate(dResult);
+            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                return (int)lResult;
+            else
+                return lResult;
+        }
+        if (result is float fResult)
+        {
+            long lResult = (long)Math.Truncate(fResult);
+            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                return (int)lResult;
+            else
+                return lResult;
+        }
+        return result;
     }
 
     public static object? DividePercent(object? a, object? b, MathHelperOptions options)
@@ -490,6 +709,82 @@ public static class MathHelper
 
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
+
+        if (options.UseBigNumbers)
+        {
+            if (a == null || b == null)
+                return null;
+
+            BigInteger? biResult = null;
+            if (a is BigDecimal bdA)
+            {
+                BigInteger biA = bdA.WholeValue;
+                if (b is BigDecimal bdB)
+                    b = bdB.WholeValue;
+                else
+                if (!(b is BigInteger))
+                    b = ConvertToBigInteger(b);
+                biResult = BigInteger.Remainder(biA, (BigInteger) b);
+            }
+            else
+            if (b is BigDecimal bdB)
+            {
+                BigInteger biB = bdB.WholeValue;
+                if (a is BigDecimal)
+                    a = ((BigDecimal)a).WholeValue;
+                else
+                if (!(a is BigInteger))
+                    a = ConvertToBigInteger(a);
+                biResult = BigInteger.Remainder((BigInteger)a, biB);
+            }
+            else
+            if (a is BigInteger biA)
+            {
+                if (!(b is BigInteger))
+                    b = ConvertToBigInteger(b);
+                biResult = BigInteger.Remainder(biA, (BigInteger)b);
+            }
+            else
+            if (b is BigInteger biB)
+            {
+                if (!(a is BigInteger))
+                    a = ConvertToBigInteger(a);
+                biResult = BigInteger.Remainder((BigInteger)a, biB);
+            }
+            else
+            if (a is long || a is ulong || b is long || b is ulong)
+            {
+                if (a is long || a is ulong)
+                {
+                    if (a is long la)
+                        biResult = new BigInteger(la);
+                    else
+                        biResult = new BigInteger((ulong)a);
+
+                    biResult = IntegerDivide(biResult.Value, b);
+                }
+                else
+                {
+                    if (b is long lb)
+                        biResult = new BigInteger(lb);
+                    else
+                        biResult = new BigInteger((ulong)b);
+
+                    biResult = IntegerDivide(a, biResult.Value);
+                }
+            }
+
+            if (biResult != null)
+            {
+                if (biResult >= long.MinValue && biResult <= long.MaxValue)
+                    return (long)biResult;
+                else
+                if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
+                    return (ulong)biResult;
+
+                return biResult;
+            }
+        }
 
         return ExecuteOperation(a, b, '%', ModuloFunc);
     }
@@ -519,7 +814,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigInteger)
+        if (options.UseBigNumbers)
         {
             if (a == null || b == null)
                 return null;
@@ -581,7 +876,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigInteger)
+        if (options.UseBigNumbers)
         {
             if (a == null || b == null)
                 return null;
@@ -675,12 +970,22 @@ public static class MathHelper
 
     public static object Abs(object? a, MathHelperOptions options)
     {
-        if (options.UseBigInteger && a is BigInteger biA)
+        if (options.UseBigNumbers)
         {
-            if (biA.Sign < 0)
-                return -biA;
-            else
-                return biA;
+            if (a is BigInteger biA)
+            {
+                if (biA.Sign < 0)
+                    return -biA;
+                else
+                    return biA;
+            }
+            if (a is BigDecimal bdA)
+            {
+                if (bdA.Sign < 0)
+                    return -bdA;
+                else
+                    return bdA;
+            }
         }
 
         if (options.DecimalAsDefault)
@@ -758,7 +1063,7 @@ public static class MathHelper
 
     public static object Pow(object? a, object? b, MathHelperOptions options)
     {
-        if (options.DecimalAsDefault || options.UseBigInteger)
+        if (options.DecimalAsDefault || options.UseBigNumbers)
         {
             var @base = new BigDecimal(ConvertToDecimal(a, options));
             var exponent = new BigInteger(ConvertToDecimal(b, options));
@@ -773,13 +1078,23 @@ public static class MathHelper
                     return (long)bi;
                 if (bi >= ulong.MinValue && bi <= ulong.MaxValue)
                     return (ulong)bi;
-                if (options.UseBigInteger)
+                if (options.UseBigNumbers)
                     return bi;
             }
-            if (options.DecimalAsDefault)
+            else
+            if (options.DecimalAsDefault && (result >= decimal.MinValue && result <= decimal.MaxValue))
                 return (decimal)result;
             else
-                return (double) result;
+            if (result >= float.MinValue && result <= float.MaxValue)
+                return (float)result;
+            else
+            if (result >= double.MinValue && result <= double.MaxValue)
+                return (double)result;
+            else
+            if (result >= decimal.MinValue && result <= decimal.MaxValue)
+                return (decimal)result;
+
+            return result;
         }
 
         return Math.Pow(ConvertToDouble(a, options), ConvertToDouble(b, options));
@@ -787,34 +1102,46 @@ public static class MathHelper
 
     public static object Factorial(object a, object b, MathHelperOptions options)
     {
-        long aValue = ConvertToLong(a, options);
-        switch (aValue)
+        if (!options.UseBigNumbers)
         {
-            case 0:
-            case 1: return 1;
-            case 2: return 2;
+            return Factorial(ConvertToLong(a, options), ConvertToLong(b, options), options);
         }
-        var value = new BigInteger(aValue);
+
+        BigInteger value;
+
+        if (a is BigInteger)
+            value = (BigInteger)a;
+        else
+            value = ConvertToBigInteger(a);
+
+        long step = ConvertToLong(b, options);
         if (value <= 0)
             throw new NotImplementedException("Factorial operation is not implemented for negative or zero values");
+        if (step <= 0)
+            throw new NotImplementedException("Factorial operation cannot be done with a negative or zero step");
+
+        if (value.IsZero)
+            return 1;
+        else
+        if (value.IsOne)
+            return 1;
+        else
+        if (value == 2)
+            return 2;
 
         var result = value;
-        var stepLong = ConvertToLong(b, options);
-        if (stepLong > 0)
+
+        value = value - step;
+        while (value > 1)
         {
-            var step = new BigInteger(stepLong);
+            result = result * value;
             value = value - step;
-            while (value > 1)
-            {
-                result = result * value;
-                value = value - step;
-            }
         }
 
         if (result >= int.MinValue && result <= int.MaxValue)
             return (int)result;
 
-        if (options.UseBigInteger)
+        if (options.UseBigNumbers)
         {
             if (result >= long.MinValue && result <= long.MaxValue)
                 return (long)result;
@@ -827,28 +1154,37 @@ public static class MathHelper
 
     public static long Factorial(long a, long b, MathHelperOptions options)
     {
-        var value = ConvertToLong(a, options);
-        if (value <= 0)
+        if (a <= 0)
             throw new NotImplementedException("Factorial operation is not implemented for negative or zero values");
+        if (b <= 0)
+            throw new NotImplementedException("Factorial operation cannot be done with a negative or zero step");
+
+        switch (a)
+        {
+            case 0:
+            case 1: return 1;
+            case 2: return 2;
+        }
+
+        long value = a;
+        var step = b;
 
         var result = value;
-        var step = ConvertToLong(b, options);
-        if (step > 0)
+
+        value = value - step;
+        while (value > 1)
         {
-            value = value - step;
-            while (value > 1)
+            try
             {
-                try
-                {
-                    result = result * value;
-                }
-                catch (OverflowException)
-                {
-                    return -1;
-                }
-                value = value - step;
+                result = result * value;
             }
+            catch (OverflowException)
+            {
+                return -1;
+            }
+            value = value - step;
         }
+
         return result;
     }
 
@@ -856,6 +1192,37 @@ public static class MathHelper
     {
         if (a != null && (IsBoxedIntegerNumber(a) || a is BigInteger))
             return a;
+
+        if (a is BigDecimal bdA)
+        {
+            BigDecimal frac = bdA.GetFractionalPart();
+            if (frac < 0.5)
+                return bdA.WholeValue;
+            else
+            if (frac == 0.5)
+            {
+                if (rounding == MidpointRounding.AwayFromZero)
+                {
+                    return (bdA.IsNegative()) ? bdA.WholeValue - 1 : bdA.WholeValue + 1;
+                }
+                else
+                if (rounding == MidpointRounding.ToZero)
+                    return (bdA.IsNegative()) ? bdA.WholeValue + 1 : bdA.WholeValue - 1;
+                else
+                if (rounding == MidpointRounding.ToEven)
+                {
+                    if (bdA.WholeValue.IsEven)
+                        return bdA.WholeValue;
+                    else
+                        return (bdA.IsNegative()) ? bdA.WholeValue - 1 : bdA.WholeValue + 1;
+                }
+                else
+                    return (bdA.IsNegative()) ? bdA.WholeValue - 1 : bdA.WholeValue + 1;
+            }
+            else
+                return (bdA.IsNegative()) ? bdA.WholeValue - 1 : bdA.WholeValue + 1;
+        }
+
         if (options.DecimalAsDefault)
             return Math.Round(ConvertToDecimal(a, options), ConvertToInt(b, options), rounding);
 
@@ -1206,27 +1573,45 @@ public static class MathHelper
     {
         switch (b)
         {
-            case byte value:
-                return a * value;
-            case sbyte value:
-                return a * value;
-            case short value:
-                return a * value;
-            case ushort value:
-                return a * value;
-            case int value:
-                return a * value;
-            case uint value:
-                return a * value;
-            case long value:
-                return a * value;
-            case ulong value:
-                return a * value;
-            case BigInteger value:
-                return a * value;
+            case byte value: return a * value;
+            case sbyte value: return a * value;
+            case short value: return a * value;
+            case ushort value: return a * value;
+            case int value: return a * value;
+            case uint value: return a * value;
+            case long value: return a * value;
+            case ulong value: return a * value;
+            case BigInteger value: return a * value;
             default:
                 throw new ArgumentException("When multiplying BigInteger, the second parameter must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger).", nameof(b));
         }
+    }
+
+    public static BigDecimal Multiply(BigDecimal a, object b)
+    {
+        switch (b)
+        {
+            case byte value: return a * value;
+            case sbyte value: return a * value;
+            case short value: return a * value;
+            case ushort value: return a * value;
+            case int value: return a * value;
+            case uint value: return a * value;
+            case long value: return a * value;
+            case ulong value: return a * value;
+            case float value: return a * value;
+            case double value: return a * value;
+            case decimal value: return a * value;
+            case BigInteger value: return a * new BigDecimal(value);
+            case BigDecimal value: return a * value;
+            default:
+                throw new ArgumentException("When multiplying BigInteger, the second parameter must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
+        }
+    }
+
+    public static BigDecimal Multiply(BigInteger a, BigDecimal b)
+    {
+        return new BigDecimal(a) * b;
     }
 
     public static BigInteger Add(BigInteger a, object b)
@@ -1244,6 +1629,33 @@ public static class MathHelper
             case BigInteger value: return a + value;
             default:
                 throw new ArgumentException("When adding to a BigInteger, the second parameter must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger).", nameof(b));
+        }
+    }
+
+    public static BigDecimal Add(BigInteger a, BigDecimal b)
+    {
+        return new BigDecimal(a) + b;
+    }
+
+    public static BigDecimal Add(BigDecimal a, object b)
+    {
+        switch (b)
+        {
+            case byte value: return a + value;
+            case sbyte value: return a + value;
+            case short value: return a + value;
+            case ushort value: return a + value;
+            case int value: return a + value;
+            case uint value: return a + value;
+            case long value: return a + value;
+            case ulong value: return a + value;
+            case float value: return a + value;
+            case double value: return a + value;
+            case decimal value: return a + value;
+            case BigInteger value: return a + new BigDecimal(value);
+            case BigDecimal value: return a + value;
+            default:
+                throw new ArgumentException("When adding to a BigDecimal, the second parameter must be a boxed number type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
         }
     }
 
@@ -1265,7 +1677,29 @@ public static class MathHelper
         }
     }
 
-    public static BigInteger Divide(BigInteger a, object b)
+    public static BigDecimal Subtract(BigDecimal a, object b)
+    {
+        switch (b)
+        {
+            case byte value: return a - value;
+            case sbyte value: return a - value;
+            case short value: return a - value;
+            case ushort value: return a - value;
+            case int value: return a - value;
+            case uint value: return a - value;
+            case long value: return a - value;
+            case ulong value: return a - value;
+            case float value: return a - value;
+            case double value: return a - value;
+            case decimal value: return a - value;
+            case BigInteger value: return a - new BigDecimal(value);
+            case BigDecimal value: return a - value;
+            default:
+                throw new ArgumentException("When subtracting from a BigDecimal, the second parameter must be a boxed number type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
+        }
+    }
+
+    public static BigInteger IntegerDivide(BigInteger a, object b)
     {
         switch (b)
         {
@@ -1283,15 +1717,82 @@ public static class MathHelper
         }
     }
 
+    public static BigInteger IntegerDivide(BigDecimal a, object b)
+    {
+        BigDecimal result;
+        switch (b)
+        {
+            case byte value: result = a / value; break;
+            case sbyte value: result = a / value; break;
+            case short value: result = a / value; break;
+            case ushort value: result = a / value; break;
+            case int value: result = a / value; break;
+            case uint value: result = a / value; break;
+            case long value: result = a / value; break;
+            case ulong value: result = a / value; break;
+            case BigInteger value: result = a / new BigDecimal(value); break;
+            case BigDecimal value: result = a / value; break;
+            default:
+                throw new ArgumentException("When dividing a BigInteger, the second parameter must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger).", nameof(b));
+        }
+        return result.WholeValue;
+    }
+
+    public static BigDecimal Divide(BigDecimal a, object b)
+    {
+        switch (b)
+        {
+            case byte value: return a / value;
+            case sbyte value: return a / value;
+            case short value: return a / value;
+            case ushort value: return a / value;
+            case int value: return a / value;
+            case uint value: return a / value;
+            case long value: return a / value;
+            case ulong value: return a / value;
+            case float value: return a / value;
+            case double value: return a / value;
+            case decimal value: return a / value;
+            case BigInteger value: return a / new BigDecimal(value);
+            case BigDecimal value: return a / value;
+            default:
+                throw new ArgumentException("When dividing a BigDecimal, the second parameter must be a boxed number type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
+        }
+    }
+
     public static BigInteger Subtract(object a, BigInteger b)
     {
         var value = ConvertToBigInteger(a);
         return value - b;
     }
 
+    public static BigDecimal Subtract(object a, BigDecimal b)
+    {
+        var value = ConvertToBigDecimal(a);
+        return value - b;
+    }
+
     public static BigInteger Divide(object a, BigInteger b)
     {
         var value = ConvertToBigInteger(a);
+        return value / b;
+    }
+
+    public static BigInteger IntegerDivide(object a, BigInteger b)
+    {
+        var value = ConvertToBigInteger(a);
+        return value / b;
+    }
+
+    public static BigInteger IntegerDivide(object a, BigDecimal b)
+    {
+        var value = ConvertToBigDecimal(a);
+        return (value / b).WholeValue;
+    }
+
+    public static BigDecimal Divide(object a, BigDecimal b)
+    {
+        var value = ConvertToBigDecimal(a);
         return value / b;
     }
 
@@ -1304,6 +1805,18 @@ public static class MathHelper
     public static object Min(object a, BigInteger b)
     {
         BigInteger aValue = ConvertToBigInteger(a);
+        return aValue < b ? a: b;
+    }
+
+    public static object Max(object a, BigDecimal b)
+    {
+        BigDecimal aValue = ConvertToBigDecimal(a);
+        return aValue > b ? a : b;
+    }
+
+    public static object Min(object a, BigDecimal b)
+    {
+        BigDecimal aValue = ConvertToBigDecimal(a);
         return aValue < b ? a: b;
     }
 
@@ -1322,7 +1835,29 @@ public static class MathHelper
             case ulong value: return value;
             case BigInteger value: return value;
             default:
-                throw new ArgumentException("The source of the convertion to a BigInteger must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger).", nameof(a));
+                throw new ArgumentException("The source of the conversion to a BigInteger must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger).", nameof(a));
+        }
+    }
+
+    public static BigDecimal ConvertToBigDecimal(object a)
+    {
+        switch (a)
+        {
+            case byte value: return new BigDecimal(value);
+            case sbyte value: return new BigDecimal(value);
+            case short value: return new BigDecimal(value);
+            case ushort value: return new BigDecimal(value);
+            case int value: return new BigDecimal(value);
+            case uint value: return new BigDecimal(new BigInteger(value));
+            case long value: return new BigDecimal(new BigInteger(value));
+            case ulong value: return new BigDecimal(new BigInteger(value));
+            case float value: return new BigDecimal(value);
+            case double value: return new BigDecimal(value);
+            case decimal value: return new BigDecimal(value);
+            case BigInteger value: return new BigDecimal(value);
+            case BigDecimal value: return value;
+            default:
+                throw new ArgumentException("The source of the conversion to a BigDecimal must be a boxed number type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(a));
         }
     }
 
@@ -1387,5 +1922,15 @@ public static class MathHelper
                t == typeof(short) || t == typeof(ushort) ||
                t == typeof(int) || t == typeof(uint) ||
                t == typeof(long) || t == typeof(ulong);
+    }
+
+    public static object? TryReduceToUInt64(BigInteger? value)
+    {
+        if (value is null)
+            return null;
+        if (value >= ulong.MinValue && value <= ulong.MaxValue)
+            return (ulong)value;
+        else
+            return value;
     }
 }

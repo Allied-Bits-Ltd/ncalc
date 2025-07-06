@@ -109,7 +109,7 @@ public static class LogicalExpressionParser
         // The Deferred helper creates a parser that can be referenced by others before it is defined
         var expression = Deferred<LogicalExpression>();
 
-        bool useBigInteger = options.HasFlag(ExpressionOptions.UseBigInteger);
+        bool useBigNumbers = options.HasFlag(ExpressionOptions.UseBigNumbers);
 
         bool unsignedHexBinOct = options.HasFlag(ExpressionOptions.HexBinOctAreUnsigned);
 
@@ -150,7 +150,7 @@ public static class LogicalExpressionParser
                 }
                 catch (Exception ex)
                 {
-                    if (useBigInteger && (ex is OverflowException))
+                    if (useBigNumbers && (ex is OverflowException))
                     {
                         // do nothing and try to convert to BigInteger below
                     }
@@ -204,7 +204,7 @@ public static class LogicalExpressionParser
                 }
                 catch (Exception ex)
                 {
-                    if (useBigInteger && (ex is OverflowException))
+                    if (useBigNumbers && (ex is OverflowException))
                     {
                         // do nothing and try to convert to BigInteger below
                     }
@@ -254,7 +254,7 @@ public static class LogicalExpressionParser
                 }
                 catch (Exception ex)
                 {
-                    if (useBigInteger && (ex is OverflowException))
+                    if (useBigNumbers && (ex is OverflowException))
                     {
                         // do nothing and try to convert to BigInteger below
                     }
@@ -297,7 +297,7 @@ public static class LogicalExpressionParser
 
         Parser<LogicalExpression>? bigIntNumber = null;
 
-        if (useBigInteger)
+        if (useBigNumbers)
         {
             bigIntNumber = Terms.Number<BigInteger>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
                 .AndSkip(Not(OneOf(floatNumExclusions)))
@@ -412,7 +412,9 @@ public static class LogicalExpressionParser
         var comma = Terms.Char(',');
         var divided = useUnicodeForOps ? OneOf(Terms.Text("/"), Terms.Text(":"), Terms.Text("\u00F7")) : Terms.Text("/");
         var times = useUnicodeForOps ? OneOf(Terms.Text("*"), Terms.Text("\u00D7"), Terms.Text("\u2219")) : Terms.Text("*");
-        var modulo = (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent)) ? Terms.Text("mod", true) : Terms.Text("%");
+        var modulo = (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent)) ? Terms.Text("mod", true) : OneOf(Terms.Text("%"), Terms.Text("mod", true));
+        var intDivB = OneOf(Terms.Text("\\"), Terms.Text("div", true));
+        var intDivP = Terms.Text("//");
         var minus = Terms.Text("-");
         var plus = Terms.Text("+");
 
@@ -1602,9 +1604,12 @@ public static class LogicalExpressionParser
 
         // multiplicative => unary ( ( "/" | "*" | "%" ) unary )* ;
         var multiplicative = unary.LeftAssociative(
+            (intDivB, static (a, b) => new BinaryExpression(BinaryExpressionType.IntDivB, a, b)),
+            (intDivP, static (a, b) => new BinaryExpression(BinaryExpressionType.IntDivP, a, b)),
             (divided, static (a, b) => new BinaryExpression(BinaryExpressionType.Div, a, b)),
             (times, static (a, b) => new BinaryExpression(BinaryExpressionType.Times, a, b)),
             (modulo, static (a, b) => new BinaryExpression(BinaryExpressionType.Modulo, a, b))
+
         );
 
         // additive => multiplicative ( ( "-" | "+" ) multiplicative )* ;
@@ -1671,7 +1676,7 @@ public static class LogicalExpressionParser
 
         var operatorSequence = ternary.LeftAssociative(
             (OneOrMany(OneOf(
-                    divided, times, modulo, plus,
+                    intDivP, intDivB, divided, times, modulo, plus,
                     minus, leftShift, rightShift, greaterOrEqual,
                     lessOrEqual, greater, less, equal,
                     notEqual)),

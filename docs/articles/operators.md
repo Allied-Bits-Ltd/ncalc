@@ -103,12 +103,13 @@ If the result of an operation is percent, an instance of <xref:NCalc.Domain.Perc
 
 Exponential operators perform exponentiation.
 
-* `**` : Exponentiation  (default, when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is not set in  <xref:NCalc.ExpressionOptions>)
-* `^` : Exponentiation  (when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
+* `**` : Exponentiation
+* `^` : Exponentiation (when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
 
 **Example:**
 ```csharp
 2 ** 2
+2 ^ 3
 ```
 When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
 * `↑` (U+2291): Exponentiation
@@ -119,8 +120,13 @@ Multiplicative operators perform multiplication, division, and modulus operation
 
 * `*` : Multiplication
 * `/` : Division
+* `//` : Integer Division (Python-like - division may be performed on floating-point operands, and the result is truncated)
+* `\\` : Integer Division (Basic-like - floating-point operands are truncated first)
+* `div` : Integer Division (Basic-like - floating-point operands are truncated first)
 * `%` : Modulus (when percent calculation is disabled)
 * `mod` : Modulus (when percent calculation is enabled in <xref:NCalc.AdvancedExpressionOptions>)
+
+If floating-point values are passed to the modulus operation, they are truncated before the operation.
 
 When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
 * `×` (U+00D7) : Multiplication
