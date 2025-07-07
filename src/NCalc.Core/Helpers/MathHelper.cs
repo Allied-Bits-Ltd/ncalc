@@ -996,16 +996,49 @@ public static class MathHelper
 
     public static object Acos(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Arccos(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Arccos(bdA);
+            }
+        }
         return Math.Acos(ConvertToDouble(a, options));
     }
 
     public static object Asin(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Arcsin(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Arcsin(bdA);
+            }
+        }
         return Math.Asin(ConvertToDouble(a, options));
     }
 
     public static object Atan(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Arctan(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Arctan(bdA);
+            }
+        }
         return Math.Atan(ConvertToDouble(a, options));
     }
 
@@ -1016,6 +1049,17 @@ public static class MathHelper
 
     public static object Ceiling(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return biA;
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Ceiling(bdA);
+            }
+        }
         if (options.DecimalAsDefault)
             return Math.Ceiling(ConvertToDecimal(a, options));
 
@@ -1024,16 +1068,49 @@ public static class MathHelper
 
     public static object Cos(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Cos(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Cos(bdA);
+            }
+        }
         return Math.Cos(ConvertToDouble(a, options));
     }
 
     public static object Exp(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Exp(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Exp(bdA);
+            }
+        }
         return Math.Exp(ConvertToDouble(a, options));
     }
 
     public static object Floor(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Floor(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Floor(bdA);
+            }
+        }
         if (options.DecimalAsDefault)
             return Math.Floor(ConvertToDecimal(a, options));
 
@@ -1048,16 +1125,49 @@ public static class MathHelper
 
     public static object Ln(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Ln(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Ln(bdA);
+            }
+        }
         return Math.Log(ConvertToDouble(a, options));
     }
 
     public static object Log(object? a, object? b, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Log(new BigDecimal(biA), ConvertToInt(b, options));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Log(bdA, ConvertToInt(b, options));
+            }
+        }
         return Math.Log(ConvertToDouble(a, options), ConvertToDouble(b, options));
     }
 
     public static object Log10(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Log10(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Log10(bdA);
+            }
+        }
         return Math.Log10(ConvertToDouble(a, options));
     }
 
@@ -1251,6 +1361,17 @@ public static class MathHelper
 
     public static object Sin(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Sin(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Sin(bdA);
+            }
+        }
         return Math.Sin(ConvertToDouble(a, options));
     }
 
@@ -1258,6 +1379,18 @@ public static class MathHelper
     {
         if (a == null)
             return null;
+
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.SquareRoot(new BigDecimal(biA), BigDecimal.Precision);
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.SquareRoot(bdA, BigDecimal.Precision);
+            }
+        }
 
         var d = ConvertToDouble(a, options);
 
@@ -1268,6 +1401,18 @@ public static class MathHelper
     {
         if (a == null)
             return null;
+
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.SquareRoot(BigDecimal.SquareRoot(new BigDecimal(biA), BigDecimal.Precision), BigDecimal.Precision);
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.SquareRoot(BigDecimal.SquareRoot(bdA, BigDecimal.Precision), BigDecimal.Precision);
+            }
+        }
 
         var d = ConvertToDouble(a, options);
 
@@ -1280,6 +1425,18 @@ public static class MathHelper
         if (a == null)
             return null;
 
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.NthRoot(new BigDecimal(biA), 3, BigDecimal.Precision);
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.NthRoot(bdA, 3, BigDecimal.Precision);
+            }
+        }
+
         var d = ConvertToDouble(a, options);
 
         return Math.Cbrt(d);
@@ -1288,11 +1445,33 @@ public static class MathHelper
 
     public static object Tan(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Tan(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Tan(bdA);
+            }
+        }
         return Math.Tan(ConvertToDouble(a, options));
     }
 
     public static object Cot(object? a, MathHelperOptions options)
     {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.One / BigDecimal.Tan(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.One /  BigDecimal.Tan(bdA);
+            }
+        }
         return 1 / Math.Tan(ConvertToDouble(a, options));
     }
 
@@ -1367,7 +1546,7 @@ public static class MathHelper
         return value switch
         {
             BigInteger bigI => ((long)bigI),
-            BigDecimal bigD => ((long)(double)bigD),
+            BigDecimal bigD => ((long)(decimal)bigD),
 
             int i => i,
             char => Convert.ToInt64(value.ToString(), options.CultureInfo),
