@@ -152,6 +152,29 @@ public static class EvaluationHelper
     public static bool Compare(object? a, object? b, ComparisonType comparisonType, ComparisonOptions options)
     {
         int result;
+        if (a is double dA)
+        {
+            if (Double.IsNaN(dA))
+                return comparisonType == ComparisonType.NotEqual;
+        }
+        else
+                if (a is float fA)
+        {
+            if (float.IsNaN(fA))
+                return comparisonType == ComparisonType.NotEqual;
+        }
+        if (b is double dB)
+        {
+            if (Double.IsNaN(dB))
+                return comparisonType == ComparisonType.NotEqual;
+        }
+        else
+        if (b is float fB)
+        {
+            if (float.IsNaN(fB))
+                return comparisonType == ComparisonType.NotEqual;
+        }
+
         if (a == null || b == null)
         {
             if (options.CompareNullValues)
@@ -178,9 +201,7 @@ public static class EvaluationHelper
                     result = bdA.CompareTo(MathHelper.ConvertToBigDecimal(b));
             }
             else
-            {
                 result = ((BigDecimal)b).CompareTo(MathHelper.ConvertToBigDecimal(a));
-            }
         }
         else
         if (a is BigInteger || b is BigInteger)
