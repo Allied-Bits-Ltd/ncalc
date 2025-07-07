@@ -1,3 +1,8 @@
+# 5.6.0 (Allied Bits)
+
+* Built-in trigonometry functions now call the implementations in BigDecimal in the case the argument is BigDecimal or BigInteger and big numbers are enabled.
+* Compare method now handles double and float NaN values before other comparisons.
+
 # 5.6.0-beta (Allied Bits)
 * Added parsing of a BigDecimal (when UseBigNumbers is set).
 * Added integer division operations (Basic-style and Python-style)
