@@ -1,3 +1,4 @@
+using NCalc.Domain;
 using NCalc.Exceptions;
 
 namespace NCalc.Helpers;
@@ -9,6 +10,38 @@ public static class AsyncBuiltInFunctionHelper
         var caseInsensitive = context.Options.HasFlag(ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
         var comparison = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
+        if (functionName.Equals("%") || functionName.Equals("PercentOf", comparison))
+        {
+            if (arguments.Length != 2)
+                throw new NCalcEvaluationException("PercentOf() takes exactly 2 arguments");
+            object? arg1 = await arguments[0].EvaluateAsync();
+            if (arg1 == null)
+                return null;
+            object? arg2 = await arguments[1].EvaluateAsync();
+            if (arg2 == null)
+                return null;
+            object? result = MathHelper.Divide(MathHelper.Multiply(100, arg1, context), arg2, context);
+            if (result != null)
+                return new Percent(result);
+            else
+                return null;
+        }
+        if (functionName.Equals("PercentDiff", comparison))
+        {
+            if (arguments.Length != 2)
+                throw new NCalcEvaluationException("PercentDiff() takes exactly 2 arguments");
+            object? arg1 = await arguments[0].EvaluateAsync();
+            if (arg1 == null)
+                return null;
+            object? arg2 = await arguments[1].EvaluateAsync();
+            if (arg2 == null)
+                return null;
+            object? result = MathHelper.Divide(MathHelper.Multiply(MathHelper.Subtract(arg2, arg1, context), 100, context), arg1, context);
+            if (result != null)
+                return new Percent(result);
+            else
+                return null;
+        }
         if (functionName.Equals("Abs", comparison))
         {
             if (arguments.Length != 1)

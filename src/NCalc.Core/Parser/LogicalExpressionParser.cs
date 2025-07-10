@@ -475,6 +475,7 @@ public static class LogicalExpressionParser
 
         // Add percent support
 
+        bool calculatePercent = (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent));
         bool useCharsForOps = !options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars);
         bool useUnicodeForOps = options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations);
         bool useAssignments = options.HasFlag(ExpressionOptions.UseAssignments);
@@ -484,7 +485,7 @@ public static class LogicalExpressionParser
         var comma = Terms.Char(',');
         var divided = useUnicodeForOps ? OneOf(Terms.Text("/"), Terms.Text(":"), Terms.Text("\u00F7")) : Terms.Text("/");
         var times = useUnicodeForOps ? OneOf(Terms.Text("*"), Terms.Text("\u00D7"), Terms.Text("\u2219")) : Terms.Text("*");
-        var modulo = (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent)) ? Terms.Text("mod", true) : OneOf(Terms.Text("%"), Terms.Text("mod", true));
+        var modulo = calculatePercent ? Terms.Text("mod", true) : OneOf(Terms.Text("%"), Terms.Text("mod", true));
         var intDivB = OneOf(Terms.Text("\\"), Terms.Text("div", true));
         var intDivP = Terms.Text("//");
         var minus = Terms.Text("-");
@@ -618,13 +619,19 @@ public static class LogicalExpressionParser
             .And(list)
             .Then<LogicalExpression>(static x =>
                 new Function(new Identifier(x.Item1.ToString()!), (LogicalExpressionList)x.Item2));
+        var percentFunction = percentChar
+            .And(list)
+            .Then<LogicalExpression>(static x =>
+                new Function(new Identifier("%"), (LogicalExpressionList)x.Item2));
 
         Parser<LogicalExpression> functionOrResultRef;
 
+        List<Parser<LogicalExpression>> funcList = [function];
         if (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.UseResultReference))
-            functionOrResultRef = OneOf(resultReference, function);
-        else
-            functionOrResultRef = function;
+            funcList.Add(resultReference);
+        if (calculatePercent)
+            funcList.Add(percentFunction);
+        functionOrResultRef = OneOf(funcList.ToArray());
 
         var booleanTrue = Terms.Text("true", true)
                 .Then<LogicalExpression>(True);
