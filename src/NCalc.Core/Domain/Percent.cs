@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using ExtendedNumerics;
 using NCalc.Exceptions;
 using NCalc.Visitors;
 
@@ -18,6 +19,7 @@ namespace NCalc.Domain
                 decimal or double or float => ValueType.Float,
                 byte or sbyte or short or int or long or ushort or uint or ulong => ValueType.Integer,
                 BigInteger => ValueType.Integer,
+                BigDecimal => ValueType.Float,
                 _ => throw new NCalcException("This value could not be handled: " + value)
             };
 

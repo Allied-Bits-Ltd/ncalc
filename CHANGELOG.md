@@ -2,6 +2,7 @@
 
 * Built-in trigonometry functions now call the implementations in BigDecimal in the case the argument is BigDecimal or BigInteger and big numbers are enabled.
 * Compare method now handles double and float NaN values before other comparisons.
+* Added the PercentOf and PercentDiff functions, also modified the parser to recognize %(a,b) as the PercentOf function.
 
 # 5.6.0-beta (Allied Bits)
 * Added parsing of a BigDecimal (when UseBigNumbers is set).

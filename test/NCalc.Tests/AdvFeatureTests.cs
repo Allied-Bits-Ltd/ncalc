@@ -837,7 +837,6 @@ public class AdvFeatureTests
     [InlineData("100-5%", 95)]
     [InlineData("20 * %5", 1)]
     [InlineData("100 - %5", 95)]
-    [InlineData("100 + %(3+2)", 105)]
     public void ShouldCalculatePercentAsNumber(string input, int expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
@@ -863,6 +862,9 @@ public class AdvFeatureTests
     [InlineData("5%*2", "10%")]
     [InlineData("10%/2", "5%")]
     [InlineData("10%/2 + 3%*3", "14%")]
+    [InlineData("%(25,50)", "50%")]
+    [InlineData("PercentDiff(80,60)", "-25%")]
+    [InlineData("PercentDiff(50,75)", "50%")]
     public void ShouldCalculatePercentAsPercent(string input, string expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
@@ -1884,7 +1886,6 @@ public class AsyncAdvFeatureTests
     [InlineData("100-5%", 95)]
     [InlineData("20 * %5", 1)]
     [InlineData("100 - %5", 95)]
-    [InlineData("100 + %(3+2)", 105)]
     public async Task ShouldCalculatePercentAsNumberAsync(string input, int expectedValue)
     {
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache);
@@ -1909,6 +1910,10 @@ public class AsyncAdvFeatureTests
     [InlineData("5%-2%", "3%")]
     [InlineData("5%*2", "10%")]
     [InlineData("10%/2", "5%")]
+    [InlineData("%(25,50)", "50%")]
+    [InlineData("PercentDiff(80,60)", "-25%")]
+    [InlineData("PercentDiff(50,75)", "50%")]
+
     public async Task ShouldCalculatePercentAsPercentAsync(string input, string expectedValue)
     {
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache);
