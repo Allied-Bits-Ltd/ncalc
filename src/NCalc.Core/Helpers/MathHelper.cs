@@ -87,17 +87,17 @@ public static class MathHelper
         return res;
     };
 
-    public static object? Add(object? a, object? b)
+    /*public static object? Add(object? a, object? b)
     {
         return Add(a, b, CultureInfo.CurrentCulture);
-    }
+    }*/
 
     public static object? AddPercent(object? a, object? b)
     {
         return AddPercent(a, b, CultureInfo.CurrentCulture);
     }
 
-    public static object? Add(object? a, object? b, MathHelperOptions options)
+    public static object? Add(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
         if (a == null || b == null)
             return null;
@@ -151,12 +151,14 @@ public static class MathHelper
 
                     result = Add(result, a);
                 }
-                if (result >= long.MinValue && result <= long.MaxValue)
-                    return (long)result;
-                else
-                if (result >= ulong.MinValue && result <= ulong.MaxValue)
-                    return (ulong)result;
-
+                if (reduceTypes)
+                {
+                    if (result >= long.MinValue && result <= long.MaxValue)
+                        return (long)result;
+                    else
+                    if (result >= ulong.MinValue && result <= ulong.MaxValue)
+                        return (ulong)result;
+                }
                 return result;
             }
         }
@@ -177,17 +179,17 @@ public static class MathHelper
         return ExecuteOperation(a, b, '+', func);
     }
 
-    public static object? Subtract(object? a, object? b)
+   /* public static object? Subtract(object? a, object? b)
     {
         return Subtract(a, b, CultureInfo.CurrentCulture);
-    }
+    }*/
 
     public static object? SubtractPercent(object? a, object? b)
     {
         return SubtractPercent(a, b, CultureInfo.CurrentCulture);
     }
 
-    public static object? Subtract(object? a, object? b, MathHelperOptions options)
+    public static object? Subtract(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
         if (a == null || b == null)
             return null;
@@ -222,18 +224,20 @@ public static class MathHelper
                 }
                 else
                 {
-                    if (options.DecimalAsDefault && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
-                        return (decimal)bdResult;
-                    else
-                    if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
-                        return (float)bdResult;
-                    else
-                    if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
-                        return (double)bdResult;
-                    else
-                    if (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
-                        return (decimal)bdResult;
-
+                    if (reduceTypes)
+                    {
+                        if (options.DecimalAsDefault && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
+                            return (decimal)bdResult;
+                        else
+                        if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
+                            return (float)bdResult;
+                        else
+                        if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
+                            return (double)bdResult;
+                        else
+                        if (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
+                            return (decimal)bdResult;
+                    }
                     return bdResult;
                 }
             }
@@ -274,7 +278,7 @@ public static class MathHelper
                 }
             }
 
-            if (result != null)
+            if (result != null && reduceTypes)
             {
                 if (result >= long.MinValue && result <= long.MaxValue)
                     return (long)result;
@@ -302,17 +306,17 @@ public static class MathHelper
         return ExecuteOperation(a, b, '-', func);
     }
 
-    public static object? Multiply(object? a, object? b)
+    /*public static object? Multiply(object? a, object? b)
     {
         return Multiply(a, b, CultureInfo.CurrentCulture);
-    }
+    }*/
 
     public static object? MultiplyPercent(object? a, object? b)
     {
         return MultiplyPercent(a, b, CultureInfo.CurrentCulture);
     }
 
-    public static object? Multiply(object? a, object? b, MathHelperOptions options)
+    public static object? Multiply(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
         if (a == null || b == null)
             return null;
@@ -366,12 +370,14 @@ public static class MathHelper
 
                     result = Multiply(result, a);
                 }
-                if (result >= long.MinValue && result <= long.MaxValue)
-                    return (long)result;
-                else
-                if (result >= ulong.MinValue && result <= ulong.MaxValue)
-                    return (ulong)result;
-
+                if (reduceTypes)
+                {
+                    if (result >= long.MinValue && result <= long.MaxValue)
+                        return (long)result;
+                    else
+                    if (result >= ulong.MinValue && result <= ulong.MaxValue)
+                        return (ulong)result;
+                }
                 return result;
             }
         }
@@ -391,12 +397,12 @@ public static class MathHelper
         return ExecuteOperation(a, b, '*', func);
     }
 
-    public static object? Divide(object? a, object? b)
+   /* public static object? Divide(object? a, object? b)
     {
         return Divide(a, b, CultureInfo.CurrentCulture);
     }
-
-    public static object? Divide(object? a, object? b, MathHelperOptions options)
+*/
+    public static object? Divide(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
         if (a == null || b == null)
             return null;
@@ -457,30 +463,33 @@ public static class MathHelper
 
             if (bdResult != null)
             {
-                if ((a is BigInteger || IsBoxedIntegerNumber(a) || options.ReduceDivResultToInteger) && bdResult.Value.GetFractionalPart().IsZero())
+                if (reduceTypes)
                 {
-                    BigInteger biResult = bdResult.Value.WholeValue;
+                    if ((a is BigInteger || IsBoxedIntegerNumber(a) || options.ReduceDivResultToInteger) && bdResult.Value.GetFractionalPart().IsZero())
+                    {
+                        BigInteger biResult = bdResult.Value.WholeValue;
 
-                    if (biResult >= long.MinValue && biResult <= long.MaxValue)
-                        return (long)biResult;
+                        if (biResult >= long.MinValue && biResult <= long.MaxValue)
+                            return (long)biResult;
+                        else
+                        if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
+                            return (ulong)biResult;
+
+                        return biResult;
+                    }
                     else
-                    if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
-                        return (ulong)biResult;
-
-                    return biResult;
+                    if (options.DecimalAsDefault && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
+                        return (decimal)bdResult;
+                    else
+                    if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
+                        return (float)bdResult;
+                    else
+                    if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
+                        return (double)bdResult;
+                    else
+                    if (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
+                        return (decimal)bdResult;
                 }
-                else
-                if (options.DecimalAsDefault && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
-                    return (decimal)bdResult;
-                else
-                if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
-                    return (float)bdResult;
-                else
-                if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
-                    return (double)bdResult;
-                else
-                if (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
-                    return (decimal)bdResult;
 
                 return bdResult;
             }
@@ -526,34 +535,38 @@ public static class MathHelper
         if (result == null || !useInteger)
             return result;
 
-        if (result is decimal decResult)
+        if (reduceTypes)
         {
-            long lResult = (long)decResult;
-            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                return (int)lResult;
-            else
-                return lResult;
+            if (result is decimal decResult)
+            {
+                long lResult = (long)decResult;
+                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                    return (int)lResult;
+                else
+                    return lResult;
+            }
+            if (result is double dResult)
+            {
+                long lResult = (long)dResult;
+                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                    return (int)lResult;
+                else
+                    return lResult;
+            }
+            if (result is float fResult)
+            {
+                long lResult = (long)fResult;
+                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                    return (int)lResult;
+                else
+                    return lResult;
+            }
         }
-        if (result is double dResult)
-        {
-            long lResult = (long)dResult;
-            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                return (int)lResult;
-            else
-                return lResult;
-        }
-        if (result is float fResult)
-        {
-            long lResult = (long)fResult;
-            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                return (int)lResult;
-            else
-                return lResult;
-        }
+
         return result;
     }
 
-    public static object? IntegerDivide(object? a, object? b, bool truncateFirst, MathHelperOptions options)
+    public static object? IntegerDivide(object? a, object? b, bool truncateFirst, bool reduceTypes, MathHelperOptions options)
     {
         if (a == null || b == null)
             return null;
@@ -637,12 +650,14 @@ public static class MathHelper
 
             if (biResult != null)
             {
-                if (biResult >= long.MinValue && biResult <= long.MaxValue)
-                    return (long)biResult;
-                else
-                if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
-                    return (ulong)biResult;
-
+                if (reduceTypes)
+                {
+                    if (biResult >= long.MinValue && biResult <= long.MaxValue)
+                        return (long)biResult;
+                    else
+                    if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
+                        return (ulong)biResult;
+                }
                 return biResult;
             }
         }
@@ -658,29 +673,32 @@ public static class MathHelper
         if (result == null || IsBoxedIntegerNumber(result))
             return result;
 
-        if (result is decimal decResult)
+        if (reduceTypes)
         {
-            long lResult = (long)Math.Truncate(decResult);
-            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                return (int)lResult;
-            else
-                return lResult;
-        }
-        if (result is double dResult)
-        {
-            long lResult = (long)Math.Truncate(dResult);
-            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                return (int)lResult;
-            else
-                return lResult;
-        }
-        if (result is float fResult)
-        {
-            long lResult = (long)Math.Truncate(fResult);
-            if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                return (int)lResult;
-            else
-                return lResult;
+            if (result is decimal decResult)
+            {
+                long lResult = (long)Math.Truncate(decResult);
+                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                    return (int)lResult;
+                else
+                    return lResult;
+            }
+            if (result is double dResult)
+            {
+                long lResult = (long)Math.Truncate(dResult);
+                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                    return (int)lResult;
+                else
+                    return lResult;
+            }
+            if (result is float fResult)
+            {
+                long lResult = (long)Math.Truncate(fResult);
+                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
+                    return (int)lResult;
+                else
+                    return lResult;
+            }
         }
         return result;
     }
@@ -697,12 +715,12 @@ public static class MathHelper
         return ExecuteOperation(a, b, '/', func);
     }
 
-    public static object? Modulo(object? a, object? b)
+    /*public static object? Modulo(object? a, object? b)
     {
         return Modulo(a, b, CultureInfo.CurrentCulture);
-    }
+    }*/
 
-    public static object? Modulo(object? a, object? b, MathHelperOptions options)
+    public static object? Modulo(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
         if (a == null || b == null)
             return null;
@@ -774,25 +792,28 @@ public static class MathHelper
                 }
             }
 
-            if (biResult != null)
+            if (reduceTypes)
             {
-                if (biResult >= long.MinValue && biResult <= long.MaxValue)
-                    return (long)biResult;
-                else
-                if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
-                    return (ulong)biResult;
+                if (biResult != null)
+                {
+                    if (biResult >= long.MinValue && biResult <= long.MaxValue)
+                        return (long)biResult;
+                    else
+                    if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
+                        return (ulong)biResult;
 
-                return biResult;
+                    return biResult;
+                }
             }
         }
 
         return ExecuteOperation(a, b, '%', ModuloFunc);
     }
 
-    public static object? Max(object a, object b)
+/*    public static object? Max(object a, object b)
     {
         return Max(a, b, CultureInfo.CurrentCulture);
-    }
+    }*/
 
     public static object? Max(object? a, object? b, MathHelperOptions options)
     {
@@ -848,11 +869,12 @@ public static class MathHelper
             _ => null,
         };
     }
-
+/*
     public static object? Min(object? a, object? b)
     {
         return Min(a, b, CultureInfo.CurrentCulture);
     }
+*/
 
     public static object? Min(object? a, object? b, MathHelperOptions options)
     {

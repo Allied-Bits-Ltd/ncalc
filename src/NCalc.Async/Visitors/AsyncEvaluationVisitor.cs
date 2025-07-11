@@ -66,9 +66,9 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 switch (expression.Type)
                 {
                     case BinaryExpressionType.Minus:
-                        return new Percent(MathHelper.Subtract(lValPercent.Value, rValPercent.Value, context) ?? 0);
+                        return new Percent(MathHelper.Subtract(lValPercent.Value, rValPercent.Value, true, context) ?? 0);
                     case BinaryExpressionType.Plus:
-                        return new Percent(MathHelper.Add(lValPercent.Value, rValPercent.Value, context) ?? 0);
+                        return new Percent(MathHelper.Add(lValPercent.Value, rValPercent.Value, true, context) ?? 0);
                 }
             }
             else
@@ -77,9 +77,9 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 switch (expression.Type)
                 {
                     case BinaryExpressionType.Times:
-                        return new Percent(MathHelper.Multiply(lValPercent1.Value, rightValue, context) ?? 0);
+                        return new Percent(MathHelper.Multiply(lValPercent1.Value, rightValue, true, context) ?? 0);
                     case BinaryExpressionType.Div:
-                        return new Percent(MathHelper.Divide(lValPercent1.Value, rightValue, context) ?? 0);
+                        return new Percent(MathHelper.Divide(lValPercent1.Value, rightValue, true, context) ?? 0);
                 }
             }
             else
@@ -101,13 +101,13 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                         return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Minus(leftValue, rValue, context));
 
                     case BinaryExpressionType.MultiplyAssignment:
-                        return await UpdateParameterAsync(expression.LeftExpression, MathHelper.Multiply(leftValue, rValue, context));
+                        return await UpdateParameterAsync(expression.LeftExpression, MathHelper.Multiply(leftValue, rValue, true, context));
 
                     case BinaryExpressionType.DivAssignment:
                         return await UpdateParameterAsync(expression.LeftExpression,
                             IsReal(leftValue) || IsReal(rValue)
-                            ? MathHelper.Divide(left, rValue, context)
-                            : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo), rValue,
+                            ? MathHelper.Divide(left, rValue, true, context)
+                            : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo), rValue, true,
                                 context)
                             );
 
@@ -139,7 +139,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Minus(await left.Value, await right.Value, context));
 
             case BinaryExpressionType.MultiplyAssignment:
-                return await UpdateParameterAsync(expression.LeftExpression, MathHelper.Multiply(await left.Value, await right.Value, context));
+                return await UpdateParameterAsync(expression.LeftExpression, MathHelper.Multiply(await left.Value, await right.Value, true, context));
 
             case BinaryExpressionType.DivAssignment:
             {
@@ -147,8 +147,8 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 object? rightValue = await right.Value;
                 return await UpdateParameterAsync(expression.LeftExpression,
                     IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal
-                    ? MathHelper.Divide(leftValue, rightValue, context)
-                    : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo), rightValue, context)
+                    ? MathHelper.Divide(leftValue, rightValue, true, context)
+                    : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo), rightValue, true, context)
                     );
             }
             case BinaryExpressionType.AndAssignment:
@@ -207,15 +207,15 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
                 return
                     IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal
-                    ? MathHelper.Divide(leftValue, rightValue, context)
+                    ? MathHelper.Divide(leftValue, rightValue, true, context)
                     : ((leftValue is null)
                         ? null
-                        : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo), rightValue, context));
+                        : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo), rightValue, true, context));
             }
         case BinaryExpressionType.IntDivB:
         case BinaryExpressionType.IntDivP:
             {
-                return MathHelper.IntegerDivide(await left.Value, await right.Value, (expression.Type == BinaryExpressionType.IntDivB), context);
+                return MathHelper.IntegerDivide(await left.Value, await right.Value, (expression.Type == BinaryExpressionType.IntDivB), true, context);
             }
         case BinaryExpressionType.Equal:
             return Compare(await left.Value, await right.Value, ComparisonType.Equal);
@@ -239,13 +239,13 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
             return EvaluationHelper.Minus(await left.Value, await right.Value, context);
 
         case BinaryExpressionType.Modulo:
-            return MathHelper.Modulo(await left.Value, await right.Value, context);
+            return MathHelper.Modulo(await left.Value, await right.Value, true, context);
 
         case BinaryExpressionType.Plus:
             return EvaluationHelper.Plus(await left.Value, await right.Value, context);
 
         case BinaryExpressionType.Times:
-            return MathHelper.Multiply(await left.Value, await right.Value, context);
+            return MathHelper.Multiply(await left.Value, await right.Value, true, context);
 
         case BinaryExpressionType.BitwiseAnd:
         {

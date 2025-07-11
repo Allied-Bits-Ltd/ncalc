@@ -59,9 +59,9 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 switch (expression.Type)
                 {
                     case BinaryExpressionType.Minus:
-                        return new Percent(MathHelper.Subtract(lValPercent.Value, rValPercent.Value, context) ?? 0);
+                        return new Percent(MathHelper.Subtract(lValPercent.Value, rValPercent.Value, true, context) ?? 0);
                     case BinaryExpressionType.Plus:
-                        return new Percent(MathHelper.Add(lValPercent.Value, rValPercent.Value, context) ?? 0);
+                        return new Percent(MathHelper.Add(lValPercent.Value, rValPercent.Value, true, context) ?? 0);
                 }
             }
             else
@@ -70,9 +70,9 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 switch (expression.Type)
                 {
                     case BinaryExpressionType.Times:
-                        return new Percent(MathHelper.Multiply(lValPercent1.Value, right.Value, context) ?? 0);
+                        return new Percent(MathHelper.Multiply(lValPercent1.Value, right.Value, true, context) ?? 0);
                     case BinaryExpressionType.Div:
-                        return new Percent(MathHelper.Divide(lValPercent1.Value, right.Value, context) ?? 0);
+                        return new Percent(MathHelper.Divide(lValPercent1.Value, right.Value, true, context) ?? 0);
                 }
             }
             else
@@ -94,13 +94,13 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                         return UpdateParameter(expression.LeftExpression, EvaluationHelper.Minus(left.Value, rValue, context));
 
                     case BinaryExpressionType.MultiplyAssignment:
-                        return UpdateParameter(expression.LeftExpression, MathHelper.Multiply(left.Value, rValue, context));
+                        return UpdateParameter(expression.LeftExpression, MathHelper.Multiply(left.Value, rValue, true, context));
 
                     case BinaryExpressionType.DivAssignment:
                         return UpdateParameter(expression.LeftExpression,
                             IsReal(left.Value) || IsReal(rValue)
-                            ? MathHelper.Divide(left.Value, rValue, context)
-                            : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), rValue,
+                            ? MathHelper.Divide(left.Value, rValue, true, context)
+                            : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), rValue, true,
                                 context)
                             );
 
@@ -132,15 +132,15 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 return UpdateParameter(expression.LeftExpression, EvaluationHelper.Minus(left.Value, right.Value, context));
 
             case BinaryExpressionType.MultiplyAssignment:
-                return UpdateParameter(expression.LeftExpression, MathHelper.Multiply(left.Value, right.Value, context));
+                return UpdateParameter(expression.LeftExpression, MathHelper.Multiply(left.Value, right.Value, true, context));
 
             case BinaryExpressionType.DivAssignment:
                 return UpdateParameter(expression.LeftExpression,
                     IsReal(left.Value) || IsReal(right.Value) || left.Value is BigInteger || right.Value is BigInteger || left.Value is BigDecimal || right.Value is BigDecimal
-                    ? MathHelper.Divide(left.Value, right.Value, context)
+                    ? MathHelper.Divide(left.Value, right.Value, true, context)
                     : ((left.Value is null)
                         ? null
-                        : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value, context))
+                        : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value, true, context))
                     );
 
             case BinaryExpressionType.AndAssignment:
@@ -181,13 +181,13 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
 
             case BinaryExpressionType.Div:
                 return IsReal(left.Value) || IsReal(right.Value) || left.Value is BigInteger || right.Value is BigInteger || left.Value is BigDecimal || right.Value is BigDecimal
-                    ? MathHelper.Divide(left.Value, right.Value, context)
+                    ? MathHelper.Divide(left.Value, right.Value, true, context)
                     : ((left.Value is null)
                         ? null
-                        : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value, context));
+                        : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value, true, context));
             case BinaryExpressionType.IntDivB:
             case BinaryExpressionType.IntDivP:
-                return MathHelper.IntegerDivide(left.Value, right.Value, (expression.Type == BinaryExpressionType.IntDivB), context);
+                return MathHelper.IntegerDivide(left.Value, right.Value, (expression.Type == BinaryExpressionType.IntDivB), true, context);
             case BinaryExpressionType.Equal:
                 return Compare(left.Value, right.Value, ComparisonType.Equal);
 
@@ -210,13 +210,13 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 return EvaluationHelper.Minus(left.Value, right.Value, context);
 
             case BinaryExpressionType.Modulo:
-                return MathHelper.Modulo(left.Value, right.Value, context);
+                return MathHelper.Modulo(left.Value, right.Value, true, context);
 
             case BinaryExpressionType.Plus:
                 return EvaluationHelper.Plus(left.Value, right.Value, context);
 
             case BinaryExpressionType.Times:
-                return MathHelper.Multiply(left.Value, right.Value, context);
+                return MathHelper.Multiply(left.Value, right.Value, true, context);
 
             case BinaryExpressionType.BitwiseAnd:
                 if (left.Value is BigInteger || right.Value is BigInteger)
