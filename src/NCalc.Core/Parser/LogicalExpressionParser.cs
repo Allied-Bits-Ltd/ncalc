@@ -281,7 +281,7 @@ public static class LogicalExpressionParser
         char numGroupSeparator = (extOptions != null) ? extOptions.GetNumberGroupSeparatorChar() : Parlot.Fluent.NumberLiterals.DefaultGroupSeparator; // this method will return the default separator, if needed
 
         NumberOptions useNumberGroupSeparatorFlag = ((extOptions != null) && (numGroupSeparator != '\0')) ? NumberOptions.AllowGroupSeparators : NumberOptions.None;
-        NumberOptions useUnderscoreFlag = (_hasAllowUnderscore && extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.AcceptUnderscoresInNumbers)) ? (NumberOptions)16 : NumberOptions.None;
+        NumberOptions useUnderscoreFlag = (_hasAllowUnderscore && acceptUnderscores) ? (NumberOptions)16 : NumberOptions.None;
 
         Parser<string>[] floatNumExclusions =
             (decimalSeparator2 != '\0')
@@ -361,14 +361,10 @@ public static class LogicalExpressionParser
                     else
                         return new ValueExpression(d);
                 });
-            Parser<LogicalExpression> bigUIntNumberD = Terms.Number<BigInteger>((NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag) & (~NumberOptions.AllowLeadingSign), decimalSeparator, numGroupSeparator)
-                //.AndSkip(Not(OneOf(floatNumExclusions)))
-                .Then<LogicalExpression>(d =>
+            Parser<LogicalExpression> bigUIntNumberD = Terms.Pattern(c => acceptableDecChars.Contains(c))
+                .Then<LogicalExpression>(s =>
                 {
-                    if (d >= ulong.MinValue && d <= ulong.MaxValue)
-                        return new ValueExpression((object)(ulong)d);
-                    else
-                        return new ValueExpression(d);
+                    return new ValueExpression(s);
                 });
 
             bigDecimalNumber =
@@ -377,12 +373,12 @@ public static class LogicalExpressionParser
                 .And(bigUIntNumberD)
                 .And(ZeroOrOne(Terms.AnyOf("Ee")))
                 .And(ZeroOrOne(bigIntNumberD))
-                .When((ctx, val) => TryParseDecimal(val) != null)
-                .Then<LogicalExpression>(static (ctx, val) =>
+                .When((ctx, val) => TryParseDecimal(val, acceptUnderscores) != null)
+                .Then<LogicalExpression>((ctx, val) =>
                 {
                     bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
 
-                    BigDecimal? value = TryParseDecimal(val);
+                    BigDecimal? value = TryParseDecimal(val, acceptUnderscores);
 
                     if (value == null)
                         return new ValueExpression(null);  // never happens - the When condition ensures that val can be parsed
@@ -1865,7 +1861,7 @@ public static class LogicalExpressionParser
         return enableParserCompilation ? expressionParser.Compile() : expressionParser;
     }
 
-    private static BigDecimal? TryParseDecimal((LogicalExpression, TextSpan, LogicalExpression, TextSpan, LogicalExpression) val)
+    private static BigDecimal? TryParseDecimal((LogicalExpression, TextSpan, LogicalExpression, TextSpan, LogicalExpression) val, bool useUnderscores)
     {
         StringBuilder sb = new StringBuilder();
         if (val.Item1 != null)
@@ -1874,7 +1870,13 @@ public static class LogicalExpressionParser
             sb.Append('0');
 
         sb.Append(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator); // BigDecimal uses the current culture's separator
-        sb.Append(val.Item3.ToString()); // fractional part
+        // With the fractional part, we have text that we may need to sanitize
+        string fracPart = val.Item3.ToString();
+        if (fracPart.Length > 0 && fracPart[0] == '\'')
+            fracPart = fracPart[1..^1];
+        if (useUnderscores)
+            fracPart = fracPart.Replace("_", "");
+        sb.Append(fracPart);
         if (val.Item4.Length == 0)
         {
             if (val.Item5 != null)

@@ -38,6 +38,22 @@ public class AdvFeatureTests
 
     }
 
+    [Theory]
+    [InlineData(".05", 0.05)]
+    [InlineData("0.05", 0.05)]
+    [InlineData("-0.05", -0.05)]
+    [InlineData("0.005", 0.005)]
+    [InlineData("-0.005", -0.005)]
+    [InlineData(".0", 0d)]
+    public void ShouldParseBigFloatingPointNumbers(string formula, decimal expectedValue)
+    {
+        var expr = new Expression(formula, ExpressionOptions.UseBigNumbers | ExpressionOptions.DecimalAsDefault, CultureInfo.InvariantCulture);
+        var res = expr.Evaluate();
+
+        Assert.Equal(expectedValue, res);
+    }
+
+
 
     [Theory]
     [InlineData("0xFFFFFFFFFFFFFFFE")]

@@ -139,7 +139,11 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                 resultBuilder.Append(expression.Value).Append(' ');
                 break;
             case ValueType.String or ValueType.Char:
-                resultBuilder.Append('\'').Append(expression.Value).Append('\'').Append(' ');
+                var value = expression.Value;
+                if (value is Parlot.TextSpan)
+                    resultBuilder.Append(value.ToString()).Append(' ');
+                else
+                    resultBuilder.Append('\'').Append(value).Append('\'').Append(' ');
                 break;
         }
 

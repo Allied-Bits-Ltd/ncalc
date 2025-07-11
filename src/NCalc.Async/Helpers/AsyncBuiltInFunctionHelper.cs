@@ -124,7 +124,7 @@ public static class AsyncBuiltInFunctionHelper
         {
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("Pow() takes exactly 2 arguments");
-            return MathHelper.Pow(await arguments[0].EvaluateAsync(), await arguments[1].EvaluateAsync(), context);
+            return MathHelper.Pow(await arguments[0].EvaluateAsync(), await arguments[1].EvaluateAsync(), true, context);
         }
         if (functionName.Equals("Round", comparison))
         {
