@@ -20,7 +20,7 @@ public static class BuiltInFunctionHelper
             object? arg2 = arguments[1].Evaluate();
             if (arg2 == null)
                 return null;
-            object? result = MathHelper.Divide(MathHelper.Multiply(100, arg1, context), arg2, context);
+            object? result = MathHelper.Divide(MathHelper.Multiply(100, arg1, false, context), arg2, true, context);
             if (result != null)
                 return new Percent(result);
             else
@@ -36,7 +36,7 @@ public static class BuiltInFunctionHelper
             object? arg2 = arguments[1].Evaluate();
             if (arg2 == null)
                 return null;
-            object? result = MathHelper.Divide(MathHelper.Multiply(MathHelper.Subtract(arg2, arg1, context), 100, context), arg1, context);
+            object? result = MathHelper.Divide(MathHelper.Multiply(MathHelper.Subtract(arg2, arg1, false, context), 100, false, context), arg1, true, context);
             if (result != null)
                 return new Percent(result);
             else

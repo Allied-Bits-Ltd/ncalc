@@ -51,7 +51,7 @@ public static class EvaluationHelper
 
         try
         {
-            return MathHelper.Add(leftValue, rightValue, context);
+            return MathHelper.Add(leftValue, rightValue, true, context);
         }
         catch (FormatException) when (leftValue is string && rightValue is string)
         {
@@ -87,7 +87,7 @@ public static class EvaluationHelper
                 return ((TimeSpan)leftValue).Subtract((TimeSpan)rightValue);
             }
         }
-        return MathHelper.Subtract(leftValue, rightValue, context);
+        return MathHelper.Subtract(leftValue, rightValue, true, context);
     }
 
     /// <summary>
@@ -251,9 +251,9 @@ public static class EvaluationHelper
                     ? MathHelper.Subtract((object)(long)0, (BigDecimal) result)
                     : ((result is BigInteger)
                         ? MathHelper.TryReduceToUInt64(MathHelper.Subtract((object)(long)0, (BigInteger) result))
-                        : MathHelper.Subtract(0, result, context)),
+                        : MathHelper.Subtract(0, result, true, context)),
             UnaryExpressionType.BitwiseNot =>
-                (result is BigInteger) ? MathHelper.TryReduceToUInt64(MathHelper.BitwiseNot(result)) : ~Convert.ToUInt64(result, context.CultureInfo),
+                (result is BigInteger biResult) ? MathHelper.TryReduceToUInt64(~biResult) : ~Convert.ToUInt64(result, context.CultureInfo),
             UnaryExpressionType.SqRoot => MathHelper.Sqrt(result, context.CultureInfo),
 #if NET8_0_OR_GREATER
             UnaryExpressionType.CbRoot => MathHelper.Cbrt(result, context.CultureInfo),
