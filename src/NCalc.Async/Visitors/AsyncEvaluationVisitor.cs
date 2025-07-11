@@ -294,7 +294,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                     Convert.ToInt32(await right.Value, context.CultureInfo);
         }
         case BinaryExpressionType.Exponentiation:
-            return MathHelper.Pow(await left.Value, await right.Value, context);
+            return MathHelper.Pow(await left.Value, await right.Value, true, context);
 
         case BinaryExpressionType.Factorial:
         {

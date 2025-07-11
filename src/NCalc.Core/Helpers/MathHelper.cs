@@ -1193,7 +1193,7 @@ public static class MathHelper
         return Math.Log10(ConvertToDouble(a, options));
     }
 
-    public static object Pow(object? a, object? b, MathHelperOptions options)
+    public static object Pow(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
         if (options.DecimalAsDefault || options.UseBigNumbers)
         {
@@ -1204,28 +1204,33 @@ public static class MathHelper
             if (result.GetFractionalPart().IsZero())
             {
                 BigInteger bi = result.WholeValue;
-                if (bi >= int.MinValue && bi <= int.MaxValue)
-                    return (int)bi;
-                if (bi >= long.MinValue && bi <= long.MaxValue)
-                    return (long)bi;
-                if (bi >= ulong.MinValue && bi <= ulong.MaxValue)
-                    return (ulong)bi;
+                if (reduceTypes)
+                {
+                    if (bi >= int.MinValue && bi <= int.MaxValue)
+                        return (int)bi;
+                    if (bi >= long.MinValue && bi <= long.MaxValue)
+                        return (long)bi;
+                    if (bi >= ulong.MinValue && bi <= ulong.MaxValue)
+                        return (ulong)bi;
+                }
                 if (options.UseBigNumbers)
                     return bi;
             }
             else
-            if (options.DecimalAsDefault && (result >= decimal.MinValue && result <= decimal.MaxValue))
-                return (decimal)result;
-            else
-            if (result >= float.MinValue && result <= float.MaxValue)
-                return (float)result;
-            else
-            if (result >= double.MinValue && result <= double.MaxValue)
-                return (double)result;
-            else
-            if (result >= decimal.MinValue && result <= decimal.MaxValue)
-                return (decimal)result;
-
+            if (reduceTypes)
+            {
+                if (options.DecimalAsDefault && (result >= decimal.MinValue && result <= decimal.MaxValue))
+                    return (decimal)result;
+                else
+                if (result >= float.MinValue && result <= float.MaxValue)
+                    return (float)result;
+                else
+                if (result >= double.MinValue && result <= double.MaxValue)
+                    return (double)result;
+                else
+                if (result >= decimal.MinValue && result <= decimal.MaxValue)
+                    return (decimal)result;
+            }
             return result;
         }
 
@@ -2123,6 +2128,55 @@ public static class MathHelper
                t == typeof(short) || t == typeof(ushort) ||
                t == typeof(int) || t == typeof(uint) ||
                t == typeof(long) || t == typeof(ulong);
+    }
+
+    public static bool IsBoxedNumberZero(object? number)
+    {
+        if (number == null)
+            throw new ArgumentNullException(nameof(number));
+
+        switch (number)
+        {
+            case byte b: return b == 0;
+            case sbyte sb: return sb == 0;
+            case short s: return s == 0;
+            case ushort us: return us == 0;
+            case int i: return i == 0;
+            case uint ui: return ui == 0;
+            case long l: return l == 0;
+            case ulong ul: return ul == 0;
+            case float f: return f == 0f;
+            case double d: return d == 0.0;
+            case decimal dec: return dec == 0m;
+            case BigInteger bi: return bi.IsZero;
+            case BigDecimal bd: return bd.IsZero();
+            default:
+                throw new ArgumentException("Provided object is not a supported numeric type.");
+        }
+    }
+    public static bool IsBoxedNumberOne(object? number)
+    {
+        if (number == null)
+            throw new ArgumentNullException(nameof(number));
+
+        switch (number)
+        {
+            case byte b: return b == 1;
+            case sbyte sb: return sb == 1;
+            case short s: return s == 1;
+            case ushort us: return us == 1;
+            case int i: return i == 1;
+            case uint ui: return ui == 1;
+            case long l: return l == 1;
+            case ulong ul: return ul == 1;
+            case float f: return f == 1f;
+            case double d: return d == 1.1;
+            case decimal dec: return dec == 1m;
+            case BigInteger bi: return bi.IsOne;
+            case BigDecimal bd: return (double) bd == 1;
+            default:
+                throw new ArgumentException("Provided object is not a supported numeric type.");
+        }
     }
 
     public static object? TryReduceToUInt64(BigInteger? value)

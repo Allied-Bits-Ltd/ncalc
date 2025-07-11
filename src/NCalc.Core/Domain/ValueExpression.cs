@@ -25,7 +25,7 @@ public sealed class ValueExpression : LogicalExpression
             char => ValueType.Char,
             decimal or double or float or BigDecimal => ValueType.Float,
             byte or sbyte or short or int or long or ushort or uint or ulong or BigInteger => ValueType.Integer,
-            string => ValueType.String,
+            string or Parlot.TextSpan => ValueType.String,
             _ => throw new NCalcException("This value could not be handled: " + value)
         };
 

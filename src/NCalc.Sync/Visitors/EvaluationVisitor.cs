@@ -249,7 +249,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                         Convert.ToInt32(right.Value, context.CultureInfo);
 
             case BinaryExpressionType.Exponentiation:
-                return MathHelper.Pow(left.Value, right.Value, context);
+                return MathHelper.Pow(left.Value, right.Value, true, context);
 
             case BinaryExpressionType.Factorial:
                 if (right.Value == null || left.Value == null)

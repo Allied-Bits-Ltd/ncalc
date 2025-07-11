@@ -124,7 +124,7 @@ public static class BuiltInFunctionHelper
         {
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("Pow() takes exactly 2 arguments");
-            return MathHelper.Pow(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
+            return MathHelper.Pow(arguments[0].Evaluate(), arguments[1].Evaluate(), true, context);
         }
         if (functionName.Equals("Round", comparison))
         {
