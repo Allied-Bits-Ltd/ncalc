@@ -1331,36 +1331,7 @@ public static class MathHelper
             return a;
 
         if (a is BigDecimal bdA)
-        {
-            BigDecimal frac = bdA.GetFractionalPart();
-            if (frac < 0.5)
-                return bdA.WholeValue;
-            else
-            if (frac == 0.5)
-            {
-                if (rounding == MidpointRounding.AwayFromZero)
-                {
-                    return (bdA.IsNegative()) ? bdA.WholeValue - 1 : bdA.WholeValue + 1;
-                }
-                else
-#if NET6_0_OR_GREATER
-                if (rounding == MidpointRounding.ToZero)
-                    return (bdA.IsNegative()) ? bdA.WholeValue + 1 : bdA.WholeValue - 1;
-                else
-#endif
-                if (rounding == MidpointRounding.ToEven)
-                {
-                    if (bdA.WholeValue.IsEven)
-                        return bdA.WholeValue;
-                    else
-                        return (bdA.IsNegative()) ? bdA.WholeValue - 1 : bdA.WholeValue + 1;
-                }
-                else
-                    return (bdA.IsNegative()) ? bdA.WholeValue - 1 : bdA.WholeValue + 1;
-            }
-            else
-                return (bdA.IsNegative()) ? bdA.WholeValue - 1 : bdA.WholeValue + 1;
-        }
+            return BigDecimal.Round(bdA, ConvertToInt(b, options), (rounding == MidpointRounding.AwayFromZero) ? RoundingStrategy.AwayFromZero : RoundingStrategy.TowardZero);
 
         if (options.DecimalAsDefault)
             return Math.Round(ConvertToDecimal(a, options), ConvertToInt(b, options), rounding);
