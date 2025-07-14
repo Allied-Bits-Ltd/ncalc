@@ -150,7 +150,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
             return null;
 
         if (size == null)
-            return await LogicalExpression.Accept(evaluationVisitor);
+            return await LogicalExpression.Accept(evaluationVisitor).ConfigureAwait(false);
 
         var results = new List<object?>();
 
@@ -162,7 +162,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
                 Parameters[kvp.Key] = kvp.Value.Current;
             }
 
-            results.Add(await LogicalExpression.Accept(evaluationVisitor));
+            results.Add(await LogicalExpression.Accept(evaluationVisitor).ConfigureAwait(false));
         }
 
         return results;

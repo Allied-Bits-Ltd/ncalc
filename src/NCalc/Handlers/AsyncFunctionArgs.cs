@@ -25,7 +25,7 @@ public class AsyncFunctionArgs(Guid id, AsyncExpression[] parameters) : EventArg
         var values = new object?[Parameters.Length];
         for (var i = 0; i < values.Length; i++)
         {
-            values[i] = await Parameters[i].EvaluateAsync();
+            values[i] = await Parameters[i].EvaluateAsync().ConfigureAwait(false);
         }
 
         return values;
