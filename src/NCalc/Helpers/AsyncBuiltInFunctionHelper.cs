@@ -186,7 +186,7 @@ public static class AsyncBuiltInFunctionHelper
             {
                 var index = Array.IndexOf(arguments, argument);
                 if (index == arguments.Length - 1)
-                    return await argument.EvaluateAsync();
+                    return await argument.EvaluateAsync().ConfigureAwait(false);
 
                 var tf = Convert.ToBoolean(await argument.EvaluateAsync().ConfigureAwait(false), context.CultureInfo);
                 if (tf)
