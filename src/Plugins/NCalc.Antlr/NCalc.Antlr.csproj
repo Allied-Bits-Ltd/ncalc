@@ -7,7 +7,7 @@
         </Description>
     </PropertyGroup>
     <ItemGroup>
-        <ProjectReference Include="..\..\NCalc.DependencyInjection\NCalc.DependencyInjection.csproj" />
+        <ProjectReference Include="..\..\NCalc\NCalc.csproj" />
     </ItemGroup>
 
     <ItemGroup>

@@ -29,7 +29,9 @@
     <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
         <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     </ItemGroup>
-
+    <ItemGroup>
+        <PackageReference Include="FastExpressionCompiler" Version="5.3.0" />
+    </ItemGroup>
     <ItemGroup>
         <PackageReference Include="ExtendedNumerics.BigDecimal" Version="3000.0.4.132" />
         <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.7" />
