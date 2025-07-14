@@ -19,14 +19,14 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
     public virtual async ValueTask<object?> Visit(TernaryExpression expression)
     {
         // Evaluates the left expression and saves the value
-        var left = Convert.ToBoolean(await expression.LeftExpression.Accept(this), context.CultureInfo);
+        var left = Convert.ToBoolean(await expression.LeftExpression.Accept(this).ConfigureAwait(false), context.CultureInfo);
 
         if (left)
         {
-            return await expression.MiddleExpression.Accept(this);
+            return await expression.MiddleExpression.Accept(this).ConfigureAwait(false);
         }
 
-        return await expression.RightExpression.Accept(this);
+        return await expression.RightExpression.Accept(this).ConfigureAwait(false);
     }
 
     private async Task<object?> UpdateParameterAsync(LogicalExpression leftExpression, object? value)
@@ -37,7 +37,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
             var parameterArgs = new AsyncUpdateParameterArgs(identifierName, identifier.Id, value);
 
-            await OnUpdateParameterAsync(identifierName, parameterArgs);
+            await OnUpdateParameterAsync(identifierName, parameterArgs).ConfigureAwait(false);
 
             if (!parameterArgs.UpdateParameterLists)
             {
@@ -58,8 +58,8 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
         if (context.AdvancedOptions != null && context.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent))
         {
-            var leftValue = await left.Value;
-            var rightValue = await right.Value;
+            var leftValue = await left.Value.ConfigureAwait(false);
+            var rightValue = await right.Value.ConfigureAwait(false);
 
             if (leftValue is Percent lValPercent && rightValue is Percent rValPercent)
             {
@@ -92,16 +92,16 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                         return rightValue; // we are assigning Percent here
 
                     case BinaryExpressionType.Assignment:
-                        return await UpdateParameterAsync(expression.LeftExpression, rValue);
+                        return await UpdateParameterAsync(expression.LeftExpression, rValue).ConfigureAwait(false);
 
                     case BinaryExpressionType.PlusAssignment:
-                        return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Plus(leftValue, rValue, context));
+                        return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Plus(leftValue, rValue, context)).ConfigureAwait(false);
 
                     case BinaryExpressionType.MinusAssignment:
-                        return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Minus(leftValue, rValue, context));
+                        return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Minus(leftValue, rValue, context)).ConfigureAwait(false);
 
                     case BinaryExpressionType.MultiplyAssignment:
-                        return await UpdateParameterAsync(expression.LeftExpression, MathHelper.Multiply(leftValue, rValue, true, context));
+                        return await UpdateParameterAsync(expression.LeftExpression, MathHelper.Multiply(leftValue, rValue, true, context)).ConfigureAwait(false);
 
                     case BinaryExpressionType.DivAssignment:
                         return await UpdateParameterAsync(expression.LeftExpression,
@@ -109,7 +109,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                             ? MathHelper.Divide(left, rValue, true, context)
                             : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo), rValue, true,
                                 context)
-                            );
+                            ).ConfigureAwait(false);
 
                     case BinaryExpressionType.Minus:
                         return MathHelper.SubtractPercent(leftValue, rValue, context);
@@ -126,84 +126,84 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
         switch (expression.Type)
         {
             case BinaryExpressionType.StatementSequence:
-                _ = await left.Value;
-                return await right.Value;
+                _ = await left.Value.ConfigureAwait(false);
+                return await right.Value.ConfigureAwait(false);
 
             case BinaryExpressionType.Assignment:
-                return await UpdateParameterAsync(expression.LeftExpression, await right.Value);
+                return await UpdateParameterAsync(expression.LeftExpression, await right.Value.ConfigureAwait(false)).ConfigureAwait(false);
 
             case BinaryExpressionType.PlusAssignment:
-                return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Plus(await left.Value, await right.Value, context));
+                return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Plus(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), context)).ConfigureAwait(false);
 
             case BinaryExpressionType.MinusAssignment:
-                return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Minus(await left.Value, await right.Value, context));
+                return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Minus(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), context)).ConfigureAwait(false);
 
             case BinaryExpressionType.MultiplyAssignment:
-                return await UpdateParameterAsync(expression.LeftExpression, MathHelper.Multiply(await left.Value, await right.Value, true, context));
+                return await UpdateParameterAsync(expression.LeftExpression, MathHelper.Multiply(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), true, context)).ConfigureAwait(false);
 
             case BinaryExpressionType.DivAssignment:
             {
-                object? leftValue = await left.Value;
-                object? rightValue = await right.Value;
+                object? leftValue = await left.Value.ConfigureAwait(false);
+                object? rightValue = await right.Value.ConfigureAwait(false);
                 return await UpdateParameterAsync(expression.LeftExpression,
                     IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal
                     ? MathHelper.Divide(leftValue, rightValue, true, context)
                     : MathHelper.Divide(Convert.ToDouble(leftValue, context.CultureInfo), rightValue, true, context)
-                    );
+                    ).ConfigureAwait(false);
             }
             case BinaryExpressionType.AndAssignment:
             {
-                object? leftValue = await left.Value;
-                object? rightValue = await right.Value;
+                object? leftValue = await left.Value.ConfigureAwait(false);
+                object? rightValue = await right.Value.ConfigureAwait(false);
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return await UpdateParameterAsync(expression.LeftExpression,
-                        MathHelper.BitwiseAnd(leftValue, rightValue));
+                        MathHelper.BitwiseAnd(leftValue, rightValue)).ConfigureAwait(false);
                 return await UpdateParameterAsync(expression.LeftExpression,
                     Convert.ToUInt64(leftValue, context.CultureInfo) &
                     Convert.ToUInt64(rightValue, context.CultureInfo)
-                    );
+                    ).ConfigureAwait(false);
             }
             case BinaryExpressionType.OrAssignment:
             {
-                object? leftValue = await left.Value;
-                object? rightValue = await right.Value;
+                object? leftValue = await left.Value.ConfigureAwait(false);
+                object? rightValue = await right.Value.ConfigureAwait(false);
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return await UpdateParameterAsync(expression.LeftExpression,
-                        MathHelper.BitwiseOr(leftValue, rightValue));
+                        MathHelper.BitwiseOr(leftValue, rightValue)).ConfigureAwait(false);
                 return await UpdateParameterAsync(expression.LeftExpression,
                     Convert.ToUInt64(leftValue, context.CultureInfo) |
                     Convert.ToUInt64(rightValue, context.CultureInfo)
-                    );
+                    ).ConfigureAwait(false);
             }
             case BinaryExpressionType.XOrAssignment:
             {
-                object? leftValue = await left.Value;
-                object? rightValue = await right.Value;
+                object? leftValue = await left.Value.ConfigureAwait(false);
+                object? rightValue = await right.Value.ConfigureAwait(false);
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return await UpdateParameterAsync(expression.LeftExpression,
-                        MathHelper.BitwiseXOr(leftValue, rightValue));
+                        MathHelper.BitwiseXOr(leftValue, rightValue)).ConfigureAwait(false);
 
                 return await UpdateParameterAsync(expression.LeftExpression,
                     Convert.ToUInt64(leftValue, context.CultureInfo) ^
                     Convert.ToUInt64(rightValue, context.CultureInfo)
-                    );
+                    ).ConfigureAwait(false);
             }
             case BinaryExpressionType.And:
-            return Convert.ToBoolean(await left.Value, context.CultureInfo) &&
-                    Convert.ToBoolean(await right.Value, context.CultureInfo);
+            return Convert.ToBoolean(await left.Value.ConfigureAwait(false), context.CultureInfo) &&
+                    Convert.ToBoolean(await right.Value.ConfigureAwait(false), context.CultureInfo);
 
         case BinaryExpressionType.Or:
-            return Convert.ToBoolean(await left.Value, context.CultureInfo) ||
-                    Convert.ToBoolean(await right.Value, context.CultureInfo);
+            return Convert.ToBoolean(await left.Value.ConfigureAwait(false), context.CultureInfo) ||
+                    Convert.ToBoolean(await right.Value.ConfigureAwait(false), context.CultureInfo);
 
         case BinaryExpressionType.XOr:
-            return Convert.ToBoolean(await left.Value, context.CultureInfo) ^
-                    Convert.ToBoolean(await right.Value, context.CultureInfo);
+            return Convert.ToBoolean(await left.Value.ConfigureAwait(false), context.CultureInfo) ^
+                    Convert.ToBoolean(await right.Value.ConfigureAwait(false), context.CultureInfo);
 
         case BinaryExpressionType.Div:
             {
-                object? leftValue = await left.Value;
-                object? rightValue = await right.Value;
+                object? leftValue = await left.Value.ConfigureAwait(false);
+                object? rightValue = await right.Value.ConfigureAwait(false);
 
                 return
                     IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal
@@ -215,42 +215,42 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
         case BinaryExpressionType.IntDivB:
         case BinaryExpressionType.IntDivP:
             {
-                return MathHelper.IntegerDivide(await left.Value, await right.Value, (expression.Type == BinaryExpressionType.IntDivB), true, context);
+                return MathHelper.IntegerDivide(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), (expression.Type == BinaryExpressionType.IntDivB), true, context);
             }
         case BinaryExpressionType.Equal:
-            return Compare(await left.Value, await right.Value, ComparisonType.Equal);
+            return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.Equal);
 
         case BinaryExpressionType.Greater:
-            return Compare(await left.Value, await right.Value, ComparisonType.Greater);
+            return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.Greater);
 
         case BinaryExpressionType.GreaterOrEqual:
-            return Compare(await left.Value, await right.Value, ComparisonType.GreaterOrEqual);
+            return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.GreaterOrEqual);
 
         case BinaryExpressionType.Less:
-            return Compare(await left.Value, await right.Value, ComparisonType.Less);
+            return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.Less);
 
         case BinaryExpressionType.LessOrEqual:
-            return Compare(await left.Value, await right.Value, ComparisonType.LessOrEqual);
+            return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.LessOrEqual);
 
         case BinaryExpressionType.NotEqual:
-            return Compare(await left.Value, await right.Value, ComparisonType.NotEqual);
+            return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.NotEqual);
 
         case BinaryExpressionType.Minus:
-            return EvaluationHelper.Minus(await left.Value, await right.Value, context);
+            return EvaluationHelper.Minus(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), context);
 
         case BinaryExpressionType.Modulo:
-            return MathHelper.Modulo(await left.Value, await right.Value, true, context);
+            return MathHelper.Modulo(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), true, context);
 
         case BinaryExpressionType.Plus:
-            return EvaluationHelper.Plus(await left.Value, await right.Value, context);
+            return EvaluationHelper.Plus(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), context);
 
         case BinaryExpressionType.Times:
-            return MathHelper.Multiply(await left.Value, await right.Value, true, context);
+            return MathHelper.Multiply(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), true, context);
 
         case BinaryExpressionType.BitwiseAnd:
         {
-            object? leftValue = await left.Value;
-            object? rightValue = await right.Value;
+            object? leftValue = await left.Value.ConfigureAwait(false);
+            object? rightValue = await right.Value.ConfigureAwait(false);
 
             if (leftValue is BigInteger || rightValue is BigInteger)
                 return MathHelper.BitwiseAnd(leftValue, rightValue);
@@ -259,8 +259,8 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
         }
         case BinaryExpressionType.BitwiseOr:
         {
-            object? leftValue = await left.Value;
-            object? rightValue = await right.Value;
+            object? leftValue = await left.Value.ConfigureAwait(false);
+            object? rightValue = await right.Value.ConfigureAwait(false);
 
             if (leftValue is BigInteger || rightValue is BigInteger)
                 return MathHelper.BitwiseOr(leftValue, rightValue);
@@ -269,8 +269,8 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
         }
         case BinaryExpressionType.BitwiseXOr:
         {
-            object? leftValue = await left.Value;
-            object? rightValue = await right.Value;
+            object? leftValue = await left.Value.ConfigureAwait(false);
+            object? rightValue = await right.Value.ConfigureAwait(false);
 
             if (leftValue is BigInteger || rightValue is BigInteger)
                 return MathHelper.BitwiseXOr(leftValue, rightValue);
@@ -279,27 +279,27 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
         }
         case BinaryExpressionType.LeftShift:
         {
-            object? leftValue = await left.Value;
+            object? leftValue = await left.Value.ConfigureAwait(false);
             if (leftValue is BigInteger)
-                return MathHelper.LeftShift((BigInteger)leftValue, await right.Value, context);
+                return MathHelper.LeftShift((BigInteger)leftValue, await right.Value.ConfigureAwait(false), context);
             return Convert.ToUInt64(leftValue, context.CultureInfo) <<
-                    Convert.ToInt32(await right.Value, context.CultureInfo);
+                    Convert.ToInt32(await right.Value.ConfigureAwait(false), context.CultureInfo);
         }
         case BinaryExpressionType.RightShift:
         {
-            object? leftValue = await left.Value;
+            object? leftValue = await left.Value.ConfigureAwait(false);
             if (leftValue is BigInteger)
-                return MathHelper.RightShift((BigInteger)leftValue, await right.Value, context);
+                return MathHelper.RightShift((BigInteger)leftValue, await right.Value.ConfigureAwait(false), context);
             return Convert.ToUInt64(leftValue, context.CultureInfo) >>
-                    Convert.ToInt32(await right.Value, context.CultureInfo);
+                    Convert.ToInt32(await right.Value.ConfigureAwait(false), context.CultureInfo);
         }
         case BinaryExpressionType.Exponentiation:
-            return MathHelper.Pow(await left.Value, await right.Value, true, context);
+            return MathHelper.Pow(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), true, context);
 
         case BinaryExpressionType.Factorial:
         {
-            var leftValue = (await left.Value);
-            var rightValue = (await right.Value);
+            var leftValue = await left.Value.ConfigureAwait(false);
+            var rightValue = await right.Value.ConfigureAwait(false);
 
             if (leftValue == null || rightValue == null)
             {
@@ -308,15 +308,15 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
             return MathHelper.Factorial(leftValue, rightValue, context);
         }
         case BinaryExpressionType.In:
-            return EvaluationHelper.In(await right.Value, await left.Value, context);
+            return EvaluationHelper.In(await right.Value.ConfigureAwait(false), await left.Value.ConfigureAwait(false), context);
 
         case BinaryExpressionType.NotIn:
-            return !EvaluationHelper.In(await right.Value, await left.Value, context);
+            return !EvaluationHelper.In(await right.Value.ConfigureAwait(false), await left.Value.ConfigureAwait(false), context);
 
         case BinaryExpressionType.Like:
         {
-            var rightValue = (await right.Value)?.ToString();
-            var leftValue = (await left.Value)?.ToString();
+            var rightValue = (await right.Value.ConfigureAwait(false))?.ToString();
+            var leftValue = (await left.Value.ConfigureAwait(false))?.ToString();
 
             if (rightValue == null || leftValue == null)
             {
@@ -328,8 +328,8 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
         case BinaryExpressionType.NotLike:
         {
-            var rightValue = (await right.Value)?.ToString();
-            var leftValue = (await left.Value)?.ToString();
+            var rightValue = (await right.Value.ConfigureAwait(false))?.ToString();
+            var leftValue = (await left.Value.ConfigureAwait(false))?.ToString();
 
             if (rightValue == null || leftValue == null)
             {
@@ -345,14 +345,14 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
     public virtual async ValueTask<object?> Visit(UnaryExpression expression)
     {
         // Recursively evaluates the underlying expression
-        var result = await expression.Expression.Accept(this);
+        var result = await expression.Expression.Accept(this).ConfigureAwait(false);
 
         return EvaluationHelper.Unary(expression, result, context);
     }
 
     public virtual async ValueTask<object?> Visit(PercentExpression expression)
     {
-        object? result = await expression.Expression.Accept(this);
+        object? result = await expression.Expression.Accept(this).ConfigureAwait(false);
         if (result == null)
             return result;
         return new Percent(result);
@@ -374,7 +374,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
         var functionName = function.Identifier.Name;
         var functionArgs = new AsyncFunctionArgs(function.Identifier.Id, args);
 
-        await OnEvaluateFunctionAsync(functionName, functionArgs);
+        await OnEvaluateFunctionAsync(functionName, functionArgs).ConfigureAwait(false);
 
         if (functionArgs.HasResult)
         {
@@ -383,10 +383,10 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
         if (context.Functions.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? functionName.ToLowerInvariant() : functionName, out var expressionFunction))
         {
-            return await expressionFunction(new AsyncExpressionFunctionData(function.Identifier.Id, args, context));
+            return await expressionFunction(new AsyncExpressionFunctionData(function.Identifier.Id, args, context)).ConfigureAwait(false);
         }
 
-        return await AsyncBuiltInFunctionHelper.EvaluateAsync(functionName, args, context);
+        return await AsyncBuiltInFunctionHelper.EvaluateAsync(functionName, args, context).ConfigureAwait(false);
     }
 
     public virtual async ValueTask<object?> Visit(Identifier identifier)
@@ -395,7 +395,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
         var parameterArgs = new AsyncParameterArgs(identifier.Id);
 
-        await OnEvaluateParameterAsync(identifierName, parameterArgs);
+        await OnEvaluateParameterAsync(identifierName, parameterArgs).ConfigureAwait(false);
 
         if (parameterArgs.HasResult)
         {
@@ -416,7 +416,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 expression.EvaluateFunctionAsync += context.AsyncEvaluateFunctionHandler;
                 expression.EvaluateParameterAsync += context.AsyncEvaluateParameterHandler;
 
-                return await expression.EvaluateAsync();
+                return await expression.EvaluateAsync().ConfigureAwait(false);
             }
 
             return parameter;
@@ -424,7 +424,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
         if (context.DynamicParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var dynamicParameter))
         {
-            return await dynamicParameter(new AsyncExpressionParameterData(identifier.Id, context));
+            return await dynamicParameter(new AsyncExpressionParameterData(identifier.Id, context)).ConfigureAwait(false);
         }
 
         throw new NCalcParameterNotDefinedException(identifierName);
@@ -438,7 +438,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
         foreach (var value in list)
         {
-            result.Add(await EvaluateAsync(value));
+            result.Add(await EvaluateAsync(value).ConfigureAwait(false));
         }
 
         return result;
