@@ -35,7 +35,6 @@ public class AdvFeatureTests
         var result = expression.Evaluate();
 
         Assert.True(result is BigDecimal);
-
     }
 
     [Theory]
@@ -52,8 +51,6 @@ public class AdvFeatureTests
 
         Assert.Equal(expectedValue, res);
     }
-
-
 
     [Theory]
     [InlineData("0xFFFFFFFFFFFFFFFE")]
@@ -1419,7 +1416,6 @@ public class AdvFeatureTests
             new BinaryExpression(BinaryExpressionType.Times, new PercentExpression(new ValueExpression(2)), new ValueExpression(2)).ToString());
         Assert.Equal("(2 + 2)%",
             new PercentExpression(new BinaryExpression(BinaryExpressionType.Plus, new ValueExpression(2), new ValueExpression(2))).ToString());
-
     }
 
     [Theory]
@@ -2070,11 +2066,12 @@ public class AsyncAdvFeatureTests
         bool eventFired = false;
 
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments);
-        expression.UpdateParameterAsync += async (name, args) =>
+        expression.UpdateParameterAsync += (name, args) =>
         {
             eventFired = true;
             Assert.Equal("a", name);
             Assert.Equal(expectedVarValue, args.Value);
+            return ValueTask.CompletedTask;
         };
 
         var result = await expression.EvaluateAsync();
@@ -2146,7 +2143,7 @@ public class AsyncAdvFeatureTests
         bool eventFired = false;
 
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
-        expression.UpdateParameterAsync += async (name, args) =>
+        expression.UpdateParameterAsync += (name, args) =>
         {
             eventFired = true;
 
@@ -2155,6 +2152,7 @@ public class AsyncAdvFeatureTests
                 Assert.Equal("a", name);
                 Assert.Equal(expectedVarValue, args.Value);
             }
+            return ValueTask.CompletedTask;
         };
         var result = await expression.EvaluateAsync();
         Assert.True(eventFired);
@@ -2178,11 +2176,12 @@ public class AsyncAdvFeatureTests
         bool eventFired = false;
 
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.LowerCaseIdentifierLookup);
-        expression.UpdateParameterAsync += async (name, args) =>
+        expression.UpdateParameterAsync += (name, args) =>
         {
             eventFired = true;
             Assert.Equal("a", name.ToLowerInvariant());
             Assert.Equal(expectedVarValue, args.Value);
+            return ValueTask.CompletedTask;
         };
 
         var result = await expression.EvaluateAsync();
@@ -2202,5 +2201,4 @@ public class AsyncAdvFeatureTests
 
         Assert.Equal(expectedValue.ToString(), result?.ToString());
     }
-
 }
