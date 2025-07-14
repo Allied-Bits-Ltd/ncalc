@@ -19,8 +19,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NCalc.Docs", "docs\NCalc.Do
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NCalc.Play", "test\NCalc.Play\NCalc.Play.csproj", "{C36CFACB-111E-45F6-94A8-ED9A084C6410}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NCalc.DependencyInjection", "src\NCalc.DependencyInjection\NCalc.DependencyInjection.csproj", "{1201E3C1-1973-49DF-8D67-7763DD6DA570}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "2. Plugins", "2. Plugins", "{EA9E75C0-E2D9-40FC-8642-407A327561D1}"
 	ProjectSection(SolutionItems) = preProject
 		src\Plugins\Directory.build.props = src\Plugins\Directory.build.props
@@ -50,8 +48,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Src", "Src", "{93F59050-498
 	ProjectSection(SolutionItems) = preProject
 		src\Directory.Build.props = src\Directory.Build.props
 	EndProjectSection
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Parlot", "..\parlot\src\Parlot\Parlot.csproj", "{A02C2659-E687-0859-DCC7-F06013FC2ADD}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NCalc", "src\NCalc\NCalc.csproj", "{1F6B51C2-718C-E2AB-5AF4-F5B662F0903E}"
 EndProject
@@ -98,12 +94,6 @@ Global
 		{247B97B7-9A1D-40ED-8A79-ED4ED8761695}.Release|Any CPU.Build.0 = Release|Any CPU
 		{247B97B7-9A1D-40ED-8A79-ED4ED8761695}.SignedRelease|Any CPU.ActiveCfg = SignedRelease|Any CPU
 		{247B97B7-9A1D-40ED-8A79-ED4ED8761695}.SignedRelease|Any CPU.Build.0 = SignedRelease|Any CPU
-		{A02C2659-E687-0859-DCC7-F06013FC2ADD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A02C2659-E687-0859-DCC7-F06013FC2ADD}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A02C2659-E687-0859-DCC7-F06013FC2ADD}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A02C2659-E687-0859-DCC7-F06013FC2ADD}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A02C2659-E687-0859-DCC7-F06013FC2ADD}.SignedRelease|Any CPU.ActiveCfg = Release|Any CPU
-		{A02C2659-E687-0859-DCC7-F06013FC2ADD}.SignedRelease|Any CPU.Build.0 = Release|Any CPU
 		{1F6B51C2-718C-E2AB-5AF4-F5B662F0903E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{1F6B51C2-718C-E2AB-5AF4-F5B662F0903E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1F6B51C2-718C-E2AB-5AF4-F5B662F0903E}.Release|Any CPU.ActiveCfg = Release|Any CPU
