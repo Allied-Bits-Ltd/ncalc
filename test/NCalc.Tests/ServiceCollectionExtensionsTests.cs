@@ -102,7 +102,7 @@ public class ServiceCollectionExtensionsTests
         var expFactory = serviceProvider.GetRequiredService<IAsyncExpressionFactory>();
 
         var exp = expFactory.Create("42");
-        Assert.Equal("The answer", await exp.EvaluateAsync());
+        Assert.Equal("The answer", await exp.EvaluateAsync(TestContext.Current.CancellationToken));
         Assert.IsType<CustomAsyncEvaluationVisitorFactory>(customVisitorFactory);
     }
 
@@ -136,12 +136,12 @@ public class ServiceCollectionExtensionsTests
 
     private class CustomVisitor(ExpressionContext context) : EvaluationVisitor(context)
     {
-        public override object Visit(ValueExpression expression)
+        public override object Visit(ValueExpression expression, CancellationToken cancellationToken = default)
         {
             if(expression.Value is 42)
                 return "The answer";
 
-            return base.Visit(expression);
+            return base.Visit(expression, cancellationToken);
         }
     }
 
@@ -155,12 +155,12 @@ public class ServiceCollectionExtensionsTests
 
     private class CustomAsyncVisitor(AsyncExpressionContext context) : AsyncEvaluationVisitor(context)
     {
-        public override ValueTask<object> Visit(ValueExpression expression)
+        public override ValueTask<object> Visit(ValueExpression expression, CancellationToken cancellationToken = default)
         {
             if (expression.Value is 42)
                 return new("The answer");
 
-            return base.Visit(expression);
+            return base.Visit(expression, cancellationToken);
         }
     }
 

@@ -119,7 +119,7 @@ public class LikeOperatorTests
     {
         AsyncExpressionContext context = ExpressionOptions.CaseInsensitiveStringComparer;
         context.StaticParameters["LEP_COD_SAP_PROD"] = "66ABC";
-        Assert.Equal(true, await new AsyncExpression("{LEP_COD_SAP_PROD} LIKE '66%'", context).EvaluateAsync());
-        Assert.Equal(true, await new AsyncExpression("{LEP_COD_SAP_PROD} LIKE '66abc%'", context).EvaluateAsync());
+        Assert.Equal(true, await new AsyncExpression("{LEP_COD_SAP_PROD} LIKE '66%'", context).EvaluateAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(true, await new AsyncExpression("{LEP_COD_SAP_PROD} LIKE '66abc%'", context).EvaluateAsync(TestContext.Current.CancellationToken));
     }
 }

@@ -14,7 +14,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         NumberDecimalSeparator = (context.AdvancedOptions == null) ? "." : context.AdvancedOptions.GetDecimalSeparatorChar().ToString()
     };
 
-    public string Visit(TernaryExpression expression)
+    public string Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
@@ -27,8 +27,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         return resultBuilder.ToString();
     }
 
-    public string Visit(BinaryExpression expression)
+    public string Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         var resultBuilder = new StringBuilder();
@@ -86,7 +87,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         return resultBuilder.ToString();
     }
 
-    public string Visit(UnaryExpression expression)
+    public string Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
@@ -110,14 +111,14 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         return resultBuilder.ToString();
     }
 
-    public string Visit(PercentExpression expression)
+    public string Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         return EncapsulateNoValue(expression.Expression).TrimEnd() + "%";
     }
 
-    public string Visit(ValueExpression expression)
+    public string Visit(ValueExpression expression, CancellationToken cancellationToken = default)
     {
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
@@ -150,7 +151,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         return resultBuilder.ToString();
     }
 
-    public string Visit(Function function)
+    public string Visit(Function function, CancellationToken cancellationToken = default)
     {
         function.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
@@ -174,19 +175,20 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         return resultBuilder.ToString();
     }
 
-    public string Visit(Identifier identifier)
+    public string Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
         return $"[{identifier.Name}]";
     }
 
-    public string Visit(LogicalExpressionList list)
+    public string Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
         list.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         var resultBuilder = new StringBuilder().Append('(');
         for (var i = 0; i < list.Count; i++)
         {
-            resultBuilder.Append(list[i].Accept(this).TrimEnd());
+            cancellationToken.ThrowIfCancellationRequested();
+            resultBuilder.Append(list[i].Accept(this, cancellationToken).TrimEnd());
             if (i < list.Count - 1)
             {
                 resultBuilder.Append(',');

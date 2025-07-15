@@ -14,20 +14,20 @@ namespace NCalc.Visitors;
 /// </summary>
 public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVisitor<object?>
 {
-    public virtual object? Visit(TernaryExpression expression)
+    public virtual object? Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
         // Evaluates the left expression and saves the value
-        var left = Convert.ToBoolean(expression.LeftExpression.Accept(this), context.CultureInfo);
+        var left = Convert.ToBoolean(expression.LeftExpression.Accept(this, cancellationToken), context.CultureInfo);
 
         if (left)
         {
-            return expression.MiddleExpression.Accept(this);
+            return expression.MiddleExpression.Accept(this, cancellationToken);
         }
 
-        return expression.RightExpression.Accept(this);
+        return expression.RightExpression.Accept(this, cancellationToken);
     }
 
-    private object? UpdateParameter(LogicalExpression leftExpression, object? value)
+    private object? UpdateParameter(LogicalExpression leftExpression, object? value, CancellationToken cancellationToken = default)
     {
         if (leftExpression is Identifier identifier && (value is not null || context.Options.HasFlag(ExpressionOptions.AllowNullParameter)))
         {
@@ -47,10 +47,10 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
         return value;
     }
 
-    public virtual object? Visit(BinaryExpression expression)
+    public virtual object? Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
-        var left = new Lazy<object?>(() => Evaluate(expression.LeftExpression), LazyThreadSafetyMode.None);
-        var right = new Lazy<object?>(() => Evaluate(expression.RightExpression), LazyThreadSafetyMode.None);
+        var left = new Lazy<object?>(() => Evaluate(expression.LeftExpression, cancellationToken), LazyThreadSafetyMode.None);
+        var right = new Lazy<object?>(() => Evaluate(expression.RightExpression, cancellationToken), LazyThreadSafetyMode.None);
 
         if (context.AdvancedOptions != null && context.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent))
         {
@@ -294,26 +294,26 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
         return null;
     }
 
-    public virtual object? Visit(UnaryExpression expression)
+    public virtual object? Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
         // Recursively evaluates the underlying expression
-        var result = expression.Expression.Accept(this);
+        var result = expression.Expression.Accept(this, cancellationToken);
 
         return EvaluationHelper.Unary(expression, result, context);
     }
 
-    public virtual object? Visit(PercentExpression expression)
+    public virtual object? Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
         // Recursively evaluates the underlying expression
-        object? result = expression.Expression.Accept(this);
+        object? result = expression.Expression.Accept(this, cancellationToken);
         if (result == null)
             return result;
         return new Percent(result);
     }
 
-    public virtual object? Visit(ValueExpression expression) => expression.Value;
+    public virtual object? Visit(ValueExpression expression, CancellationToken cancellationToken = default) => expression.Value;
 
-    public virtual object? Visit(Function function)
+    public virtual object? Visit(Function function, CancellationToken cancellationToken = default)
     {
         var argsCount = function.Parameters.Count;
         var args = new Expression[argsCount];
@@ -342,7 +342,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
         return BuiltInFunctionHelper.Evaluate(functionName, args, context);
     }
 
-    public virtual object? Visit(Identifier identifier)
+    public virtual object? Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
         var identifierName = identifier.Name;
 
@@ -384,7 +384,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
         throw new NCalcParameterNotDefinedException(identifierName);
     }
 
-    public virtual object Visit(LogicalExpressionList list)
+    public virtual object Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
         List<object?> result = [];
 
@@ -425,5 +425,10 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
     protected object? Evaluate(LogicalExpression expression)
     {
         return expression.Accept(this);
+    }
+
+    protected object? Evaluate(LogicalExpression expression, CancellationToken cancellationToken = default)
+    {
+        return expression.Accept(this, cancellationToken);
     }
 }

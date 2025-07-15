@@ -46,7 +46,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         _caseInsensitiveStringComparer = _options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer);
     }
 
-    public LinqExpression Visit(TernaryExpression expression)
+    public LinqExpression Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
         var conditional = expression.LeftExpression.Accept(this);
         var ifTrue = expression.MiddleExpression.Accept(this);
@@ -55,7 +55,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         return LinqExpression.Condition(conditional, ifTrue, ifFalse);
     }
 
-    public LinqExpression Visit(BinaryExpression expression)
+    public LinqExpression Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
         var left = expression.LeftExpression.Accept(this);
         var right = expression.RightExpression.Accept(this);
@@ -145,7 +145,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         };
     }
 
-    public LinqExpression Visit(UnaryExpression expression)
+    public LinqExpression Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
         var operand = expression.Expression.Accept(this);
 
@@ -164,7 +164,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         };
     }
 
-    public LinqExpression Visit(PercentExpression expression)
+    public LinqExpression Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
         LinqExpression result = expression.Expression.Accept(this);
         if (result.Type != typeof(Percent))
@@ -173,12 +173,12 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             return result;
     }
 
-    public LinqExpression Visit(ValueExpression expression)
+    public LinqExpression Visit(ValueExpression expression, CancellationToken cancellationToken = default)
     {
         return LinqExpression.Constant(expression.Value);
     }
 
-    public LinqExpression Visit(Function function)
+    public LinqExpression Visit(Function function, CancellationToken cancellationToken = default)
     {
         var args = new LinqExpression[function.Parameters.Count];
         for (var i = 0; i < function.Parameters.Count; i++)
@@ -305,7 +305,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         }
     }
 
-    public LinqExpression Visit(Identifier identifier)
+    public LinqExpression Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
         var identifierName = _expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? identifier.Name.ToLowerInvariant() : identifier.Name;
 
@@ -320,7 +320,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         return LinqExpression.PropertyOrField(_context, identifierName);
     }
 
-    public LinqExpression Visit(LogicalExpressionList list)
+    public LinqExpression Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
         throw new NotSupportedException("Collections are not supported for Lambda expressions yet. Please open a issue at https://www.github.com/ncalc/ncalc if you want this support.");
     }

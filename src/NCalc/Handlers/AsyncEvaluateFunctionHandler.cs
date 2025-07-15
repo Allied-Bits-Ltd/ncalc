@@ -1,3 +1,3 @@
 namespace NCalc.Handlers;
 
-public delegate ValueTask AsyncEvaluateFunctionHandler(string name, AsyncFunctionArgs args);
+public delegate ValueTask AsyncEvaluateFunctionHandler(string name, AsyncFunctionArgs args, CancellationToken cancellationToken = default);
