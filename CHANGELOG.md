@@ -1,8 +1,10 @@
-# 5.6.0 (Allied Bits)
-
+# 7.0.0 (Allied Bits)
+* Increased the version to expose the difference in functionality between ncalc/ncalc and this package.
+* Combined the main projects into one NCalc project.
 * Built-in trigonometry functions now call the implementations in BigDecimal in the case the argument is BigDecimal or BigInteger and big numbers are enabled.
 * Compare method now handles double and float NaN values before other comparisons.
 * Added the PercentOf and PercentDiff functions, also modified the parser to recognize %(a,b) as the PercentOf function.
+* Added CancellationToken to the async versions of the methods and events. 
 
 # 5.6.0-beta (Allied Bits)
 * Added parsing of a BigDecimal (when UseBigNumbers is set).

@@ -2,25 +2,25 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
     <id>AlliedBits.NCalc</id>
-    <version>5.6.0-beta</version>
+    <version>7.0.0</version>
     <authors>Sebastien Ros and contributors, Eugene Mayevski</authors>
     <copyright>Sebastien Ros and contributors, Eugene Mayevski</copyright>
     <license type="expression">MIT</license>
     <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
     <icon>NCalc.png</icon>
     <title>The mathematical expression evaluator for .NET</title>
-    <tags>ncalc sync expressions math evaluation</tags>
-    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="1ed4c1b8c3aab28c7090b4f91363445f2a738322" />
+    <tags>ncalc math expression evaluation</tags>
+    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="31a27a1a70497cbef6a16b979d2d93d987a3da9b" />
     <projectUrl>https://github.com/Allied-Bits-Ltd/ncalc</projectUrl>
     <readme>README.nuget.md</readme>
     <description>NCalc is a fast and lightweight expression evaluator library for .NET, designed for flexibility and high performance. It supports a wide range of mathematical and logical operations. NCalc can parse any expression and evaluate the result,
 including static or dynamic parameters and custom functions. NCalc targets .NET 9, .NET 8, .NET Standard 2.0, and NET Framework 4.6.2 and later.
 
-This package by Allied Bits contains the unsigned assemblies of NCalc that include Core, Sync, Async, DependencyInjection and offers a number of advanced features compared to the main NCalc project.
+This package by Allied Bits offers a number of advanced features compared to the main NCalc project.
     </description>
     <dependencies>
       <group targetFramework=".NETFramework4.6.2">
-        <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.3.40" exclude="Build,Analyzers" />
+        <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.4.132" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Bcl.AsyncInterfaces" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.CSharp" version="4.7.0" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.Logging.Console" version="9.0.2" exclude="Build,Analyzers" />
@@ -32,7 +32,7 @@ This package by Allied Bits contains the unsigned assemblies of NCalc that inclu
         <dependency id="System.ValueTuple" version="4.5.0" exclude="Build,Analyzers" />
       </group>
       <group targetFramework="net8.0">
-        <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.3.40" exclude="Build,Analyzers" />
+        <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.4.132" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Bcl.AsyncInterfaces" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.Logging.Console" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.Logging.TraceSource" version="9.0.2" exclude="Build,Analyzers" />
@@ -40,7 +40,7 @@ This package by Allied Bits contains the unsigned assemblies of NCalc that inclu
         <dependency id="AlliedBits.Parlot" version="1.4" exclude="Build,Analyzers" />
       </group>
       <group targetFramework="net9.0">
-        <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.3.40" exclude="Build,Analyzers" />
+        <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.4.132" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Bcl.AsyncInterfaces" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.Logging.Console" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.Logging.TraceSource" version="9.0.2" exclude="Build,Analyzers" />
@@ -49,7 +49,7 @@ This package by Allied Bits contains the unsigned assemblies of NCalc that inclu
         <dependency id="System.Collections.Immutable" version="9.0.2" exclude="Build,Analyzers" />
       </group>
       <group targetFramework=".NETStandard2.0">
-        <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.3.40" exclude="Build,Analyzers" />
+        <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.4.132" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Bcl.AsyncInterfaces" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.CSharp" version="4.7.0" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.Logging.Console" version="9.0.2" exclude="Build,Analyzers" />
@@ -63,21 +63,9 @@ This package by Allied Bits contains the unsigned assemblies of NCalc that inclu
   <files>
     <file src="README.nuget.md" target="\" />
     <file src="NCalc.png" target="\" />
-    <file src="src\NCalc.Core\bin\Release\net462\NCalc.Core.dll" target="lib\net462" />
-    <file src="src\NCalc.Core\bin\Release\netstandard2.0\NCalc.Core.dll" target="lib\netstandard2.0" />
-    <file src="src\NCalc.Core\bin\Release\net8.0\NCalc.Core.dll" target="lib\net8.0" />
-    <file src="src\NCalc.Core\bin\Release\net9.0\NCalc.Core.dll" target="lib\net9.0" />    
-    <file src="src\NCalc.Sync\bin\Release\net462\NCalc.Sync.dll" target="lib\net462" />
-    <file src="src\NCalc.Sync\bin\Release\netstandard2.0\NCalc.Sync.dll" target="lib\netstandard2.0" />
-    <file src="src\NCalc.Sync\bin\Release\net8.0\NCalc.Sync.dll" target="lib\net8.0" />
-    <file src="src\NCalc.Sync\bin\Release\net9.0\NCalc.Sync.dll" target="lib\net9.0" />
-    <file src="src\NCalc.Async\bin\Release\net462\NCalc.Async.dll" target="lib\net462" />
-    <file src="src\NCalc.Async\bin\Release\netstandard2.0\NCalc.Async.dll" target="lib\netstandard2.0" />
-    <file src="src\NCalc.Async\bin\Release\net8.0\NCalc.Async.dll" target="lib\net8.0" />
-    <file src="src\NCalc.Async\bin\Release\net9.0\NCalc.Async.dll" target="lib\net9.0" />
-    <file src="src\NCalc.DependencyInjection\bin\Release\net462\NCalc.DependencyInjection.dll" target="lib\net462" />
-    <file src="src\NCalc.DependencyInjection\bin\Release\netstandard2.0\NCalc.DependencyInjection.dll" target="lib\netstandard2.0" />
-    <file src="src\NCalc.DependencyInjection\bin\Release\net8.0\NCalc.DependencyInjection.dll" target="lib\net8.0" />
-    <file src="src\NCalc.DependencyInjection\bin\Release\net9.0\NCalc.DependencyInjection.dll" target="lib\net9.0" />
+    <file src="src\NCalc\bin\Release\net462\NCalc.dll" target="lib\net462" />
+    <file src="src\NCalc\bin\Release\netstandard2.0\NCalc.dll" target="lib\netstandard2.0" />
+    <file src="src\NCalc\bin\Release\net8.0\NCalc.dll" target="lib\net8.0" />
+    <file src="src\NCalc\bin\Release\net9.0\NCalc.dll" target="lib\net9.0" />    
   </files>
 </package>

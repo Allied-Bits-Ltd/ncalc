@@ -20,10 +20,10 @@ This branch of NCalc contains a number of advanced features compared to the main
 * Advanced date and time parsing, which takes into account culture settings (current or specific culture or custom separators) and supports times with or without seconds as well as 12-hour time.
 * Parsing of humane period expressions like "3 weeks 2 days 5 hours" (period identifiers are customizable and multiple identifier per period are supported).
 * Basic calculations with dates and time spans - one can add and subtract dates and times. Without these operations, date and time values are of little use (if only with custom functions).
-* Currency support, which takes into account culture settings (current or specific culture or custom symbols). The idea is that the parser should drop the currency symbol when the expression is copied by the user from some source and includes this currency symbol (don't force people remove manually what the parser can remove automatically).
-* Optional use of BigInteger type for basic math operations and some funcitons.
-* Underscores in numbers and currency . Modern programming languages support underscores for readability. Support is built-in with binary, octal, and hex numbers, while support in decimal numbers requires a [custom branch of Parlot](https://github.com/Allied-Bits-Ltd/parlot/tree/ABCalc). 
-* Custom decimal and group separators in numbers and currency. Requires more attention to optionally support both comma and dot as separators, but this also requires modifying Parlot parser or using the alternative parsing for decimal and double numbers.
+* Currency support, which takes into account culture settings (current or specific culture or custom symbols) and produces decimal result from the currency value.
+* Optional use of BigInteger and BigDecimal types for basic math operations and most built-in funcitons.
+* Underscores in numbers and currency values. Modern programming languages support underscores for readability. Support is built-in with binary, octal, and hex numbers, while support in decimal numbers requires a [custom branch of Parlot](https://github.com/Allied-Bits-Ltd/parlot/tree/ABCalc). 
+* Custom decimal and group separators in numbers and currency.
 * An optional secondary decimal number separator (requires a [custom branch of Parlot](https://github.com/Allied-Bits-Ltd/parlot/tree/ABCalc) ). 
 * C-Style octal literals.
 * Result Reference character. A pseudo-function that would let a user application return some value, such as the result of a previous calculation. This is handy when an expression should include this result multiple times.
@@ -34,12 +34,14 @@ This branch of NCalc contains a number of advanced features compared to the main
 * Lowercase lookup for parameter and function names.
 * The possibility to re-initialize the parser before parsing an expression.
 * New flags in ExpressionOptions to skip date and GUID parsers in order to speed up parsing.
+* Minor improvements in the asyncrhonous code (CancellationToken and ConfigureAwait(false) are present in all calls).
+* The main projects have been combined into one project.
 
-This version is and will be synchronized with the main NCalc project. The main NCalc project resides [here on github](https://github.com/ncalc/ncalc), and its packages are available [here](https://www.nuget.org/packages/NCalc.Core) and [here](https://www.nuget.org/packages/NCalc.Sync) on NuGet.
+This version attempts to be synchronized with the main NCalc project, which resides [here on github](https://github.com/ncalc/ncalc).
 
 ## Docs
 
-Need help or want to learn more? [Check our docs](https://ncalc.github.io/ncalc) (documentation there does not include the advanced features listed above; those are documented in the .md files within the branch).
+Need help or want to learn more? [Check core NCalc docs](https://ncalc.github.io/ncalc) (documentation there does not include the advanced features listed above; those are documented in the .md files within the branch).
 
 ## Learn more
 
@@ -50,14 +52,15 @@ For additional information on the technique we used to create this framework ple
 ## Help
 
 > [!IMPORTANT]
-> If you need help, [please open an issue](https://github.com/Allied-Bits-Ltd/ncalc/issues/new/choose) and include the expression
-> to help us better understand the problem.
+> If you need help, [please open an issue](https://github.com/Allied-Bits-Ltd/ncalc/issues/new/choose) and include the expression to help us better understand the problem.
 > Providing this information will aid in resolving the issue effectively.
 
 ## Getting Started
 
 ```
 dotnet add package AlliedBits.NCalc
+...
+using NCalc;
 ```
 
 ## Functionalities
@@ -194,23 +197,3 @@ by [Panoramic Data](https://github.com/panoramicdata).
 
 JJMasterData is a runtime form generator from database metadata. It uses NCalc to evaluate expressions used in field
 visibility and other dynamic behaviors.
-
-## NCalc versioning
-
-The project uses [Nerdbank.GitVersioning](https://github.com/dotnet/Nerdbank.GitVersioning) tool to manage versions.  
-Each library build can be traced back to the original git commit.
-Read more about [versioning here.](https://ncalc.github.io/ncalc/articles/new_release.html)
-
-## Discord Server
-
-If you want to speak with the NCalc core team, get support, or just get the latest NCalc news, [come to our discord server](https://discord.gg/TeJkmXbqFk).
-
-## Star History
-
-<a href="https://star-history.com/#ncalc/ncalc&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ncalc/ncalc&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ncalc/ncalc&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ncalc/ncalc&type=Date" />
- </picture>
-</a>
