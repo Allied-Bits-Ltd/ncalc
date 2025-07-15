@@ -118,7 +118,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     /// </summary>
     /// <returns>The result of the evaluation.</returns>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
-    public ValueTask<object?> EvaluateAsync()
+    public ValueTask<object?> EvaluateAsync(CancellationToken cancellationToken = default)
     {
         LogicalExpression ??= GetLogicalExpression();
 
@@ -130,17 +130,17 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
 
         // If array evaluation, execute the same expression multiple times
         if (Options.HasFlag(ExpressionOptions.IterateParameters))
-            return IterateParametersAsync();
+            return IterateParametersAsync(cancellationToken);
 
         var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
 
         if (LogicalExpression is null)
             return new ValueTask<object?>();
 
-        return LogicalExpression.Accept(evaluationVisitor);
+        return LogicalExpression.Accept(evaluationVisitor, cancellationToken);
     }
 
-    private async ValueTask<object?> IterateParametersAsync()
+    private async ValueTask<object?> IterateParametersAsync(CancellationToken cancellationToken = default)
     {
         var parameterEnumerators = ParametersHelper.GetEnumerators(Parameters, out var size);
 
@@ -150,7 +150,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
             return null;
 
         if (size == null)
-            return await LogicalExpression.Accept(evaluationVisitor).ConfigureAwait(false);
+            return await LogicalExpression.Accept(evaluationVisitor, cancellationToken).ConfigureAwait(false);
 
         var results = new List<object?>();
 
@@ -162,7 +162,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
                 Parameters[kvp.Key] = kvp.Value.Current;
             }
 
-            results.Add(await LogicalExpression.Accept(evaluationVisitor).ConfigureAwait(false));
+            results.Add(await LogicalExpression.Accept(evaluationVisitor, cancellationToken).ConfigureAwait(false));
         }
 
         return results;

@@ -58,9 +58,9 @@ namespace NCalc.Domain
             Expression = expression;
         }
 
-        public override T Accept<T>(ILogicalExpressionVisitor<T> visitor)
+        public override T Accept<T>(ILogicalExpressionVisitor<T> visitor, CancellationToken cancellationToken = default)
         {
-            return visitor.Visit(this);
+            return visitor.Visit(this, cancellationToken);
         }
     }
 }

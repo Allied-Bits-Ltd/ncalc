@@ -1904,7 +1904,7 @@ public class AsyncAdvFeatureTests
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.CalculatePercent;
 
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         if (result?.GetType() == typeof(System.Double))
         {
@@ -1932,7 +1932,7 @@ public class AsyncAdvFeatureTests
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.CalculatePercent;
 
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         if (expectedValue.Contains('.') && CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator != ".")
             expectedValue = expectedValue.Replace(".", CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
@@ -1951,7 +1951,7 @@ public class AsyncAdvFeatureTests
         expression.AdvancedOptions.DateSeparator = "/";
         expression.AdvancedOptions.DateOrder = AdvancedExpressionOptions.DateOrderKind.YMD;
 
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4], expectedValue[5]);
 
@@ -1969,7 +1969,7 @@ public class AsyncAdvFeatureTests
         expression.AdvancedOptions.TimeSeparator = ":";
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
 
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -1986,7 +1986,7 @@ public class AsyncAdvFeatureTests
         expression.AdvancedOptions.DateSeparator = "/";
         expression.AdvancedOptions.DateOrder = AdvancedExpressionOptions.DateOrderKind.YMD;
 
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -2002,7 +2002,7 @@ public class AsyncAdvFeatureTests
     {
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache);
 
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, result);
     }
@@ -2014,7 +2014,7 @@ public class AsyncAdvFeatureTests
     {
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseBigNumbers);
 
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         var expected = BigInteger.Parse(expectedValue);
         Assert.Equal(expectedValue, result?.ToString());
@@ -2030,7 +2030,7 @@ public class AsyncAdvFeatureTests
     {
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache);
 
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         if (result?.GetType() == typeof(System.Double))
         {
@@ -2053,7 +2053,7 @@ public class AsyncAdvFeatureTests
     public async Task ShouldCalculateRootsAsync(string input, double expectedValue)
     {
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseUnicodeCharsForOperations);
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
 
@@ -2066,7 +2066,7 @@ public class AsyncAdvFeatureTests
         bool eventFired = false;
 
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments);
-        expression.UpdateParameterAsync += (name, args) =>
+        expression.UpdateParameterAsync += (name, args, cancellationToken) =>
         {
             eventFired = true;
             Assert.Equal("a", name);
@@ -2074,7 +2074,7 @@ public class AsyncAdvFeatureTests
             return ValueTask.CompletedTask;
         };
 
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         Assert.True(eventFired);
         Assert.Equal(expectedExprValue, result);
@@ -2091,11 +2091,11 @@ public class AsyncAdvFeatureTests
     public async Task ShouldHandleStatementSequenceAsync(string input, int expectedValue)
     {
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
-        expression.Functions["Length"] = async (args) =>
+        expression.Functions["Length"] = async (args, cancellationToken) =>
         {
             return ((await args[0].EvaluateAsync()) as string)?.Length ?? 0;
         };
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
 
@@ -2107,7 +2107,7 @@ public class AsyncAdvFeatureTests
     public async Task ShouldHandleBinaryStatementsAsync(string input, object expectedValue)
     {
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache  /*| ExpressionOptions.UseAssignments*/ | ExpressionOptions.UseStatementSequences);
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         if (result.GetType() == typeof(System.Double))
@@ -2143,7 +2143,7 @@ public class AsyncAdvFeatureTests
         bool eventFired = false;
 
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
-        expression.UpdateParameterAsync += (name, args) =>
+        expression.UpdateParameterAsync += (name, args, cancellationToken) =>
         {
             eventFired = true;
 
@@ -2154,7 +2154,7 @@ public class AsyncAdvFeatureTests
             }
             return ValueTask.CompletedTask;
         };
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
         Assert.True(eventFired);
         Assert.Equal(expectedExprValue, result);
     }
@@ -2164,8 +2164,8 @@ public class AsyncAdvFeatureTests
     public async Task ShouldHandleFunctionsInLowercaseAsync(string input, object expectedValue)
     {
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.LowerCaseIdentifierLookup);
-        expression.Functions.Add("length", async (x) => (await (x[0].EvaluateAsync()))?.ToString()?.Length ?? 0);
-        var result = await expression.EvaluateAsync();
+        expression.Functions.Add("length", async (x, cancellationToken) => (await (x[0].EvaluateAsync()))?.ToString()?.Length ?? 0);
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
 
@@ -2176,7 +2176,7 @@ public class AsyncAdvFeatureTests
         bool eventFired = false;
 
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.LowerCaseIdentifierLookup);
-        expression.UpdateParameterAsync += (name, args) =>
+        expression.UpdateParameterAsync += (name, args, cancellationToken) =>
         {
             eventFired = true;
             Assert.Equal("a", name.ToLowerInvariant());
@@ -2184,7 +2184,7 @@ public class AsyncAdvFeatureTests
             return ValueTask.CompletedTask;
         };
 
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         Assert.True(eventFired);
         Assert.Equal(expectedExprValue, result);
@@ -2197,7 +2197,7 @@ public class AsyncAdvFeatureTests
     public async Task ShouldCalculateIntegerDivAsync(string input, long expectedValue)
     {
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache);
-        var result = await expression.EvaluateAsync();
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue.ToString(), result?.ToString());
     }
