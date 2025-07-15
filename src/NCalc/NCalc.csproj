@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <Nullable>enable</Nullable>
-        <PackageId>NCalc</PackageId>
+        <PackageId>AlliedBits.NCalc</PackageId>
         <AssemblyName>NCalc</AssemblyName>
         <Description>Assembly with the core logic of NCalc.</Description>
         <SignAssembly>true</SignAssembly>
