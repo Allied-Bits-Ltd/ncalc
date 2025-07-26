@@ -8,6 +8,7 @@
         <SignAssembly>true</SignAssembly>
         <AssemblyOriginatorKeyFile>../../NCalc.snk</AssemblyOriginatorKeyFile>
         <RootNamespace>NCalc</RootNamespace>
+        <PublishTrimmed>false</PublishTrimmed>
     </PropertyGroup>
 
     <ItemGroup>
@@ -16,7 +17,7 @@
             <PackagePath>/</PackagePath>
         </None>
     </ItemGroup>
-    <ItemGroup Condition="'$(TargetFramework)' != 'net8.0'">
+    <ItemGroup Condition="'$(TargetFramework)' != 'net9.0'">
         <PackageReference Include="System.Collections.Immutable" Version="9.0.7" />
     </ItemGroup>
 
@@ -30,12 +31,12 @@
         <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     </ItemGroup>
     <ItemGroup>
-        <PackageReference Include="FastExpressionCompiler" Version="5.2.0" />
+        <PackageReference Include="FastExpressionCompiler" Version="5.*" />
     </ItemGroup>
     <ItemGroup>
-        <PackageReference Include="ExtendedNumerics.BigDecimal" Version="3000.0.4.132" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.7" />
-        <PackageReference Include="Microsoft.Extensions.Logging.TraceSource" Version="9.0.7" />
+        <PackageReference Include="ExtendedNumerics.BigDecimal" Version="3001.*" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.*" />
+        <PackageReference Include="Microsoft.Extensions.Logging.TraceSource" Version="9.*" />
     </ItemGroup>
 
     <ItemGroup>
