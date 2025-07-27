@@ -1,7 +1,7 @@
 # 7.0.1 (Allied Bits)
 * Added the MatchString event to the expression classes for customized matching of strings. 
 * Added the TreatNullAsZero flag to ExpressionOptions.
-* Updated all unary, binary, and ternary functions so that the properly handle null values (either convert them to 0 or return null immediately depending on the TreatNullAsZero flag). 
+* Updated all unary, binary, and ternary functions so that they properly handle null values (either convert them to 0 or return null immediately depending on the TreatNullAsZero flag). 
 * Fixed bugs in the handling of percent operations.
 
 # 7.0.0 (Allied Bits)
