@@ -36,7 +36,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     }
 
     /// <summary>
-    /// Event triggered to handle parameter evaluation.
+    /// Event triggered to handle parameter evaluation. If the value is not returned, the Parameters and DynamicParameters properties are checked for a value.
     /// </summary>
     public event AsyncEvaluateParameterHandler EvaluateParameterAsync
     {
@@ -51,6 +51,15 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     {
         add => Context.AsyncUpdateParameterHandler += value;
         remove => Context.AsyncUpdateParameterHandler -= value;
+    }
+
+    /// <summary>
+    /// Event triggered to handle string matching. If the event handler is not assigned or does not return a value, the default matching using RegEx is performed.
+    /// </summary>
+    public event AsyncMatchStringHandler MatchStringAsync
+    {
+        add => Context.AsyncMatchStringHandler += value;
+        remove => Context.AsyncMatchStringHandler -= value;
     }
 
     protected IAsyncEvaluationVisitorFactory EvaluationVisitorFactory { get; }

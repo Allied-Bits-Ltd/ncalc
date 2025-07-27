@@ -244,12 +244,15 @@ expression.AdvancedOptions.Flags |= NCalc.AdvExpressionOptions.CalculatePercent;
 The following operations with percent are supported:
 * `a * b%` : Multiply a by b per cent ( a * b / 100 )
 * `a / b%` : Multiply a by b per cent ( a * 100 / b )
-* `a + b%` : Add b per cent to a ( a  + ( a * b + 100 )
-* `a - b%` : Subtract b per cent from  a ( a  - ( a * b + 100 )
+* `a + b%` : Add b per cent to a ( a  + ( a * b / 100 ) )
+* `a - b%` : Subtract b per cent from a ( a  - ( a * b / 100 ) )
 
 * `a% * b` : multiply the numeric value of percent a by b ( a * b ) with a result becoming a percent. E.g.: 5% * 2 = 10%
-* `a% / b` : divide the numeric value of percent a by b ( a * b ) with a result becoming a percent. E.g.: 10% / 2 = 5%
+* `a% / b` : divide the numeric value of percent a by b ( a / b ) with a result becoming a percent. E.g.: 10% / 2 = 5%
+
+* `a% * b%` : multiply the numeric value of percent a by b per cent ( a * b / 100 ) with a result becoming a percent. E.g.: 5% * 20% = 1%
+* `a% / b%` : divide the numeric value of percent a by b per cent ( a / b * 100 ) with a result becoming a percent. E.g.: 10% / 20% = 50%
 * `a% + b%` : add the numeric value of percent b to the numeric value of percent a ( a + b ) with a result becoming a percent. E.g.: 5% + 2% = 7%
 * `a% - b%` : subtract the numeric value of percent b from the numeric value of percent a ( a - b ) with a result becoming a percent. E.g.: 5% - 2% = 3%
 
-Operations that produce percent as a result return an instance of the `Percent` type, whose `Value` property contains the value of a percent (e.g., 5 for 5% and so on). 
+Operations that produce percent as a result return an instance of the <xref:NCalc.Domain.Percent> type, whose <xref:NCalc.Domain.Percent.Value> property contains the value of a percent (e.g., 5 for 5% and so on). 

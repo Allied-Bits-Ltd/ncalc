@@ -1,3 +1,3 @@
 namespace NCalc.Handlers;
 
-public delegate ValueTask AsyncUpdateParameterHandler(string name, AsyncUpdateParameterArgs args, CancellationToken cancellationToken = default);
+public delegate ValueTask AsyncUpdateParameterHandler(string name, UpdateParameterArgs args, CancellationToken cancellationToken = default);

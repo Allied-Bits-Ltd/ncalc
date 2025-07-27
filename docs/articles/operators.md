@@ -12,6 +12,10 @@ Expressions can be combined using operators, each with a specific precedence pri
 8. **Relational**
 9. **Logical**
 
+## Handling of null values
+
+In some cases, null values can appear in expressions. If the <xref:NCalc.ExpressionOptions.TreatNullAsZero> flag in <xref:NCalc.ExpressionOptions> is set, nulls are converted to zeros for all operations except for comparison and matchiing; for the latter operations, null takes place in comparison/matching. If `TreatNullAsZero` is not set and null is found in one of the values, null is immediately returned without evaluating the expression.
+
 ## Primary
 
 Primary are the first thing to be evaluated. They are direct values or a list of them.
@@ -236,7 +240,9 @@ The `LIKE` and `NOT LIKE` operators compare a string against a pattern.
 * `LIKE` : Checks if the string matches the specified pattern.
 * `NOT LIKE` : Checks if the string does not match the specified pattern.
 
-Patterns can include:
+Default matching uses RegEx and is used unless an application handles the MatchString event of <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> and returns the result of matching. This event is fired before the default matching, allowing applications to override the default matching mechanism. 
+
+With default matching, patterns can include:
 * `%` to match any sequence of characters.
 * `_` to match any single character.
 

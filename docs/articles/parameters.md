@@ -125,7 +125,7 @@ See [case_sensitivity](case_sensitivity.md) for more info.
 ## Assigning and Updating Parameters 
 
 Parameters can be assigned in expressions. 
-Support for assignments must be enabled by including the <xref:NCalc.ExpressionOptions.UseAssignments> flag into <xref:NCalc.ExpressionOptions> of an <xref:NCalc.Expression>.
+Support for assignments must be enabled by including the <xref:NCalc.ExpressionOptions.UseAssignments> flag into <xref:NCalc.ExpressionOptions> of an <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression>.
 
 When a parameter is assigned, first the <xref:NCalc.Expression.OnUpdateParameter> event is fired. An event handler may tell the evaluation engine to update the static parameter table or bypass this step by setting the UpdateParameterArgs.<xref:NCalc.Handlers.UpdateParameterArgs.UpdateParameterLists> or AsyncUpdateParameterArgs.<xref:NCalc.Handlers.AsyncUpdateParameterArgs.UpdateParameterLists> property to `true` or `false` respectively.
 

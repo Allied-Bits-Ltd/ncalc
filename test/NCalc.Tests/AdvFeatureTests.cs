@@ -38,6 +38,29 @@ public class AdvFeatureTests
     }
 
     [Theory]
+    [InlineData("179,19016410100086368947822994", 179)]
+    [InlineData("-123.19016410100086368947822994", -123)]
+    public void ShouldParseBigDecimal2(string input, int expectedWhole)
+    {
+        var expression = new Expression(input, ExpressionOptions.UseBigNumbers | ExpressionOptions.DecimalAsDefault);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.DecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+        expression.AdvancedOptions.DecimalSeparator = ",";
+        expression.AdvancedOptions.SecondaryDecimalSeparator = ".";
+        var result = expression.Evaluate();
+
+        Assert.NotNull(result);
+
+        if (result is BigDecimal bdA)
+            Assert.True(((BigDecimal)result).WholeValue == expectedWhole);
+        else
+        if (result is decimal dA)
+            Assert.True(Math.Truncate(dA) == expectedWhole);
+        else
+            Assert.True(Math.Truncate((double) result) == expectedWhole);
+    }
+
+    [Theory]
     [InlineData(".05", 0.05)]
     [InlineData("0.05", 0.05)]
     [InlineData("-0.05", -0.05)]

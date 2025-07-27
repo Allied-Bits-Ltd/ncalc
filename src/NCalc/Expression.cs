@@ -24,7 +24,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     }
 
     /// <summary>
-    /// Event triggered to handle parameter evaluation.
+    /// Event triggered to handle parameter evaluation. If the value is not returned, the Parameters and DynamicParameters properties are checked for a value.
     /// </summary>
     public event EvaluateParameterHandler EvaluateParameter
     {
@@ -39,6 +39,15 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     {
         add => Context.UpdateParameterHandler += value;
         remove => Context.UpdateParameterHandler -= value;
+    }
+
+    /// <summary>
+    /// Event triggered to handle string matching. If the event handler is not assigned or does not return a value, the default matching using RegEx is performed.
+    /// </summary>
+    public event MatchStringHandler MatchString
+    {
+        add => Context.MatchStringHandler += value;
+        remove => Context.MatchStringHandler -= value;
     }
 
     public IDictionary<string, ExpressionParameter> DynamicParameters

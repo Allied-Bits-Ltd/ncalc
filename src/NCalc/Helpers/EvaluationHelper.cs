@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using ExtendedNumerics;
 using NCalc.Domain;
 using NCalc.Exceptions;
+using NCalc.Handlers;
 
 namespace NCalc.Helpers;
 
@@ -265,10 +266,10 @@ public static class EvaluationHelper
     }
 
     /// <summary>
-    /// Determines whether a specified string matches a pattern using SQL-like wildcards.
+    /// Determines whether a specified string matches a pattern using an event or SQL-like wildcards.
     /// </summary>
     /// <param name="value">The string to be compared against the pattern.</param>
-    /// <param name="pattern">The pattern to match. '%' matches zero or more characters, and '_' matches exactly one character.</param>
+    /// <param name="pattern">The pattern to match. If a default Regex-based matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
     /// <param name="context">The context containing options for the comparison.</param>
     /// <returns>
     /// <c>true</c> if the <paramref name="value"/> matches the <paramref name="pattern"/>; otherwise, <c>false</c>.
@@ -278,6 +279,20 @@ public static class EvaluationHelper
     /// </remarks>
     public static bool Like(string value, string pattern, ExpressionContextBase context)
     {
+        bool? outcome = null;
+        if (context is ExpressionContext actualCtx)
+        {
+            if (actualCtx.MatchStringHandler != null)
+            {
+                MatchStringArgs args = new MatchStringArgs(value, pattern, context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer));
+                actualCtx.MatchStringHandler?.Invoke(args);
+                outcome = args.Matches;
+            }
+        }
+
+        if (outcome.HasValue)
+            return outcome.Value;
+
         var regexPattern = Regex.Escape(pattern)
             .Replace("%", ".*") // % matches zero or more characters
             .Replace("_", "."); // _ matches exactly one character
@@ -288,5 +303,167 @@ public static class EvaluationHelper
 
         // Use ^ and $ to match the start and end of the string
         return Regex.IsMatch(value, $"^{regexPattern}$", options);
+    }
+
+    /// <summary>
+    /// Determines whether a specified string matches a pattern using an event or SQL-like wildcards.
+    /// </summary>
+    /// <param name="value">The string to be compared against the pattern.</param>
+    /// <param name="pattern">The pattern to match. If a default Regex-based matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
+    /// <param name="context">The context containing options for the comparison.</param>
+    /// <returns>
+    /// <c>true</c> if the <paramref name="value"/> matches the <paramref name="pattern"/>; otherwise, <c>false</c>.
+    /// </returns>
+    /// <remarks>
+    /// The comparison is case-insensitive if the <see cref="ExpressionOptions.CaseInsensitiveStringComparer"/> flag is set in the <paramref name="context"/>.
+    /// </remarks>
+    public static async Task<bool> LikeAsync(string value, string pattern, ExpressionContextBase context, CancellationToken cancellationToken = default)
+    {
+        bool? outcome = null;
+        if (context is AsyncExpressionContext actualCtx)
+        {
+            if (actualCtx.AsyncMatchStringHandler != null)
+            {
+                MatchStringArgs args = new MatchStringArgs(value, pattern, context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer));
+
+                ValueTask? task = actualCtx.AsyncMatchStringHandler?.Invoke(args, cancellationToken);
+                if (task.HasValue)
+                    await task.Value;
+
+                outcome = args.Matches;
+            }
+        }
+
+        if (outcome.HasValue)
+            return outcome.Value;
+
+        var regexPattern = Regex.Escape(pattern)
+            .Replace("%", ".*") // % matches zero or more characters
+            .Replace("_", "."); // _ matches exactly one character
+
+        var options = context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer)
+            ? RegexOptions.IgnoreCase
+            : RegexOptions.None;
+
+        // Use ^ and $ to match the start and end of the string
+        return Regex.IsMatch(value, $"^{regexPattern}$", options);
+    }
+
+    /// <summary>
+    /// Determines whether a specified string matches a pattern using an event or SQL-like wildcards.
+    /// </summary>
+    /// <param name="value">The string to be compared against the pattern.</param>
+    /// <param name="pattern">The pattern to match. If a default Regex-based matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
+    /// <param name="context">The context containing options for the comparison.</param>
+    /// <returns>
+    /// <c>true</c> if the <paramref name="value"/> matches the <paramref name="pattern"/>; otherwise, <c>false</c>.
+    /// </returns>
+    /// <remarks>
+    /// The comparison is case-insensitive if the <see cref="ExpressionOptions.CaseInsensitiveStringComparer"/> flag is set in the <paramref name="context"/>.
+    /// </remarks>
+    public static bool Like(object value, object pattern, ExpressionContextBase context)
+    {
+        if (context.Options.HasFlag(ExpressionOptions.StrictTypeMatching))
+        {
+            if (pattern is not string)
+                throw new NCalcEvaluationException("A pattern in LIKE and NOTLIKE operations must be a string");
+
+            if (value is not string && value is not char)
+                throw new NCalcEvaluationException("A value in LIKE and NOTLIKE operations must be a char or a string");
+        }
+
+        string? lValue = value.ToString();
+        string? lPattern = pattern.ToString();
+
+        if (lValue is null || lPattern is null)
+        {
+            return (lValue is null && lPattern is null);
+        }
+
+        bool? outcome = null;
+        if (context is ExpressionContext actualCtx)
+        {
+            if (actualCtx.MatchStringHandler != null)
+            {
+                MatchStringArgs args = new MatchStringArgs(lValue, lPattern, context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer));
+                actualCtx.MatchStringHandler?.Invoke(args);
+                outcome = args.Matches;
+            }
+        }
+
+        if (outcome.HasValue)
+            return outcome.Value;
+
+        var regexPattern = Regex.Escape(lPattern)
+            .Replace("%", ".*") // % matches zero or more characters
+            .Replace("_", "."); // _ matches exactly one character
+
+        var options = context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer)
+            ? RegexOptions.IgnoreCase
+            : RegexOptions.None;
+
+        // Use ^ and $ to match the start and end of the string
+        return Regex.IsMatch(lValue, $"^{regexPattern}$", options);
+    }
+
+    /// <summary>
+    /// Determines whether a specified string matches a pattern using an event or SQL-like wildcards.
+    /// </summary>
+    /// <param name="value">The string to be compared against the pattern.</param>
+    /// <param name="pattern">The pattern to match. If a default Regex-based matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
+    /// <param name="context">The context containing options for the comparison.</param>
+    /// <returns>
+    /// <c>true</c> if the <paramref name="value"/> matches the <paramref name="pattern"/>; otherwise, <c>false</c>.
+    /// </returns>
+    /// <remarks>
+    /// The comparison is case-insensitive if the <see cref="ExpressionOptions.CaseInsensitiveStringComparer"/> flag is set in the <paramref name="context"/>.
+    /// </remarks>
+    public static async Task<bool> LikeAsync(object value, object pattern, ExpressionContextBase context, CancellationToken cancellationToken = default)
+    {
+        if (context.Options.HasFlag(ExpressionOptions.StrictTypeMatching))
+        {
+            if (pattern is not string)
+                throw new NCalcEvaluationException("A pattern in LIKE and NOTLIKE operations must be a string");
+
+            if (value is not string && value is not char)
+                throw new NCalcEvaluationException("A value in LIKE and NO TLIKE operations must be a char or a string");
+        }
+
+        string? lValue = value.ToString();
+        string? lPattern = pattern.ToString();
+
+        if (lValue is null || lPattern is null)
+        {
+            return (lValue is null && lPattern is null);
+        }
+
+        bool? outcome = null;
+        if (context is AsyncExpressionContext actualCtx)
+        {
+            if (actualCtx.AsyncMatchStringHandler != null)
+            {
+                MatchStringArgs args = new MatchStringArgs(lValue, lPattern, context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer));
+
+                ValueTask? task = actualCtx.AsyncMatchStringHandler?.Invoke(args, cancellationToken);
+                if (task.HasValue)
+                    await task.Value;
+
+                outcome = args.Matches;
+            }
+        }
+
+        if (outcome.HasValue)
+            return outcome.Value;
+
+        var regexPattern = Regex.Escape(lPattern)
+            .Replace("%", ".*") // % matches zero or more characters
+            .Replace("_", "."); // _ matches exactly one character
+
+        var options = context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer)
+            ? RegexOptions.IgnoreCase
+            : RegexOptions.None;
+
+        // Use ^ and $ to match the start and end of the string
+        return Regex.IsMatch(lValue, $"^{regexPattern}$", options);
     }
 }

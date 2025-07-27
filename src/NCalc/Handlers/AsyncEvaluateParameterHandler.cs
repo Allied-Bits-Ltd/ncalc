@@ -1,3 +1,3 @@
 namespace NCalc.Handlers;
 
-public delegate ValueTask AsyncEvaluateParameterHandler(string name, AsyncParameterArgs args, CancellationToken cancellationToken = default);
+public delegate ValueTask AsyncEvaluateParameterHandler(string name, ParameterArgs args, CancellationToken cancellationToken = default);
