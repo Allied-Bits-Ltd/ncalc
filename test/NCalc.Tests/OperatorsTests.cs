@@ -100,12 +100,14 @@ public class OperatorsTests
         Assert.Equal(3UL, new Expression(logicalExpression).Evaluate());
     }
 
-    [Fact]
-    public void Should_Short_Circuit_Boolean_Expressions()
+    [Theory]
+    [InlineData("([a] != 0) && ([b]/[a]>2)", false)]
+    [InlineData("([a] == 0) || ([b]/[a]>2)", true)]
+    public void Should_Short_Circuit_Boolean_Expressions(string expression, bool expected)
     {
-        var e = new Expression("([a] != 0) && ([b]/[a]>2)");
+        var e = new Expression(expression);
         e.Parameters["a"] = 0;
 
-        Assert.False((bool)e.Evaluate()!);
+        Assert.Equal(expected, (bool)e.Evaluate()!);
     }
 }

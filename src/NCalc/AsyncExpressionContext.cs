@@ -13,6 +13,7 @@ public record AsyncExpressionContext : ExpressionContextBase
     public AsyncEvaluateParameterHandler? AsyncEvaluateParameterHandler { get; set; }
     public AsyncEvaluateFunctionHandler? AsyncEvaluateFunctionHandler { get; set; }
     public AsyncUpdateParameterHandler? AsyncUpdateParameterHandler { get; set; }
+    public AsyncMatchStringHandler? AsyncMatchStringHandler { get; set; }
 
     public AsyncExpressionContext()
     {

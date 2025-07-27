@@ -14,17 +14,35 @@ namespace NCalc.Visitors;
 /// </summary>
 public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVisitor<object?>
 {
+    private bool TryGetValueOrNull(object? candidate, out object? value)
+    {
+        if (candidate is null)
+        {
+            if (context.Options.HasFlag(ExpressionOptions.TreatNullAsZero))
+            {
+                value = 0;
+                return true;
+            }
+            else
+            {
+                value = null;
+                return false;
+            }
+        }
+        else
+        {
+            value = candidate;
+            return true;
+        }
+    }
+
     public virtual object? Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
-        // Evaluates the left expression and saves the value
-        var left = Convert.ToBoolean(expression.LeftExpression.Accept(this, cancellationToken), context.CultureInfo);
+        object? value;
+        if (!TryGetValueOrNull(expression.LeftExpression.Accept(this, cancellationToken), out value))
+            return null;
 
-        if (left)
-        {
-            return expression.MiddleExpression.Accept(this, cancellationToken);
-        }
-
-        return expression.RightExpression.Accept(this, cancellationToken);
+        return (Convert.ToBoolean(value, context.CultureInfo) ? expression.MiddleExpression : expression.RightExpression).Accept(this, cancellationToken);
     }
 
     private object? UpdateParameter(LogicalExpression leftExpression, object? value, CancellationToken cancellationToken = default)
@@ -52,142 +70,336 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
         var left = new Lazy<object?>(() => Evaluate(expression.LeftExpression, cancellationToken), LazyThreadSafetyMode.None);
         var right = new Lazy<object?>(() => Evaluate(expression.RightExpression, cancellationToken), LazyThreadSafetyMode.None);
 
-        if (context.AdvancedOptions != null && context.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent))
-        {
-            if (left.Value is Percent lValPercent && right.Value is Percent rValPercent)
-            {
-                switch (expression.Type)
-                {
-                    case BinaryExpressionType.Minus:
-                        return new Percent(MathHelper.Subtract(lValPercent.Value, rValPercent.Value, true, context) ?? 0);
-                    case BinaryExpressionType.Plus:
-                        return new Percent(MathHelper.Add(lValPercent.Value, rValPercent.Value, true, context) ?? 0);
-                }
-            }
-            else
-            if (left.Value is Percent lValPercent1)
-            {
-                switch (expression.Type)
-                {
-                    case BinaryExpressionType.Times:
-                        return new Percent(MathHelper.Multiply(lValPercent1.Value, right.Value, true, context) ?? 0);
-                    case BinaryExpressionType.Div:
-                        return new Percent(MathHelper.Divide(lValPercent1.Value, right.Value, true, context) ?? 0);
-                }
-            }
-            else
-            if (right.Value is Percent rValPercent1)
-            {
-                object? rValue = rValPercent1.Value;
-                switch (expression.Type)
-                {
-                    case BinaryExpressionType.StatementSequence:
-                        _ = left.Value;
-                        return right.Value; // we are assigning Percent here
+        var handlePercent = context.AdvancedOptions != null && context.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent);
 
-                    case BinaryExpressionType.Assignment:
-                        return UpdateParameter(expression.LeftExpression, rValue);
-                    case BinaryExpressionType.PlusAssignment:
-                        return UpdateParameter(expression.LeftExpression, EvaluationHelper.Plus(left.Value, rValue, context));
-
-                    case BinaryExpressionType.MinusAssignment:
-                        return UpdateParameter(expression.LeftExpression, EvaluationHelper.Minus(left.Value, rValue, context));
-
-                    case BinaryExpressionType.MultiplyAssignment:
-                        return UpdateParameter(expression.LeftExpression, MathHelper.Multiply(left.Value, rValue, true, context));
-
-                    case BinaryExpressionType.DivAssignment:
-                        return UpdateParameter(expression.LeftExpression,
-                            IsReal(left.Value) || IsReal(rValue)
-                            ? MathHelper.Divide(left.Value, rValue, true, context)
-                            : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), rValue, true,
-                                context)
-                            );
-
-                    case BinaryExpressionType.Minus:
-                        return MathHelper.SubtractPercent(left.Value, rValue, context);
-                    case BinaryExpressionType.Plus:
-                        return MathHelper.AddPercent(left.Value, rValue, context);
-                    case BinaryExpressionType.Times:
-                        return MathHelper.MultiplyPercent(left.Value, rValue, context);
-                    case BinaryExpressionType.Div:
-                        return MathHelper.DividePercent(left.Value, rValue, context);
-                }
-            }
-        }
+        object? leftValue = null;
+        object? rightValue = null;
 
         switch (expression.Type)
         {
             case BinaryExpressionType.StatementSequence:
+            {
                 _ = left.Value;
-                return right.Value;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+                if (handlePercent && rightValue is Percent rValPercent)
+                    rightValue = rValPercent.Value;
+                return rightValue;
+            }
 
             case BinaryExpressionType.Assignment:
-                return UpdateParameter(expression.LeftExpression, right.Value);
+            {
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                return UpdateParameter(expression.LeftExpression, rightValue);
+            }
 
             case BinaryExpressionType.PlusAssignment:
-                return UpdateParameter(expression.LeftExpression, EvaluationHelper.Plus(left.Value, right.Value, context));
+            {
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
 
+                if (handlePercent)
+                {
+                    if (leftValue is Percent lValPercent)
+                        leftValue = lValPercent.Value;
+
+                    if (rightValue is Percent rValPercent)
+                        rightValue = rValPercent.Value;
+
+                    if (left.Value is Percent && right.Value is Percent)
+                    {
+                        object? result = MathHelper.Add(leftValue, rightValue, true, context);
+                        if (result is null)
+                            return null;
+                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                    }
+                    else
+                    if (right.Value is Percent)
+                        return UpdateParameter(expression.LeftExpression, MathHelper.AddPercent(leftValue, rightValue, context));
+                    else
+                    if (left.Value is Percent)
+                    {
+                        throw new NCalcEvaluationException("The left side of a += operation cannot be a percent unless the right side is a percent as well");
+                    }
+                }
+
+                return UpdateParameter(expression.LeftExpression, EvaluationHelper.Plus(leftValue, rightValue, context));
+            }
             case BinaryExpressionType.MinusAssignment:
-                return UpdateParameter(expression.LeftExpression, EvaluationHelper.Minus(left.Value, right.Value, context));
+            {
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
 
+                if (handlePercent)
+                {
+                    if (leftValue is Percent lValPercent)
+                        leftValue = lValPercent.Value;
+
+                    if (rightValue is Percent rValPercent)
+                        rightValue = rValPercent.Value;
+
+                    if (left.Value is Percent && right.Value is Percent)
+                    {
+                        object? result = MathHelper.Subtract(leftValue, rightValue, true, context);
+                        if (result is null)
+                            return null;
+                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                    }
+                    else
+                    if (right.Value is Percent)
+                        return UpdateParameter(expression.LeftExpression, MathHelper.SubtractPercent(leftValue, rightValue, context));
+                    else
+                    if (left.Value is Percent)
+                    {
+                        throw new NCalcEvaluationException("The left side of a -= operation cannot be a percent unless the right side is a percent as well");
+                    }
+                }
+
+                return UpdateParameter(expression.LeftExpression, EvaluationHelper.Minus(leftValue, rightValue, context));
+            }
             case BinaryExpressionType.MultiplyAssignment:
-                return UpdateParameter(expression.LeftExpression, MathHelper.Multiply(left.Value, right.Value, true, context));
+            {
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                if (handlePercent)
+                {
+                    if (leftValue is Percent lValPerc && rightValue is Percent rValPerc)
+                    {
+                        object? result = MathHelper.MultiplyPercent(lValPerc.Value, rValPerc.Value, context);
+                        if (result is null)
+                            return null;
+                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                    }
+                    else
+                    if (leftValue is Percent lValPercent)
+                    {
+                        leftValue = lValPercent.Value;
+                        object? result = MathHelper.Multiply(leftValue, rightValue, true, context);
+                        if (result is null)
+                            return null;
+
+                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                    }
+                    else
+                    if (rightValue is Percent rValPercent)
+                    {
+                        rightValue = rValPercent.Value;
+
+                        object? result = MathHelper.MultiplyPercent(leftValue, rightValue, context);
+                        if (result is null)
+                            return null;
+
+                        return UpdateParameter(expression.LeftExpression, result);
+                    }
+                }
+
+                return UpdateParameter(expression.LeftExpression, MathHelper.Multiply(leftValue, rightValue, true, context));
+            }
 
             case BinaryExpressionType.DivAssignment:
-                return UpdateParameter(expression.LeftExpression,
-                    IsReal(left.Value) || IsReal(right.Value) || left.Value is BigInteger || right.Value is BigInteger || left.Value is BigDecimal || right.Value is BigDecimal
-                    ? MathHelper.Divide(left.Value, right.Value, true, context)
-                    : ((left.Value is null)
-                        ? null
-                        : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value, true, context))
-                    );
+            {
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
+
+                if (handlePercent)
+                {
+                    if (leftValue is Percent lValPerc && rightValue is Percent rValPerc)
+                    {
+                        leftValue = lValPerc.Value;
+                        if (!noConvertToDouble)
+                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                        object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
+                        if (result is null)
+                            return null;
+                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                    }
+                    if (leftValue is Percent lValPercent)
+                    {
+                        leftValue = lValPercent.Value;
+                        if (!noConvertToDouble)
+                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                        object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                        if (result is null)
+                            return null;
+
+                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                    }
+                    else
+                    if (rightValue is Percent rValPercent)
+                    {
+                        rightValue = rValPercent.Value;
+                        if (!noConvertToDouble)
+                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                        object? result = MathHelper.DividePercent(leftValue, rightValue, context);
+                        if (result is null)
+                            return null;
+
+                        return UpdateParameter(expression.LeftExpression, result);
+                    }
+                }
+
+                if (!noConvertToDouble)
+                    leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                {
+                    object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                    if (result is null)
+                        return null;
+                    return UpdateParameter(expression.LeftExpression, result);
+                }
+            }
 
             case BinaryExpressionType.AndAssignment:
-                if (left.Value is BigInteger || right.Value is BigInteger)
-                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(left.Value, right.Value));
+
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                if (leftValue is BigInteger || rightValue is BigInteger)
+                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue));
                 return UpdateParameter(expression.LeftExpression,
-                    Convert.ToUInt64(left.Value, context.CultureInfo) &
-                    Convert.ToUInt64(right.Value, context.CultureInfo)
+                    Convert.ToUInt64(leftValue, context.CultureInfo) &
+                    Convert.ToUInt64(rightValue, context.CultureInfo)
                     );
 
             case BinaryExpressionType.OrAssignment:
-                if (left.Value is BigInteger || right.Value is BigInteger)
-                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(left.Value, right.Value));
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                if (leftValue is BigInteger || rightValue is BigInteger)
+                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue));
                 return UpdateParameter(expression.LeftExpression,
-                    Convert.ToUInt64(left.Value, context.CultureInfo) |
-                    Convert.ToUInt64(right.Value, context.CultureInfo)
+                    Convert.ToUInt64(leftValue, context.CultureInfo) |
+                    Convert.ToUInt64(rightValue, context.CultureInfo)
                     );
 
             case BinaryExpressionType.XOrAssignment:
-                if (left.Value is BigInteger || right.Value is BigInteger)
-                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(left.Value, right.Value));
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                if (leftValue is BigInteger || rightValue is BigInteger)
+                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue));
                 return UpdateParameter(expression.LeftExpression,
-                    Convert.ToUInt64(left.Value, context.CultureInfo) ^
-                    Convert.ToUInt64(right.Value, context.CultureInfo)
+                    Convert.ToUInt64(leftValue, context.CultureInfo) ^
+                    Convert.ToUInt64(rightValue, context.CultureInfo)
                     );
 
             case BinaryExpressionType.And:
-                return Convert.ToBoolean(left.Value, context.CultureInfo) &&
-                        Convert.ToBoolean(right.Value, context.CultureInfo);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!Convert.ToBoolean(leftValue, context.CultureInfo))
+                    return false;
+
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                return Convert.ToBoolean(rightValue, context.CultureInfo);
 
             case BinaryExpressionType.Or:
-                return Convert.ToBoolean(left.Value, context.CultureInfo) ||
-                        Convert.ToBoolean(right.Value, context.CultureInfo);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (Convert.ToBoolean(leftValue, context.CultureInfo))
+                    return true;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+                return Convert.ToBoolean(rightValue, context.CultureInfo);
 
             case BinaryExpressionType.XOr:
-                return Convert.ToBoolean(left.Value, context.CultureInfo) ^
-                        Convert.ToBoolean(right.Value, context.CultureInfo);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+                return Convert.ToBoolean(leftValue, context.CultureInfo) ^
+                        Convert.ToBoolean(rightValue, context.CultureInfo);
 
             case BinaryExpressionType.Div:
-                return IsReal(left.Value) || IsReal(right.Value) || left.Value is BigInteger || right.Value is BigInteger || left.Value is BigDecimal || right.Value is BigDecimal
-                    ? MathHelper.Divide(left.Value, right.Value, true, context)
-                    : ((left.Value is null)
-                        ? null
-                        : MathHelper.Divide(Convert.ToDouble(left.Value, context.CultureInfo), right.Value, true, context));
+            {
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
+
+                if (handlePercent)
+                {
+                    if (leftValue is Percent lValPerc && rightValue is Percent rValPerc)
+                    {
+                        leftValue = lValPerc.Value;
+                        if (!noConvertToDouble)
+                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                        object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
+                        if (result is null)
+                            return null;
+                        return new Percent(result);
+                    }
+                    else
+                    if (leftValue is Percent lValPercent)
+                    {
+                        leftValue = lValPercent.Value;
+                        if (!noConvertToDouble)
+                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                        object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                        if (result is null)
+                            return null;
+
+                        return new Percent(result);
+                    }
+                    else
+                    if (rightValue is Percent rValPercent)
+                    {
+                        rightValue = rValPercent.Value;
+                        if (!noConvertToDouble)
+                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                        object? result = MathHelper.DividePercent(leftValue, rightValue, context);
+                        if (result is null)
+                            return null;
+
+                        return result;
+                    }
+                }
+
+                if (!noConvertToDouble)
+                    leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                {
+                    object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                    if (result is null)
+                        return null;
+                    return result;
+                }
+            }
+
             case BinaryExpressionType.IntDivB:
             case BinaryExpressionType.IntDivP:
-                return MathHelper.IntegerDivide(left.Value, right.Value, (expression.Type == BinaryExpressionType.IntDivB), true, context);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+                return MathHelper.IntegerDivide(leftValue, rightValue, (expression.Type == BinaryExpressionType.IntDivB), true, context);
+
             case BinaryExpressionType.Equal:
                 return Compare(left.Value, right.Value, ComparisonType.Equal);
 
@@ -207,87 +419,227 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 return Compare(left.Value, right.Value, ComparisonType.NotEqual);
 
             case BinaryExpressionType.Minus:
-                return EvaluationHelper.Minus(left.Value, right.Value, context);
+            {
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                if (handlePercent)
+                {
+                    if (leftValue is Percent lValPercent)
+                        leftValue = lValPercent.Value;
+
+                    if (rightValue is Percent rValPercent)
+                        rightValue = rValPercent.Value;
+
+                    if (left.Value is Percent && right.Value is Percent)
+                    {
+                        object? result = MathHelper.Subtract(leftValue, rightValue, true, context);
+                        if (result is null)
+                            return null;
+                        return new Percent(result);
+                    }
+                    else
+                    if (right.Value is Percent)
+                        return MathHelper.SubtractPercent(leftValue, rightValue, context);
+                    else
+                    if (left.Value is Percent)
+                    {
+                        throw new NCalcEvaluationException("The left side of a subtraction operation cannot be a percent unless the right side is a percent as well");
+                    }
+                }
+
+                return EvaluationHelper.Minus(leftValue, rightValue, context);
+            }
 
             case BinaryExpressionType.Modulo:
-                return MathHelper.Modulo(left.Value, right.Value, true, context);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                return MathHelper.Modulo(leftValue, rightValue, true, context);
 
             case BinaryExpressionType.Plus:
-                return EvaluationHelper.Plus(left.Value, right.Value, context);
+            {
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                if (handlePercent)
+                {
+                    if (leftValue is Percent lValPercent)
+                        leftValue = lValPercent.Value;
+
+                    if (rightValue is Percent rValPercent)
+                        rightValue = rValPercent.Value;
+
+                    if (left.Value is Percent && right.Value is Percent)
+                    {
+                        object? result = MathHelper.Add(leftValue, rightValue, true, context);
+                        if (result is null)
+                            return null;
+                        return new Percent(result);
+                    }
+                    else
+                    if (right.Value is Percent)
+                        return MathHelper.AddPercent(leftValue, rightValue, context);
+                    else
+                    if (left.Value is Percent)
+                    {
+                        throw new NCalcEvaluationException("The left side of an addition operation cannot be a percent unless the right side is a percent as well");
+                    }
+                }
+
+                return EvaluationHelper.Plus(leftValue, rightValue, context);
+            }
 
             case BinaryExpressionType.Times:
-                return MathHelper.Multiply(left.Value, right.Value, true, context);
+            {
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                if (handlePercent)
+                {
+                    if (leftValue is Percent lValPerc && rightValue is Percent rValPerc)
+                    {
+                        object? result = MathHelper.MultiplyPercent(lValPerc.Value, rValPerc.Value, context);
+                        if (result is null)
+                            return null;
+                        return new Percent(result);
+                    }
+                    else
+                    if (leftValue is Percent lValPercent)
+                    {
+                        leftValue = lValPercent.Value;
+                        object? result = MathHelper.Multiply(leftValue, rightValue, true, context);
+                        if (result is null)
+                            return null;
+
+                        return new Percent(result);
+                    }
+                    else
+                    if (rightValue is Percent rValPercent)
+                    {
+                        rightValue = rValPercent.Value;
+
+                        object? result = MathHelper.MultiplyPercent(leftValue, rightValue, context);
+                        if (result is null)
+                            return null;
+
+                        return result;
+                    }
+                }
+
+                return MathHelper.Multiply(leftValue, rightValue, true, context);
+            }
 
             case BinaryExpressionType.BitwiseAnd:
-                if (left.Value is BigInteger || right.Value is BigInteger)
-                    return MathHelper.BitwiseAnd(left.Value, right.Value);
-                return Convert.ToUInt64(left.Value, context.CultureInfo) &
-                        Convert.ToUInt64(right.Value, context.CultureInfo);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                if (leftValue is BigInteger || rightValue is BigInteger)
+                    return MathHelper.BitwiseAnd(leftValue, rightValue);
+                return Convert.ToUInt64(leftValue, context.CultureInfo) &
+                        Convert.ToUInt64(rightValue, context.CultureInfo);
 
             case BinaryExpressionType.BitwiseOr:
-                if (left.Value is BigInteger || right.Value is BigInteger)
-                    return MathHelper.BitwiseOr(left.Value, right.Value);
-                return Convert.ToUInt64(left.Value, context.CultureInfo) |
-                        Convert.ToUInt64(right.Value, context.CultureInfo);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                if (leftValue is BigInteger || rightValue is BigInteger)
+                    return MathHelper.BitwiseOr(leftValue, rightValue);
+                return Convert.ToUInt64(leftValue, context.CultureInfo) |
+                        Convert.ToUInt64(rightValue, context.CultureInfo);
 
             case BinaryExpressionType.BitwiseXOr:
-                if (left.Value is BigInteger || right.Value is BigInteger)
-                    return MathHelper.BitwiseXOr(left.Value, right.Value);
-                return Convert.ToUInt64(left.Value, context.CultureInfo) ^
-                        Convert.ToUInt64(right.Value, context.CultureInfo);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+                if (leftValue is BigInteger || rightValue is BigInteger)
+                    return MathHelper.BitwiseXOr(leftValue, rightValue);
+                return Convert.ToUInt64(leftValue, context.CultureInfo) ^
+                        Convert.ToUInt64(rightValue, context.CultureInfo);
 
             case BinaryExpressionType.LeftShift:
-                if (left.Value is BigInteger)
-                    return MathHelper.LeftShift((BigInteger) left.Value, right.Value, context);
-                return Convert.ToUInt64(left.Value, context.CultureInfo) <<
-                        Convert.ToInt32(right.Value, context.CultureInfo);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+                if (leftValue is BigInteger)
+                    return MathHelper.LeftShift((BigInteger) leftValue, rightValue, context);
+                return Convert.ToUInt64(leftValue, context.CultureInfo) <<
+                        Convert.ToInt32(rightValue, context.CultureInfo);
 
             case BinaryExpressionType.RightShift:
-                if (left.Value is BigInteger)
-                    return MathHelper.RightShift((BigInteger)left.Value, right.Value, context);
-                return Convert.ToUInt64(left.Value, context.CultureInfo) >>
-                        Convert.ToInt32(right.Value, context.CultureInfo);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                if (leftValue is BigInteger)
+                    return MathHelper.RightShift((BigInteger)leftValue, rightValue, context);
+                return Convert.ToUInt64(leftValue, context.CultureInfo) >>
+                        Convert.ToInt32(rightValue, context.CultureInfo);
 
             case BinaryExpressionType.Exponentiation:
-                return MathHelper.Pow(left.Value, right.Value, true, context);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                return MathHelper.Pow(leftValue, rightValue, true, context);
 
             case BinaryExpressionType.Factorial:
-                if (right.Value == null || left.Value == null)
-                {
-                    return false;
-                }
-                return MathHelper.Factorial(left.Value!, right.Value!, context);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                return MathHelper.Factorial(leftValue!, rightValue!, context);
 
             case BinaryExpressionType.In:
-                return EvaluationHelper.In(right.Value, left.Value, context);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+                return EvaluationHelper.In(rightValue, leftValue, context);
 
             case BinaryExpressionType.NotIn:
-                return !EvaluationHelper.In(right.Value, left.Value, context);
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+                return !EvaluationHelper.In(rightValue, leftValue, context);
 
             case BinaryExpressionType.Like:
             {
-                var rightValue = right.Value?.ToString();
-                var leftValue = left.Value?.ToString();
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
 
-                if (rightValue == null || leftValue == null)
-                {
-                    return false;
-                }
-
-                return EvaluationHelper.Like(leftValue, rightValue, context);
+                return EvaluationHelper.Like(leftValue!, rightValue!, context);
             }
 
             case BinaryExpressionType.NotLike:
             {
-                var rightValue = right.Value?.ToString();
-                var leftValue = left.Value?.ToString();
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
 
-                if (rightValue == null || leftValue == null)
-                {
-                    return false;
-                }
-
-                return !EvaluationHelper.Like(leftValue, rightValue, context);
+                return !EvaluationHelper.Like(leftValue!, rightValue!, context);
             }
         }
 
@@ -297,7 +649,9 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
     public virtual object? Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
         // Recursively evaluates the underlying expression
-        var result = expression.Expression.Accept(this, cancellationToken);
+        object? result = null;
+        if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out result))
+            return null;
 
         return EvaluationHelper.Unary(expression, result, context);
     }
@@ -305,10 +659,11 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
     public virtual object? Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
         // Recursively evaluates the underlying expression
-        object? result = expression.Expression.Accept(this, cancellationToken);
-        if (result == null)
-            return result;
-        return new Percent(result);
+        object? result = null;
+        if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out result))
+            return null;
+
+        return new Percent(result!);
     }
 
     public virtual object? Visit(ValueExpression expression, CancellationToken cancellationToken = default) => expression.Value;
@@ -369,6 +724,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 expression.EvaluateFunction += context.EvaluateFunctionHandler;
                 expression.EvaluateParameter += context.EvaluateParameterHandler;
                 expression.UpdateParameter += context.UpdateParameterHandler;
+                expression.MatchString += context.MatchStringHandler;
 
                 return expression.Evaluate();
             }
@@ -382,6 +738,11 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
         }
 
         throw new NCalcParameterNotDefinedException(identifierName);
+    }
+
+    private void Expression_MatchString(MatchStringArgs args)
+    {
+        throw new NotImplementedException();
     }
 
     public virtual object Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
@@ -400,7 +761,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
 
         if (!context.Options.HasFlag(ExpressionOptions.CompareNullValues))
         {
-            if ((a == null || b == null) && !(a == null && b == null))
+            if ((a is null || b is null) && !(a is null && b is null))
                 return false;
         }
 

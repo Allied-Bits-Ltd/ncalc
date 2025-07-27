@@ -82,7 +82,7 @@ public enum ExpressionOptions
     AllowNullOrEmptyExpressions = 1 << 14,
 
     /// <summary>
-    /// Enables strict type matching, where comparisons between objects of different types will return false.
+    /// Enables strict type matching, where comparisons between objects of different types will return false. This also applies to LIKE and NOT LIKE operations - if StrictTypeMatching is enabled, the operands must be strings.
     /// </summary>
     StrictTypeMatching = 1 << 15,
 
@@ -149,5 +149,10 @@ public enum ExpressionOptions
     /// <summary>
     /// Specifies that comparison of null values should take place (a non-null value has precedence) instead of shortcutting to false.
     /// </summary>
-    CompareNullValues = 1 << 28
+    CompareNullValues = 1 << 28,
+
+    /// <summary>
+    /// When set, null will be converted to zero in math expressions
+    /// </summary>
+    TreatNullAsZero = 1 << 29
 }
