@@ -1177,6 +1177,22 @@ public static class MathHelper
         return Math.Log(ConvertToDouble(a, options), ConvertToDouble(b, options));
     }
 
+    public static object Log2(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Log2(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Log2(bdA);
+            }
+        }
+        return Math.Log2(ConvertToDouble(a, options));
+    }
+
     public static object Log10(object? a, MathHelperOptions options)
     {
         if (options.UseBigNumbers)
@@ -1502,7 +1518,7 @@ public static class MathHelper
         };
     }
 
-    private static double ConvertToDouble(object? value, MathHelperOptions options)
+    public static double ConvertToDouble(object? value, MathHelperOptions options)
     {
         return value switch
         {
@@ -1514,7 +1530,7 @@ public static class MathHelper
         };
     }
 
-    private static decimal ConvertToDecimal(object? value, MathHelperOptions options)
+    public static decimal ConvertToDecimal(object? value, MathHelperOptions options)
     {
         return value switch
         {
@@ -1526,7 +1542,7 @@ public static class MathHelper
         };
     }
 
-    private static int ConvertToInt(object? value, MathHelperOptions options)
+    public static int ConvertToInt(object? value, MathHelperOptions options)
     {
         return value switch
         {
@@ -1539,7 +1555,7 @@ public static class MathHelper
         };
     }
 
-    private static long ConvertToLong(object? value, MathHelperOptions options)
+    public static long ConvertToLong(object? value, MathHelperOptions options)
     {
         return value switch
         {

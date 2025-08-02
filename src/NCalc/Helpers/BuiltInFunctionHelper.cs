@@ -114,6 +114,12 @@ public static class BuiltInFunctionHelper
                 throw new NCalcEvaluationException("Log() takes exactly 2 arguments");
             return MathHelper.Log(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
         }
+        if (functionName.Equals("Log2", comparison))
+        {
+            if (arguments.Length != 2)
+                throw new NCalcEvaluationException("Log2() takes exactly 1 argument");
+            return MathHelper.Log2(arguments[0].Evaluate(), context);
+        }
         if (functionName.Equals("Log10", comparison))
         {
             if (arguments.Length != 1)

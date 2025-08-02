@@ -1,3 +1,5 @@
+* Added Log2 to built-in functions.
+
 # 5.4.1
 * Update Parlot version by @gumbarros in https://github.com/ncalc/ncalc/pull/397
 
