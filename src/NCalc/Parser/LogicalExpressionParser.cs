@@ -603,7 +603,7 @@ public static class LogicalExpressionParser
 
         // list => "(" (expression ("," expression)*)? ")"
         var populatedList =
-            Between(openParen, Separated(comma.Or(semicolon), expression),
+            Between(openParen, Separated(comma.Or(semicolon)/*(decimalSeparator == ',' || decimalSeparator2 == ',' || numGroupSeparator == ',' ? semicolon : comma.Or(semicolon))*/, expression),
                     closeParen.ElseError("Parenthesis not closed."))
                 .Then<LogicalExpression>(values => new LogicalExpressionList(values));
 
@@ -1784,6 +1784,7 @@ public static class LogicalExpressionParser
                             expressionType = BinaryExpressionType.MultiplyAssignment;
                             break;
                         case "/=":
+                        case "\u00F7=":
                             expressionType = BinaryExpressionType.DivAssignment;
                             break;
                         case "&=":

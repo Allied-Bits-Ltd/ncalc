@@ -1,5 +1,4 @@
 ﻿using System.Numerics;
-
 using ExtendedNumerics;
 
 namespace NCalc.Helpers;
@@ -2119,6 +2118,35 @@ public static class MathHelper
                t == typeof(long) || t == typeof(ulong);
     }
 
+    public static bool IsBoxedNumber(object? obj)
+    {
+        if (obj is null)
+            return false;
+
+        var t = obj.GetType();
+        return t == typeof(byte) || t == typeof(sbyte) ||
+               t == typeof(short) || t == typeof(ushort) ||
+               t == typeof(int) || t == typeof(uint) ||
+               t == typeof(long) || t == typeof(ulong) ||
+               t == typeof(float) || t == typeof(double) || t == typeof(decimal);
+    }
+
+    public static bool IsBoxedNumberOrBigNumber(object? obj)
+    {
+        if (obj is null)
+            return false;
+
+        if (obj is BigInteger || obj is BigDecimal)
+            return true;
+
+        var t = obj.GetType();
+        return t == typeof(byte) || t == typeof(sbyte) ||
+               t == typeof(short) || t == typeof(ushort) ||
+               t == typeof(int) || t == typeof(uint) ||
+               t == typeof(long) || t == typeof(ulong) ||
+               t == typeof(float) || t == typeof(double) || t == typeof(decimal);
+    }
+
     public static bool IsBoxedNumberZero(object? number)
     {
         if (number == null)
@@ -2166,6 +2194,83 @@ public static class MathHelper
             default:
                 throw new ArgumentException("Provided object is not a supported numeric type.");
         }
+    }
+
+    public static object? ReduceNumericType(object value, bool forceInteger = false, MathHelperOptions options = default)
+    {
+        if (value is BigDecimal bdValue)
+            return MathHelper.ReduceToSaneNumber(bdValue, false, options);
+        else
+        if (value is BigInteger biValue)
+            return MathHelper.ReduceToSaneNumber(biValue, options);
+        else
+        if (MathHelper.IsBoxedIntegerNumber(value))
+        {
+            if (value is ulong ulValue)
+            {
+                if (ulValue <= int.MaxValue)
+                    return (int)value;
+                else
+                if (ulValue <= uint.MaxValue)
+                    return (uint)ulValue;
+                return ulValue;
+            }
+            else
+            {
+                long candidate = MathHelper.ConvertToLong(value, options);
+                if (candidate >= int.MinValue && candidate <= int.MaxValue)
+                    return (int)candidate;
+                else
+                if (candidate >= uint.MinValue && candidate <= uint.MaxValue)
+                    return (uint)candidate;
+                return candidate;
+            }
+        }
+        else
+        if (options.DecimalAsDefault == true)
+            return MathHelper.ConvertToDecimal(value, options);
+        else
+            return MathHelper.ConvertToDouble(value, options);
+    }
+
+    public static object? ReduceToSaneNumber(BigDecimal value, bool forceInteger = false, MathHelperOptions? options = default)
+    {
+        if (forceInteger || value.GetFractionalPart().IsZero())
+        {
+            BigInteger biResult = value.WholeValue;
+
+            if (biResult >= long.MinValue && biResult <= long.MaxValue)
+                return (long)biResult;
+            else
+            if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
+                return (ulong)biResult;
+
+            return biResult;
+        }
+        else
+        if ((options?.DecimalAsDefault  == true) && (value >= decimal.MinValue && value <= decimal.MaxValue))
+            return (decimal)value;
+        else
+            if (value >= float.MinValue && value <= float.MaxValue)
+            return (float)value;
+        else
+            if (value >= double.MinValue && value <= double.MaxValue)
+            return (double)value;
+        else
+            if (value >= decimal.MinValue && value <= decimal.MaxValue)
+            return (decimal)value;
+        return value;
+    }
+
+    public static object? ReduceToSaneNumber(BigInteger value, MathHelperOptions? options = default)
+    {
+        if (value >= long.MinValue && value <= long.MaxValue)
+            return (long)value;
+        else
+        if (value >= ulong.MinValue && value <= ulong.MaxValue)
+            return (ulong)value;
+
+        return value;
     }
 
     public static object? TryReduceToUInt64(BigInteger? value)
