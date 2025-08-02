@@ -1,3 +1,5 @@
+* Added Log2 to built-in functions.
+
 # 7.0.1 (Allied Bits)
 * Added the MatchString event to the expression classes for customized matching of strings. 
 * Added the TreatNullAsZero flag to ExpressionOptions.
