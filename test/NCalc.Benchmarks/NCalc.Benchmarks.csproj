@@ -19,4 +19,10 @@
     <ProjectReference Include="..\..\src\Plugins\NCalc.Antlr\NCalc.Antlr.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Update="Roslynator.Analyzers" Version="4.14.0" />
+    <PackageReference Update="Roslynator.CodeAnalysis.Analyzers" Version="4.14.0" />
+    <PackageReference Update="Roslynator.Formatting.Analyzers" Version="4.14.0" />
+  </ItemGroup>
+
 </Project>
