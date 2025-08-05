@@ -105,6 +105,11 @@ public class EvaluationTests
         eifs.Parameters["number"] = 1337;
 
         Assert.Equal(8, eifs.Evaluate());
+
+        eifs = new Expression("ifs([number] == 3, 5, [number] == 5, 3)");
+        eifs.Parameters["number"] = 1337;
+
+        Assert.Null(eifs.Evaluate());
     }
 
     [Fact]
@@ -120,6 +125,11 @@ public class EvaluationTests
         eif.Parameters["divider"] = 0;
         eif.Parameters["divided"] = 5;
         Assert.Equal(0, eif.Evaluate());
+
+        eif = new Expression("if([divider] <> 0, [divided] / [divider])");
+        eif.Parameters["divider"] = 0;
+        eif.Parameters["divided"] = 5;
+        Assert.Null(eif.Evaluate());
     }
 
     [Fact]

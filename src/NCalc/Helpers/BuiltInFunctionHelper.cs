@@ -185,31 +185,34 @@ public static class BuiltInFunctionHelper
         }
         if (functionName.Equals("ifs", comparison))
         {
-            if (arguments.Length < 3 || arguments.Length % 2 != 1)
+            if (arguments.Length < 2)
             {
                 throw new NCalcEvaluationException(
-                    "ifs() takes at least 3 arguments, or an odd number of arguments");
+                    "ifs() takes at least 2 arguments");
             }
 
-            foreach (var argument in arguments.Where((_, i) => i % 2 == 0))
+            for (int i = 0; i < arguments.Length; i+=2)
             {
-                var index = Array.IndexOf(arguments, argument);
-                if (index == arguments.Length - 1)
+                var argument = arguments[i];
+
+                if (i == arguments.Length - 1)
                     return argument.Evaluate();
 
                 var tf = Convert.ToBoolean(argument.Evaluate(), context.CultureInfo);
                 if (tf)
-                    return arguments[index + 1].Evaluate();
+                    return arguments[i + 1].Evaluate();
             }
+            if (arguments.Length % 2 == 1)
+                return arguments[^1].Evaluate();
 
             return null;
         }
         if (functionName.Equals("if", comparison))
         {
-            if (arguments.Length != 3)
-                throw new NCalcEvaluationException("if() takes exactly 3 arguments");
+            if (arguments.Length < 2 || arguments.Length > 3)
+                throw new NCalcEvaluationException("if() takes 2 or 3 arguments");
             var cond = Convert.ToBoolean(arguments[0].Evaluate(), context.CultureInfo);
-            return cond ? arguments[1].Evaluate() : arguments[2].Evaluate();
+            return cond ? arguments[1].Evaluate() : ((arguments.Length == 3) ? arguments[2].Evaluate() : null);
         }
         if (functionName.Equals("in", comparison))
         {
