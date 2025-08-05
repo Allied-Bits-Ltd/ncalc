@@ -147,8 +147,8 @@ public class SerializationTests
         var trueArrayExpression = new LogicalExpressionList([new ValueExpression(true)]);
         var helloWorldArrayExpression = new LogicalExpressionList([new ValueExpression("Hello"), new ValueExpression("World")]);
         Assert.Equal("(True)", trueArrayExpression.ToString());
-        Assert.Equal("('Hello','World')", helloWorldArrayExpression.ToString());
+        Assert.Equal("('Hello'; 'World')", helloWorldArrayExpression.ToString());
         Assert.Equal("()", new LogicalExpressionList([]).ToString());
-        Assert.Equal("((True),('Hello','World'))", new LogicalExpressionList([trueArrayExpression, helloWorldArrayExpression]).ToString());
+        Assert.Equal("((True); ('Hello'; 'World'))", new LogicalExpressionList([trueArrayExpression, helloWorldArrayExpression]).ToString());
     }
 }

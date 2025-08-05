@@ -180,6 +180,15 @@ public class EvaluationTests
     }
 
     [Fact]
+    public void ShouldHandleCurlyBraces()
+    {
+        var volume = new Expression("{h}");
+        volume.Parameters["h"] = 3;
+
+        Assert.Equal(3, volume.Evaluate());
+    }
+
+    [Fact]
     public void ShouldAllowToUseCurlyBraces()
     {
         var volume = new Expression("{surface} * h");

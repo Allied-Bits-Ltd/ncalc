@@ -16,4 +16,5 @@ public interface ILogicalExpressionVisitor<out T>
     T Visit(Function function, CancellationToken cancellationToken = default);
     T Visit(Identifier identifier, CancellationToken cancellationToken = default);
     T Visit(LogicalExpressionList list, CancellationToken cancellationToken = default);
+    T Visit(ExpressionGroup group, CancellationToken cancellationToken = default);
 }

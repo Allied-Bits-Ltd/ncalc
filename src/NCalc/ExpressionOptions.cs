@@ -152,7 +152,22 @@ public enum ExpressionOptions
     CompareNullValues = 1 << 28,
 
     /// <summary>
-    /// When set, null will be converted to zero in math expressions
+    /// When set, null will be converted to zero in math expressions.
     /// </summary>
-    TreatNullAsZero = 1 << 29
+    TreatNullAsZero = 1 << 29,
+
+    /// <summary>
+    /// By default, an identifier may be included in curly braces or square brackets. Enabling this option removes the braces
+    /// </summary>
+    //NoBracesForIdentifiers = 1 << 30
+
+    /// <summary>
+    /// When set, the parser will recognize C-style line and block comments in expressions.
+    /// </summary>
+    SupportCStyleComments = 1 << 31,
+
+    /// <summary>
+    /// When set, the parser will recognize Python comments in expressions.
+    /// </summary>
+    SupportPythonComments = 1 << 32
 }
