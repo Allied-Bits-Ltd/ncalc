@@ -1,4 +1,12 @@
+TODO: assign to list elements
+
+* Added support for C-Style (line and block) and Python-style comments.
+* Added support for indexed expressions (when an expression evaluates to a list, it is possible to access individual elements).
+* Sequences of expressions and statements can now be grouped using curly brackets (this is needed when a group of expressions or statements is used as a parameter of a function).
+* Added the MatchString event for custom string matching.
 * Added Log2 to built-in functions.
+* Fixed statement sequences (the last statement was skipped).
+* Added the missing pieces to the serialization visitor (not all binary operations were serialized).
 
 # 7.0.1 (Allied Bits)
 * Added the MatchString event to the expression classes for customized matching of strings. 
