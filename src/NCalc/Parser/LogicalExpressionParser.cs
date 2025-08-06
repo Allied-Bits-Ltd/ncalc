@@ -625,10 +625,10 @@ public static class LogicalExpressionParser
 
         var index = openBrace.SkipAnd(expressionOrBracedStatementSequence).AndSkip(closeBrace);
 
-        var indexedIdentifierExpression = OneOf(braceIdentifier, identifier).And(index)
+        /*var indexedIdentifierExpression = OneOf(braceIdentifier, identifier).And(index)
         .Then<LogicalExpression>(x =>
             new IndexedIdentifier(x.Item1.ToString() ?? string.Empty, x.Item2)
-            );
+            );*/
 
         // list => "(" (expression ("," expression)*)? ")"
         var populatedList =
@@ -1615,7 +1615,7 @@ public static class LogicalExpressionParser
         enabledParsers.Add(stringValue);
         enabledParsers.Add(functionOrResultRef);
         enabledParsers.Add(groupExpression);
-        enabledParsers.Add(indexedIdentifierExpression);
+        // enabledParsers.Add(indexedIdentifierExpression);
         enabledParsers.Add(identifierExpression);
         enabledParsers.Add(list);
         enabledParsers.Add(bracedExpressionOrStatementSequence);

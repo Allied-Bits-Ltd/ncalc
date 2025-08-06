@@ -645,10 +645,22 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             case BinaryExpressionType.IndexAccess:
             {
                 if (!TryGetValueOrNull(left.Value, out leftValue))
-                    return null;
+                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list");
                 if (!TryGetValueOrNull(right.Value, out rightValue))
-                    return null;
+                    throw new NCalcParameterIndexException("The index does not evaluate to a number");
 
+                if (leftValue is not IList identList)
+                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list");
+
+                if (!MathHelper.IsBoxedIntegerNumber(rightValue))
+                    throw new NCalcParameterIndexException("The index does not evaluate to a number");
+                var index = MathHelper.ConvertToInt(rightValue, context);
+                if (index < 0 || index >= identList.Count)
+                    throw new NCalcParameterIndexException($"The index is out of bounds [0; {identList.Count - 1}]");
+                object? result = identList[index];
+                if (result is LogicalExpression expr)
+                    result = expr.Accept(this);
+                return result;
             }
         }
 
@@ -720,8 +732,8 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             result = parameterArgs.Result;
             if (result is null)
             {
-                if (identifier is IndexedIdentifier indIdent)
-                    throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                /*if (identifier is IndexedIdentifier indIdent)
+                    throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                 return result;
             }
         }
@@ -747,8 +759,8 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                     result = expression.Evaluate();
                     if (result is null)
                     {
-                        if (identifier is IndexedIdentifier indIdent)
-                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                        /*if (identifier is IndexedIdentifier indIdent)
+                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                         return result;
                     }
                 }
@@ -757,8 +769,8 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                     result = parameter;
                     if (result is null)
                     {
-                        if (identifier is IndexedIdentifier indIdent)
-                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                        /*if (identifier is IndexedIdentifier indIdent)
+                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                         return result;
                     }
                 }
@@ -772,8 +784,8 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 result = dynamicParameter(new ExpressionParameterData(identifier.Id, context));
                 if (result is null)
                 {
-                    if (identifier is IndexedIdentifier indIdent)
-                        throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                    /*if (identifier is IndexedIdentifier indIdent)
+                        throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                     return result;
                 }
             }
@@ -781,7 +793,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
 
         if (result != null)
         {
-            if (identifier is IndexedIdentifier indIdent)
+            /*if (identifier is IndexedIdentifier indIdent)
             {
                 if (result is not IList identList)
                     throw new NCalcParameterIndexException(identifierName, $"{identifierName}, if used with an index, must denote a list");
@@ -794,7 +806,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 result = identList[index];
                 if (result is LogicalExpression expr)
                     result = expr.Accept(this);
-            }
+            }*/
             return result;
         }
 

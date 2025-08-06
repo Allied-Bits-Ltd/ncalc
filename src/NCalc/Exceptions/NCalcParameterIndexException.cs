@@ -10,4 +10,8 @@ public sealed class NCalcParameterIndexException: NCalcEvaluationException
     {
         ParameterName = parameterName;
     }
+    public NCalcParameterIndexException(string message) : base(message)
+    {
+        ParameterName = string.Empty;
+    }
 }

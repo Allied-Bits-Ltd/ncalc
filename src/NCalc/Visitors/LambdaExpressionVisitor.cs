@@ -140,6 +140,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             BinaryExpressionType.RightShift => LinqExpression.RightShift(left, right),
             BinaryExpressionType.Exponentiation => LinqExpression.Power(LinqExpression.Convert(left, typeof(double)), LinqExpression.Convert(right, typeof(double))),
             BinaryExpressionType.Factorial => Factorial(left, right),
+            BinaryExpressionType.IndexAccess => throw new NotSupportedException("Indexed access to parameters is not supported for Lambda expressions. Please submit an issue to https://github.com/Allied-Bits-Ltd/ncalc/issues if you need this support."),
             BinaryExpressionType.Unknown => throw new ArgumentOutOfRangeException(),
             _ => throw new ArgumentOutOfRangeException()
         };
@@ -326,7 +327,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         if (result is null && _context is not null)
             result = LinqExpression.PropertyOrField(_context, identifierName);
 
-        if (result is not null && identifier is IndexedIdentifier indIdent)
+        /*if (result is not null && identifier is IndexedIdentifier indIdent)
         {
             LinqExpression indexer = indIdent.Index.Accept(this, cancellationToken);
             var indexValue = ((Linq.LambdaExpression)indexer).Body;
@@ -336,7 +337,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             var indexerAccess = LinqExpression.MakeIndex(result, indexerProperty, new[] { indexValue });
 
             result = indexerAccess;
-        }
+        }*/
         if (result is null)
             throw new NCalcParameterNotDefinedException(identifier.Name);
         return result;

@@ -13,7 +13,7 @@ public class Identifier(string name) : LogicalExpression
     }
 }
 
-public class IndexedIdentifier : Identifier
+/*public class IndexedIdentifier : Identifier
 {
     internal LogicalExpression Index {  get; set; }
 
@@ -21,4 +21,4 @@ public class IndexedIdentifier : Identifier
     {
         Index = index;
     }
-}
+}*/

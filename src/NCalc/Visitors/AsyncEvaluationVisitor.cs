@@ -664,6 +664,27 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
                 return !(await EvaluationHelper.LikeAsync(leftValue!, rightValue!, context, cancellationToken).ConfigureAwait(false));
             }
+
+            case BinaryExpressionType.IndexAccess:
+            {
+                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list");
+                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                    throw new NCalcParameterIndexException("The index does not evaluate to a number");
+
+                if (leftValue is not IList identList)
+                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list");
+
+                if (!MathHelper.IsBoxedIntegerNumber(rightValue))
+                    throw new NCalcParameterIndexException("The index does not evaluate to a number");
+                var index = MathHelper.ConvertToInt(rightValue, context);
+                if (index < 0 || index >= identList.Count)
+                    throw new NCalcParameterIndexException($"The index is out of bounds [0; {identList.Count - 1}]");
+                object? result = identList[index];
+                if (result is LogicalExpression expr)
+                    result = await expr.Accept(this, cancellationToken).ConfigureAwait(false);
+                return result;
+            }
         }
         return null;
     }
@@ -729,8 +750,8 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
             result = parameterArgs.Result;
             if (result is null)
             {
-                if (identifier is IndexedIdentifier indIdent)
-                    throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                /*if (identifier is IndexedIdentifier indIdent)
+                    throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                 return result;
             }
         }
@@ -756,8 +777,8 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                     result = await expression.EvaluateAsync(cancellationToken).ConfigureAwait(false);
                     if (result is null)
                     {
-                        if (identifier is IndexedIdentifier indIdent)
-                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                        /*if (identifier is IndexedIdentifier indIdent)
+                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                         return result;
                     }
                 }
@@ -766,8 +787,8 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                     result = parameter;
                     if (result is null)
                     {
-                        if (identifier is IndexedIdentifier indIdent)
-                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                        /*if (identifier is IndexedIdentifier indIdent)
+                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                         return result;
                     }
                 }
@@ -780,8 +801,8 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 result = await dynamicParameter(new AsyncExpressionParameterData(identifier.Id, context), cancellationToken).ConfigureAwait(false);
                 if (result is null)
                 {
-                    if (identifier is IndexedIdentifier indIdent)
-                        throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                    /*if (identifier is IndexedIdentifier indIdent)
+                        throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                     return result;
                 }
             }
@@ -789,7 +810,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
         if (result != null)
         {
-            if (identifier is IndexedIdentifier indIdent)
+            /*if (identifier is IndexedIdentifier indIdent)
             {
                 if (result is not IList identList)
                     throw new NCalcParameterIndexException(identifierName, $"{identifierName}, if used with an index, must denote a list");
@@ -802,7 +823,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 result = identList[index];
                 if (result is LogicalExpression expr)
                     result = await expr.Accept(this).ConfigureAwait(false);
-            }
+            }*/
             return result;
         }
 
