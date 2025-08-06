@@ -1735,6 +1735,7 @@ public class AdvFeatureTests
     [InlineData("a := (1;  4 div 2; 3); a[1]", 2)]
     [InlineData("a := (1; 2; 3); b := 2; c := 1; a[1] + 1", 3)]
     [InlineData("b := 2; c:= 1; a := (c; b; 3); a[1]", 2)]
+    [InlineData("b := 2; c:= 1; a := (c; b; 3); a[2 / 2]", 2)]
     public void ShouldHandleIndexedParameters(string input, int expectedValue)
     {
         bool eventFired = false;

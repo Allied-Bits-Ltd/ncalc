@@ -652,9 +652,15 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 if (leftValue is not IList identList)
                     throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list");
 
-                if (!MathHelper.IsBoxedIntegerNumber(rightValue))
+                int index;
+                try
+                {
+                    index = MathHelper.ConvertToInt(rightValue, context);
+                }
+                catch
+                {
                     throw new NCalcParameterIndexException("The index does not evaluate to a number");
-                var index = MathHelper.ConvertToInt(rightValue, context);
+                }
                 if (index < 0 || index >= identList.Count)
                     throw new NCalcParameterIndexException($"The index is out of bounds [0; {identList.Count - 1}]");
                 object? result = identList[index];
