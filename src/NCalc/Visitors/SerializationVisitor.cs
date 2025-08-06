@@ -18,13 +18,11 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     {
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
-        var resultBuilder = new StringBuilder();
-        resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression));
-        resultBuilder.Append("? ");
-        resultBuilder.Append(EncapsulateNoValue(expression.MiddleExpression));
-        resultBuilder.Append(": ");
-        resultBuilder.Append(EncapsulateNoValue(expression.RightExpression));
-        return resultBuilder.ToString();
+        string result = EncapsulateNoValue(expression.LeftExpression) + "? ";
+        result += EncapsulateNoValue(expression.MiddleExpression) + ": ";
+        result += EncapsulateNoValue(expression.RightExpression);
+
+        return result;
     }
 
     public string Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
@@ -56,10 +54,19 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             {
                 BinaryExpressionType.StatementSequence => "; " ,
                 BinaryExpressionType.Assignment => context.Options.HasFlag(ExpressionOptions.UseCStyleAssignments) ? "= " : ":= ",
+                BinaryExpressionType.PlusAssignment => "+= ",
+                BinaryExpressionType.MinusAssignment => "-= ",
+                BinaryExpressionType.MultiplyAssignment => "*= ",
+                BinaryExpressionType.DivAssignment => "/= ",
+                BinaryExpressionType.AndAssignment => "&= ",
+                BinaryExpressionType.OrAssignment => "|= ",
+                BinaryExpressionType.XOrAssignment => "^= ",
                 BinaryExpressionType.And => "and ",
                 BinaryExpressionType.Or => "or ",
                 BinaryExpressionType.XOr => "xor ",
                 BinaryExpressionType.Div => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u00F7 " : "/ ",
+                BinaryExpressionType.IntDivB => "div ",
+                BinaryExpressionType.IntDivP => "// ",
                 BinaryExpressionType.Equal => context.Options.HasFlag(ExpressionOptions.UseCStyleAssignments) ? "== " : "= ",
                 BinaryExpressionType.Greater => "> ",
                 BinaryExpressionType.GreaterOrEqual => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2265 " : ">= ",
@@ -97,9 +104,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     {
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
-        var resultBuilder = new StringBuilder();
-
-        resultBuilder.Append(expression.Type switch
+        string result = expression.Type switch
         {
             UnaryExpressionType.Not => "!",
             UnaryExpressionType.Negate => "-",
@@ -110,11 +115,10 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 #endif
             UnaryExpressionType.FourthRoot => "\u221c",
             _ => string.Empty
-        });
+        };
 
-        resultBuilder.Append(EncapsulateNoValue(expression.Expression));
-
-        return resultBuilder.ToString();
+        result += EncapsulateNoValue(expression.Expression);
+        return result;
     }
 
     public string Visit(PercentExpression expression, CancellationToken cancellationToken = default)
@@ -128,41 +132,23 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     {
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
-        var resultBuilder = new StringBuilder();
+        var value = expression.Value;
 
-        switch (expression.Type)
+        return expression.Type switch
         {
-            case ValueType.Boolean:
-                resultBuilder.Append(expression.Value).Append(' ');
-                break;
-            case ValueType.DateTime or ValueType.TimeSpan:
-                resultBuilder.Append('#').Append(expression.Value).Append('#').Append(' ');
-                break;
-            case ValueType.Float:
-                resultBuilder.Append(decimal.Parse(expression.Value?.ToString() ?? string.Empty).ToString(_numberFormatInfo))
-                    .Append(' ');
-                break;
-            case ValueType.Integer:
-                resultBuilder.Append(expression.Value).Append(' ');
-                break;
-            case ValueType.String or ValueType.Char:
-                var value = expression.Value;
-                if (value is Parlot.TextSpan)
-                    resultBuilder.Append(value.ToString()).Append(' ');
-                else
-                    resultBuilder.Append('\'').Append(value).Append('\'').Append(' ');
-                break;
-        }
-
-        return resultBuilder.ToString();
+            ValueType.Boolean or ValueType.Integer => $"{value} ",
+            ValueType.DateTime or ValueType.TimeSpan => $"#{value}# ",
+            ValueType.Float => $"{decimal.Parse(value?.ToString() ?? string.Empty).ToString(_numberFormatInfo)} ",
+            ValueType.String or ValueType.Char => (value is Parlot.TextSpan) ?  $"{value} " : $"'{value}' ",
+            _ => "",
+        };
     }
 
     public string Visit(Function function, CancellationToken cancellationToken = default)
     {
         function.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
-        var resultBuilder = new StringBuilder();
-        resultBuilder.Append(function.Identifier.Name).Append('(');
+        var resultBuilder = new StringBuilder(function.Identifier.Name +'(');
 
         for (int i = 0; i < function.Parameters.Count; i++)
         {
@@ -183,25 +169,14 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
-        /*if (identifier is IndexedIdentifier indIdent)
-        {
-            StringBuilder resultBuilder = new StringBuilder();
-            resultBuilder.Append(identifier.Name);
-            resultBuilder.Append('[');
-            resultBuilder.Append(indIdent.Index.Accept(this, cancellationToken).TrimEnd());
-            resultBuilder.Append(']');
-
-            return resultBuilder.ToString();
-        }
-        else*/
-            return $"{identifier.Name}";
+        return $"[{identifier.Name}]";
     }
 
     public string Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
         list.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
-        var resultBuilder = new StringBuilder().Append('(');
+        var resultBuilder = new StringBuilder("(");
         for (var i = 0; i < list.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();

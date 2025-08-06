@@ -1511,10 +1511,10 @@ public static class MathHelper
     {
         return value switch
         {
-            char when options is { DecimalAsDefault: true, AllowCharValues: false } => decimal.Parse(value.ToString()!, options.CultureInfo),
-            string when options is { DecimalAsDefault: true } => decimal.Parse(value.ToString()!, options.CultureInfo),
-            char when options is { AllowCharValues: false } => double.Parse(value.ToString()!, options.CultureInfo),
-            string => double.Parse(value.ToString()!, options.CultureInfo),
+            char ch when options is { DecimalAsDefault: true, AllowCharValues: false } => decimal.Parse(ch.ToString(), options.CultureInfo),
+            string s when options is { DecimalAsDefault: true } => decimal.Parse(s, options.CultureInfo),
+            char ch when options is { AllowCharValues: false } => double.Parse(ch.ToString(), options.CultureInfo),
+            string s => double.Parse(s, options.CultureInfo),
             bool boolean when options.AllowBooleanCalculation => boolean ? 1 : 0,
             _ => value
         };
@@ -1527,7 +1527,7 @@ public static class MathHelper
             BigInteger bigI => ((double)bigI),
             BigDecimal bigD => ((double)bigD),
             double @double => @double,
-            char => Convert.ToDouble(value.ToString(), options.CultureInfo),
+            char ch => Convert.ToDouble(ch.ToString(), options.CultureInfo),
             _ => Convert.ToDouble(value, options.CultureInfo)
         };
     }
@@ -1539,7 +1539,7 @@ public static class MathHelper
             BigInteger bigI => ((decimal)bigI),
             BigDecimal bigD => ((decimal)bigD),
             decimal @decimal => @decimal,
-            char => Convert.ToDecimal(value.ToString(), options.CultureInfo),
+            char ch => Convert.ToDecimal(ch.ToString(), options.CultureInfo),
             _ => Convert.ToDecimal(value, options.CultureInfo)
         };
     }
@@ -1552,7 +1552,7 @@ public static class MathHelper
             BigDecimal bigD => ((int)bigD),
 
             int i => i,
-            char => Convert.ToInt32(value.ToString(), options.CultureInfo),
+            char ch => Convert.ToInt32(ch.ToString(), options.CultureInfo),
             _ => Convert.ToInt32(value, options.CultureInfo)
         };
     }
@@ -1565,7 +1565,7 @@ public static class MathHelper
             BigDecimal bigD => ((long)(decimal)bigD),
 
             int i => i,
-            char => Convert.ToInt64(value.ToString(), options.CultureInfo),
+            char ch => Convert.ToInt64(ch.ToString(), options.CultureInfo),
             _ => Convert.ToInt64(value, options.CultureInfo)
         };
     }
