@@ -558,7 +558,11 @@ public static class LogicalExpressionParser
 
         // We don't let $ at the beginning of identifiers as it may be confused with currency
 
-        var identifier = supportCurrency ? Terms.Identifier(SearchValues.Create("_" + Character.AZ), SearchValues.Create("_" + Character.AlphaNumeric)) : Terms.Identifier();
+        var identifier =
+#if NET8_0_OR_GREATER
+            supportCurrency ? Terms.Identifier(SearchValues.Create("_" + Character.AZ), SearchValues.Create("_" + Character.AlphaNumeric)) :
+#endif
+            Terms.Identifier();
 
         Parser<string>? not;
         Parser<string>? and;
@@ -609,7 +613,7 @@ public static class LogicalExpressionParser
         var groupExpression = Between(openParen, expression, closeParen);
 
         var braceIdentifier = openBrace
-            .SkipAnd(AnyCharBefore(closeBrace, consumeDelimiter: true, failOnEof: true).ElseError("Brace not closed."));
+            .SkipAnd(AnyCharBefore(closeBrace, consumeDelimiter: true, failOnEof: true).ElseError("Bracket not closed."));
 
         var curlyBraceIdentifier =
             openCurlyBrace.SkipAnd(AnyCharBefore(closeCurlyBrace, consumeDelimiter: true, failOnEof: true)

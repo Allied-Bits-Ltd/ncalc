@@ -1177,6 +1177,7 @@ public static class MathHelper
         return Math.Log(ConvertToDouble(a, options), ConvertToDouble(b, options));
     }
 
+#if NET8_0_OR_GREATER
     public static object Log2(object? a, MathHelperOptions options)
     {
         if (options.UseBigNumbers)
@@ -1192,6 +1193,7 @@ public static class MathHelper
         }
         return Math.Log2(ConvertToDouble(a, options));
     }
+#endif
 
     public static object Log10(object? a, MathHelperOptions options)
     {

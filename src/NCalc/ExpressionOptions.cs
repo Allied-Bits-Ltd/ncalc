@@ -157,11 +157,6 @@ public enum ExpressionOptions
     TreatNullAsZero = 1 << 29,
 
     /// <summary>
-    /// By default, an identifier may be included in curly braces or square brackets. Enabling this option removes the braces
-    /// </summary>
-    //NoBracesForIdentifiers = 1 << 30
-
-    /// <summary>
     /// When set, the parser will recognize C-style line and block comments in expressions.
     /// </summary>
     SupportCStyleComments = 1 << 31,
