@@ -1,6 +1,6 @@
 # Intro
 
-NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expression and evaluate the result, including static or dynamic parameters and custom functions.
+NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expression or a group of expressions and evaluate the result, including static or dynamic parameters and custom functions.
 
 ## Project Description
 
@@ -11,8 +11,8 @@ NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expres
 - [Values](values.md): Authorized values like types and functions.
 - [Advanced Value Formats](advanced_value_formats.md): Advanced Value Formats and Operations
 - [Functions](functions.md):  List of already implemented functions.
-- [Parameters](parameters.md):  How to use parameters expressions.
-- [Handling Errors](handling_errors.md):  How to handle errors.
+- [Parameters/Variables](parameters.md): How to use parameters (variables) in expressions.
+- [Handling Errors](handling_errors.md): How to handle errors.
 - [Case Sensitivity](case_sensitivity.md): Options in how to handle case sensitivity.
 - [Overflow Handling](overflow_protection.md): How to handle overflow with binary arithmetic operations
 - [Async Support](async.md): How and when to use `async`.
@@ -23,6 +23,16 @@ NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expres
 - [Benchmarks](benchmarks.md): Check some numbers about the speed of some NCalc components.
 
 ## Functionalities
+
+### Expressions and statements 
+
+This branch of NCalc handles expressions which include variable assignment statements (which are also expressions as they return the assigned value) and groups of expressions. 
+Expressions in a group are separated with a semicolon. One or several expressions may be wrapped with curly braces '{' and '}' to make a single expression, which is useful when a group of expressions should be treated as one expression (e.g., in function parameters).
+To enable expression sequences, include the <xref:NCalc.ExpressionOptions.UseStatementSequences> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
+
+```c#
+var expression = new NCalc.Expression("{ 1; 2 }", ExpressionOptions.UseStatementSequences);
+```
 
 ### Simple Expressions
 
@@ -69,7 +79,7 @@ Debug.Assert("だ" == new Expression(@"'\u3060'").Evaluate());
 Debug.Assert("\u0100" == new Expression(@"'\u0100'").Evaluate());
 ```
 
-### Parameters - Static and Dynamic
+### Parameters (variables) - Static and Dynamic
 
 ```c#
 var expression = new Expression("Round(Pow([Pi], 2) + Pow([Pi2], 2) + [X], 2)");
@@ -91,3 +101,14 @@ var expression = new Expression("1 + 2");
 Func<int> function = expression.ToLambda<int>();
 Debug.Assert(function()); //3
 ```
+
+### Comments
+
+This branch of NCalc supports line and block C-style comments and Python line comments. 
+To enable them, include the  <xref:NCalc.ExpressionOptions.SupportCStyleComments> or <xref:NCalc.ExpressionOptions.SupportPythonComments> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
+
+```c#
+var expression = new NCalc.Expression("{ 1; 2 }", ExpressionOptions.SupportCStyleComments | ExpressionOptions.SupportPythonComments);
+```
+
+Note that when C-style comments are enabled, the "//" operator used in Python for integer division, cannot be used for this purpose. If C-style comments are disabled, this "//" integer division operator is supported.
