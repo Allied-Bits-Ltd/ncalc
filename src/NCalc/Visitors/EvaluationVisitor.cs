@@ -699,6 +699,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
 
     public virtual object? Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
+        object? result = null;
         var identifierName = identifier.Name;
 
         var parameterArgs = new ParameterArgs(identifier.Id);
@@ -707,34 +708,85 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
 
         if (parameterArgs.HasResult)
         {
-            return parameterArgs.Result;
-        }
-
-        if (context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var parameter))
-        {
-            if (parameter is Expression expression)
+            result = parameterArgs.Result;
+            if (result is null)
             {
-                //Share the parameters with child expression.
-                foreach (var p in context.StaticParameters)
-                    expression.Parameters[p.Key] = p.Value;
-
-                foreach (var p in context.DynamicParameters)
-                    expression.DynamicParameters[p.Key] = p.Value;
-
-                expression.EvaluateFunction += context.EvaluateFunctionHandler;
-                expression.EvaluateParameter += context.EvaluateParameterHandler;
-                expression.UpdateParameter += context.UpdateParameterHandler;
-                expression.MatchString += context.MatchStringHandler;
-
-                return expression.Evaluate();
+                if (identifier is IndexedIdentifier indIdent)
+                    throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                return result;
             }
-
-            return parameter;
         }
 
-        if (context.DynamicParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var dynamicParameter))
+        if (result == null)
         {
-            return dynamicParameter(new ExpressionParameterData(identifier.Id, context));
+            if (context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var parameter))
+            {
+                if (parameter is Expression expression)
+                {
+                    //Share the parameters with child expression.
+                    foreach (var p in context.StaticParameters)
+                        expression.Parameters[p.Key] = p.Value;
+
+                    foreach (var p in context.DynamicParameters)
+                        expression.DynamicParameters[p.Key] = p.Value;
+
+                    expression.EvaluateFunction += context.EvaluateFunctionHandler;
+                    expression.EvaluateParameter += context.EvaluateParameterHandler;
+                    expression.UpdateParameter += context.UpdateParameterHandler;
+                    expression.MatchString += context.MatchStringHandler;
+
+                    result = expression.Evaluate();
+                    if (result is null)
+                    {
+                        if (identifier is IndexedIdentifier indIdent)
+                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                        return result;
+                    }
+                }
+                else
+                {
+                    result = parameter;
+                    if (result is null)
+                    {
+                        if (identifier is IndexedIdentifier indIdent)
+                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                        return result;
+                    }
+                }
+            }
+        }
+
+        if (result == null)
+        {
+            if (context.DynamicParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var dynamicParameter))
+            {
+                result = dynamicParameter(new ExpressionParameterData(identifier.Id, context));
+                if (result is null)
+                {
+                    if (identifier is IndexedIdentifier indIdent)
+                        throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                    return result;
+                }
+            }
+        }
+
+        if (result != null)
+        {
+            if (identifier is IndexedIdentifier indIdent)
+            {
+                if (result is not IList identList)
+                    throw new NCalcParameterIndexException(identifierName, $"{identifierName}, if used with an index, must denote a list");
+                var indexObj = indIdent.Index.Accept(this);
+                if (!MathHelper.IsBoxedIntegerNumber(indexObj))
+                    throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number");
+                var index = MathHelper.ConvertToInt(indexObj, context);
+                if (index < 0 || index >= identList.Count)
+                    throw new NCalcParameterIndexException(identifierName, $"The index {index} of {identifierName} is out of bounds [0; {identList.Count - 1}]");
+                result = identList[index];
+                if (result is LogicalExpression expr)
+                    result = expr.Accept(this);
+            }
+            return result;
         }
 
         throw new NCalcParameterNotDefinedException(identifierName);
@@ -791,5 +843,10 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
     protected object? Evaluate(LogicalExpression expression, CancellationToken cancellationToken = default)
     {
         return expression.Accept(this, cancellationToken);
+    }
+
+    public object? Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
+    {
+        return group.Expression.Accept(this, cancellationToken);
     }
 }

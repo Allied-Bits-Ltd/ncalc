@@ -10,6 +10,46 @@ namespace NCalc.Tests;
 [Trait("Category", "Advanced")]
 public class AdvFeatureTests
 {
+    [Theory]
+    [InlineData("{ 0 }", 0)]
+    [InlineData("{ 1 }", 1)]
+    [InlineData("{ 1 + 2; 1 }", 1)]
+    [InlineData("{ 1 } + 2", 3)]
+    [InlineData("2 + { 1 }", 3)]
+    [InlineData("2 + { 1 } + 3", 6)]
+    [InlineData("a := 2; { a }", 2)]
+    public void ShouldHandleBraces(string input, int expectedValue)
+    {
+        var expr = new Expression(input, ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences, CultureInfo.InvariantCulture);
+        var res = expr.Evaluate();
+
+        Assert.Equal(expectedValue, res);
+    }
+
+    [Theory]
+    [InlineData("// a comment \n 0", 0)]
+    [InlineData("// a comment \n 2 + 2", 4)]
+    [InlineData("/* a comment */ 2 + 2", 4)]
+    [InlineData("/* a comment */\n 2 + 2", 4)]
+    public void ShouldSkipCStyleComments(string input, int expectedValue)
+    {
+        var expr = new Expression(input, ExpressionOptions.SupportCStyleComments, CultureInfo.InvariantCulture);
+        var res = expr.Evaluate();
+
+        Assert.Equal(expectedValue, res);
+    }
+
+    [Theory]
+    [InlineData("#* a comment *# \n 0", 0)]
+    [InlineData("# a comment \n 2 + 2", 4)]
+    public void ShouldSkipPythonComments(string input, int expectedValue)
+    {
+        var expr = new Expression(input, ExpressionOptions.SupportPythonComments | ExpressionOptions.DontParseDates, CultureInfo.InvariantCulture);
+        var res = expr.Evaluate();
+
+        Assert.Equal(expectedValue, res);
+    }
+
     [Fact]
     public void ShouldParseBigInteger()
     {
@@ -1478,12 +1518,13 @@ public class AdvFeatureTests
     [InlineData("a24 := 2", "a24", 2, 2)]
     [InlineData("mc5 := 2", "mc5", 2, 2)]
     [InlineData("a := 2 + 2", "a", 4, 4)]
-    [InlineData("{a} := (2 + 2)", "a" ,4, 4)]
+    [InlineData("a := (2 + 2)", "a" , 4, 4)]
+    [InlineData("[a] := (2 + 2)", "a" , 4, 4)]
     public void ShouldHandleAssignment(string input, string expectedVar, int expectedVarValue, int expectedExprValue)
     {
         bool eventFired = false;
 
-        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments);
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
         expression.UpdateParameter += (name, args) =>
         {
             eventFired = true;
@@ -1530,6 +1571,8 @@ public class AdvFeatureTests
     class AssignmentLambdaTestsContext
     {
         public int a { get; set; }
+        public int b { get; set; }
+        public int c { get; set; }
 
         public int length(string x)
         {
@@ -1550,7 +1593,7 @@ public class AdvFeatureTests
     [Theory]
     [InlineData("a := 2", 2, 2)]
     [InlineData("a := 2 + 2", 4, 4)]
-    [InlineData("{a} := (2 + 2)", 4, 4)]
+    [InlineData("a := (2 + 2)", 4, 4)]
     public void ShouldHandleAssignmentLambda(string input, int expectedVarValue, int expectedExprValue)
     {
         bool eventFired = false;
@@ -1635,11 +1678,12 @@ public class AdvFeatureTests
     [Theory]
     [InlineData("a := 2", 2, 2)]
     [InlineData("a := 2 + 2", 4, 4)]
-    [InlineData("{a} := (2 + 2)", 4, 4)]
+    [InlineData("[a] := (2 + 2)", 4, 4)]
     [InlineData("a := 2; a + 2", 2, 4)]
-    [InlineData("a := 2; {a} + 2", 2, 4)]
+    [InlineData("a := 2; [a] + 2", 2, 4)]
     [InlineData("a := 2; a + Max(2, 4)", 2, 6)]
     [InlineData("a := 2; b := 4; Max(a, b)", 2, 4)]
+    [InlineData("a := 2; b := 4; a + b", 2, 6)]
     [InlineData("a := 2; a + Max(2; 4)", 2, 6)]
     [InlineData("a := if (true, 2, 4); a + Max(2; 4)", 2, 6)]
     [InlineData("if (true, a := 2, a := 4); a + Max(2; 4)", 2, 6)]
@@ -1664,6 +1708,85 @@ public class AdvFeatureTests
         Assert.True(eventFired);
         Assert.Equal(expectedExprValue, result);
     }
+
+    [Theory]
+    [InlineData("if (true; {a := 2; a*=4 }; a := 4); a ", 8)]
+    [InlineData("if ( { a := 1 } ; {a := 2; a*=4 }; a := 4); a ", 8)]
+    public void ShouldHandleStatementSequenceWithAssignmentInFunction(string input, int expectedValue)
+    {
+        bool eventFired = false;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        expression.UpdateParameter += (name, args) =>
+        {
+            eventFired = true;
+            if (name == "a")
+            {
+                Assert.Equal("a", name);
+            }
+        };
+        var result = expression.Evaluate();
+        Assert.True(eventFired);
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("a := (1; 2; 3); a[1]", 2)]
+    [InlineData("a := (1;  4 div 2; 3); a[1]", 2)]
+    [InlineData("a := (1; 2; 3); b := 2; c := 1; a[1] + 1", 3)]
+    [InlineData("b := 2; c:= 1; a := (c; b; 3); a[1]", 2)]
+    public void ShouldHandleIndexedParameters(string input, int expectedValue)
+    {
+        bool eventFired = false;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        expression.UpdateParameter += (name, args) =>
+        {
+            eventFired = true;
+            if (name == "a")
+            {
+                Assert.Equal("a", name);
+            }
+        };
+        var result = expression.Evaluate();
+        Assert.True(eventFired);
+        if (result is long lResult)
+            Assert.Equal(expectedValue, (int) lResult);
+        else
+            Assert.Equal(expectedValue, result);
+    }
+
+    /* Waits until lambda visitor supports lists
+    [Theory]
+    [InlineData("a := (1; 2; 3); a[1]", 2)]
+    [InlineData("a := (1;  4 div 2; 3); a[1]", 2)]
+    [InlineData("a := (1; 2; 3); b := 2; c := 1; a[1] + 1", 3)]
+    [InlineData("b := 2; c:= 1; a := (c; b; 3); a[1]", 2)]
+    public void ShouldHandleIndexedParametersLambda(string input, int expectedValue)
+    {
+        bool eventFired = false;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        expression.UpdateParameter += (name, args) =>
+        {
+            eventFired = true;
+            if (name == "a")
+            {
+                Assert.Equal("a", name);
+            }
+        };
+        Func<AssignmentLambdaTestsContext, object> function = expression.ToLambda<AssignmentLambdaTestsContext, object>();
+
+        var context = new AssignmentLambdaTestsContext { };
+        var result = function(context);
+
+        Assert.True(eventFired);
+        if (result is long lResult)
+            Assert.Equal(expectedValue, (int) lResult);
+        else
+            Assert.Equal(expectedValue, result);
+    }
+    */
 
     public class StatementSequenceWithAssignment2TestData : TheoryData<string, int>
     {
@@ -1812,7 +1935,7 @@ public class AdvFeatureTests
     [ClassData(typeof(EvaluationTestData))]
     public void ShouldHandleStatementsWithAssignmentsEnabled(string input, object expectedValue)
     {
-        var expression = new Expression(input, ExpressionOptions.NoCache | /*ExpressionOptions.UseAssignments | */ExpressionOptions.UseStatementSequences);
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
         var result = expression.Evaluate();
         Assert.Equal(expectedValue, result);
     }
@@ -2083,7 +2206,7 @@ public class AsyncAdvFeatureTests
     [Theory]
     [InlineData("a := 2", 2, 2)]
     [InlineData("a := 2 + 2", 4, 4)]
-    [InlineData("{a} := (2 + 2)", 4, 4)]
+    [InlineData("a := (2 + 2)", 4, 4)]
     public async Task ShouldHandleAssignmentAsync(string input, int expectedVarValue, int expectedExprValue)
     {
         bool eventFired = false;
@@ -2151,9 +2274,9 @@ public class AsyncAdvFeatureTests
     [Theory]
     [InlineData("a := 2", 2, 2)]
     [InlineData("a := 2 + 2", 4, 4)]
-    [InlineData("{a} := (2 + 2)", 4, 4)]
+    [InlineData("[a] := (2 + 2)", 4, 4)]
     [InlineData("a := 2; a + 2", 2, 4)]
-    [InlineData("a := 2; {a} + 2", 2, 4)]
+    [InlineData("a := 2; [a] + 2", 2, 4)]
     [InlineData("a := 2; a + Max(2, 4)", 2, 6)]
     [InlineData("a := 2; b := 4; Max(a, b)", 2, 4)]
     [InlineData("a := 2; a + Max(2; 4)", 2, 6)]

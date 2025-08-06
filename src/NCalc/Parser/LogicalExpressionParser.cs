@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Numerics;
 using ExtendedNumerics;
 using NCalc.Domain;
@@ -110,6 +111,9 @@ public static class LogicalExpressionParser
         // The Deferred helper creates a parser that can be referenced by others before it is defined
         var expression = Deferred<LogicalExpression>();
 
+        var expressionOrBracedStatementSequence = Deferred<LogicalExpression>();
+        var bracedExpressionOrStatementSequence = Deferred<LogicalExpression>();
+
         bool useBigNumbers = options.HasFlag(ExpressionOptions.UseBigNumbers);
 
         bool unsignedHexBinOct = options.HasFlag(ExpressionOptions.HexBinOctAreUnsigned);
@@ -117,6 +121,23 @@ public static class LogicalExpressionParser
         bool acceptUnderscores = (extOptions != null) && extOptions.Flags.HasFlag(AdvExpressionOptions.AcceptUnderscoresInNumbers);
 
         string acceptableHexChars = acceptUnderscores ? "0123456789abcdefABCDEF_" : "0123456789abcdefABCDEF";
+
+        // Comments
+        var pythonLineComment = Terms.Text("#").And(AnyCharBefore(new PatternLiteral((x => x == '\n'), 1, 0), canBeEmpty: true, consumeDelimiter: true));
+        var cLineComment = Terms.Text("//").And(AnyCharBefore(new PatternLiteral((x => x == '\n'), 1, 0), canBeEmpty: true, consumeDelimiter: true));
+        var blockComment = Terms.Text("/*").And(AnyCharBefore(Terms.Text("*/"), canBeEmpty: true, consumeDelimiter: true, failOnEof: true)
+                .ElseError("Comment not closed."));
+
+        List<Sequence<string, TextSpan>> comments = [];
+        if (options.HasFlag(ExpressionOptions.SupportPythonComments))
+            comments.Add(pythonLineComment);
+        if (options.HasFlag(ExpressionOptions.SupportCStyleComments))
+        {
+            comments.Add(cLineComment);
+            comments.Add(blockComment);
+        }
+
+        var comment = OneOf(comments.ToArray());
 
         var hexNumber = Terms.Text("0x")
             .SkipAnd(Terms.Pattern(c => acceptableHexChars.Contains(c)))
@@ -412,15 +433,17 @@ public static class LogicalExpressionParser
 
         // Add currency support
 
+        bool supportCurrency = (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.AcceptCurrencySymbol));
+
         Parser<LogicalExpression>? currency = null;
 
-        if (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.AcceptCurrencySymbol))
+        if (supportCurrency)
         {
             string currencySymbol = string.Empty;
             string currencySymbol2 = string.Empty;
             string currencySymbol3 = string.Empty;
 
-            extOptions.GetCurrencySymbols(out currencySymbol, out currencySymbol2, out currencySymbol3);
+            extOptions!.GetCurrencySymbols(out currencySymbol, out currencySymbol2, out currencySymbol3);
 
             if (!string.IsNullOrEmpty(currencySymbol) || !string.IsNullOrEmpty(currencySymbol2) || !string.IsNullOrEmpty(currencySymbol3))
             {
@@ -533,7 +556,9 @@ public static class LogicalExpressionParser
 
         var resultRefChar = Terms.Char('@');
 
-        var identifier = Terms.Identifier();
+        // We don't let $ at the beginning of identifiers as it may be confused with currency
+
+        var identifier = supportCurrency ? Terms.Identifier(SearchValues.Create("_" + Character.AZ), SearchValues.Create("_" + Character.AlphaNumeric)) : Terms.Identifier();
 
         Parser<string>? not;
         Parser<string>? and;
@@ -594,16 +619,18 @@ public static class LogicalExpressionParser
             .Then<LogicalExpression>(static x =>
                 new Function(new Identifier(x.ToString()!), new LogicalExpressionList()));
 
+        var indexedIdentifierExpression = identifier.AndSkip(openBrace).And(expressionOrBracedStatementSequence).AndSkip(closeBrace)
+                .Then<LogicalExpression>(x =>
+                    new IndexedIdentifier(x.Item1.ToString() ?? string.Empty, x.Item2)
+                    );
+
         // ("[" | "{") identifier ("]" | "}")
-        var identifierExpression = OneOf(
-                braceIdentifier,
-                curlyBraceIdentifier,
-                identifier)
-            .Then<LogicalExpression>(x => new Identifier(x.ToString()!));
+        Parser<LogicalExpression> identifierExpression = OneOf(braceIdentifier, identifier) //(options.HasFlag(ExpressionOptions.UseStatementSequences) ? OneOf(braceIdentifier, identifier) : OneOf(braceIdentifier, curlyBraceIdentifier, identifier))
+                .Then<LogicalExpression>(x => new Identifier(x.ToString()!));
 
         // list => "(" (expression ("," expression)*)? ")"
         var populatedList =
-            Between(openParen, Separated(comma.Or(semicolon), expression),
+            Between(openParen, Separated(comma.Or(semicolon)/*(decimalSeparator == ',' || decimalSeparator2 == ',' || numGroupSeparator == ',' ? semicolon : comma.Or(semicolon))*/, expressionOrBracedStatementSequence),
                     closeParen.ElseError("Parenthesis not closed."))
                 .Then<LogicalExpression>(values => new LogicalExpressionList(values));
 
@@ -1586,10 +1613,12 @@ public static class LogicalExpressionParser
         enabledParsers.Add(stringValue);
         enabledParsers.Add(functionOrResultRef);
         enabledParsers.Add(groupExpression);
+        enabledParsers.Add(indexedIdentifierExpression);
         enabledParsers.Add(identifierExpression);
         enabledParsers.Add(list);
+        enabledParsers.Add(bracedExpressionOrStatementSequence);
 
-        var primary = OneOf(enabledParsers.ToArray());
+        var primary = ((options.HasFlag(ExpressionOptions.SupportCStyleComments) || options.HasFlag(ExpressionOptions.SupportPythonComments)) ? ZeroOrMany(comment).SkipAnd(OneOf(enabledParsers.ToArray())).AndSkip(ZeroOrMany(comment)) : OneOf(enabledParsers.ToArray()));
 
         // factorial => primary ("!")* ;
         // A factorial includes any primary
@@ -1677,15 +1706,17 @@ public static class LogicalExpressionParser
             unaryOps.Add((root4, static value => new UnaryExpression(UnaryExpressionType.FourthRoot, value)));
         var unary = exponential.Unary(unaryOps.ToArray());
 
-        // multiplicative => unary ( ( "/" | "*" | "%" ) unary )* ;
-        var multiplicative = unary.LeftAssociative(
+        List<(Parser<string>, Func<LogicalExpression, LogicalExpression, LogicalExpression>)>  multiplicativeList = [
             (intDivB, static (a, b) => new BinaryExpression(BinaryExpressionType.IntDivB, a, b)),
-            (intDivP, static (a, b) => new BinaryExpression(BinaryExpressionType.IntDivP, a, b)),
             (divided, static (a, b) => new BinaryExpression(BinaryExpressionType.Div, a, b)),
             (times, static (a, b) => new BinaryExpression(BinaryExpressionType.Times, a, b)),
-            (modulo, static (a, b) => new BinaryExpression(BinaryExpressionType.Modulo, a, b))
-
-        );
+            (modulo, static (a, b) => new BinaryExpression(BinaryExpressionType.Modulo, a, b))];
+        if (!options.HasFlag(ExpressionOptions.SupportCStyleComments))
+        {
+            multiplicativeList.Insert(1, (intDivP, static (a, b) => new BinaryExpression(BinaryExpressionType.IntDivP, a, b)));
+        }
+        // multiplicative => unary ( ( "/" | "*" | "%" ) unary )* ;
+        var multiplicative = unary.LeftAssociative(multiplicativeList.ToArray());
 
         // additive => multiplicative ( ( "-" | "+" ) multiplicative )* ;
         var additive = multiplicative.LeftAssociative(
@@ -1749,12 +1780,16 @@ public static class LogicalExpressionParser
                 : new TernaryExpression(x.Item1, x.Item2.Item1, x.Item2.Item2))
             .Or(logical);
 
+        List<Parser<string>> operatorSequenceElements = [
+            intDivB, divided, times, modulo, plus,
+            minus, leftShift, rightShift, greaterOrEqual,
+            lessOrEqual, greater, less, equal,
+            notEqual];
+        if (!options.HasFlag(ExpressionOptions.SupportCStyleComments))
+            operatorSequenceElements.Insert(0, intDivP);
+
         var operatorSequence = ternary.LeftAssociative(
-            (OneOrMany(OneOf(
-                    intDivP, intDivB, divided, times, modulo, plus,
-                    minus, leftShift, rightShift, greaterOrEqual,
-                    lessOrEqual, greater, less, equal,
-                    notEqual)),
+            (OneOrMany(OneOf(operatorSequenceElements.ToArray())),
                 static (_, _) => throw new InvalidOperationException("Unknown operator sequence.")));
 
         List<Parser<LogicalExpression>> statements = [operatorSequence];
@@ -1784,6 +1819,7 @@ public static class LogicalExpressionParser
                             expressionType = BinaryExpressionType.MultiplyAssignment;
                             break;
                         case "/=":
+                        case "\u00F7=":
                             expressionType = BinaryExpressionType.DivAssignment;
                             break;
                         case "&=":
@@ -1803,7 +1839,7 @@ public static class LogicalExpressionParser
                     result = (BinaryExpression)(new BinaryExpression(expressionType, x.Item1, x.Item3[0])).SetOptions(options, cultureInfo, extOptions);
                     if (x.Item3.Count > 1)
                     {
-                        for (int i = 1; i < x.Item3.Count - 1; i++)
+                        for (int i = 1; i < x.Item3.Count; i++)
                         {
                             result = (BinaryExpression)(new BinaryExpression(expressionType, result, x.Item3[i])).SetOptions(options, cultureInfo, extOptions);
                         }
@@ -1817,12 +1853,14 @@ public static class LogicalExpressionParser
 
         var statementsArray = statements.ToArray();
 
-        topLevel = OneOf(statementsArray);
         var expressionOrAssignment = OneOf(statementsArray);
+
+        topLevel = expressionOrAssignment;
 
         if (options.HasFlag(ExpressionOptions.UseStatementSequences))
         {
-            var statementSequence = expressionOrAssignment.And(ZeroOrMany(Terms.Pattern((c) => c == ';').SkipAnd(expressionOrAssignment)))
+            var statementSequence = expressionOrAssignment.And(ZeroOrMany(Terms.Pattern((c) => c == ';').SkipAnd(expressionOrAssignment)));
+            var statementSequenceParser = statementSequence
                 .Then(x =>
                 {
                     LogicalExpression result = null!;
@@ -1833,27 +1871,35 @@ public static class LogicalExpressionParser
                             result = x.Item1;
                             break;
                         case 1:
-                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]);
+                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetOptions(options, cultureInfo, extOptions);
                             break;
                         default:
                         {
-                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]);
-                            for (int i = 1; i < x.Item2.Count - 1; i++)
+                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetOptions(options, cultureInfo, extOptions);
+                            for (int i = 1; i < x.Item2.Count; i++)
                             {
                                 result = new BinaryExpression(BinaryExpressionType.StatementSequence, result,
-                                    x.Item2[i]);
+                                    x.Item2[i]).SetOptions(options, cultureInfo, extOptions);
                             }
                             break;
                         }
                     }
                     return result;
                 });
-            topLevel = statementSequence;
+
+            topLevel = statementSequenceParser;
         }
 
-        expression.Parser = OneOf(statementsArray);
+        var curlyBracedTopLevel = openCurlyBrace.SkipAnd(topLevel.AndSkip(closeCurlyBrace))
+            .Then<LogicalExpression>(x =>
+            x);
 
-        var expressionParser = topLevel.AndSkip(ZeroOrMany(Literals.WhiteSpace(true))).Eof()
+        expression.Parser = expressionOrAssignment;
+
+        expressionOrBracedStatementSequence.Parser = OneOf(curlyBracedTopLevel, expressionOrAssignment);
+        bracedExpressionOrStatementSequence.Parser = curlyBracedTopLevel;
+
+        var expressionParser = OneOf(topLevel, curlyBracedTopLevel).AndSkip(ZeroOrMany(Literals.WhiteSpace(true))).Eof()
                 .ElseError(InvalidTokenMessage);
 
         AppContext.TryGetSwitch("NCalc.EnableParlotParserCompilation", out var enableParserCompilation);

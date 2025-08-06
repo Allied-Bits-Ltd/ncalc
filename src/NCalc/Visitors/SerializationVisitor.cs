@@ -54,6 +54,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
             resultBuilder.Append(expression.Type switch
             {
+                BinaryExpressionType.StatementSequence => "; " ,
                 BinaryExpressionType.Assignment => context.Options.HasFlag(ExpressionOptions.UseCStyleAssignments) ? "= " : ":= ",
                 BinaryExpressionType.And => "and ",
                 BinaryExpressionType.Or => "or ",
@@ -83,7 +84,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                 _ => throw new ArgumentOutOfRangeException()
             });
         }
+
         resultBuilder.Append(EncapsulateNoValue(expression.RightExpression));
+
         return resultBuilder.ToString();
     }
 
@@ -177,7 +180,18 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
-        return $"[{identifier.Name}]";
+        if (identifier is IndexedIdentifier indIdent)
+        {
+            StringBuilder resultBuilder = new StringBuilder();
+            resultBuilder.Append(identifier.Name);
+            resultBuilder.Append('[');
+            resultBuilder.Append(indIdent.Index.Accept(this, cancellationToken).TrimEnd());
+            resultBuilder.Append(']');
+
+            return resultBuilder.ToString();
+        }
+        else
+            return $"{identifier.Name}";
     }
 
     public string Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
@@ -191,11 +205,16 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             resultBuilder.Append(list[i].Accept(this, cancellationToken).TrimEnd());
             if (i < list.Count - 1)
             {
-                resultBuilder.Append(',');
+                resultBuilder.Append("; ");
             }
         }
         resultBuilder.Append(')');
         return resultBuilder.ToString();
+    }
+
+    public string Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
+    {
+        return string.Join(group.Expression.Accept(this, cancellationToken).Trim(), "{ ", " }");
     }
 
     protected virtual string EncapsulateNoValue(LogicalExpression expression, bool appendSpace = true)

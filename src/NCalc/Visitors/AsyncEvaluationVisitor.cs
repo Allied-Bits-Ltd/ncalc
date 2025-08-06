@@ -717,6 +717,7 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
     public virtual async ValueTask<object?> Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
+        object? result = null;
         var identifierName = identifier.Name;
 
         var parameterArgs = new ParameterArgs(identifier.Id);
@@ -725,34 +726,84 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
 
         if (parameterArgs.HasResult)
         {
-            return parameterArgs.Result;
-        }
-
-        if (context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var parameter))
-        {
-            if (parameter is AsyncExpression expression)
+            result = parameterArgs.Result;
+            if (result is null)
             {
-                //Share the parameters with child expression.
-                foreach (var p in context.StaticParameters)
-                    expression.Parameters[p.Key] = p.Value;
-
-                foreach (var p in context.DynamicParameters)
-                    expression.DynamicParameters[p.Key] = p.Value;
-
-                expression.EvaluateFunctionAsync += context.AsyncEvaluateFunctionHandler;
-                expression.EvaluateParameterAsync += context.AsyncEvaluateParameterHandler;
-                expression.UpdateParameterAsync += context.AsyncUpdateParameterHandler;
-                expression.MatchStringAsync += context.AsyncMatchStringHandler;
-
-                return await expression.EvaluateAsync(cancellationToken).ConfigureAwait(false);
+                if (identifier is IndexedIdentifier indIdent)
+                    throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                return result;
             }
-
-            return parameter;
         }
 
-        if (context.DynamicParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var dynamicParameter))
+        if (result is null)
         {
-            return await dynamicParameter(new AsyncExpressionParameterData(identifier.Id, context), cancellationToken).ConfigureAwait(false);
+            if (context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var parameter))
+            {
+                if (parameter is AsyncExpression expression)
+                {
+                    //Share the parameters with child expression.
+                    foreach (var p in context.StaticParameters)
+                        expression.Parameters[p.Key] = p.Value;
+
+                    foreach (var p in context.DynamicParameters)
+                        expression.DynamicParameters[p.Key] = p.Value;
+
+                    expression.EvaluateFunctionAsync += context.AsyncEvaluateFunctionHandler;
+                    expression.EvaluateParameterAsync += context.AsyncEvaluateParameterHandler;
+                    expression.UpdateParameterAsync += context.AsyncUpdateParameterHandler;
+                    expression.MatchStringAsync += context.AsyncMatchStringHandler;
+
+                    result = await expression.EvaluateAsync(cancellationToken).ConfigureAwait(false);
+                    if (result is null)
+                    {
+                        if (identifier is IndexedIdentifier indIdent)
+                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                        return result;
+                    }
+                }
+                else
+                {
+                    result = parameter;
+                    if (result is null)
+                    {
+                        if (identifier is IndexedIdentifier indIdent)
+                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                        return result;
+                    }
+                }
+            }
+        }
+        if (result is null)
+        {
+            if (context.DynamicParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var dynamicParameter))
+            {
+                result = await dynamicParameter(new AsyncExpressionParameterData(identifier.Id, context), cancellationToken).ConfigureAwait(false);
+                if (result is null)
+                {
+                    if (identifier is IndexedIdentifier indIdent)
+                        throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));
+                    return result;
+                }
+            }
+        }
+
+        if (result != null)
+        {
+            if (identifier is IndexedIdentifier indIdent)
+            {
+                if (result is not IList identList)
+                    throw new NCalcParameterIndexException(identifierName, $"{identifierName}, if used with an index, must denote a list");
+                var indexObj = await indIdent.Index.Accept(this).ConfigureAwait(false);
+                if (!MathHelper.IsBoxedIntegerNumber(indexObj))
+                    throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number");
+                var index = MathHelper.ConvertToInt(indexObj, context);
+                if (index < 0 || index >= identList.Count)
+                    throw new NCalcParameterIndexException(identifierName, $"The index {index} of {identifierName} is out of bounds [0; {identList.Count - 1}]");
+                result = identList[index];
+                if (result is LogicalExpression expr)
+                    result = await expr.Accept(this).ConfigureAwait(false);
+            }
+            return result;
         }
 
         throw new NCalcParameterNotDefinedException(identifierName);
@@ -803,5 +854,10 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
     protected ValueTask<object?> EvaluateAsync(LogicalExpression expression, CancellationToken cancellationToken = default)
     {
         return expression.Accept(this, cancellationToken);
+    }
+
+    public ValueTask<object?> Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
+    {
+        return group.Expression.Accept(this, cancellationToken);
     }
 }

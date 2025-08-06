@@ -48,17 +48,17 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
-        var conditional = expression.LeftExpression.Accept(this);
-        var ifTrue = expression.MiddleExpression.Accept(this);
-        var ifFalse = expression.RightExpression.Accept(this);
+        var conditional = expression.LeftExpression.Accept(this, cancellationToken);
+        var ifTrue = expression.MiddleExpression.Accept(this, cancellationToken);
+        var ifFalse = expression.RightExpression.Accept(this, cancellationToken);
 
         return LinqExpression.Condition(conditional, ifTrue, ifFalse);
     }
 
     public LinqExpression Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
-        var left = expression.LeftExpression.Accept(this);
-        var right = expression.RightExpression.Accept(this);
+        var left = expression.LeftExpression.Accept(this, cancellationToken);
+        var right = expression.RightExpression.Accept(this, cancellationToken);
 
         if (_expressionContext?.AdvancedOptions != null && _expressionContext.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent))
         {
@@ -166,11 +166,16 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
-        LinqExpression result = expression.Expression.Accept(this);
+        LinqExpression result = expression.Expression.Accept(this, cancellationToken);
         if (result.Type != typeof(Percent))
             return WrapWithPercent(result);
         else
             return result;
+    }
+
+    public LinqExpression Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
+    {
+        return group.Expression.Accept(this, cancellationToken);
     }
 
     public LinqExpression Visit(ValueExpression expression, CancellationToken cancellationToken = default)
@@ -183,7 +188,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         var args = new LinqExpression[function.Parameters.Count];
         for (var i = 0; i < function.Parameters.Count; i++)
         {
-            args[i] = function.Parameters[i].Accept(this);
+            args[i] = function.Parameters[i].Accept(this, cancellationToken);
         }
 
         var functionName = function.Identifier.Name.ToUpperInvariant();
@@ -307,22 +312,39 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
+        LinqExpression? result = null;
+
         var identifierName = _expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? identifier.Name.ToLowerInvariant() : identifier.Name;
 
-        if (_context == null)
+        if (_context is null)
         {
             if (_parameters != null && _parameters.TryGetValue(identifierName, out var param))
-                return LinqExpression.Constant(param);
-
-            throw new NCalcParameterNotDefinedException(identifier.Name);
+                result = LinqExpression.Constant(param);
+            else
+                throw new NCalcParameterNotDefinedException(identifier.Name);
         }
+        if (result is null && _context is not null)
+            result = LinqExpression.PropertyOrField(_context, identifierName);
 
-        return LinqExpression.PropertyOrField(_context, identifierName);
+        if (result is not null && identifier is IndexedIdentifier indIdent)
+        {
+            LinqExpression indexer = indIdent.Index.Accept(this, cancellationToken);
+            var indexValue = ((Linq.LambdaExpression)indexer).Body;
+            var indexerProperty = result.Type.GetProperty("Item", new[] { typeof(int) });
+            if (indexerProperty is null)
+                throw new NCalcParameterIndexException(identifierName, $"{identifierName}, if used with an index, must denote a list");
+            var indexerAccess = LinqExpression.MakeIndex(result, indexerProperty, new[] { indexValue });
+
+            result = indexerAccess;
+        }
+        if (result is null)
+            throw new NCalcParameterNotDefinedException(identifier.Name);
+        return result;
     }
 
     public LinqExpression Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
-        throw new NotSupportedException("Collections are not supported for Lambda expressions yet. Please open a issue at https://www.github.com/ncalc/ncalc if you want this support.");
+        throw new NotSupportedException("Lists are not supported for Lambda expressions.");
     }
 
     private ExtendedMethodInfo? FindMethod(string methodName, LinqExpression[] methodArgs)
