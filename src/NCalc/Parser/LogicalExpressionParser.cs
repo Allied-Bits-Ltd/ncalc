@@ -619,14 +619,16 @@ public static class LogicalExpressionParser
             .Then<LogicalExpression>(static x =>
                 new Function(new Identifier(x.ToString()!), new LogicalExpressionList()));
 
-        var indexedIdentifierExpression = identifier.AndSkip(openBrace).And(expressionOrBracedStatementSequence).AndSkip(closeBrace)
-                .Then<LogicalExpression>(x =>
-                    new IndexedIdentifier(x.Item1.ToString() ?? string.Empty, x.Item2)
-                    );
-
-        // ("[" | "{") identifier ("]" | "}")
-        Parser<LogicalExpression> identifierExpression = OneOf(braceIdentifier, identifier) //(options.HasFlag(ExpressionOptions.UseStatementSequences) ? OneOf(braceIdentifier, identifier) : OneOf(braceIdentifier, curlyBraceIdentifier, identifier))
+        // ["["] identifier ["]"]
+        Parser<LogicalExpression> identifierExpression = OneOf(braceIdentifier, identifier)
                 .Then<LogicalExpression>(x => new Identifier(x.ToString()!));
+
+        var index = openBrace.SkipAnd(expressionOrBracedStatementSequence).AndSkip(closeBrace);
+
+        var indexedIdentifierExpression = OneOf(braceIdentifier, identifier).And(index)
+        .Then<LogicalExpression>(x =>
+            new IndexedIdentifier(x.Item1.ToString() ?? string.Empty, x.Item2)
+            );
 
         // list => "(" (expression ("," expression)*)? ")"
         var populatedList =
@@ -1620,9 +1622,20 @@ public static class LogicalExpressionParser
 
         var primary = ((options.HasFlag(ExpressionOptions.SupportCStyleComments) || options.HasFlag(ExpressionOptions.SupportPythonComments)) ? ZeroOrMany(comment).SkipAnd(OneOf(enabledParsers.ToArray())).AndSkip(ZeroOrMany(comment)) : OneOf(enabledParsers.ToArray()));
 
+        var indexedAccess = primary.And(ZeroOrOne(index))
+            .Then(static x =>
+            {
+                if (x.Item2 is null)
+                {
+                    // there is just a primary discovered
+                    return x.Item1;
+                }
+                return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, x.Item2);
+            });
+
         // factorial => primary ("!")* ;
         // A factorial includes any primary
-        var factorial = primary.And(ZeroOrMany(exclamationMark.AndSkip(Not(equal))))
+        var factorial = indexedAccess.And(ZeroOrMany(exclamationMark.AndSkip(Not(equal))))
             .Then(static x =>
             {
                 if (x.Item2.Count == 0)

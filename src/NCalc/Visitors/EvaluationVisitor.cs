@@ -641,6 +641,15 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
 
                 return !EvaluationHelper.Like(leftValue!, rightValue!, context);
             }
+
+            case BinaryExpressionType.IndexAccess:
+            {
+                if (!TryGetValueOrNull(left.Value, out leftValue))
+                    return null;
+                if (!TryGetValueOrNull(right.Value, out rightValue))
+                    return null;
+
+            }
         }
 
         return null;
