@@ -85,9 +85,9 @@ foreach (var result in (IList)expression.Evaluate())
 
 ## Indexed parameters
 
-If a parameter contains a list of values (IList), it is possible to access an element by accessing the variable and specifying a zero-based index:
+If a parameter contains a list of values (IList), it is possible to access an element by accessing the variable and specifying a zero-based index (which may be an expression):
 ```csharp
-var expression = new Expression("a := (1,2,3); a[1]", ExpressionOptions.UseAssignments);
+var expression = new Expression("a := (1,2,3); a[ 2 / 2 ]", ExpressionOptions.UseAssignments);
 ```
 
 ## Using Event Handlers

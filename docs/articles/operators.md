@@ -42,6 +42,14 @@ Lists are used to group expressions.
 secret_operation("my_db", 2) // Function arguments are actually a list!
 ```
 
+### Indexed Access to Lists
+
+If an expression evaluates to a list, an element of the list can be accessed using a zero-based index (which may also be an expression):
+**Examples:**
+```csharp
+(1;2;3)[1] // produces 2
+```
+
 ## Unary
 
 Unary operators operate on a single operand.

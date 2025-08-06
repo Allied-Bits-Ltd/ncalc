@@ -34,6 +34,7 @@ public enum BinaryExpressionType
     RightShift,
     Exponentiation,
     Factorial,
+    IndexAccess,
     In,
     NotIn,
     Like,

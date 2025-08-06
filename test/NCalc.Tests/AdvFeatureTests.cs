@@ -1735,6 +1735,8 @@ public class AdvFeatureTests
     [InlineData("a := (1;  4 div 2; 3); a[1]", 2)]
     [InlineData("a := (1; 2; 3); b := 2; c := 1; a[1] + 1", 3)]
     [InlineData("b := 2; c:= 1; a := (c; b; 3); a[1]", 2)]
+    [InlineData("b := 2; c:= 1; a := (c; b; 3); a[ 2 / 2]", 2)]
+	 [InlineData("(1; 2; 3)[1]", 2)]
     public void ShouldHandleIndexedParameters(string input, int expectedValue)
     {
         bool eventFired = false;
@@ -1756,6 +1758,18 @@ public class AdvFeatureTests
             Assert.Equal(expectedValue, result);
     }
 
+    [Theory]
+    [InlineData("(1; 2; 3)[1]", 2)]
+    public void ShouldHandleIndexedParameters2(string input, int expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+
+        var result = expression.Evaluate();
+        if (result is long lResult)
+            Assert.Equal(expectedValue, (int)lResult);
+        else
+            Assert.Equal(expectedValue, result);
+    }
     /* Waits until lambda visitor supports lists
     [Theory]
     [InlineData("a := (1; 2; 3); a[1]", 2)]
