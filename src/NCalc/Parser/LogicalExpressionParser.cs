@@ -623,7 +623,6 @@ public static class LogicalExpressionParser
             .Then<LogicalExpression>(static x =>
                 new Function(new Identifier(x.ToString()!), new LogicalExpressionList()));
 
-
         // ("[" | "{") identifier ("]" | "}")
         Parser<LogicalExpression> identifierExpression = OneOf(braceIdentifier, identifier) //(options.HasFlag(ExpressionOptions.UseStatementSequences) ? OneOf(braceIdentifier, identifier) : OneOf(braceIdentifier, curlyBraceIdentifier, identifier))
                 .Then<LogicalExpression>(x => new Identifier(x.ToString()!));

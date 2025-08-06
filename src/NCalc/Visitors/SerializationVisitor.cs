@@ -80,12 +80,15 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                 BinaryExpressionType.NotIn => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2209 " : "not in ",
                 BinaryExpressionType.Like => "like ",
                 BinaryExpressionType.NotLike => "not like ",
+                BinaryExpressionType.IndexAccess => "[",
                 BinaryExpressionType.Unknown => "unknown ",
                 _ => throw new ArgumentOutOfRangeException()
             });
         }
 
         resultBuilder.Append(EncapsulateNoValue(expression.RightExpression));
+        if (expression.Type == BinaryExpressionType.IndexAccess)
+            resultBuilder.Append(']');
 
         return resultBuilder.ToString();
     }
@@ -180,7 +183,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
-        if (identifier is IndexedIdentifier indIdent)
+        /*if (identifier is IndexedIdentifier indIdent)
         {
             StringBuilder resultBuilder = new StringBuilder();
             resultBuilder.Append(identifier.Name);
@@ -190,7 +193,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
             return resultBuilder.ToString();
         }
-        else
+        else*/
             return $"{identifier.Name}";
     }
 
