@@ -17,7 +17,13 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.7" />
+      <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.8" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Update="Roslynator.Analyzers" Version="4.14.0" />
+      <PackageReference Update="Roslynator.CodeAnalysis.Analyzers" Version="4.14.0" />
+      <PackageReference Update="Roslynator.Formatting.Analyzers" Version="4.14.0" />
     </ItemGroup>
 
 </Project>
