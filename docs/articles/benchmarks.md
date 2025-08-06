@@ -1,7 +1,9 @@
 ﻿# Benchmarks
 
-If you want to check the benchmarks by yourself, `git clone https://github.com/ncalc/ncalc`, open the solution and
+If you want to check the benchmarks by yourself, `git clone https://github.com/Allied-Bits-ltd/ncalc`, open the solution and
 run `NCalc.Benchmarks` at `Release` mode.
+
+Note: the speed and the result of any benchmarks is heavily affected by the scope of features of the parser that you enable.
 
 ## Legends
 Mean      : Arithmetic mean of all measurements

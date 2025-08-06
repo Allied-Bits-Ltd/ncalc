@@ -57,18 +57,15 @@ var expression = new Expression("[My First Parameter] + [My Second Parameter]");
 
 ## Curly Braces Parameters
 
-You can also use a curly braces as alternative to square brackets.
-
-```c#
-var expression = new Expression("{PageState} ==  'List'");
-```
+In this branch of NCalc, curly braces are used to group expressions. 
+So while the '{PageState}' will work when referencing the value of the parameter, assigning to '{PageState}' will not work (use square brackets instead). 
 
 ## Multi-Valued Parameters
 
 When parameters are `IEnumerable` and the <xref:NCalc.ExpressionOptions.IterateParameters> is
 used, the result is a `List<object?>` made of the evaluation of each value in the parameter.
 
-```c#
+```csharp
 var expression = new Expression("(a * b) ** c", ExpressionOptions.IterateParameters);
 expression.Parameters["a"] = new int[] { 1, 2, 3, 4, 5 };
 expression.Parameters["b"] = new int[] { 6, 7, 8, 9, 0 };
@@ -86,6 +83,13 @@ foreach (var result in (IList)expression.Evaluate())
 //  0
 ```
 
+## Indexed parameters
+
+If a parameter contains a list of values (IList), it is possible to access an element by accessing the variable and specifying a zero-based index:
+```csharp
+var expression = new Expression("a := (1,2,3); a[1]", ExpressionOptions.UseAssignments);
+```
+
 ## Using Event Handlers
 You can also use event handlers to handle parameters.
 ```csharp
@@ -98,7 +102,7 @@ expression.EvaluateParameter += delegate(string name, ParameterArgs args)
 
 ## Compare with Null Parameters
 
-When parameter is null and <xref:NCalc.ExpressionOptions.AllowNullParameter> is used, comparison of values to null is
+When parameter is null and the <xref:NCalc.ExpressionOptions.AllowNullParameter> flag is used, comparison of values to null is
 allowed.
 
 ```c#
