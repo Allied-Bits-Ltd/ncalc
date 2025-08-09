@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using System.Diagnostics.Contracts;
 
 using NCalc.Visitors;
+using NCalc.Parser;
 
 namespace NCalc.Domain;
 
@@ -19,6 +20,7 @@ namespace NCalc.Domain;
 [JsonDerivedType(typeof(TernaryExpression), typeDiscriminator: "ternary")]
 [JsonDerivedType(typeof(UnaryExpression), typeDiscriminator: "unary")]
 [JsonDerivedType(typeof(PercentExpression), typeDiscriminator: "percent")]
+[JsonDerivedType(typeof(ExpressionGroup), typeDiscriminator: "expressionGroup")]
 [JsonDerivedType(typeof(ValueExpression), typeDiscriminator: "value")]
 #endif
 public abstract class LogicalExpression
@@ -27,13 +29,25 @@ public abstract class LogicalExpression
     protected CultureInfo? _cultureInfo;
     protected AdvancedExpressionOptions? _advancedOptions;
 
+    protected ExpressionLocation _location;
+
+    public ExpressionLocation Location => _location;
+
     public LogicalExpression()
     {
         _options = ExpressionOptions.None;
+        _location = ExpressionLocation.Empty;
     }
 
-    public LogicalExpression(ExpressionOptions options, CultureInfo? cultureInfo, AdvancedExpressionOptions? advancedOptions)
+    public LogicalExpression(ExpressionLocation location)
     {
+        _options = ExpressionOptions.None;
+        _location = location;
+    }
+
+    protected LogicalExpression(ExpressionOptions options, CultureInfo? cultureInfo, AdvancedExpressionOptions? advancedOptions, ExpressionLocation location)
+    {
+        _location = location;
         SetOptions(options, cultureInfo, advancedOptions);
     }
 
@@ -42,6 +56,21 @@ public abstract class LogicalExpression
         _options = options;
         _cultureInfo = cultureInfo;
         _advancedOptions = advancedOptions;
+        return this;
+    }
+
+    public LogicalExpression SetOptions(ExpressionOptions options, CultureInfo? cultureInfo, AdvancedExpressionOptions? advancedOptions, ExpressionLocation location)
+    {
+        _location = location;
+        _options = options;
+        _cultureInfo = cultureInfo;
+        _advancedOptions = advancedOptions;
+        return this;
+    }
+
+    public LogicalExpression SetLocation(ExpressionLocation location)
+    {
+        _location = location;
         return this;
     }
 

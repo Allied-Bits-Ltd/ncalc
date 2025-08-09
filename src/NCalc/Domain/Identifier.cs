@@ -12,13 +12,3 @@ public class Identifier(string name) : LogicalExpression
         return visitor.Visit(this, cancellationToken);
     }
 }
-
-/*public class IndexedIdentifier : Identifier
-{
-    internal LogicalExpression Index {  get; set; }
-
-    public IndexedIdentifier(string name, LogicalExpression index) : base(name)
-    {
-        Index = index;
-    }
-}*/

@@ -141,7 +141,7 @@ public static class LogicalExpressionParser
 
         var hexNumber = Terms.Text("0x")
             .SkipAnd(Terms.Pattern(c => acceptableHexChars.Contains(c)))
-            .Then<LogicalExpression>((x) =>
+            .Then<LogicalExpression>((ctx, x) =>
             {
                 string? stringValue = x.ToString();
 
@@ -157,17 +157,17 @@ public static class LogicalExpressionParser
                     {
                         ulong converted = Convert.ToUInt64(stringValue, 16);
                         if (converted <= uint.MaxValue)
-                            return new ValueExpression((object)(uint)converted);
+                            return new ValueExpression((object)(uint)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
-                            return new ValueExpression((object)converted);
+                            return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                     else
                     {
                         long converted = Convert.ToInt64(stringValue, 16);
                         if (converted >= int.MinValue && converted <= int.MaxValue)
-                            return new ValueExpression((object)(int)converted);
+                            return new ValueExpression((object)(int)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
-                            return new ValueExpression((object)converted);
+                            return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
                 catch (Exception ex)
@@ -186,7 +186,7 @@ public static class LogicalExpressionParser
                 if (!BigIntegerParser.TryParseBigInteger(stringValue!, 16, out result))
                     throw new ArgumentException($"{stringValue} is not a valid hex number");
 
-                return new ValueExpression((object) result);
+                return new ValueExpression((object) result).SetLocation(new ParlotExpressionLocation(ctx));
             });
 
         string acceptableOctalChars = acceptUnderscores ? "01234567_" : "01234567";
@@ -195,7 +195,7 @@ public static class LogicalExpressionParser
 
         var octalNumber = octalPrefixParser
             .SkipAnd(Terms.Pattern(c => acceptableOctalChars.Contains(c)))
-            .Then<LogicalExpression>((x) =>
+            .Then<LogicalExpression>((ctx, x) =>
             {
                 string? stringValue = x.ToString();
 
@@ -211,17 +211,17 @@ public static class LogicalExpressionParser
                     {
                         ulong converted = Convert.ToUInt64(stringValue, 8);
                         if (converted <= uint.MaxValue)
-                            return new ValueExpression((object)(uint)converted);
+                            return new ValueExpression((object)(uint)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
-                            return new ValueExpression((object)converted);
+                            return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                     else
                     {
                         long converted = Convert.ToInt64(stringValue, 8);
                         if (converted >= int.MinValue && converted <= int.MaxValue)
-                            return new ValueExpression((object)(int)converted);
+                            return new ValueExpression((object)(int)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
-                            return new ValueExpression((object)converted);
+                            return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
                 catch (Exception ex)
@@ -240,12 +240,12 @@ public static class LogicalExpressionParser
                 if (!BigIntegerParser.TryParseBigInteger(stringValue!, 8, out result))
                     throw new ArgumentException($"{stringValue} is not a valid octal number");
 
-                return new ValueExpression((object)result);
+                return new ValueExpression((object)result).SetLocation(new ParlotExpressionLocation(ctx));
             });
 
         var binaryNumber = Terms.Text("0b")
             .SkipAnd(Terms.Pattern(c => c == '0' || c == '1' || (acceptUnderscores && c == '_')))
-            .Then<LogicalExpression>((x) =>
+            .Then<LogicalExpression>((ctx, x) =>
             {
                 string? stringValue = x.ToString();
 
@@ -261,17 +261,17 @@ public static class LogicalExpressionParser
                     {
                         ulong converted = Convert.ToUInt64(stringValue, 2);
                         if (converted <= uint.MaxValue)
-                            return new ValueExpression((object)(uint)converted);
+                            return new ValueExpression((object)(uint)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
-                            return new ValueExpression((object)converted);
+                            return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                     else
                     {
                         long converted = Convert.ToInt64(stringValue, 2);
                         if (converted >= int.MinValue && converted <= int.MaxValue)
-                            return new ValueExpression((object)(int)converted);
+                            return new ValueExpression((object)(int)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
-                            return new ValueExpression((object)converted);
+                            return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
                 catch (Exception ex)
@@ -311,11 +311,11 @@ public static class LogicalExpressionParser
 
         var intNumber = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
             .AndSkip(Not(OneOf(floatNumExclusions)))
-            .Then<LogicalExpression>(d => new ValueExpression(d));
+            .Then<LogicalExpression>((ctx, d) => new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var longNumber = Terms.Number<long>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
             .AndSkip(Not(OneOf(floatNumExclusions)))
-            .Then<LogicalExpression>(d => new ValueExpression(d));
+            .Then<LogicalExpression>((ctx, d) => new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx)));
 
         Parser<LogicalExpression>? bigIntNumber = null;
 
@@ -323,12 +323,12 @@ public static class LogicalExpressionParser
         {
             bigIntNumber = Terms.Number<BigInteger>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
                 .AndSkip(Not(OneOf(floatNumExclusions)))
-                .Then<LogicalExpression>(d =>
+                .Then<LogicalExpression>((ctx, d) =>
                     {
                         if (d >= ulong.MinValue && d <= ulong.MaxValue)
-                            return new ValueExpression((object)(ulong)d);
+                            return new ValueExpression((object)(ulong)d).SetLocation(new ParlotExpressionLocation(ctx));
                         else
-                            return new ValueExpression(d);
+                            return new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx));
                     });
         }
 
@@ -339,9 +339,9 @@ public static class LogicalExpressionParser
             {
                 bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
                 if (useDecimal)
-                    return new ValueExpression(val);
+                    return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
 
-                return new ValueExpression((double)val);
+                return new ValueExpression((double)val).SetLocation(new ParlotExpressionLocation(ctx));
             });
 
         var doubleNumber = Terms.Number<double>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator, decimalSeparator2)
@@ -351,12 +351,12 @@ public static class LogicalExpressionParser
                 if (useDecimal)
                 {
                     if (val > MaxDecDouble)
-                        return new ValueExpression(double.PositiveInfinity);
+                        return new ValueExpression(double.PositiveInfinity).SetLocation(new ParlotExpressionLocation(ctx));
 
                     if (val < MinDecDouble)
-                        return new ValueExpression(double.NegativeInfinity);
+                        return new ValueExpression(double.NegativeInfinity).SetLocation(new ParlotExpressionLocation(ctx));
 
-                    return new ValueExpression((decimal)val);
+                    return new ValueExpression((decimal)val).SetLocation(new ParlotExpressionLocation(ctx));
                 }
 
                 return new ValueExpression(val);
@@ -375,7 +375,7 @@ public static class LogicalExpressionParser
 
             Parser<LogicalExpression> bigIntNumberD = Terms.Number<BigInteger>((NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag), decimalSeparator, numGroupSeparator)
                 //.AndSkip(Not(OneOf(floatNumExclusions)))
-                .Then<LogicalExpression>(d =>
+                .Then<LogicalExpression>((d) =>
                 {
                     if (d >= ulong.MinValue && d <= ulong.MaxValue)
                         return new ValueExpression((object)(ulong)d);
@@ -402,30 +402,30 @@ public static class LogicalExpressionParser
                     BigDecimal? value = TryParseDecimal(val, acceptUnderscores);
 
                     if (value == null)
-                        return new ValueExpression(null);  // never happens - the When condition ensures that val can be parsed
+                        return new ValueExpression((string?) null);  // never happens - the When condition ensures that val can be parsed
 
                     if (useDecimal && (value >= decimal.MinValue && value <= decimal.MaxValue))
                     {
                         decimal decValue = (decimal)value;
                         if (value == decValue)
-                            return new ValueExpression(decValue);
+                            return new ValueExpression(decValue).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
                     if (value >= double.MinValue && value <= double.MaxValue)
                     {
                         double dValue = (double)value;
                         if (value == dValue)
-                            return new ValueExpression(dValue);
+                            return new ValueExpression(dValue).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
                     if (!useDecimal && (value >= decimal.MinValue && value <= decimal.MaxValue))
                     {
                         decimal decValue = (decimal)value;
                         if (value == decValue)
-                            return new ValueExpression(decValue);
+                            return new ValueExpression(decValue).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
-                    return new ValueExpression(value);
+                    return new ValueExpression(value).SetLocation(new ParlotExpressionLocation(ctx));
                 });
         }
 
@@ -473,7 +473,7 @@ public static class LogicalExpressionParser
                 var decimalCurrencyNumber = Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | useNumberGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator, currencyDecimalSeparator2)
                 .Then<LogicalExpression>(static (ctx, val) =>
                 {
-                    return new ValueExpression(val);
+                    return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
                 });
 
                 currency1 = OneOf(currencyCharsArray).SkipAnd(SkipWhiteSpace(OneOf(decimalCurrencyNumber, intNumber, longNumber)))
@@ -620,25 +620,23 @@ public static class LogicalExpressionParser
                 .ElseError("Brace not closed."));
 
         var resultReference = resultRefChar
-            .Then<LogicalExpression>(static x =>
-                new Function(new Identifier(x.ToString()!), new LogicalExpressionList()));
+            .Then<LogicalExpression>(static (ctx, x) =>
+            {
+                ExpressionLocation loc = new ParlotExpressionLocation(ctx);
+                return new Function((Identifier) new Identifier(x.ToString()!).SetLocation(loc), new LogicalExpressionList()).SetLocation(loc);
+            });
 
         // ["["] identifier ["]"]
         Parser<LogicalExpression> identifierExpression = OneOf(braceIdentifier, identifier)
-                .Then<LogicalExpression>(x => new Identifier(x.ToString()!));
+                .Then<LogicalExpression>(static (ctx, x) => new Identifier(x.ToString()!).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var index = openBrace.SkipAnd(expressionOrBracedStatementSequence).AndSkip(closeBrace);
-
-        /*var indexedIdentifierExpression = OneOf(braceIdentifier, identifier).And(index)
-        .Then<LogicalExpression>(x =>
-            new IndexedIdentifier(x.Item1.ToString() ?? string.Empty, x.Item2)
-            );*/
 
         // list => "(" (expression ("," expression)*)? ")"
         var populatedList =
             Between(openParen, Separated(comma.Or(semicolon)/*(decimalSeparator == ',' || decimalSeparator2 == ',' || numGroupSeparator == ',' ? semicolon : comma.Or(semicolon))*/, expressionOrBracedStatementSequence),
                     closeParen.ElseError("Parenthesis not closed."))
-                .Then<LogicalExpression>(values => new LogicalExpressionList(values));
+                .Then<LogicalExpression>((ctx, values) => new LogicalExpressionList(values).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var emptyList = openParen.AndSkip(closeParen).Then<LogicalExpression>(_ => new LogicalExpressionList());
 
@@ -646,12 +644,18 @@ public static class LogicalExpressionParser
 
         var function = identifier
             .And(list)
-            .Then<LogicalExpression>(static x =>
-                new Function(new Identifier(x.Item1.ToString()!), (LogicalExpressionList)x.Item2));
+            .Then<LogicalExpression>(static (ctx, x) =>
+            {
+                ExpressionLocation loc = new ParlotExpressionLocation(ctx);
+                return new Function((Identifier) new Identifier(x.Item1.ToString()!).SetLocation(loc), (LogicalExpressionList)x.Item2).SetLocation(loc);
+            });
         var percentFunction = percentChar
             .And(list)
-            .Then<LogicalExpression>(static x =>
-                new Function(new Identifier("%"), (LogicalExpressionList)x.Item2));
+            .Then<LogicalExpression>(static (ctx, x) =>
+            {
+                ExpressionLocation loc = new ParlotExpressionLocation(ctx);
+                return new Function((Identifier) new Identifier("%").SetLocation(loc), (LogicalExpressionList)x.Item2).SetLocation(loc);
+            });
 
         Parser<LogicalExpression> functionOrResultRef;
 
@@ -674,16 +678,16 @@ public static class LogicalExpressionParser
                     if (value.Length == 1 &&
                         ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.AllowCharValues))
                     {
-                        return new ValueExpression(value.Span[0]);
+                        return new ValueExpression(value.Span[0]).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
-                    return new ValueExpression(value.ToString());
+                    return new ValueExpression(value.ToString()).SetLocation(new ParlotExpressionLocation(ctx));
                 });
 
         var doubleQuotesStringValue =
             Terms
                 .String(quotes: StringLiteralQuotes.Double)
-                .Then<LogicalExpression>(value => new ValueExpression(value.ToString()!));
+                .Then<LogicalExpression>((ctx, value) => new ValueExpression(value.ToString()!).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var stringValue = OneOf(singleQuotesStringValue, doubleQuotesStringValue);
 
@@ -798,14 +802,14 @@ public static class LogicalExpressionParser
             }
 
             // date => number/number/number or custom
-            date = dateDefinition.Then<LogicalExpression>(date =>
+            date = dateDefinition.Then<LogicalExpression>((ctx, date) =>
             {
                 string customDateSepForDT = dateTimeFormat.DateSeparator;
                 if (useSecondDate || onlyCustomDateTranslation)
                 {
                     if (DateTime.TryParse($"{date.Item1}{customDateSepForDT}{date.Item2}{customDateSepForDT}{date.Item3}", dateTimeFormat, DateTimeStyles.None, out var result))
                     {
-                        return new ValueExpression(result);
+                        return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
                 if (useSecondDate || !onlyCustomDateTranslation)
@@ -813,7 +817,7 @@ public static class LogicalExpressionParser
                     // Use the existing ncalc approach with the current culture
                     if (DateTime.TryParseExact($"{date.Item1}{builtInDateSep}{date.Item2}{builtInDateSep}{date.Item3}", ncalcDateMasks, _currentCultureFormatProvider, DateTimeStyles.None, out var result))
                     {
-                        return new ValueExpression(result);
+                        return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
 
@@ -999,7 +1003,7 @@ public static class LogicalExpressionParser
             Parser<LogicalExpression>? time12 = null;
             Parser<LogicalExpression>? shortTime12 = null;
 
-            var time = timeSpanDefinition.Then<LogicalExpression>(time =>
+            var time = timeSpanDefinition.Then<LogicalExpression>((ctx, time) =>
             {
                 string customTimeSepForDT = dateTimeFormat.TimeSeparator;
                 if (useSecondTime || onlyCustomTimeTranslation)
@@ -1017,7 +1021,7 @@ public static class LogicalExpressionParser
                         {
                             tsResult = TimeSpan.FromMilliseconds(-tsResult.TotalMilliseconds);
                         }
-                        return new ValueExpression(tsResult);
+                        return new ValueExpression(tsResult).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
                 if (useSecondTime || !onlyCustomTimeTranslation)
@@ -1035,14 +1039,14 @@ public static class LogicalExpressionParser
                         {
                             tsResult = TimeSpan.FromMilliseconds(-tsResult.TotalMilliseconds);
                         }
-                        return new ValueExpression(tsResult);
+                        return new ValueExpression(tsResult).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
 
                 throw new FormatException("Invalid TimeSpan format.");
             });
 
-            var shortTime = shortTimeSpanDefinition.Then<LogicalExpression>(time =>
+            var shortTime = shortTimeSpanDefinition.Then<LogicalExpression>((ctx, time) =>
             {
                 string customTimeSepForDT = dateTimeFormat.TimeSeparator;
                 if (useSecondTime || onlyCustomTimeTranslation)
@@ -1060,7 +1064,7 @@ public static class LogicalExpressionParser
                         {
                             tsResult  = TimeSpan.FromMilliseconds(-tsResult.TotalMilliseconds);
                         }
-                        return new ValueExpression(tsResult);
+                        return new ValueExpression(tsResult).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
                 if (useSecondTime || !onlyCustomTimeTranslation)
@@ -1078,7 +1082,7 @@ public static class LogicalExpressionParser
                         {
                             tsResult = TimeSpan.FromMilliseconds(-tsResult.TotalMilliseconds);
                         }
-                        return new ValueExpression(tsResult);
+                        return new ValueExpression(tsResult).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
 
@@ -1092,7 +1096,7 @@ public static class LogicalExpressionParser
                 if (dateTimeFormat.ShortTimePattern.Contains(" t"))
                     amSpacer = " ";
 
-                time12 = time12Definition!.Then<LogicalExpression>(time =>
+                time12 = time12Definition!.Then<LogicalExpression>((ctx, time) =>
                 {
                     string amPMValue = time.Item4;
                     if (amPMValue.ToLower().Equals(amTimeFirstCharLower))
@@ -1105,7 +1109,7 @@ public static class LogicalExpressionParser
                     {
                         if (DateTime.TryParse($"{time.Item1}{customTimeSepForDT}{time.Item2}{customTimeSepForDT}{time.Item3}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
                         {
-                            return new ValueExpression(result.TimeOfDay);
+                            return new ValueExpression(result.TimeOfDay).SetLocation(new ParlotExpressionLocation(ctx));
                         }
                     }
                     if (useSecondTime || !onlyCustomTimeTranslation)
@@ -1113,14 +1117,14 @@ public static class LogicalExpressionParser
                         // Use the existing ncalc approach with the current culture
                         if (TimeSpan.TryParse($"{time.Item1}{builtInTimeSep}{time.Item2}{builtInTimeSep}{time.Item3}{amSpacer}{amPMValue}", out var result))
                         {
-                            return new ValueExpression(result);
+                            return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                         }
                     }
 
                     throw new FormatException("Invalid TimeSpan format.");
                 });
 
-                shortTime12 = shortTime12Definition!.Then<LogicalExpression>(time =>
+                shortTime12 = shortTime12Definition!.Then<LogicalExpression>((ctx, time) =>
                 {
                     string customTimeSepForDT = dateTimeFormat.TimeSeparator;
                     string amPMValue = time.Item3;
@@ -1134,14 +1138,14 @@ public static class LogicalExpressionParser
                     {
                         if (DateTime.TryParse($"{time.Item1}{customTimeSepForDT}{time.Item2}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
                         {
-                            return new ValueExpression(result.TimeOfDay);
+                            return new ValueExpression(result.TimeOfDay).SetLocation(new ParlotExpressionLocation(ctx));
                         }
                     }
                     if (useSecondTime || !onlyCustomTimeTranslation)
                     {
                         if (TimeSpan.TryParse($"{time.Item1}{builtInTimeSep}{time.Item2}{amSpacer}{amPMValue}", out var result))
                         {
-                            return new ValueExpression(result);
+                            return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                         }
                     }
 
@@ -1150,8 +1154,7 @@ public static class LogicalExpressionParser
             }
 
             // dateAndTime => number/number/number number:number:number or custom
-            var dateAndTime = dateDefinition.AndSkip(Literals.WhiteSpace()).And(timeDefinition).Then<LogicalExpression>(
-                dateTime =>
+            var dateAndTime = dateDefinition.AndSkip(Literals.WhiteSpace()).And(timeDefinition).Then<LogicalExpression>((ctx, dateTime) =>
                 {
                     string customDateSepForDT = dateTimeFormat.DateSeparator;
                     string customTimeSepForDT = dateTimeFormat.TimeSeparator;
@@ -1161,14 +1164,14 @@ public static class LogicalExpressionParser
                         {
                             if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}", dateTimeFormat, DateTimeStyles.None, out var result))
                             {
-                                return new ValueExpression(result);
+                                return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
                         }
                         if (useSecondTime || !onlyCustomTimeTranslation)
                         {
                             if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}{builtInTimeSep}{dateTime.Item4.Item3}", dateTimeFormat, DateTimeStyles.None, out var result))
                             {
-                                return new ValueExpression(result);
+                                return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
                         }
                     }
@@ -1178,7 +1181,7 @@ public static class LogicalExpressionParser
                         {
                             if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}", dateTimeFormat, DateTimeStyles.None, out var result))
                             {
-                                return new ValueExpression(result);
+                                return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
                         }
 
@@ -1187,7 +1190,7 @@ public static class LogicalExpressionParser
                             // Use the existing approach
                             if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}{builtInTimeSep}{dateTime.Item4.Item3}", ncalcDateTimeMasks, _currentCultureFormatProvider, DateTimeStyles.None, out var result))
                             {
-                                return new ValueExpression(result);
+                                return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
                         }
                     }
@@ -1195,8 +1198,7 @@ public static class LogicalExpressionParser
                     throw new FormatException("Invalid DateTime format.");
                 });
 
-            var dateAndShortTime = dateDefinition.AndSkip(Literals.WhiteSpace()).And(shortTimeDefinition).Then<LogicalExpression>(
-                dateTime =>
+            var dateAndShortTime = dateDefinition.AndSkip(Literals.WhiteSpace()).And(shortTimeDefinition).Then<LogicalExpression>((ctx, dateTime) =>
                 {
                     string customDateSepForDT = dateTimeFormat.DateSeparator;
                     string customTimeSepForDT = dateTimeFormat.TimeSeparator;
@@ -1206,14 +1208,14 @@ public static class LogicalExpressionParser
                         {
                             if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}", dateTimeFormat, DateTimeStyles.None, out var result))
                             {
-                                return new ValueExpression(result);
+                                return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
                         }
                         if (useSecondTime || !onlyCustomTimeTranslation)
                         {
                             if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}", dateTimeFormat, DateTimeStyles.None, out var result))
                             {
-                                return new ValueExpression(result);
+                                return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
                         }
                     }
@@ -1223,7 +1225,7 @@ public static class LogicalExpressionParser
                         {
                             if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}", dateTimeFormat, DateTimeStyles.None, out var result))
                             {
-                                return new ValueExpression(result);
+                                return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
                         }
 
@@ -1232,7 +1234,7 @@ public static class LogicalExpressionParser
                             // Use the existing approach
                             if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}", ncalcDateShortTimeMasks, _currentCultureFormatProvider, DateTimeStyles.None, out var result))
                             {
-                                return new ValueExpression(result);
+                                return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
                         }
                     }
@@ -1250,8 +1252,7 @@ public static class LogicalExpressionParser
                 if (dateTimeFormat.ShortTimePattern.Contains(" t"))
                     amSpacer = " ";
 
-                dateAndTime12 = dateDefinition.AndSkip(Literals.WhiteSpace()).And(time12Definition!).Then<LogicalExpression>(
-                    dateTime =>
+                dateAndTime12 = dateDefinition.AndSkip(Literals.WhiteSpace()).And(time12Definition!).Then<LogicalExpression>((ctx, dateTime) =>
                     {
                         string customDateSepForDT = dateTimeFormat.DateSeparator;
                         string customTimeSepForDT = dateTimeFormat.TimeSeparator;
@@ -1268,14 +1269,14 @@ public static class LogicalExpressionParser
                             {
                                 if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
                                 {
-                                    return new ValueExpression(result);
+                                    return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
                             }
                             if (useSecondTime || !onlyCustomTimeTranslation)
                             {
                                 if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}:{dateTime.Item4.Item2}:{dateTime.Item4.Item3}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
                                 {
-                                    return new ValueExpression(result);
+                                    return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
                             }
                         }
@@ -1285,7 +1286,7 @@ public static class LogicalExpressionParser
                             {
                                 if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
                                 {
-                                    return new ValueExpression(result);
+                                    return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
                             }
 
@@ -1294,7 +1295,7 @@ public static class LogicalExpressionParser
                                 // Use the existing approach
                                 if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}{builtInTimeSep}{dateTime.Item4.Item3} {amPMValue}", ncalcDateTime12Masks, _currentCultureFormatProvider, DateTimeStyles.None, out var result))
                                 {
-                                    return new ValueExpression(result);
+                                    return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
                             }
                         }
@@ -1302,8 +1303,7 @@ public static class LogicalExpressionParser
                         throw new FormatException("Invalid DateTime format.");
                     });
 
-                dateAndShortTime12 = dateDefinition.AndSkip(Literals.WhiteSpace()).And(shortTime12Definition!).Then<LogicalExpression>(
-                    dateTime =>
+                dateAndShortTime12 = dateDefinition.AndSkip(Literals.WhiteSpace()).And(shortTime12Definition!).Then<LogicalExpression>((ctx, dateTime) =>
                     {
                         string customDateSepForDT = dateTimeFormat.DateSeparator;
                         string customTimeSepForDT = dateTimeFormat.TimeSeparator;
@@ -1320,14 +1320,14 @@ public static class LogicalExpressionParser
                             {
                                 if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
                                 {
-                                    return new ValueExpression(result);
+                                    return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
                             }
                             if (useSecondTime || !onlyCustomTimeTranslation)
                             {
                                 if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
                                 {
-                                    return new ValueExpression(result);
+                                    return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
                             }
                         }
@@ -1337,7 +1337,7 @@ public static class LogicalExpressionParser
                             {
                                 if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
                                 {
-                                    return new ValueExpression(result);
+                                    return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
                             }
 
@@ -1346,7 +1346,7 @@ public static class LogicalExpressionParser
                                 // Use the existing approach
                                 if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2} {amPMValue}", ncalcDateShortTime12Masks, _currentCultureFormatProvider, DateTimeStyles.None, out var result))
                                 {
-                                    return new ValueExpression(result);
+                                    return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
                             }
                         }
@@ -1365,7 +1365,7 @@ public static class LogicalExpressionParser
                     .AndSkip(Not(OneOf(floatNumExclusions)))
                     .Then<int>(d => d);
 
-                humaneTimeSpan = ZeroOrOne(alphaText).And(ZeroOrMany(intNumberForPeriod.And(alphaText.AndSkip(ZeroOrOne(Terms.Char('.')))))).And(ZeroOrOne(alphaText)).Then<LogicalExpression>(val =>
+                humaneTimeSpan = ZeroOrOne(alphaText).And(ZeroOrMany(intNumberForPeriod.And(alphaText.AndSkip(ZeroOrOne(Terms.Char('.')))))).And(ZeroOrOne(alphaText)).Then<LogicalExpression>((ctx, val) =>
                 {
                     string indicator;
                     int elemValue;
@@ -1470,7 +1470,7 @@ public static class LogicalExpressionParser
                             dt = dt.AddSeconds(secondValue);
                         if (msecValue != 0)
                             dt = dt.AddMilliseconds(msecValue);
-                        return new ValueExpression(dt - current);
+                        return new ValueExpression(dt - current).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                     else
                     {
@@ -1541,7 +1541,7 @@ public static class LogicalExpressionParser
                             if (msecValue != 0)
                                 dt = dt.AddMilliseconds(msecValue);
                         }
-                        return new ValueExpression(dt);
+                        return new ValueExpression(dt).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 });
             }
@@ -1586,14 +1586,14 @@ public static class LogicalExpressionParser
                     .And(fourHexSequence)
                     .AndSkip(minus)
                     .And(twelveHexSequence)
-                .Then<LogicalExpression>(static g =>
-                        new ValueExpression(Guid.Parse(g.Item1.ToString() + g.Item2 + g.Item3 + g.Item4 + g.Item5)));
+                .Then<LogicalExpression>((ctx, g) =>
+                        new ValueExpression(Guid.Parse(g.Item1.ToString() + g.Item2 + g.Item3 + g.Item4 + g.Item5)).SetLocation(new ParlotExpressionLocation(ctx)));
 
             Parser<LogicalExpression> guidWithoutHyphens;
 
             guidWithoutHyphens = thirtyTwoHexSequence
                 .AndSkip(Not(decimalOrDoubleNumber))
-                .Then<LogicalExpression>(static g => new ValueExpression(Guid.Parse(g.ToString()!)));
+                .Then<LogicalExpression>((ctx, g) => new ValueExpression(Guid.Parse(g.ToString()!)).SetLocation(new ParlotExpressionLocation(ctx)));
 
             guid = OneOf(guidWithHyphens, guidWithoutHyphens);
         }
@@ -1619,7 +1619,6 @@ public static class LogicalExpressionParser
         enabledParsers.Add(stringValue);
         enabledParsers.Add(functionOrResultRef);
         enabledParsers.Add(groupExpression);
-        // enabledParsers.Add(indexedIdentifierExpression);
         enabledParsers.Add(identifierExpression);
         enabledParsers.Add(list);
         enabledParsers.Add(bracedExpressionOrStatementSequence);
@@ -1627,27 +1626,28 @@ public static class LogicalExpressionParser
         var primary = ((options.HasFlag(ExpressionOptions.SupportCStyleComments) || options.HasFlag(ExpressionOptions.SupportPythonComments)) ? ZeroOrMany(comment).SkipAnd(OneOf(enabledParsers.ToArray())).AndSkip(ZeroOrMany(comment)) : OneOf(enabledParsers.ToArray()));
 
         var indexedAccess = primary.And(ZeroOrOne(index))
-            .Then(static x =>
+            .Then((ctx, x) =>
             {
                 if (x.Item2 is null)
                 {
                     // there is just a primary discovered
                     return x.Item1;
                 }
-                return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, x.Item2);
+                return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, x.Item2).SetLocation(new ParlotExpressionLocation(ctx));
             });
 
         // factorial => primary ("!")* ;
         // A factorial includes any primary
         var factorial = indexedAccess.And(ZeroOrMany(exclamationMark.AndSkip(Not(equal))))
-            .Then(static x =>
+            .Then((ctx, x) =>
             {
                 if (x.Item2.Count == 0)
                 {
                     // there is just a primary discovered
                     return x.Item1;
                 }
-                return new BinaryExpression(BinaryExpressionType.Factorial, x.Item1, new ValueExpression(x.Item2.Count));
+                ExpressionLocation loc = new ParlotExpressionLocation(ctx);
+                return new BinaryExpression(BinaryExpressionType.Factorial, x.Item1, new ValueExpression(x.Item2.Count).SetLocation(loc)).SetLocation(loc);
             }
         );
 
@@ -1656,19 +1656,19 @@ public static class LogicalExpressionParser
         if (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent))
         {
             Parser<LogicalExpression>? numberPercent = factorial.And(ZeroOrOne(percentChar, '\0'))
-                .Then<LogicalExpression>(static x =>
+                .Then<LogicalExpression>((ctx, x) =>
                 {
                     if (x.Item2 == '\0')
                     {
                         // there is just a primary discovered
                         return x.Item1;
                     }
-                    return new PercentExpression(x.Item1);
+                    return new PercentExpression(x.Item1).SetLocation(new ParlotExpressionLocation(ctx));
                 });
             Parser<LogicalExpression>? numberPercent2 = percentChar.And(factorial)
-                .Then<LogicalExpression>(static x =>
+                .Then<LogicalExpression>((ctx, x) =>
                 {
-                    return new PercentExpression(x.Item2);
+                    return new PercentExpression(x.Item2).SetLocation(new ParlotExpressionLocation(ctx));
                 });
             factorialOrPercent = OneOf(numberPercent, numberPercent2);
         }
@@ -1678,7 +1678,7 @@ public static class LogicalExpressionParser
         // Either a factorial, primary, or exponential
         // exponential => factorial ( "**" factorial )* ;
         var exponential = factorialOrPercent.And(ZeroOrMany(exponent.And(factorial)))
-            .Then(static x =>
+            .Then((ctx, x) =>
             {
                 LogicalExpression result = null!;
 
@@ -1688,17 +1688,17 @@ public static class LogicalExpressionParser
                         result = x.Item1;
                         break;
                     case 1:
-                        result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, x.Item2[0].Item2);
+                        result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, x.Item2[0].Item2).SetLocation(new ParlotExpressionLocation(ctx));
                         break;
                     default:
                     {
                         for (int i = x.Item2.Count - 1; i > 0; i--)
                         {
                             result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item2[i - 1].Item2,
-                                x.Item2[i].Item2);
+                                x.Item2[i].Item2).SetLocation(new ParlotExpressionLocation(ctx));
                         }
 
-                        result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, result);
+                        result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, result).SetLocation(new ParlotExpressionLocation(ctx));
                         break;
                     }
                 }
@@ -1707,44 +1707,44 @@ public static class LogicalExpressionParser
             });
 
         // ( "-" | "!" | "not" | "~" | root2 | root3 | root4 ) factorial | exponential | primary;
-        List<(Parser<string>, Func<LogicalExpression, LogicalExpression>)> unaryOps =
+        List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)> unaryOps =
         [
-            (not, static value => new UnaryExpression(UnaryExpressionType.Not, value)),
-            (minus, static value => new UnaryExpression(UnaryExpressionType.Negate, value)),
-            (bitwiseNot, static value => new UnaryExpression(UnaryExpressionType.BitwiseNot, value)),
+            (not, (ctx, value) => new UnaryExpression(UnaryExpressionType.Not, value).SetLocation(new ParlotExpressionLocation(ctx))),
+            (minus, (ctx, value)  => new UnaryExpression(UnaryExpressionType.Negate, value).SetLocation(new ParlotExpressionLocation(ctx))),
+            (bitwiseNot, (ctx, value) => new UnaryExpression(UnaryExpressionType.BitwiseNot, value).SetLocation(new ParlotExpressionLocation(ctx))),
         ];
         if (root2 != null)
-            unaryOps.Add((root2, static value => new UnaryExpression(UnaryExpressionType.SqRoot, value)));
+            unaryOps.Add((root2, (ctx, value) => new UnaryExpression(UnaryExpressionType.SqRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
 #if NET8_0_OR_GREATER
         if (root3 != null)
-            unaryOps.Add((root3, static value => new UnaryExpression(UnaryExpressionType.CbRoot, value)));
+            unaryOps.Add((root3, (ctx, value) => new UnaryExpression(UnaryExpressionType.CbRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
 #endif
         if (root4 != null)
-            unaryOps.Add((root4, static value => new UnaryExpression(UnaryExpressionType.FourthRoot, value)));
+            unaryOps.Add((root4, (ctx, value) => new UnaryExpression(UnaryExpressionType.FourthRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
         var unary = exponential.Unary(unaryOps.ToArray());
 
-        List<(Parser<string>, Func<LogicalExpression, LogicalExpression, LogicalExpression>)>  multiplicativeList = [
-            (intDivB, static (a, b) => new BinaryExpression(BinaryExpressionType.IntDivB, a, b)),
-            (divided, static (a, b) => new BinaryExpression(BinaryExpressionType.Div, a, b)),
-            (times, static (a, b) => new BinaryExpression(BinaryExpressionType.Times, a, b)),
-            (modulo, static (a, b) => new BinaryExpression(BinaryExpressionType.Modulo, a, b))];
+        List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression, LogicalExpression>)>  multiplicativeList = [
+            (intDivB, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.IntDivB, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
+            (divided, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Div, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
+            (times, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Times, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
+            (modulo, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Modulo, a, b).SetLocation(new ParlotExpressionLocation(ctx)))];
         if (!options.HasFlag(ExpressionOptions.SupportCStyleComments))
         {
-            multiplicativeList.Insert(1, (intDivP, static (a, b) => new BinaryExpression(BinaryExpressionType.IntDivP, a, b)));
+            multiplicativeList.Insert(1, (intDivP, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.IntDivP, a, b).SetLocation(new ParlotExpressionLocation(ctx))));
         }
         // multiplicative => unary ( ( "/" | "*" | "%" ) unary )* ;
         var multiplicative = unary.LeftAssociative(multiplicativeList.ToArray());
 
         // additive => multiplicative ( ( "-" | "+" ) multiplicative )* ;
         var additive = multiplicative.LeftAssociative(
-            (plus, static (a, b) => new BinaryExpression(BinaryExpressionType.Plus, a, b)),
-            (minus, static (a, b) => new BinaryExpression(BinaryExpressionType.Minus, a, b))
+            (plus, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Plus, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
+            (minus, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Minus, a, b).SetLocation(new ParlotExpressionLocation(ctx)))
         );
 
         // shift => additive ( ( "<<" | ">>" ) additive )* ;
         var shift = additive.LeftAssociative(
-            (leftShift, static (a, b) => new BinaryExpression(BinaryExpressionType.LeftShift, a, b)),
-            (rightShift, static (a, b) => new BinaryExpression(BinaryExpressionType.RightShift, a, b))
+            (leftShift, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.LeftShift, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
+            (rightShift, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.RightShift, a, b).SetLocation(new ParlotExpressionLocation(ctx)))
         );
 
         // relational => shift ( ( ">=" | "<=" | "<" | ">" | "in" | "not in" ) shift )* ;
@@ -1792,9 +1792,10 @@ public static class LogicalExpressionParser
 
         // ternary => logical("?" logical ":" logical) ?
         var ternary = logical.And(ZeroOrOne(questionMark.SkipAnd(logical).AndSkip(colon).And(logical)))
-            .Then(static x => x.Item2.Item1 == null
-                ? x.Item1
-                : new TernaryExpression(x.Item1, x.Item2.Item1, x.Item2.Item2))
+            .Then((ctx, x) =>
+                x.Item2.Item1 == null
+                    ? x.Item1
+                    : new TernaryExpression(x.Item1, x.Item2.Item1, x.Item2.Item2).SetLocation(new ParlotExpressionLocation(ctx)))
             .Or(logical);
 
         List<Parser<string>> operatorSequenceElements = [
@@ -1817,8 +1818,8 @@ public static class LogicalExpressionParser
         {
             var assignmentTypeParser = assignmentOperator.Then(BinaryExpressionType.Assignment);
 
-            var assignment = identifierExpression.And(OneOf(assignmentOperator, plusAssign, minusAssign, multiplyAssign, divAssign, orAssign, xorAssign, andAssign)).And(OneOrMany(operatorSequence))
-            .Then<LogicalExpression>(x =>
+            var assignment = OneOf(indexedAccess, identifierExpression).And(OneOf(assignmentOperator, plusAssign, minusAssign, multiplyAssign, divAssign, orAssign, xorAssign, andAssign)).And(expressionOrBracedStatementSequence)
+            .Then<LogicalExpression>((ctx, x) =>
                 {
                     LogicalExpression result = null!;
                     BinaryExpressionType expressionType;
@@ -1852,15 +1853,15 @@ public static class LogicalExpressionParser
                             expressionType = BinaryExpressionType.Assignment;
                             break;
                     }
-
-                    result = (BinaryExpression)(new BinaryExpression(expressionType, x.Item1, x.Item3[0])).SetOptions(options, cultureInfo, extOptions);
-                    if (x.Item3.Count > 1)
+                    ExpressionLocation loc = new ParlotExpressionLocation(ctx);
+                    result = (BinaryExpression) new BinaryExpression(expressionType, x.Item1, x.Item3/*[0]*/).SetLocation(loc).SetOptions(options, cultureInfo, extOptions);
+                    /*if (x.Item3.Count > 1)
                     {
                         for (int i = 1; i < x.Item3.Count; i++)
                         {
-                            result = (BinaryExpression)(new BinaryExpression(expressionType, result, x.Item3[i])).SetOptions(options, cultureInfo, extOptions);
+                            result = (BinaryExpression)(new BinaryExpression(expressionType, result, x.Item3[i])).SetOptions(options, cultureInfo, extOptions).SetLocation(new ParlotExpressionLocation(ctx));
                         }
-                    }
+                    }*/
                     return result;
                 }
             );
@@ -1878,25 +1879,24 @@ public static class LogicalExpressionParser
         {
             var statementSequence = expressionOrAssignment.And(ZeroOrMany(Terms.Pattern((c) => c == ';').SkipAnd(expressionOrAssignment)));
             var statementSequenceParser = statementSequence
-                .Then(x =>
+                .Then((ctx, x) =>
                 {
                     LogicalExpression result = null!;
-
+                    ExpressionLocation loc = new ParlotExpressionLocation(ctx);
                     switch (x.Item2.Count)
                     {
                         case 0:
                             result = x.Item1;
                             break;
                         case 1:
-                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetOptions(options, cultureInfo, extOptions);
+                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetLocation(loc).SetOptions(options, cultureInfo, extOptions);
                             break;
                         default:
                         {
-                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetOptions(options, cultureInfo, extOptions);
+                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetLocation(loc).SetOptions(options, cultureInfo, extOptions);
                             for (int i = 1; i < x.Item2.Count; i++)
                             {
-                                result = new BinaryExpression(BinaryExpressionType.StatementSequence, result,
-                                    x.Item2[i]).SetOptions(options, cultureInfo, extOptions);
+                                result = new BinaryExpression(BinaryExpressionType.StatementSequence, result, x.Item2[i]).SetLocation(loc).SetOptions(options, cultureInfo, extOptions);
                             }
                             break;
                         }
@@ -1908,8 +1908,8 @@ public static class LogicalExpressionParser
         }
 
         var curlyBracedTopLevel = openCurlyBrace.SkipAnd(topLevel.AndSkip(closeCurlyBrace))
-            .Then<LogicalExpression>(x =>
-            x);
+            .Then<LogicalExpression>((ctx, x) =>
+              new ExpressionGroup(x).SetLocation(new ParlotExpressionLocation(ctx)));
 
         expression.Parser = expressionOrAssignment;
 
@@ -1976,13 +1976,13 @@ public static class LogicalExpressionParser
         return newParser;
     }
 
-    private static LogicalExpression ParseBinaryExpression((LogicalExpression, IReadOnlyList<(BinaryExpressionType, LogicalExpression)>) x)
+    private static LogicalExpression ParseBinaryExpression(ParseContext ctx, (LogicalExpression, IReadOnlyList<(BinaryExpressionType, LogicalExpression)>) x)
     {
         var result = x.Item1;
 
         foreach (var op in x.Item2)
         {
-            result = new BinaryExpression(op.Item1, result, op.Item2);
+            result = new BinaryExpression(op.Item1, result, op.Item2).SetLocation(new ParlotExpressionLocation(ctx));
         }
 
         return result;

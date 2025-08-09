@@ -2118,6 +2118,29 @@ public static class MathHelper
                t == typeof(long) || t == typeof(ulong);
     }
 
+    public static bool IsBoxedIntegerNumberOrBigNumber(object? obj)
+    {
+        if (obj is null)
+            return false;
+
+        var t = obj.GetType();
+        if (t == typeof(BigInteger))
+            return true;
+        else
+        if (t == typeof(BigDecimal))
+        {
+            if (((BigDecimal)obj).GetFractionalPart() == 0)
+            {
+                return true;
+            }
+        }
+
+        return t == typeof(byte) || t == typeof(sbyte) ||
+                   t == typeof(short) || t == typeof(ushort) ||
+                   t == typeof(int) || t == typeof(uint) ||
+                   t == typeof(long) || t == typeof(ulong);
+    }
+
     public static bool IsBoxedNumber(object? obj)
     {
         if (obj is null)

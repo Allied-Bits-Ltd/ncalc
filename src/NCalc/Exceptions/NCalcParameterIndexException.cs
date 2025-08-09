@@ -1,4 +1,6 @@
-﻿namespace NCalc.Exceptions;
+﻿using NCalc.Parser;
+
+namespace NCalc.Exceptions;
 
 public sealed class NCalcParameterIndexException: NCalcEvaluationException
 {
@@ -10,7 +12,18 @@ public sealed class NCalcParameterIndexException: NCalcEvaluationException
     {
         ParameterName = parameterName;
     }
+
+    public NCalcParameterIndexException(string parameterName, string message, ExpressionLocation location) : base(message, location)
+    {
+        ParameterName = parameterName;
+    }
+
     public NCalcParameterIndexException(string message) : base(message)
+    {
+        ParameterName = string.Empty;
+    }
+
+    public NCalcParameterIndexException(string message, ExpressionLocation location) : base(message, location)
     {
         ParameterName = string.Empty;
     }
