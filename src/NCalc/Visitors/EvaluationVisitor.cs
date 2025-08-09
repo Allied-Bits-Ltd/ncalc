@@ -47,7 +47,46 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
 
     private object? UpdateParameter(LogicalExpression leftExpression, object? value, CancellationToken cancellationToken = default)
     {
-        if (leftExpression is Identifier identifier && (value is not null || context.Options.HasFlag(ExpressionOptions.AllowNullParameter)))
+        if (value is null && !context.Options.HasFlag(ExpressionOptions.AllowNullParameter))
+        {
+            return value;
+        }
+
+        if (leftExpression is BinaryExpression binExpr && binExpr.Type == BinaryExpressionType.IndexAccess)
+        {
+            if (binExpr.LeftExpression is Identifier ident)
+            {
+                var identifierName = ident.Name;
+
+                var indexObj = binExpr.RightExpression.Accept(this, cancellationToken);
+                if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(indexObj))
+                    throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number", binExpr.RightExpression.Location);
+                var index = MathHelper.ConvertToInt(indexObj, context);
+
+                var parameterArgs = new UpdateParameterArgs(identifierName, ident.Id, index, value);
+
+                OnUpdateParameter(identifierName, parameterArgs);
+
+                if (!parameterArgs.UpdateParameterLists)
+                {
+                    return value;
+                }
+
+                object? staticParam = null;
+                if (!context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out staticParam) || staticParam is null)
+                    throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not set and cannot be assigned to by index", binExpr.LeftExpression.Location);
+
+                if (staticParam is not IList)
+                {
+                    throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not a list and cannot be assigned to by index", binExpr.LeftExpression.Location);
+                }
+                ((IList)staticParam)[index] = value;
+            }
+            else
+                throw new NCalcEvaluationException("The expression should evaluate to an identifier", binExpr.Location);
+        }
+        else
+        if (leftExpression is Identifier identifier)
         {
             var identifierName = identifier.Name;
 
@@ -123,7 +162,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                     else
                     if (left.Value is Percent)
                     {
-                        throw new NCalcEvaluationException("The left side of a += operation cannot be a percent unless the right side is a percent as well");
+                        throw new NCalcEvaluationException("The left side of a += operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
                     }
                 }
 
@@ -157,7 +196,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                     else
                     if (left.Value is Percent)
                     {
-                        throw new NCalcEvaluationException("The left side of a -= operation cannot be a percent unless the right side is a percent as well");
+                        throw new NCalcEvaluationException("The left side of a -= operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
                     }
                 }
 
@@ -446,7 +485,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                     else
                     if (left.Value is Percent)
                     {
-                        throw new NCalcEvaluationException("The left side of a subtraction operation cannot be a percent unless the right side is a percent as well");
+                        throw new NCalcEvaluationException("The left side of a subtraction operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
                     }
                 }
 
@@ -489,7 +528,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                     else
                     if (left.Value is Percent)
                     {
-                        throw new NCalcEvaluationException("The left side of an addition operation cannot be a percent unless the right side is a percent as well");
+                        throw new NCalcEvaluationException("The left side of an addition operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
                     }
                 }
 
@@ -645,12 +684,12 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             case BinaryExpressionType.IndexAccess:
             {
                 if (!TryGetValueOrNull(left.Value, out leftValue))
-                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list");
+                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list", expression.LeftExpression.Location);
                 if (!TryGetValueOrNull(right.Value, out rightValue))
-                    throw new NCalcParameterIndexException("The index does not evaluate to a number");
+                    throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
 
                 if (leftValue is not IList identList)
-                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list");
+                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list", expression.LeftExpression.Location);
 
                 int index;
                 try
@@ -659,10 +698,10 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 }
                 catch
                 {
-                    throw new NCalcParameterIndexException("The index does not evaluate to a number");
+                    throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
                 }
                 if (index < 0 || index >= identList.Count)
-                    throw new NCalcParameterIndexException($"The index is out of bounds [0; {identList.Count - 1}]");
+                    throw new NCalcParameterIndexException($"The index is out of bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
                 object? result = identList[index];
                 if (result is LogicalExpression expr)
                     result = expr.Accept(this);
@@ -721,7 +760,7 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             return expressionFunction(new ExpressionFunctionData(function.Identifier.Id, args, context));
         }
 
-        return BuiltInFunctionHelper.Evaluate(functionName, args, context);
+        return BuiltInFunctionHelper.Evaluate(functionName, args, context, function.Location);
     }
 
     public virtual object? Visit(Identifier identifier, CancellationToken cancellationToken = default)
@@ -738,8 +777,6 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
             result = parameterArgs.Result;
             if (result is null)
             {
-                /*if (identifier is IndexedIdentifier indIdent)
-                    throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                 return result;
             }
         }
@@ -765,8 +802,6 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                     result = expression.Evaluate();
                     if (result is null)
                     {
-                        /*if (identifier is IndexedIdentifier indIdent)
-                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                         return result;
                     }
                 }
@@ -775,8 +810,6 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                     result = parameter;
                     if (result is null)
                     {
-                        /*if (identifier is IndexedIdentifier indIdent)
-                            throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                         return result;
                     }
                 }
@@ -790,38 +823,15 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
                 result = dynamicParameter(new ExpressionParameterData(identifier.Id, context));
                 if (result is null)
                 {
-                    /*if (identifier is IndexedIdentifier indIdent)
-                        throw new NCalcParameterIndexException(identifierName, string.Format(NCalcParameterIndexException.MessageCantIndexNull, identifierName));*/
                     return result;
                 }
             }
         }
 
         if (result != null)
-        {
-            /*if (identifier is IndexedIdentifier indIdent)
-            {
-                if (result is not IList identList)
-                    throw new NCalcParameterIndexException(identifierName, $"{identifierName}, if used with an index, must denote a list");
-                var indexObj = indIdent.Index.Accept(this);
-                if (!MathHelper.IsBoxedIntegerNumber(indexObj))
-                    throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number");
-                var index = MathHelper.ConvertToInt(indexObj, context);
-                if (index < 0 || index >= identList.Count)
-                    throw new NCalcParameterIndexException(identifierName, $"The index {index} of {identifierName} is out of bounds [0; {identList.Count - 1}]");
-                result = identList[index];
-                if (result is LogicalExpression expr)
-                    result = expr.Accept(this);
-            }*/
             return result;
-        }
 
-        throw new NCalcParameterNotDefinedException(identifierName);
-    }
-
-    private void Expression_MatchString(MatchStringArgs args)
-    {
-        throw new NotImplementedException();
+        throw new NCalcParameterNotDefinedException(identifierName, identifier.Location);
     }
 
     public virtual object Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)

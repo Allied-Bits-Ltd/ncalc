@@ -1,7 +1,20 @@
-﻿namespace NCalc.Exceptions;
+﻿using NCalc.Parser;
 
-public sealed class NCalcParameterNotDefinedException(string parameterName)
-    : NCalcEvaluationException($"Parameter {parameterName} is not defined.")
+namespace NCalc.Exceptions;
+
+public sealed class NCalcParameterNotDefinedException : NCalcEvaluationException
 {
-    public string ParameterName { get; } = parameterName;
+    private const string DefaultMessage = "Parameter {0} is not defined.";
+
+    public string ParameterName { get; }
+
+    public NCalcParameterNotDefinedException(string parameterName) : base(string.Format(DefaultMessage, parameterName))
+    {
+        ParameterName = parameterName;
+    }
+
+    public NCalcParameterNotDefinedException(string parameterName, ExpressionLocation location) : base(string.Format(DefaultMessage, parameterName), location)
+    {
+        ParameterName = parameterName;
+    }
 }

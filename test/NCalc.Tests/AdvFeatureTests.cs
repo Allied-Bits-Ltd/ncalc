@@ -1568,6 +1568,103 @@ public class AdvFeatureTests
         Assert.Equal(expectedExprValue, iResult);
     }
 
+    [Theory]
+    [InlineData("a := (1; 2; 3); a[1] := (2 + 2); a[1]", 4)]
+    public void ShouldHandleIndexedAssignment(string input, int expectedExprValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+
+        long iResult;
+        var result = expression.Evaluate();
+
+        Assert.NotNull(result);
+
+        if (result is double dResult)
+        {
+            iResult = (long)dResult;
+        }
+        if (result is long lResult)
+        {
+            iResult = (int)lResult;
+        }
+        else
+            iResult = (int)result;
+
+        Assert.Equal(expectedExprValue, iResult);
+    }
+
+    [Theory]
+    [InlineData("a[1] := 4", "a", 4, 4)]
+    [InlineData("a := (1; 2; 3); a[1] := (2 + 2); a[1]", "a", 4, 4)]
+    public void ShouldHandleIndexedAssignmentWithEvent(string input, string expectedVar, int expectedVarValue, int expectedExprValue)
+    {
+        bool eventFired = false;
+
+        object? paramValue = null;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        expression.EvaluateParameter += (name, args) =>
+        {
+            if (name == "a")
+            {
+                args.Result = paramValue;
+            }
+        };
+
+        expression.UpdateParameter += (name, args) =>
+        {
+            eventFired = true;
+            Assert.Equal(expectedVar, name);
+            int iValue;
+            Assert.NotNull(args.Value);
+
+            if (args.Index is not null)
+            {
+                if (args.Value is double dValue)
+                {
+                    iValue = (int)(long)dValue;
+                }
+                else
+                if (args.Value is long lValue)
+                {
+                    iValue = (int)lValue;
+                }
+                else
+                    iValue = (int)args.Value;
+
+                Assert.Equal(expectedVarValue, iValue);
+                if (paramValue is IList list)
+                {
+                    list[args.Index.Value] = args.Value;
+                }
+            }
+            else
+                paramValue = args.Value;
+
+            args.UpdateParameterLists = false;
+        };
+
+        long iResult;
+        var result = expression.Evaluate();
+
+        Assert.NotNull(result);
+
+        if (result is double dResult)
+        {
+            iResult = (long)dResult;
+        }
+        if (result is long lResult)
+        {
+            iResult = (int)lResult;
+        }
+        else
+            iResult = (int)result;
+
+        Assert.True(eventFired);
+
+        Assert.Equal(expectedExprValue, iResult);
+    }
+
     class AssignmentLambdaTestsContext
     {
         public int a { get; set; }

@@ -1,11 +1,12 @@
 using NCalc.Domain;
 using NCalc.Exceptions;
+using NCalc.Parser;
 
 namespace NCalc.Helpers;
 
 public static class BuiltInFunctionHelper
 {
-    public static object? Evaluate(string functionName, Expression[] arguments, ExpressionContext context)
+    public static object? Evaluate(string functionName, Expression[] arguments, ExpressionContext context, ExpressionLocation location)
     {
         var caseInsensitive = context.Options.HasFlag(ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
         var comparison = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
@@ -232,6 +233,6 @@ public static class BuiltInFunctionHelper
             return evaluation;
         }
 
-        throw new NCalcFunctionNotFoundException(functionName);
+        throw new NCalcFunctionNotFoundException(functionName, location);
     }
 }

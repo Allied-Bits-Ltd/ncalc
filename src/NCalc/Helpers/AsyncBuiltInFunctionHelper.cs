@@ -1,11 +1,12 @@
 using NCalc.Domain;
 using NCalc.Exceptions;
+using NCalc.Parser;
 
 namespace NCalc.Helpers;
 
 public static class AsyncBuiltInFunctionHelper
 {
-    public static async ValueTask<object?> EvaluateAsync(string functionName, AsyncExpression[] arguments, AsyncExpressionContext context, CancellationToken cancellationToken = default)
+    public static async ValueTask<object?> EvaluateAsync(string functionName, AsyncExpression[] arguments, AsyncExpressionContext context, ExpressionLocation location, CancellationToken cancellationToken = default)
     {
         var caseInsensitive = context.Options.HasFlag(ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
         var comparison = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
@@ -219,6 +220,6 @@ public static class AsyncBuiltInFunctionHelper
             return evaluation;
         }
 
-        throw new NCalcFunctionNotFoundException(functionName);
+        throw new NCalcFunctionNotFoundException(functionName, location);
     }
 }
