@@ -1,8 +1,9 @@
-TODO: assign to list elements
-
+# 7.5.0 (Allied Bits)
 * Added support for C-Style (line and block) and Python-style comments.
 * Added support for indexed expressions (when an expression evaluates to a list, it is possible to access individual elements).
+* Implemented assignment of values to indexed expressions (if they evaluate to a variable).
 * Sequences of expressions and statements can now be grouped using curly brackets (this is needed when a group of expressions or statements is used as a parameter of a function).
+* Added location of a logical expression in the source expression as a property of LogicalExpression class and its descendants; this expression is used when throwing some exceptions and can be used for simplifying diagnostics, logging, and error messages.
 * Added the MatchString event for custom string matching.
 * Added Log2 to built-in functions.
 * Fixed statement sequences (the last statement was skipped).
