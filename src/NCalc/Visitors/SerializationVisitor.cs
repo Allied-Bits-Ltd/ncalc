@@ -18,11 +18,18 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     {
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
-        string result = EncapsulateNoValue(expression.LeftExpression) + "? ";
-        result += EncapsulateNoValue(expression.MiddleExpression) + ": ";
-        result += EncapsulateNoValue(expression.RightExpression);
-
-        return result;
+        if (expression is IfStatementExpression)
+        {
+            string result = "if (" + EncapsulateNoValue(expression.LeftExpression) + ") { " + EncapsulateNoValue(expression.MiddleExpression);
+            if (!(expression.RightExpression is ValueExpression valueExp && valueExp.Type == ValueType.String && valueExp.Value is null))
+                result += " } else { " + EncapsulateNoValue(expression.RightExpression);
+            result += " }";
+            return result;
+        }
+        else
+        {
+            return EncapsulateNoValue(expression.LeftExpression) + "? " + EncapsulateNoValue(expression.MiddleExpression) + ": " + EncapsulateNoValue(expression.RightExpression);
+        }
     }
 
     public string Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
@@ -32,6 +39,16 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
         var resultBuilder = new StringBuilder();
 
+        if (expression.Type == BinaryExpressionType.WhileLoop)
+        {
+            resultBuilder.Append("while (");
+            resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression));
+            resultBuilder.Append(") { ");
+            resultBuilder.Append(EncapsulateNoValue(expression.RightExpression));
+            resultBuilder.Append(" }");
+            return resultBuilder.ToString();
+        }
+        else
         if (expression.Type == BinaryExpressionType.Factorial)
         {
             if ((expression.RightExpression is ValueExpression valueExpression) && (valueExpression.Type == ValueType.Integer) && (valueExpression.Value != null))
@@ -52,7 +69,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
             resultBuilder.Append(expression.Type switch
             {
-                BinaryExpressionType.StatementSequence => "; " ,
+                BinaryExpressionType.StatementSequence => "; ",
                 BinaryExpressionType.Assignment => context.Options.HasFlag(ExpressionOptions.UseCStyleAssignments) ? "= " : ":= ",
                 BinaryExpressionType.PlusAssignment => "+= ",
                 BinaryExpressionType.MinusAssignment => "-= ",
@@ -76,8 +93,8 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                 BinaryExpressionType.Modulo => (context.AdvancedOptions != null && context.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent)) ? "mod " : "% ",
                 BinaryExpressionType.NotEqual => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2260 " : "!= ",
                 BinaryExpressionType.Plus => "+ ",
-                BinaryExpressionType.Times => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u00D7 " :  "* ",
-                BinaryExpressionType.BitwiseAnd => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_and " :  "& ",
+                BinaryExpressionType.Times => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u00D7 " : "* ",
+                BinaryExpressionType.BitwiseAnd => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_and " : "& ",
                 BinaryExpressionType.BitwiseOr => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_or " : "| ",
                 BinaryExpressionType.BitwiseXOr => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_xor " : "^ ",
                 BinaryExpressionType.LeftShift => "<< ",
@@ -147,6 +164,11 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     public string Visit(Function function, CancellationToken cancellationToken = default)
     {
         function.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
+
+        if (context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.UseResultReference) == true && function.Identifier.Name == "@")
+        {
+            return "@";
+        }
 
         var resultBuilder = new StringBuilder(function.Identifier.Name +'(');
 

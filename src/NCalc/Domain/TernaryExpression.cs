@@ -2,7 +2,7 @@
 
 namespace NCalc.Domain;
 
-public sealed class TernaryExpression(
+public class TernaryExpression(
     LogicalExpression leftExpression,
     LogicalExpression middleExpression,
     LogicalExpression rightExpression)
@@ -18,4 +18,12 @@ public sealed class TernaryExpression(
     {
         return visitor.Visit(this, cancellationToken);
     }
+}
+
+public class IfStatementExpression : TernaryExpression
+{
+    public IfStatementExpression(
+        LogicalExpression leftExpression,
+        LogicalExpression middleExpression,
+        LogicalExpression rightExpression) : base(leftExpression, middleExpression, rightExpression) { }
 }

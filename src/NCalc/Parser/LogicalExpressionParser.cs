@@ -1831,7 +1831,7 @@ public static class LogicalExpressionParser
         {
             var ifStatement = Terms.Text("if", caseInsensitive: true).SkipAnd(Terms.Text("(")).SkipAnd(expressionOrBracedStatementSequence).AndSkip(Terms.Text(")")).And(expressionOrBracedStatementSequence).And(ZeroOrOne(Terms.Text("else", caseInsensitive: true).SkipAnd(expressionOrBracedStatementSequence)))
                     .Then<LogicalExpression>((ctx, x) =>
-                        new TernaryExpression(x.Item1, x.Item2, x.Item3 is null ? new ValueExpression(null) : x.Item3)
+                        new IfStatementExpression(x.Item1, x.Item2, x.Item3 is null ? new ValueExpression(null) : x.Item3)
                     );
 
             statements.Add(ifStatement);

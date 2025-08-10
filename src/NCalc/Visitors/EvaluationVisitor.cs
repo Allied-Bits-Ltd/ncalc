@@ -810,9 +810,9 @@ public class EvaluationVisitor(ExpressionContext context) : ILogicalExpressionVi
         if (context.Options.HasFlag(ExpressionOptions.UseLoops))
         {
             if (identifierName.Equals("break", StringComparison.InvariantCultureIgnoreCase))
-                throw new NCalcFlowControl(NCalcFlowControl.FlowControlType.Break);
+                throw new NCalcFlowControl(NCalcFlowControl.FlowControlType.Break, identifier.Location);
             if (identifierName.Equals("continue", StringComparison.InvariantCultureIgnoreCase))
-                throw new NCalcFlowControl(NCalcFlowControl.FlowControlType.Continue);
+                throw new NCalcFlowControl(NCalcFlowControl.FlowControlType.Continue, identifier.Location);
         }
 
         var parameterArgs = new ParameterArgs(identifier.Id);

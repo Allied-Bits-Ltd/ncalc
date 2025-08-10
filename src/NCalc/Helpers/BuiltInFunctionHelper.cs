@@ -14,7 +14,7 @@ public static class BuiltInFunctionHelper
         if (functionName.Equals("%") || functionName.Equals("PercentOf", comparison))
         {
             if (arguments.Length != 2)
-                throw new NCalcEvaluationException("PercentOf() takes exactly 2 arguments");
+                throw new NCalcEvaluationException("PercentOf() takes exactly 2 arguments", location);
             object? arg1 = arguments[0].Evaluate();
             if (arg1 == null)
                 return null;
@@ -30,7 +30,7 @@ public static class BuiltInFunctionHelper
         if (functionName.Equals("PercentDiff", comparison))
         {
             if (arguments.Length != 2)
-                throw new NCalcEvaluationException("PercentDiff() takes exactly 2 arguments");
+                throw new NCalcEvaluationException("PercentDiff() takes exactly 2 arguments", location);
             object? arg1 = arguments[0].Evaluate();
             if (arg1 == null)
                 return null;
@@ -46,99 +46,99 @@ public static class BuiltInFunctionHelper
         if (functionName.Equals("Abs", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Abs() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Abs() takes exactly 1 argument", location);
             return MathHelper.Abs(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Acos", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Acos() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Acos() takes exactly 1 argument", location);
             return MathHelper.Acos(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Asin", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Asin() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Asin() takes exactly 1 argument", location);
             return MathHelper.Asin(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Atan", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Atan() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Atan() takes exactly 1 argument", location);
             return MathHelper.Atan(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Atan2", comparison))
         {
             if (arguments.Length != 2)
-                throw new NCalcEvaluationException("Atan2() takes exactly 2 arguments");
+                throw new NCalcEvaluationException("Atan2() takes exactly 2 arguments", location);
             return MathHelper.Atan2(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
         }
         if (functionName.Equals("Ceiling", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Ceiling() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Ceiling() takes exactly 1 argument", location);
             return MathHelper.Ceiling(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Cos", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Cos() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Cos() takes exactly 1 argument", location);
             return MathHelper.Cos(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Exp", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Exp() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Exp() takes exactly 1 argument", location);
             return MathHelper.Exp(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Floor", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Floor() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Floor() takes exactly 1 argument", location);
             return MathHelper.Floor(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("IEEERemainder", comparison))
         {
             if (arguments.Length != 2)
-                throw new NCalcEvaluationException("IEEERemainder() takes exactly 2 arguments");
+                throw new NCalcEvaluationException("IEEERemainder() takes exactly 2 arguments", location);
             return MathHelper.IEEERemainder(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
         }
         if (functionName.Equals("Ln", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Ln() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Ln() takes exactly 1 argument", location);
             return MathHelper.Ln(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Log", comparison))
         {
             if (arguments.Length != 2)
-                throw new NCalcEvaluationException("Log() takes exactly 2 arguments");
+                throw new NCalcEvaluationException("Log() takes exactly 2 arguments", location);
             return MathHelper.Log(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
         }
 #if NET8_0_OR_GREATER
         if (functionName.Equals("Log2", comparison))
         {
             if (arguments.Length != 2)
-                throw new NCalcEvaluationException("Log2() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Log2() takes exactly 1 argument", location);
             return MathHelper.Log2(arguments[0].Evaluate(), context);
         }
 #endif
         if (functionName.Equals("Log10", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Log10() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Log10() takes exactly 1 argument", location);
             return MathHelper.Log10(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Pow", comparison))
         {
             if (arguments.Length != 2)
-                throw new NCalcEvaluationException("Pow() takes exactly 2 arguments");
+                throw new NCalcEvaluationException("Pow() takes exactly 2 arguments", location);
             return MathHelper.Pow(arguments[0].Evaluate(), arguments[1].Evaluate(), true, context);
         }
         if (functionName.Equals("Round", comparison))
         {
             if (arguments.Length != 2)
-                throw new NCalcEvaluationException("Round() takes exactly 2 arguments");
+                throw new NCalcEvaluationException("Round() takes exactly 2 arguments", location);
             var rounding = context.Options.HasFlag(ExpressionOptions.RoundAwayFromZero)
                 ? MidpointRounding.AwayFromZero
                 : MidpointRounding.ToEven;
@@ -147,49 +147,49 @@ public static class BuiltInFunctionHelper
         if (functionName.Equals("Sign", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Sign() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Sign() takes exactly 1 argument", location);
             return MathHelper.Sign(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Sin", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Sin() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Sin() takes exactly 1 argument", location);
             return MathHelper.Sin(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Sqrt", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Sqrt() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Sqrt() takes exactly 1 argument", location);
             return MathHelper.Sqrt(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Tan", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Tan() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Tan() takes exactly 1 argument", location);
             return MathHelper.Tan(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Truncate", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("Truncate() takes exactly 1 argument");
+                throw new NCalcEvaluationException("Truncate() takes exactly 1 argument", location);
             return MathHelper.Truncate(arguments[0].Evaluate(), context);
         }
         if (functionName.Equals("Max", comparison))
         {
             if (arguments.Length != 2)
-                throw new NCalcEvaluationException("Max() takes exactly 2 arguments");
+                throw new NCalcEvaluationException("Max() takes exactly 2 arguments", location);
             return MathHelper.Max(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
         }
         if (functionName.Equals("Min", comparison))
         {
             if (arguments.Length != 2)
-                throw new NCalcEvaluationException("Min() takes exactly 2 arguments");
+                throw new NCalcEvaluationException("Min() takes exactly 2 arguments", location);
             return MathHelper.Min(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
         }
         if (functionName.Equals("MakeList", comparison))
         {
             if (arguments.Length != 1)
-                throw new NCalcEvaluationException("MakeList() takes exactly 1 argument");
+                throw new NCalcEvaluationException("MakeList() takes exactly 1 argument", location);
             var sizeObj = arguments[0].Evaluate();
             if (sizeObj is null)
                 throw new NCalcEvaluationException("List size is evaluated to null in a call to MakeList()", location);
@@ -206,7 +206,7 @@ public static class BuiltInFunctionHelper
             if (arguments.Length < 2)
             {
                 throw new NCalcEvaluationException(
-                    "ifs() takes at least 2 arguments");
+                    "ifs() takes at least 2 arguments", location);
             }
 
             for (int i = 0; i < arguments.Length; i+=2)
@@ -228,14 +228,14 @@ public static class BuiltInFunctionHelper
         if (functionName.Equals("iff", comparison) || functionName.Equals("if", comparison))
         {
             if (arguments.Length < 2 || arguments.Length > 3)
-                throw new NCalcEvaluationException("iff() takes 2 or 3 arguments");
+                throw new NCalcEvaluationException("iff() takes 2 or 3 arguments", location);
             var cond = Convert.ToBoolean(arguments[0].Evaluate(), context.CultureInfo);
             return cond ? arguments[1].Evaluate() : ((arguments.Length == 3) ? arguments[2].Evaluate() : null);
         }
         if (functionName.Equals("in", comparison))
         {
             if (arguments.Length < 2)
-                throw new NCalcEvaluationException("in() takes at least 2 arguments");
+                throw new NCalcEvaluationException("in() takes at least 2 arguments", location);
             var parameter = arguments[0].Evaluate();
             var evaluation = false;
             for (var i = 1; i < arguments.Length; i++)
