@@ -15,8 +15,12 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
 
 This branch of NCalc contains a number of advanced features compared to the main NCalc project, such as 
 
-* Assignable parameters including shortcut operators (+=, etc.).
-* Statement sequences (useful together with parameter assignments).
+* Assignable parameters (variables) including shortcut operators (+=, etc.).
+* Statement sequences (useful together with parameter assignments) which, in expressions, may be grouped using curly brackets (like in C-like languages).
+* Support for indexed expressions (when an expression evaluates to a list, it is possible to access individual elements).
+* Support for loops using the 'while' loop statement (it follows the regular C-like style) with 'break' and 'continue' flow control keywords.
+* Support for the 'if' statement, which follows the regular C-like style.
+* Support for C-Style (line and block) and Python-style comments.
 * Advanced date and time parsing, which takes into account culture settings (current or specific culture or custom separators) and supports times with or without seconds as well as 12-hour time.
 * Parsing of humane period expressions like "3 weeks 2 days 5 hours" (period identifiers are customizable and multiple identifier per period are supported).
 * Basic calculations with dates and time spans - one can add and subtract dates and times. Without these operations, date and time values are of little use (if only with custom functions).
@@ -37,7 +41,7 @@ This branch of NCalc contains a number of advanced features compared to the main
 * Minor improvements in the asyncrhonous code (CancellationToken and ConfigureAwait(false) are present in all calls).
 * The main projects have been combined into one project.
 
-This version attempts to be synchronized with the main NCalc project, which resides [here on github](https://github.com/ncalc/ncalc).
+This version borrows some updates of the main NCalc project, which resides [here on github](https://github.com/ncalc/ncalc).
 
 ## Docs
 
