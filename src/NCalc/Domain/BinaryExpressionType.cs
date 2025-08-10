@@ -11,6 +11,7 @@ public enum BinaryExpressionType
     AndAssignment,
     OrAssignment,
     XOrAssignment,
+    WhileLoop,
     And,
     Or,
     XOr,

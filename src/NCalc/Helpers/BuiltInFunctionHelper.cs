@@ -186,6 +186,21 @@ public static class BuiltInFunctionHelper
                 throw new NCalcEvaluationException("Min() takes exactly 2 arguments");
             return MathHelper.Min(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
         }
+        if (functionName.Equals("MakeList", comparison))
+        {
+            if (arguments.Length != 1)
+                throw new NCalcEvaluationException("MakeList() takes exactly 1 argument");
+            var sizeObj = arguments[0].Evaluate();
+            if (sizeObj is null)
+                throw new NCalcEvaluationException("List size is evaluated to null in a call to MakeList()", location);
+            if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(sizeObj))
+                throw new NCalcEvaluationException("List size is not evaluated to an integer number in a call to MakeList()", location);
+            int size = MathHelper.ConvertToInt(sizeObj, context);
+            if (size <= 0)
+                throw new NCalcEvaluationException($"List size is {size}, and it must be positive in a call to MakeList()", location);
+
+            return new object?[size];
+        }
         if (functionName.Equals("ifs", comparison))
         {
             if (arguments.Length < 2)
@@ -210,10 +225,10 @@ public static class BuiltInFunctionHelper
 
             return null;
         }
-        if (functionName.Equals("if", comparison))
+        if (functionName.Equals("iff", comparison) || functionName.Equals("if", comparison))
         {
             if (arguments.Length < 2 || arguments.Length > 3)
-                throw new NCalcEvaluationException("if() takes 2 or 3 arguments");
+                throw new NCalcEvaluationException("iff() takes 2 or 3 arguments");
             var cond = Convert.ToBoolean(arguments[0].Evaluate(), context.CultureInfo);
             return cond ? arguments[1].Evaluate() : ((arguments.Length == 3) ? arguments[2].Evaluate() : null);
         }

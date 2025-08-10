@@ -78,11 +78,18 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 if (!context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out staticParam) || staticParam is null)
                     throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not set and cannot be assigned to by index", binExpr.LeftExpression.Location);
 
-                if (staticParam is not IList)
+                if (staticParam is not IList list)
                 {
                     throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not a list and cannot be assigned to by index", binExpr.LeftExpression.Location);
                 }
-                ((IList)staticParam)[index] = value;
+
+                if (list.IsReadOnly)
+                    throw new NCalcParameterIndexException(identifierName, $"{identifierName} is read-only and cannot be assigned to by index", binExpr.LeftExpression.Location);
+
+                if (list.Count <= index)
+                    throw new NCalcParameterIndexException(identifierName, $"{identifierName} cannot be assigned to by index: it has {list.Count} elements, while the index to update is {index}", binExpr.RightExpression.Location);
+
+                list[index] = value;
             }
             else
                 throw new NCalcEvaluationException("The expression should evaluate to an identifier", binExpr.Location);
@@ -724,6 +731,38 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                     result = await expr.Accept(this, cancellationToken).ConfigureAwait(false);
                 return result;
             }
+
+            case BinaryExpressionType.WhileLoop:
+            {
+                object? result = null;
+
+                int ctr = 0;
+
+                while (ctr < AsyncExpression.MaxLoopIterations)
+                {
+                    ctr++;
+
+                    if (!TryGetValueOrNull(await EvaluateAsync(expression.LeftExpression, cancellationToken).ConfigureAwait(false), out leftValue))
+                        break;
+
+                    if (!Convert.ToBoolean(leftValue, context.CultureInfo))
+                        break;
+
+                    try
+                    {
+                        TryGetValueOrNull(await EvaluateAsync(expression.RightExpression, cancellationToken).ConfigureAwait(false), out result);
+                    }
+                    catch (NCalcFlowControl fc)
+                    {
+                        if (fc.Type == NCalcFlowControl.FlowControlType.Break)
+                            break;
+                        /*else
+                        if (fc.Type == NCalcFlowControl.FlowControlType.Continue)
+                            continue;*/
+                    }
+                }
+                return result;
+            }
         }
         return null;
     }
@@ -779,6 +818,14 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
     {
         object? result = null;
         var identifierName = identifier.Name;
+
+        if (context.Options.HasFlag(ExpressionOptions.UseLoops))
+        {
+            if (identifierName.Equals("break", StringComparison.InvariantCultureIgnoreCase))
+                throw new NCalcFlowControl(NCalcFlowControl.FlowControlType.Break);
+            if (identifierName.Equals("continue", StringComparison.InvariantCultureIgnoreCase))
+                throw new NCalcFlowControl(NCalcFlowControl.FlowControlType.Continue);
+        }
 
         var parameterArgs = new ParameterArgs(identifier.Id);
 

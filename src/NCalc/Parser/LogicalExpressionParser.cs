@@ -1816,7 +1816,28 @@ public static class LogicalExpressionParser
             (OneOrMany(OneOf(operatorSequenceElements.ToArray())),
                 static (_, _) => throw new InvalidOperationException("Unknown operator sequence.")));
 
-        List<Parser<LogicalExpression>> statements = [operatorSequence];
+        List<Parser<LogicalExpression>> statements = [];
+
+        if (options.HasFlag(ExpressionOptions.UseLoops))
+        {
+            var whileLoop = Terms.Text("while", caseInsensitive: true).SkipAnd(Terms.Text("(")).SkipAnd(expressionOrBracedStatementSequence).AndSkip(Terms.Text(")")).And(expressionOrBracedStatementSequence)
+                .Then<LogicalExpression>((ctx, x) =>
+                    new BinaryExpression(BinaryExpressionType.WhileLoop, x.Item1, x.Item2)
+                );
+            statements.Add(whileLoop);
+        }
+
+        if (options.HasFlag(ExpressionOptions.UseIfStatement))
+        {
+            var ifStatement = Terms.Text("if", caseInsensitive: true).SkipAnd(Terms.Text("(")).SkipAnd(expressionOrBracedStatementSequence).AndSkip(Terms.Text(")")).And(expressionOrBracedStatementSequence).And(ZeroOrOne(Terms.Text("else", caseInsensitive: true).SkipAnd(expressionOrBracedStatementSequence)))
+                    .Then<LogicalExpression>((ctx, x) =>
+                        new TernaryExpression(x.Item1, x.Item2, x.Item3 is null ? new ValueExpression(null) : x.Item3)
+                    );
+
+            statements.Add(ifStatement);
+        }
+
+        statements.Add(operatorSequence);
 
         Parser<LogicalExpression>? topLevel = null;
 
@@ -1860,7 +1881,7 @@ public static class LogicalExpressionParser
                             break;
                     }
                     ExpressionLocation loc = new ParlotExpressionLocation(ctx);
-                    result = (BinaryExpression) new BinaryExpression(expressionType, x.Item1, x.Item3/*[0]*/).SetLocation(loc).SetOptions(options, cultureInfo, extOptions);
+                    result = (BinaryExpression)new BinaryExpression(expressionType, x.Item1, x.Item3/*[0]*/).SetLocation(loc).SetOptions(options, cultureInfo, extOptions);
                     /*if (x.Item3.Count > 1)
                     {
                         for (int i = 1; i < x.Item3.Count; i++)
@@ -1883,7 +1904,8 @@ public static class LogicalExpressionParser
 
         if (options.HasFlag(ExpressionOptions.UseStatementSequences))
         {
-            var statementSequence = expressionOrAssignment.And(ZeroOrMany(Terms.Pattern((c) => c == ';').SkipAnd(expressionOrAssignment)));
+            var separator = Terms.Pattern((c) => c == ';');
+            var statementSequence = expressionOrAssignment.And(ZeroOrMany(separator.SkipAnd(expressionOrAssignment))).And(ZeroOrMany(separator));
             var statementSequenceParser = statementSequence
                 .Then((ctx, x) =>
                 {

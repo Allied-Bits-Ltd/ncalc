@@ -159,10 +159,22 @@ public enum ExpressionOptions
     /// <summary>
     /// When set, the parser will recognize C-style line and block comments in expressions.
     /// </summary>
-    SupportCStyleComments = 1 << 31,
+    SupportCStyleComments = 1 << 30,
 
     /// <summary>
     /// When set, the parser will recognize Python comments in expressions.
     /// </summary>
-    SupportPythonComments = 1 << 32
+    SupportPythonComments = 1 << 31,
+
+    /// <summary>
+    /// When set, while() loop statement is supported.
+    /// The safety fuse, a limit of loop iterations, is set via Expression.MaxLoopIterations/AsyncExpression.MaxLoopIterations. The default value is 65536.
+    /// </summary>
+    UseLoops = 1 << 32,
+
+    /// <summary>
+    /// When set, recognizes the if() statement, and "if" is not used for a function.
+    /// When not set, if() is used as an alias to the built-in "iff" function.
+    /// </summary>
+    UseIfStatement = 1 << 33
 }

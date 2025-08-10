@@ -69,6 +69,8 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
 
     public Exception? Error { get; private set; }
 
+    public static int MaxLoopIterations = 65536;
+
     private ILogicalExpressionCache LogicalExpressionCache { get; }
     private ILogicalExpressionFactory LogicalExpressionFactory { get; }
 

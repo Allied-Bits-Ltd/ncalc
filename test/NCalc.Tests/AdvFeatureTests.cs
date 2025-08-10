@@ -1570,9 +1570,10 @@ public class AdvFeatureTests
 
     [Theory]
     [InlineData("a := (1; 2; 3); a[1] := (2 + 2); a[1]", 4)]
+    [InlineData("a := makelist(3); a[1] := (2 + 2); a[1]", 4)]
     public void ShouldHandleIndexedAssignment(string input, int expectedExprValue)
     {
-        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
 
         long iResult;
         var result = expression.Evaluate();
@@ -1596,13 +1597,14 @@ public class AdvFeatureTests
     [Theory]
     [InlineData("a[1] := 4", "a", 4, 4)]
     [InlineData("a := (1; 2; 3); a[1] := (2 + 2); a[1]", "a", 4, 4)]
+    [InlineData("a := makelist(3); a[1] := (2 + 2); a[1]", "a", 4, 4)]
     public void ShouldHandleIndexedAssignmentWithEvent(string input, string expectedVar, int expectedVarValue, int expectedExprValue)
     {
         bool eventFired = false;
 
         object? paramValue = null;
 
-        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
         expression.EvaluateParameter += (name, args) =>
         {
             if (name == "a")
@@ -2139,6 +2141,41 @@ public class AdvFeatureTests
 
         Assert.Equal(expectedValue.ToString(), result?.ToString());
     }
+
+    [Theory]
+    [ClassData(typeof(ShouldEvaluateIfStatementTestData))]
+    public void ShouldEvaluateIfStatement(string input, string? expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseIfStatement);
+        var result = expression.Evaluate();
+        Assert.Equal(expectedValue, result?.ToString());
+    }
+
+    [Theory]
+    [ClassData(typeof(ShouldHandleWhileLoopTestData))]
+
+    public void ShouldHandleWhileLoop(string input, int expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseLoops);
+
+        int iResult;
+        var result = expression.Evaluate();
+
+        Assert.NotNull(result);
+
+        if (result is double dResult)
+        {
+            iResult = (int)dResult;
+        }
+        if (result is long lResult)
+        {
+            iResult = (int)lResult;
+        }
+        else
+            iResult = (int)result;
+
+        Assert.Equal(expectedValue, iResult);
+    }
 }
 
 [Trait("Category", "Advanced")]
@@ -2337,6 +2374,107 @@ public class AsyncAdvFeatureTests
     }
 
     [Theory]
+    [InlineData("a := (1; 2; 3); a[1] := (2 + 2); a[1]", 4)]
+    [InlineData("a := makelist(3); a[1] := (2 + 2); a[1]", 4)]
+    public async Task ShouldHandleIndexedAssignmentAsync(string input, int expectedExprValue)
+    {
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
+
+        long iResult;
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+
+        if (result is double dResult)
+        {
+            iResult = (long)dResult;
+        }
+        if (result is long lResult)
+        {
+            iResult = (int)lResult;
+        }
+        else
+            iResult = (int)result;
+
+        Assert.Equal(expectedExprValue, iResult);
+    }
+
+    [Theory]
+    [InlineData("a[1] := 4", "a", 4, 4)]
+    [InlineData("a := (1; 2; 3); a[1] := (2 + 2); a[1]", "a", 4, 4)]
+    [InlineData("a := makelist(3); a[1] := (2 + 2); a[1]", "a", 4, 4)]
+    public async Task ShouldHandleIndexedAssignmentWithEventAsync(string input, string expectedVar, int expectedVarValue, int expectedExprValue)
+    {
+        bool eventFired = false;
+
+        object? paramValue = null;
+
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
+        expression.EvaluateParameterAsync += (name, args, cancellationToken) =>
+        {
+            if (name == "a")
+            {
+                args.Result = paramValue;
+            }
+            return ValueTask.CompletedTask;
+        };
+
+        expression.UpdateParameterAsync += (name, args, cancellationToken) =>
+        {
+            eventFired = true;
+            Assert.Equal(expectedVar, name);
+            int iValue;
+            Assert.NotNull(args.Value);
+
+            if (args.Index is not null)
+            {
+                if (args.Value is double dValue)
+                {
+                    iValue = (int)(long)dValue;
+                }
+                else
+                if (args.Value is long lValue)
+                {
+                    iValue = (int)lValue;
+                }
+                else
+                    iValue = (int)args.Value;
+
+                Assert.Equal(expectedVarValue, iValue);
+                if (paramValue is IList list)
+                {
+                    list[args.Index.Value] = args.Value;
+                }
+            }
+            else
+                paramValue = args.Value;
+
+            args.UpdateParameterLists = false;
+            return ValueTask.CompletedTask;
+        };
+
+        long iResult;
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+
+        if (result is double dResult)
+        {
+            iResult = (long)dResult;
+        }
+        if (result is long lResult)
+        {
+            iResult = (int)lResult;
+        }
+        else
+            iResult = (int)result;
+
+        Assert.True(eventFired);
+
+        Assert.Equal(expectedExprValue, iResult);
+    }
+
+    [Theory]
     [InlineData("2 + 2; 3 + 3", 6)]
     [InlineData("(2 + 2); 3 + 3", 6)]
     [InlineData("Max(2, 5); 3 + 3", 6)]
@@ -2456,5 +2594,67 @@ public class AsyncAdvFeatureTests
         var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue.ToString(), result?.ToString());
+    }
+
+    [Theory]
+    [ClassData(typeof(ShouldEvaluateIfStatementTestData))]
+    public async Task ShouldEvaluateIfStatementAsync(string input, string? expectedValue)
+    {
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseIfStatement);
+
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedValue, result?.ToString());
+    }
+
+    [Theory]
+    [ClassData(typeof(ShouldHandleWhileLoopTestData))]
+    public async Task ShouldHandleWhileLoopAsync(string input, int expectedValue)
+    {
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseLoops);
+
+        int iResult;
+
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+
+        if (result is double dResult)
+        {
+            iResult = (int)dResult;
+        }
+        if (result is long lResult)
+        {
+            iResult = (int)lResult;
+        }
+        else
+            iResult = (int)result;
+
+        Assert.Equal(expectedValue, iResult);
+    }
+}
+
+public class ShouldEvaluateIfStatementTestData : TheoryData<string, string?>
+{
+    public ShouldEvaluateIfStatementTestData()
+    {
+        Add("if (1 < 2) { 'true' } else { 'false' }", "true");
+        Add("if (1 > 2) { 'true' } else { 'false' }", "false");
+        Add("if (1 < 2) { 'true' }", "true");
+        Add("if (1 < 2) 'true' ", "true");
+    }
+}
+
+public class ShouldHandleWhileLoopTestData : TheoryData<string, int>
+{
+    public ShouldHandleWhileLoopTestData()
+    {
+        Add("a := 1; while (a < 5) { a += 1 } ", (int)5);
+        Add("a := 1; while (a < 5) { a += 1; a } ", (int)5);
+        Add("a := 1; while (a < 5) a += 1; a", (int)5);
+        Add("a := 1; while (a < 5) { a += 1; }; a", (int)5);
+        Add("a := 1; while (true) { a += 1; }; a", (int)65537); // This test verifies correctness of the loop breaking and relies on the value of Expression.MaxLoopIterations
+        Add("a := 1; while (a < 5) { break; a += 1; }; a", (int)1);
+        Add("a := 1; while (a < 5) { continue; a += 1; }; a", (int)1);
     }
 }
