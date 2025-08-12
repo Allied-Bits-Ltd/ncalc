@@ -12,7 +12,7 @@ namespace NCalc;
 /// </summary>
 public abstract class ExpressionBase<TExpressionContext> where TExpressionContext : ExpressionContextBase, new()
 {
-    protected TExpressionContext Context { get; }
+    internal TExpressionContext Context { get; }
 
     /// <summary>
     /// Options for the expression evaluation.
