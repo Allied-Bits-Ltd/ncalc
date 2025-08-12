@@ -1573,7 +1573,7 @@ public class AdvFeatureTests
     [InlineData("a := makelist(3); a[1] := (2 + 2); a[1]", 4)]
     public void ShouldHandleIndexedAssignment(string input, int expectedExprValue)
     {
-        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
+        var expression = new Expression(input, ExpressionOptions.NoCache  | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
 
         long iResult;
         var result = expression.Evaluate();
@@ -1592,6 +1592,32 @@ public class AdvFeatureTests
             iResult = (int)result;
 
         Assert.Equal(expectedExprValue, iResult);
+    }
+
+    [Theory]
+    [InlineData("a := 'abc'; a[1] := 'D'; a[1]", 'D')]
+    public void ShouldHandleIndexedAssignmentToString(string input, char expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.AllowCharValues | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
+
+        var result = expression.Evaluate();
+
+        Assert.NotNull(result);
+
+        Assert.Equal(expectedValue, (char) result);
+    }
+
+    [Theory]
+    [InlineData("a := 'abc'; a[1] := 'D'; a[1]", 'D')]
+    public void ShouldHandleIndexedAssignmentOfStringToString(string input, char expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
+
+        var result = expression.Evaluate();
+
+        Assert.NotNull(result);
+
+        Assert.Equal(expectedValue, (char)result);
     }
 
     [Theory]
@@ -1830,11 +1856,8 @@ public class AdvFeatureTests
     }
 
     [Theory]
-    [InlineData("a := (1; 2; 3); a[1]", 2)]
-    [InlineData("a := (1;  4 div 2; 3); a[1]", 2)]
-    [InlineData("a := (1; 2; 3); b := 2; c := 1; a[1] + 1", 3)]
-    [InlineData("b := 2; c:= 1; a := (c; b; 3); a[1]", 2)]
-    [InlineData("b := 2; c:= 1; a := (c; b; 3); a[2 / 2]", 2)]
+    [ClassData(typeof(ShouldHandleIndexedParametersTestData))]
+
     public void ShouldHandleIndexedParameters(string input, int expectedValue)
     {
         bool eventFired = false;
@@ -1868,6 +1891,18 @@ public class AdvFeatureTests
         else
             Assert.Equal(expectedValue, result);
     }
+
+    [Theory]
+    [ClassData(typeof(ShouldHandleRangeIndexedParametersTestData))]
+    public void ShouldHandleRangeIndexedParameters(string input, string expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+
+        var result = expression.Evaluate();
+
+        Assert.Equal(expectedValue, result);
+    }
+
     /* Waits until lambda visitor supports lists
     [Theory]
     [InlineData("a := (1; 2; 3); a[1]", 2)]
@@ -2153,7 +2188,6 @@ public class AdvFeatureTests
 
     [Theory]
     [ClassData(typeof(ShouldHandleWhileLoopTestData))]
-
     public void ShouldHandleWhileLoop(string input, int expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseLoops);
@@ -2397,6 +2431,71 @@ public class AsyncAdvFeatureTests
             iResult = (int)result;
 
         Assert.Equal(expectedExprValue, iResult);
+    }
+
+    [Theory]
+    [ClassData(typeof(ShouldHandleIndexedParametersTestData))]
+
+    public async Task ShouldHandleIndexedParametersAsync(string input, int expectedValue)
+    {
+        bool eventFired = false;
+
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        expression.UpdateParameterAsync += (name, args, cancellationToken) =>
+        {
+            eventFired = true;
+            if (name == "a")
+            {
+                Assert.Equal("a", name);
+            }
+            return ValueTask.CompletedTask;
+        };
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(eventFired);
+        if (result is long lResult)
+            Assert.Equal(expectedValue, (int)lResult);
+        else
+            Assert.Equal(expectedValue, result);
+    }
+
+
+
+    [Theory]
+    [ClassData(typeof(ShouldHandleRangeIndexedParametersTestData))]
+    public async Task ShouldHandleRangeIndexedParametersAsync(string input, string expectedValue)
+    {
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("a := 'abc'; a[1] := 'D'; a[1]", 'D')]
+    public async Task ShouldHandleIndexedAssignmentToStringAsync(string input, char expectedValue)
+    {
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.AllowCharValues | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
+
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+
+        Assert.Equal(expectedValue, (char)result);
+    }
+
+    [Theory]
+    [InlineData("a := 'abc'; a[1] := 'D'; a[1]", 'D')]
+    public async Task ShouldHandleIndexedAssignmentOfStringToStringAsync(string input, char expectedValue)
+    {
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
+
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+
+        Assert.Equal(expectedValue, (char)result);
     }
 
     [Theory]
@@ -2657,4 +2756,27 @@ public class ShouldHandleWhileLoopTestData : TheoryData<string, int>
         Add("a := 1; while (a < 5) { break; a += 1; }; a", (int)1);
         Add("a := 1; while (a < 5) { continue; a += 1; }; a", (int)1);
     }
+}
+
+public class ShouldHandleIndexedParametersTestData : TheoryData<string, int>
+{
+    public ShouldHandleIndexedParametersTestData()
+    {
+        Add("a := (1; 2; 3); a[1]", 2);
+        Add("a := (1;  4 div 2; 3); a[1]", 2);
+        Add("a := (1; 2; 3); b := 2; c := 1; a[1] + 1", 3);
+        Add("b := 2; c:= 1; a := (c; b; 3); a[1]", 2);
+        Add("b := 2; c:= 1; a := (c; b; 3); a[2 / 2]", 2);
+   }
+}
+
+public class ShouldHandleRangeIndexedParametersTestData : TheoryData<string, string>
+{
+    public ShouldHandleRangeIndexedParametersTestData()
+    {
+        Add("a := \"abcd\"; a[1..2]", "b");
+        Add("a := 'abcd'; a[1..2]", "b");
+        Add("a := 'abcd'; a[(2/2)..(2*1)]", "b");
+        Add("'abcd'[1..2]", "b");
+   }
 }

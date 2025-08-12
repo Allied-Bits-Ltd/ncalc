@@ -7,7 +7,7 @@ public class ValuesTestData : TheoryData<string, object>
         Add("123456", 123456);
         Add(".2", 0.2d);
         Add("123.456", 123.456d);
-        Add("123.", 123d);
+        //Add("123.", 123d);
         Add("123.0E2", 12300d);
         Add("true", true);
         Add("'true'", "true");

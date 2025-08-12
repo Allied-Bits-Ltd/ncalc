@@ -112,6 +112,7 @@ public static class LogicalExpressionParser
         var expression = Deferred<LogicalExpression>();
 
         var expressionOrBracedStatementSequence = Deferred<LogicalExpression>();
+        //var expressionOrBracedStatementSequenceForIndex = Deferred<LogicalExpression>();
         var bracedExpressionOrStatementSequence = Deferred<LogicalExpression>();
 
         bool useBigNumbers = options.HasFlag(ExpressionOptions.UseBigNumbers);
@@ -334,7 +335,7 @@ public static class LogicalExpressionParser
 
         if (decimalSeparator2 != '\0' && decimalSeparator2 == numGroupSeparator)
             useNumberGroupSeparatorFlag = 0; // decimalSeparator2 takes precedence when it is specified.
-        var decimalNumber = Terms.Number<decimal>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator, decimalSeparator2)
+        var decimalNumber = Terms.Number<decimal>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals, decimalSeparator, numGroupSeparator, decimalSeparator2)
             .Then<LogicalExpression>(static (ctx, val) =>
             {
                 bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
@@ -344,7 +345,7 @@ public static class LogicalExpressionParser
                 return new ValueExpression((double)val).SetLocation(new ParlotExpressionLocation(ctx));
             });
 
-        var doubleNumber = Terms.Number<double>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator, decimalSeparator2)
+        var doubleNumber = Terms.Number<double>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals, decimalSeparator, numGroupSeparator, decimalSeparator2)
             .Then<LogicalExpression>(static (ctx, val) =>
             {
                 bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
@@ -630,7 +631,7 @@ public static class LogicalExpressionParser
         Parser<LogicalExpression> identifierExpression = OneOf(braceIdentifier, identifier) //(options.HasFlag(ExpressionOptions.UseStatementSequences) ? OneOf(braceIdentifier, identifier) : OneOf(braceIdentifier, curlyBraceIdentifier, identifier))
                 .Then<LogicalExpression>(static (ctx, x) => new Identifier(x.ToString()!).SetLocation(new ParlotExpressionLocation(ctx)));
 
-        var index = openBrace.SkipAnd(expressionOrBracedStatementSequence).AndSkip(closeBrace);
+        var rangedIndex = openBrace.SkipAnd(ZeroOrOne(expressionOrBracedStatementSequence)).And(ZeroOrOne(Terms.Text(".."))).And(ZeroOrOne(expressionOrBracedStatementSequence)).AndSkip(closeBrace);
 
         /*var indexedIdentifierExpression = OneOf(braceIdentifier, identifier).And(index)
         .Then<LogicalExpression>(x =>
@@ -1631,20 +1632,39 @@ public static class LogicalExpressionParser
 
         var primary = ((options.HasFlag(ExpressionOptions.SupportCStyleComments) || options.HasFlag(ExpressionOptions.SupportPythonComments)) ? ZeroOrMany(comment).SkipAnd(OneOf(enabledParsers.ToArray())).AndSkip(ZeroOrMany(comment)) : OneOf(enabledParsers.ToArray()));
 
-        var indexedAccess = primary.And(ZeroOrOne(index))
+        var indexedAccess = primary.And(ZeroOrOne(rangedIndex))
             .Then((ctx, x) =>
             {
-                if (x.Item2 is null)
+                if (x.Item2.Item1 is null && x.Item2.Item2 is null && x.Item2.Item3 is null)
                 {
                     // there is just a primary discovered
                     return x.Item1;
                 }
-                return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, x.Item2).SetLocation(new ParlotExpressionLocation(ctx));
+
+                if (x.Item2.Item1 is not null && x.Item2.Item2 is null && x.Item2.Item3 is null) // only the first index is available
+                {
+                    return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, x.Item2.Item1).SetLocation(new ParlotExpressionLocation(ctx));
+                }
+                else
+                if (x.Item2.Item1 is not null && x.Item2.Item2 is not null && x.Item2.Item3 is null) // the last index is missing
+                {
+                    return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, new BinaryExpression(BinaryExpressionType.RangeIndex, x.Item2.Item1, new ValueExpression(null))).SetLocation(new ParlotExpressionLocation(ctx));
+                }
+                else
+                if (x.Item2.Item1 is null && x.Item2.Item2 is not null && x.Item2.Item3 is not null) // the first index is missing
+                {
+                    return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, new BinaryExpression(BinaryExpressionType.RangeIndex, new ValueExpression(null), x.Item2.Item3)).SetLocation(new ParlotExpressionLocation(ctx));
+                }
+                else
+                if (x.Item2.Item1 is not null && x.Item2.Item2 is not null && x.Item2.Item3 is not null) // both indices are present
+                    return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, new BinaryExpression(BinaryExpressionType.RangeIndex, x.Item2.Item1, x.Item2.Item3)).SetLocation(new ParlotExpressionLocation(ctx));
+                else
+                    throw new NCalcParserException("Ranged index could not be parsed", ctx.Scanner.Cursor.Position);
             });
 
         // factorial => primary ("!")* ;
         // A factorial includes any primary
-        var factorial = indexedAccess.And(ZeroOrMany(exclamationMark.AndSkip(Not(equal))))
+        var factorial = OneOf(indexedAccess/*, indexedAccess*/).And(ZeroOrMany(exclamationMark.AndSkip(Not(equal))))
             .Then((ctx, x) =>
             {
                 if (x.Item2.Count == 0)

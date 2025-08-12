@@ -13,9 +13,20 @@ namespace NCalc.Visitors;
 /// <summary>
 /// Class responsible to asynchronous evaluating <see cref="LogicalExpression"/> objects into CLR objects.
 /// </summary>
-/// <param name="context">Contextual parameters of the <see cref="LogicalExpression"/>, like custom functions and parameters.</param>
-public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalExpressionVisitor<ValueTask<object?>>
+public class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTask<object?>>
 {
+    private readonly AsyncExpressionContext context;
+
+    public AsyncEvaluationVisitor(AsyncExpressionContext context)
+    {
+        this.context = context;
+    }
+
+    public AsyncEvaluationVisitor(AsyncExpression parentExpression)
+    {
+        this.context = parentExpression.Context;
+    }
+
     private bool TryGetValueOrNull(object? candidate, out object? value)
     {
         if (candidate is null)
@@ -65,6 +76,9 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                     throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number", binExpr.RightExpression.Location);
                 var index = MathHelper.ConvertToInt(indexObj, context);
 
+                if (index < 0)
+                    throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} is less than zero ({index}), which is not a valid value (an index must be zero or positive)", binExpr.RightExpression.Location);
+
                 var parameterArgs = new UpdateParameterArgs(identifierName, ident.Id, index, value);
 
                 await OnUpdateParameterAsync(identifierName, parameterArgs, cancellationToken).ConfigureAwait(false);
@@ -78,18 +92,39 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 if (!context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out staticParam) || staticParam is null)
                     throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not set and cannot be assigned to by index", binExpr.LeftExpression.Location);
 
-                if (staticParam is not IList list)
+                if (staticParam is string strParam)
                 {
-                    throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not a list and cannot be assigned to by index", binExpr.LeftExpression.Location);
+                    if (value is char || (value is string && ((string)value).Length == 1))
+                    {
+                        if (strParam.Length <= index)
+                            throw new NCalcParameterIndexException(identifierName, $"A character in the '{identifierName}' string cannot be updated by index: the string has the length of {strParam.Length}, while the index is {index}", binExpr.RightExpression.Location);
+
+                        char charValue = '\0';
+
+                        if (value is string strValue)
+                            charValue = strValue[0];
+                        else
+                            charValue = (char)value;
+
+                        strParam = strParam[0..index] + charValue + strParam[(index + 1)..];
+                        context.StaticParameters[context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName] = strParam;
+                    }
+                    else
+                        throw new NCalcParameterIndexException(identifierName, $"When updating a string in '{identifierName}' via the index, the value must be a character or a one-character string", binExpr.RightExpression.Location);
                 }
+                else
+                {
+                    if (staticParam is not IList list)
+                        throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' is not a list or a string and cannot be assigned to by index", binExpr.LeftExpression.Location);
 
-                if (list.IsReadOnly)
-                    throw new NCalcParameterIndexException(identifierName, $"{identifierName} is read-only and cannot be assigned to by index", binExpr.LeftExpression.Location);
+                    if (list.IsReadOnly)
+                        throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' is read-only and cannot be assigned to by index", binExpr.LeftExpression.Location);
 
-                if (list.Count <= index)
-                    throw new NCalcParameterIndexException(identifierName, $"{identifierName} cannot be assigned to by index: it has {list.Count} elements, while the index to update is {index}", binExpr.RightExpression.Location);
+                    if (list.Count <= index)
+                        throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' cannot be assigned to by index: it has {list.Count} elements, while the index to update is {index}", binExpr.RightExpression.Location);
 
-                list[index] = value;
+                    list[index] = value;
+                }
             }
             else
                 throw new NCalcEvaluationException("The expression should evaluate to an identifier", binExpr.Location);
@@ -711,24 +746,121 @@ public class AsyncEvaluationVisitor(AsyncExpressionContext context) : ILogicalEx
                 return !(await EvaluationHelper.LikeAsync(leftValue!, rightValue!, context, cancellationToken).ConfigureAwait(false));
             }
 
+            case BinaryExpressionType.RangeIndex:
+                leftValue = await left.Value.ConfigureAwait(false);
+                rightValue = await right.Value.ConfigureAwait(false);
+
+                if (leftValue is not null && !MathHelper.IsBoxedNumberOrBigNumber(leftValue))
+                    throw new NCalcParameterIndexException("The lower boundary, unless omitted, should evaluate to zero or an integer number", expression.LeftExpression.Location);
+                if (rightValue is not null && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
+                    throw new NCalcParameterIndexException("The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
+
+                int? leftInt = (leftValue is null) ? null : MathHelper.ConvertToInt(leftValue, context);
+                int? rightInt = (rightValue is null) ? null : MathHelper.ConvertToInt(rightValue, context);
+
+                if (leftInt.HasValue && leftInt < 0)
+                    throw new NCalcParameterIndexException("The lower boundary should be zero or a positive number", expression.LeftExpression.Location);
+
+                if (rightInt.HasValue && (rightInt < 0 || rightInt < leftInt))
+                    throw new NCalcParameterIndexException("The upper boundary should be zero or a positive number and should be larger than the lower boundary", expression.RightExpression.Location);
+
+                return new RangeValue { LowerBound = leftInt is null ? null : new Index(leftInt.Value), UpperBound = rightInt is null ? null : new Index(rightInt.Value) };
+
             case BinaryExpressionType.IndexAccess:
             {
                 if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list", expression.LeftExpression.Location);
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
+                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list or a string", expression.LeftExpression.Location);
 
-                if (leftValue is not IList identList)
-                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list", expression.LeftExpression.Location);
+                IList? identList = null;
+                string? identString = null;
 
-                if (!MathHelper.IsBoxedIntegerNumber(rightValue))
-                    throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
-                var index = MathHelper.ConvertToInt(rightValue, context);
-                if (index < 0 || index >= identList.Count)
-                    throw new NCalcParameterIndexException($"The index is out of bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
-                object? result = identList[index];
-                if (result is LogicalExpression expr)
-                    result = await expr.Accept(this, cancellationToken).ConfigureAwait(false);
+                if (leftValue is IList)
+                    identList = (IList)leftValue;
+                else
+                if (leftValue is string)
+                    identString = (string)leftValue;
+                else
+                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list or a string", expression.LeftExpression.Location);
+
+                object? result = null;
+
+                if (expression.RightExpression is BinaryExpression binExpr && binExpr.Type == BinaryExpressionType.RangeIndex)
+                {
+                    RangeValue? range = (RangeValue?)await binExpr.Accept(this, cancellationToken).ConfigureAwait(false);
+                    if (range is null)
+                        return null;
+
+                    int lowerBound = range.LowerBound?.Value ?? 0;
+                    int upperBound;
+
+                    if (identList is not null)
+                    {
+                        upperBound = range.UpperBound?.Value ?? identList.Count;
+                        if (lowerBound >= identList.Count || upperBound >= identList.Count)
+                            throw new NCalcParameterIndexException($"The index range [{lowerBound}..{upperBound}] goes out out of the list bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
+
+                        if (upperBound == lowerBound)
+                            return new object?[0];
+
+                        object?[] resultArr = new object?[upperBound - lowerBound];
+                        for (int i = 0; i < resultArr.Length; i++)
+                        {
+                            result = resultArr[lowerBound + i];
+
+                            if (result is LogicalExpression expr)
+                                result = await expr.Accept(this, cancellationToken).ConfigureAwait(false);
+
+                            resultArr[i] = result;
+                        }
+                        result = resultArr;
+                    }
+                    else
+                    if (identString is not null)
+                    {
+                        upperBound = range.UpperBound?.Value ?? identString.Length;
+                        if (lowerBound >= identString.Length || upperBound >= identString.Length)
+                            throw new NCalcParameterIndexException($"The range [{lowerBound}..{upperBound}] is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
+
+                        if (upperBound == lowerBound)
+                            return string.Empty;
+
+                        result = identString[lowerBound..upperBound];
+                    }
+
+                    return result;
+                }
+                else
+                {
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
+
+                    int index;
+                    try
+                    {
+                        index = MathHelper.ConvertToInt(rightValue, context);
+                    }
+                    catch
+                    {
+                        throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
+                    }
+
+                    if (identList is not null)
+                    {
+                        if (index < 0 || index >= identList.Count)
+                            throw new NCalcParameterIndexException($"The index is out of bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
+                        result = identList[index];
+
+                        if (result is LogicalExpression expr)
+                            result = await expr.Accept(this, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    if (identString is not null)
+                    {
+                        if (index < 0 || index >= identString.Length)
+                            throw new NCalcParameterIndexException($"The index is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
+                        result = identString[index];
+                    }
+                }
                 return result;
             }
 

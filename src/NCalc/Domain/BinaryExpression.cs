@@ -18,3 +18,9 @@ public sealed class BinaryExpression(
         return visitor.Visit(this, cancellationToken);
     }
 }
+
+public record RangeValue
+{
+    public Index? LowerBound;
+    public Index? UpperBound;
+}

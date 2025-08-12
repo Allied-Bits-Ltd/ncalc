@@ -36,6 +36,7 @@ public enum BinaryExpressionType
     Exponentiation,
     Factorial,
     IndexAccess,
+    RangeIndex,
     In,
     NotIn,
     Like,
