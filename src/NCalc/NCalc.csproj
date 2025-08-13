@@ -29,7 +29,7 @@
         <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     </ItemGroup>
     <ItemGroup>
-        <PackageReference Include="AlliedBits.Parlot" Version="1.4.0" />
+        <PackageReference Include="AlliedBits.Parlot" Version="1.4.1" />
         <PackageReference Include="FastExpressionCompiler" Version="5.3.0" />
     </ItemGroup>
     <ItemGroup>
