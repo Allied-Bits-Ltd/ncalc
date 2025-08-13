@@ -2,6 +2,7 @@ namespace NCalc.Domain;
 
 public enum ValueType
 {
+    NoValue,
     Integer,
     String,
     DateTime,

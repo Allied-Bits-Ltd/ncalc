@@ -20,11 +20,33 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
         if (expression is IfStatementExpression)
         {
-            string result = "if (" + EncapsulateNoValue(expression.LeftExpression) + ") { " + EncapsulateNoValue(expression.MiddleExpression);
-            if (!(expression.RightExpression is ValueExpression valueExp && valueExp.Type == ValueType.String && valueExp.Value is null))
-                result += " } else { " + EncapsulateNoValue(expression.RightExpression);
-            result += " }";
-            return result;
+            var resultBuilder = new StringBuilder();
+            resultBuilder.Append("if (");
+            resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, false, false));
+            resultBuilder.Append(") ");
+            if (expression.MiddleExpression is ExpressionGroup)
+                resultBuilder.Append(EncapsulateNoValue(expression.MiddleExpression, false));
+            else
+            {
+                resultBuilder.Append("{ ");
+                resultBuilder.Append(EncapsulateNoValue(expression.MiddleExpression));
+                resultBuilder.Append(" }");
+            }
+
+            if (!(expression.RightExpression is ValueExpression valueExp && valueExp.Type == ValueType.NoValue))
+            {
+                resultBuilder.Append(" else ");
+                if (expression.RightExpression is ExpressionGroup)
+                    resultBuilder.Append(EncapsulateNoValue(expression.RightExpression, false));
+                else
+                {
+                    resultBuilder.Append("{ ");
+                    resultBuilder.Append(EncapsulateNoValue(expression.RightExpression));
+                    resultBuilder.Append(" }");
+                }
+            }
+
+            return resultBuilder.ToString();
         }
         else
         {
@@ -37,15 +59,26 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         cancellationToken.ThrowIfCancellationRequested();
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
+        bool parensNeeded = false;
+        bool appendSpace = false;
+
         var resultBuilder = new StringBuilder();
 
         if (expression.Type == BinaryExpressionType.WhileLoop)
         {
             resultBuilder.Append("while (");
-            resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression));
-            resultBuilder.Append(") { ");
-            resultBuilder.Append(EncapsulateNoValue(expression.RightExpression));
-            resultBuilder.Append(" }");
+            resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, false));
+            if (expression.RightExpression is ExpressionGroup)
+            {
+                resultBuilder.Append(") ");
+                resultBuilder.Append(EncapsulateNoValue(expression.RightExpression, false));
+            }
+            else
+            {
+                resultBuilder.Append(") { ");
+                resultBuilder.Append(EncapsulateNoValue(expression.RightExpression, false));
+                resultBuilder.Append(" }");
+            }
             return resultBuilder.ToString();
         }
         else
@@ -53,19 +86,23 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         {
             if ((expression.RightExpression is ValueExpression valueExpression) && (valueExpression.Type == ValueType.Integer) && (valueExpression.Value != null))
             {
-                resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, false));
+                parensNeeded = !(expression.LeftExpression is Identifier || expression.LeftExpression is ValueExpression);
+                resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, false, parensNeeded));
 
                 var step = (int)valueExpression.Value;
-                StringBuilder builder = new StringBuilder(step + 1);
                 for (int i = 0; i < step; i++)
-                    builder.Append('!');
-                resultBuilder.Append(builder);
+                    resultBuilder.Append('!');
                 return resultBuilder.ToString();
             }
         }
         else
         {
-            resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression));
+            parensNeeded = false;
+            if (expression.Type is BinaryExpressionType.RangeIndex)
+                parensNeeded = !(expression.LeftExpression is Identifier || expression.LeftExpression is ValueExpression) && !(expression.LeftExpression is UnaryExpression unExp && unExp.Type == UnaryExpressionType.FromEnd);
+
+            appendSpace = expression.Type != BinaryExpressionType.IndexAccess && expression.Type != BinaryExpressionType.RangeIndex && expression.Type != BinaryExpressionType.StatementSequence;
+            resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, appendSpace, parensNeeded));
 
             resultBuilder.Append(expression.Type switch
             {
@@ -104,13 +141,25 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                 BinaryExpressionType.NotIn => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2209 " : "not in ",
                 BinaryExpressionType.Like => "like ",
                 BinaryExpressionType.NotLike => "not like ",
+                BinaryExpressionType.RangeIndex => "..",
                 BinaryExpressionType.IndexAccess => "[",
                 BinaryExpressionType.Unknown => "unknown ",
                 _ => throw new ArgumentOutOfRangeException()
             });
         }
 
-        resultBuilder.Append(EncapsulateNoValue(expression.RightExpression));
+        if (expression.Type is BinaryExpressionType.RangeIndex)
+            parensNeeded = !(expression.RightExpression is Identifier || expression.RightExpression is ValueExpression) && !(expression.RightExpression is UnaryExpression unExp2 && unExp2.Type == UnaryExpressionType.FromEnd);
+
+        appendSpace = true;
+        if (expression.Type == BinaryExpressionType.IndexAccess)
+            appendSpace = false;
+
+        resultBuilder.Append(
+            EncapsulateNoValue(
+                expression.RightExpression,
+                appendSpace,//expression.Type != BinaryExpressionType.IndexAccess && expression.Type != BinaryExpressionType.RangeIndex && expression.Type != BinaryExpressionType.StatementSequence,
+                parensNeeded));
         if (expression.Type == BinaryExpressionType.IndexAccess)
             resultBuilder.Append(']');
 
@@ -125,6 +174,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         {
             UnaryExpressionType.Not => "!",
             UnaryExpressionType.Negate => "-",
+            UnaryExpressionType.FromEnd => "^",
             UnaryExpressionType.BitwiseNot => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_xor " : "~",
             UnaryExpressionType.SqRoot => "\u221a",
 #if NET8_0_OR_GREATER
@@ -134,7 +184,8 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             _ => string.Empty
         };
 
-        result += EncapsulateNoValue(expression.Expression);
+        bool parensNeeded = !(expression.Expression is Identifier || expression.Expression is ValueExpression);
+        result += EncapsulateNoValue(expression.Expression, parensNeeded: parensNeeded);
         return result;
     }
 
@@ -142,7 +193,8 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     {
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
-        return EncapsulateNoValue(expression.Expression).TrimEnd() + "%";
+        bool parensNeeded = !(expression.Expression is Identifier || expression.Expression is ValueExpression);
+        return EncapsulateNoValue(expression.Expression, false, parensNeeded) + "%";
     }
 
     public string Visit(ValueExpression expression, CancellationToken cancellationToken = default)
@@ -191,7 +243,10 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
-        return $"[{identifier.Name}]";
+        if (identifier.IsBracketed)
+            return $"[{identifier.Name}]";
+        else
+            return identifier.Name;
     }
 
     public string Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
@@ -217,7 +272,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         return string.Join(group.Expression.Accept(this, cancellationToken).Trim(), "{ ", " }");
     }
 
-    protected virtual string EncapsulateNoValue(LogicalExpression expression, bool appendSpace = true)
+    protected virtual string EncapsulateNoValue(LogicalExpression expression, bool appendSpace = true, bool parensNeeded = false)
     {
         if (expression is ValueExpression valueExpression)
         {
@@ -229,11 +284,8 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
         var resultBuilder = new StringBuilder();
 
-        // Factorials don't need parenthesis around them
-        bool parensNeeded = true;
-
-        if (((expression is BinaryExpression binaryExpression) && (binaryExpression.Type == BinaryExpressionType.Factorial)) || (expression is PercentExpression))
-            parensNeeded = false;
+        /*if (((expression is BinaryExpression binaryExpression) && (binaryExpression.Type == BinaryExpressionType.Factorial)) || (expression is PercentExpression))
+            parensNeeded = false;*/
 
         if (parensNeeded)
             resultBuilder.Append('(');

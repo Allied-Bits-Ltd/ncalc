@@ -12,6 +12,7 @@ public sealed class ValueExpression : LogicalExpression
 
     public ValueExpression()
     {
+        Type = ValueType.NoValue;
     }
 
     public ValueExpression(object value)

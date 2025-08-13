@@ -253,6 +253,7 @@ public static class EvaluationHelper
                     : ((result is BigInteger)
                         ? MathHelper.TryReduceToUInt64(MathHelper.Subtract((object)(long)0, (BigInteger) result))
                         : MathHelper.Subtract(0, result, true, context)),
+            UnaryExpressionType.FromEnd => new Index(MathHelper.ConvertToInt(result, context), true),
             UnaryExpressionType.BitwiseNot =>
                 (result is BigInteger biResult) ? MathHelper.TryReduceToUInt64(~biResult) : ~Convert.ToUInt64(result, context.CultureInfo),
             UnaryExpressionType.SqRoot => MathHelper.Sqrt(result, context.CultureInfo),

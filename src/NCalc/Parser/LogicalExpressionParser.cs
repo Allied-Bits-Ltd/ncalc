@@ -403,7 +403,7 @@ public static class LogicalExpressionParser
                     BigDecimal? value = TryParseDecimal(val, acceptUnderscores);
 
                     if (value == null)
-                        return new ValueExpression(null);  // never happens - the When condition ensures that val can be parsed
+                        return new ValueExpression();  // never happens - the When condition ensures that val can be parsed
 
                     if (useDecimal && (value >= decimal.MinValue && value <= decimal.MaxValue))
                     {
@@ -610,6 +610,9 @@ public static class LogicalExpressionParser
         var andAssign = Terms.Text("&=");
         var xorAssign = Terms.Text("^=");
 
+        var rangeText = Terms.Text("..");
+        var fromEndText = Terms.Text("^");
+
         // "(" expression ")"
         var groupExpression = Between(openParen, expression, closeParen);
 
@@ -628,10 +631,12 @@ public static class LogicalExpressionParser
             });
 
         // ("[" | "{") identifier ("]" | "}")
-        Parser<LogicalExpression> identifierExpression = OneOf(braceIdentifier, identifier) //(options.HasFlag(ExpressionOptions.UseStatementSequences) ? OneOf(braceIdentifier, identifier) : OneOf(braceIdentifier, curlyBraceIdentifier, identifier))
+        Parser<LogicalExpression> identifierExpression = identifier
                 .Then<LogicalExpression>(static (ctx, x) => new Identifier(x.ToString()!).SetLocation(new ParlotExpressionLocation(ctx)));
+        Parser<LogicalExpression> bracketedIdentifierExpression = braceIdentifier
+                .Then<LogicalExpression>(static (ctx, x) => new Identifier(x.ToString()!).SetBracketed(true).SetLocation(new ParlotExpressionLocation(ctx)));
 
-        var rangedIndex = openBrace.SkipAnd(ZeroOrOne(expressionOrBracedStatementSequence)).And(ZeroOrOne(Terms.Text(".."))).And(ZeroOrOne(expressionOrBracedStatementSequence)).AndSkip(closeBrace);
+        var rangedIndex = openBrace.SkipAnd(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).And(ZeroOrOne(rangeText)).And(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).AndSkip(closeBrace);
 
         /*var indexedIdentifierExpression = OneOf(braceIdentifier, identifier).And(index)
         .Then<LogicalExpression>(x =>
@@ -1625,7 +1630,7 @@ public static class LogicalExpressionParser
         enabledParsers.Add(stringValue);
         enabledParsers.Add(functionOrResultRef);
         enabledParsers.Add(groupExpression);
-        // enabledParsers.Add(indexedIdentifierExpression);
+        enabledParsers.Add(bracketedIdentifierExpression);
         enabledParsers.Add(identifierExpression);
         enabledParsers.Add(list);
         enabledParsers.Add(bracedExpressionOrStatementSequence);
@@ -1635,29 +1640,60 @@ public static class LogicalExpressionParser
         var indexedAccess = primary.And(ZeroOrOne(rangedIndex))
             .Then((ctx, x) =>
             {
-                if (x.Item2.Item1 is null && x.Item2.Item2 is null && x.Item2.Item3 is null)
+                // x.Item2 contains [^][lowerBound][..][^][upperBound]
+                if (x.Item2.Item2 is null && x.Item2.Item3 is null && x.Item2.Item5 is null)
                 {
                     // there is just a primary discovered
                     return x.Item1;
                 }
 
-                if (x.Item2.Item1 is not null && x.Item2.Item2 is null && x.Item2.Item3 is null) // only the first index is available
+                if (x.Item2.Item2 is not null && x.Item2.Item3 is null && x.Item2.Item5 is null) // only the first index is available
                 {
-                    return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, x.Item2.Item1).SetLocation(new ParlotExpressionLocation(ctx));
+                    return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, x.Item2.Item2).SetLocation(new ParlotExpressionLocation(ctx));
                 }
                 else
-                if (x.Item2.Item1 is not null && x.Item2.Item2 is not null && x.Item2.Item3 is null) // the last index is missing
+                if (x.Item2.Item2 is not null && x.Item2.Item3 is not null && x.Item2.Item5 is null) // the last index is missing
                 {
-                    return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, new BinaryExpression(BinaryExpressionType.RangeIndex, x.Item2.Item1, new ValueExpression(null))).SetLocation(new ParlotExpressionLocation(ctx));
+                    return new BinaryExpression(
+                        BinaryExpressionType.IndexAccess,
+                        x.Item1,
+                        new BinaryExpression(
+                            BinaryExpressionType.RangeIndex,
+                            (x.Item2.Item1 is not null)
+                                ? new UnaryExpression(UnaryExpressionType.FromEnd, x.Item2.Item2)
+                                : x.Item2.Item2,
+                            new ValueExpression())
+                    ).SetLocation(new ParlotExpressionLocation(ctx));
                 }
                 else
-                if (x.Item2.Item1 is null && x.Item2.Item2 is not null && x.Item2.Item3 is not null) // the first index is missing
+                if (x.Item2.Item2 is null && x.Item2.Item3 is not null && x.Item2.Item5 is not null) // the first index is missing
                 {
-                    return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, new BinaryExpression(BinaryExpressionType.RangeIndex, new ValueExpression(null), x.Item2.Item3)).SetLocation(new ParlotExpressionLocation(ctx));
+                    return new BinaryExpression(
+                        BinaryExpressionType.IndexAccess,
+                        x.Item1,
+                        new BinaryExpression(
+                            BinaryExpressionType.RangeIndex,
+                            new ValueExpression(),
+                            (x.Item2.Item4 is not null)
+                                ? new UnaryExpression(UnaryExpressionType.FromEnd, x.Item2.Item5)
+                                : x.Item2.Item5)
+                    ).SetLocation(new ParlotExpressionLocation(ctx));
                 }
                 else
-                if (x.Item2.Item1 is not null && x.Item2.Item2 is not null && x.Item2.Item3 is not null) // both indices are present
-                    return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, new BinaryExpression(BinaryExpressionType.RangeIndex, x.Item2.Item1, x.Item2.Item3)).SetLocation(new ParlotExpressionLocation(ctx));
+                if (x.Item2.Item2 is not null && x.Item2.Item3 is not null && x.Item2.Item5 is not null) // both indices are present
+                {
+                    return new BinaryExpression(
+                        BinaryExpressionType.IndexAccess,
+                        x.Item1,
+                        new BinaryExpression(
+                            BinaryExpressionType.RangeIndex,
+                            (x.Item2.Item1 is not null)
+                                ? new UnaryExpression(UnaryExpressionType.FromEnd, x.Item2.Item2)
+                                : x.Item2.Item2,
+                            (x.Item2.Item4 is not null)
+                                ? new UnaryExpression(UnaryExpressionType.FromEnd, x.Item2.Item5)
+                                : x.Item2.Item5)).SetLocation(new ParlotExpressionLocation(ctx));
+                }
                 else
                     throw new NCalcParserException("Ranged index could not be parsed", ctx.Scanner.Cursor.Position);
             });
@@ -1851,7 +1887,7 @@ public static class LogicalExpressionParser
         {
             var ifStatement = Terms.Text("if", caseInsensitive: true).SkipAnd(Terms.Text("(")).SkipAnd(expressionOrBracedStatementSequence).AndSkip(Terms.Text(")")).And(expressionOrBracedStatementSequence).And(ZeroOrOne(Terms.Text("else", caseInsensitive: true).SkipAnd(expressionOrBracedStatementSequence)))
                     .Then<LogicalExpression>((ctx, x) =>
-                        new IfStatementExpression(x.Item1, x.Item2, x.Item3 is null ? new ValueExpression(null) : x.Item3)
+                        new IfStatementExpression(x.Item1, x.Item2, x.Item3 is null ? new ValueExpression() : x.Item3)
                     );
 
             statements.Add(ifStatement);

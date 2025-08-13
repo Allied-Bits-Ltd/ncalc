@@ -2210,6 +2210,61 @@ public class AdvFeatureTests
 
         Assert.Equal(expectedValue, iResult);
     }
+
+    [Theory]
+    [InlineData("while (True) { False }")]
+    [InlineData("while (True) { 1 + 2 }")]
+    [InlineData("while (a > 2) { 1 + 2 }")]
+    public void ShouldSerializeWhileLoop(string input)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseLoops  | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        Assert.False(expression.HasErrors());
+        string? actual = expression.LogicalExpression?.ToString();
+        Assert.NotNull(actual);
+        Assert.Equal(input, actual);
+    }
+
+    [Theory]
+    [InlineData("if (True) { False }")]
+    [InlineData("if (True) { 1 + 2 }")]
+    [InlineData("if (a > 2) { 1 + 2 }")]
+    [InlineData("if (a > 2) { 1 + 2 } else { 3 }")]
+    public void ShouldSerializeIfStatement(string input)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseIfStatement | ExpressionOptions.UseLoops  | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        if (expression.HasErrors())
+            Assert.Fail(expression.Error?.Message ?? "Undefined error in the expression");
+
+        string? actual = expression.LogicalExpression?.ToString();
+        Assert.NotNull(actual);
+        Assert.Equal(input, actual);
+    }
+
+    [Theory]
+    [ClassData(typeof(ShouldHandleIndexedParametersTestData))]
+    public void ShouldSerializeIndexedParametersExpression(string input, int ignorable)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        if (expression.HasErrors())
+            Assert.Fail(expression.Error?.Message ?? "Undefined error in the expression");
+
+        string? actual = expression.LogicalExpression?.ToString();
+        Assert.NotNull(actual);
+        Assert.Equal(input, actual);
+        _ = ignorable;
+    }
+
+    [Theory]
+    [ClassData(typeof(ShouldHandleRangeIndexedParametersTestData))]
+    public void ShouldSerializeRangeIndexedParametersExpression(string input, string ignorable)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        Assert.False(expression.HasErrors());
+        string? actual = expression.LogicalExpression?.ToString();
+        Assert.NotNull(actual);
+        Assert.Equal(input, actual);
+        _ = ignorable;
+    }
 }
 
 [Trait("Category", "Advanced")]
@@ -2458,8 +2513,6 @@ public class AsyncAdvFeatureTests
         else
             Assert.Equal(expectedValue, result);
     }
-
-
 
     [Theory]
     [ClassData(typeof(ShouldHandleRangeIndexedParametersTestData))]
@@ -2758,15 +2811,18 @@ public class ShouldHandleWhileLoopTestData : TheoryData<string, int>
     }
 }
 
+/// <summary>
+/// Test data for several tests including the test of the SerializationVisitor. Thus, the syntax of the expressions must remain unchanged.
+/// </summary>
 public class ShouldHandleIndexedParametersTestData : TheoryData<string, int>
 {
     public ShouldHandleIndexedParametersTestData()
     {
         Add("a := (1; 2; 3); a[1]", 2);
-        Add("a := (1;  4 div 2; 3); a[1]", 2);
+        Add("a := (1; 4 div 2; 3); a[1]", 2);
         Add("a := (1; 2; 3); b := 2; c := 1; a[1] + 1", 3);
-        Add("b := 2; c:= 1; a := (c; b; 3); a[1]", 2);
-        Add("b := 2; c:= 1; a := (c; b; 3); a[2 / 2]", 2);
+        Add("b := 2; c := 1; a := (c; b; 3); a[1]", 2);
+        Add("b := 2; c := 1; a := (c; b; 3); a[2 / 2]", 2);
    }
 }
 
@@ -2774,9 +2830,12 @@ public class ShouldHandleRangeIndexedParametersTestData : TheoryData<string, str
 {
     public ShouldHandleRangeIndexedParametersTestData()
     {
-        Add("a := \"abcd\"; a[1..2]", "b");
         Add("a := 'abcd'; a[1..2]", "b");
-        Add("a := 'abcd'; a[(2/2)..(2*1)]", "b");
+        Add("a := 'abcd'; a[1..^1]", "bc");
+        Add("a := 'abcd'; a[^3..^1]", "bc");
+        Add("a := 'abcd'; a[1..]", "bcd");
+        Add("a := 'abcd'; a[..3]", "abc");
+        Add("a := 'abcd'; a[(2 / 2)..(2 * 1)]", "b");
         Add("'abcd'[1..2]", "b");
    }
 }

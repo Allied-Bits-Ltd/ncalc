@@ -4,6 +4,7 @@ public enum UnaryExpressionType
 {
     Not,
     Negate,
+    FromEnd,
     BitwiseNot,
     Positive,
     SqRoot,

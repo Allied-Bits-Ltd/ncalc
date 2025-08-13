@@ -725,21 +725,25 @@ public class EvaluationVisitor : ILogicalExpressionVisitor<object?>
                 leftValue = left.Value;
                 rightValue = right.Value;
 
-                if (leftValue is not null && !MathHelper.IsBoxedNumberOrBigNumber(leftValue))
+                if (leftValue is not null && leftValue is not Index && !MathHelper.IsBoxedNumberOrBigNumber(leftValue))
                     throw new NCalcParameterIndexException("The lower boundary, unless omitted, should evaluate to zero or an integer number", expression.LeftExpression.Location);
-                if (rightValue is not null && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
+                if (rightValue is not null && rightValue is not Index && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
                     throw new NCalcParameterIndexException("The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
 
-                int? leftInt = (leftValue is null) ? null : MathHelper.ConvertToInt(leftValue, context);
-                int? rightInt = (rightValue is null) ? null : MathHelper.ConvertToInt(rightValue, context);
+                int? leftInt = (leftValue is null) ? null : (leftValue is Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, context);
+                int? rightInt = (rightValue is null) ? null : (rightValue is Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, context);
 
                 if (leftInt.HasValue && leftInt < 0)
                     throw new NCalcParameterIndexException("The lower boundary should be zero or a positive number", expression.LeftExpression.Location);
 
-                if (rightInt.HasValue && (rightInt < 0 || rightInt < leftInt))
-                    throw new NCalcParameterIndexException("The upper boundary should be zero or a positive number and should be larger than the lower boundary", expression.RightExpression.Location);
+                if (rightInt.HasValue && rightInt < 0)
+                    throw new NCalcParameterIndexException("The upper boundary should be zero or a positive number", expression.RightExpression.Location);
 
-                return new RangeValue { LowerBound = leftInt is null ? null : new Index(leftInt.Value), UpperBound = rightInt is null ? null : new Index(rightInt.Value) };
+                return new RangeValue
+                {
+                    LowerBound = leftInt is null ? null : (leftValue is Index leftIdx2) ? leftIdx2 : new Index(leftInt.Value),
+                    UpperBound = rightInt is null ? null : (rightValue is Index rightIdx2) ? rightIdx2 : new Index(rightInt.Value),
+                };
 
             case BinaryExpressionType.IndexAccess:
             {
@@ -765,13 +769,18 @@ public class EvaluationVisitor : ILogicalExpressionVisitor<object?>
                     if (range is null)
                         return null;
 
-                    int lowerBound = range.LowerBound?.Value ?? 0;
+                    int lowerBound;
                     int upperBound;
 
                     if (identList is not null)
                     {
-                        upperBound = range.UpperBound?.Value ?? identList.Count;
-                        if (lowerBound >= identList.Count || upperBound >= identList.Count)
+                        lowerBound = (range.LowerBound?.IsFromEnd == true) ? (identList.Count - range.LowerBound.Value.Value) : (range.LowerBound?.Value ?? 0);
+                        upperBound = (range.UpperBound?.IsFromEnd == true) ? (identList.Count - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identList.Count);
+
+                        if (lowerBound > upperBound)
+                            throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
+
+                        if (lowerBound >= identList.Count || upperBound > identList.Count)
                             throw new NCalcParameterIndexException($"The index range [{lowerBound}..{upperBound}] goes out out of the list bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
 
                         if (upperBound == lowerBound)
@@ -790,8 +799,13 @@ public class EvaluationVisitor : ILogicalExpressionVisitor<object?>
                     else
                     if (identString is not null)
                     {
-                        upperBound = range.UpperBound?.Value ?? identString.Length;
-                        if (lowerBound >= identString.Length || upperBound >= identString.Length)
+                        lowerBound = (range.LowerBound?.IsFromEnd == true) ? (identString.Length - range.LowerBound.Value.Value) : (range.LowerBound?.Value ?? 0);
+                        upperBound = (range.UpperBound?.IsFromEnd == true) ? (identString.Length - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identString.Length);
+
+                        if (lowerBound > upperBound)
+                            throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
+
+                        if (lowerBound >= identString.Length || upperBound > identString.Length)
                             throw new NCalcParameterIndexException($"The range [{lowerBound}..{upperBound}] is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
 
                         if (upperBound == lowerBound)
