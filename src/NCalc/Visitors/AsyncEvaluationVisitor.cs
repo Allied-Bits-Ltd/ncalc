@@ -750,13 +750,13 @@ public class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTask<object
                 leftValue = await left.Value.ConfigureAwait(false);
                 rightValue = await right.Value.ConfigureAwait(false);
 
-                if (leftValue is not null && leftValue is not Index && !MathHelper.IsBoxedNumberOrBigNumber(leftValue))
+                if (leftValue is not null && leftValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(leftValue))
                     throw new NCalcParameterIndexException("The lower boundary, unless omitted, should evaluate to zero or an integer number", expression.LeftExpression.Location);
-                if (rightValue is not null && rightValue is not Index && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
+                if (rightValue is not null && rightValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
                     throw new NCalcParameterIndexException("The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
 
-                int? leftInt = (leftValue is null) ? null : (leftValue is Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, context);
-                int? rightInt = (rightValue is null) ? null : (rightValue is Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, context);
+                int? leftInt = (leftValue is null) ? null : (leftValue is NCalc.Domain.Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, context);
+                int? rightInt = (rightValue is null) ? null : (rightValue is NCalc.Domain.Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, context);
 
                 if (leftInt.HasValue && leftInt < 0)
                     throw new NCalcParameterIndexException("The lower boundary should be zero or a positive number", expression.LeftExpression.Location);
@@ -766,8 +766,8 @@ public class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTask<object
 
                 return new RangeValue
                 {
-                    LowerBound = leftInt is null ? null : (leftValue is Index leftIdx2) ? leftIdx2 : new Index(leftInt.Value),
-                    UpperBound = rightInt is null ? null : (rightValue is Index rightIdx2) ? rightIdx2 : new Index(rightInt.Value),
+                    LowerBound = leftInt is null ? null : (leftValue is NCalc.Domain.Index leftIdx2) ? leftIdx2 : new NCalc.Domain.Index(leftInt.Value),
+                    UpperBound = rightInt is null ? null : (rightValue is NCalc.Domain.Index rightIdx2) ? rightIdx2 : new NCalc.Domain.Index(rightInt.Value),
                 };
 
             case BinaryExpressionType.IndexAccess:

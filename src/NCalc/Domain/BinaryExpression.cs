@@ -19,6 +19,33 @@ public sealed class BinaryExpression(
     }
 }
 
+public readonly struct Index
+{
+    private readonly int _value = 0;
+
+    public Index(int value, bool fromEnd = false)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value), value, "The value of an Index cannot be negative");
+        }
+
+        if (fromEnd)
+            _value = ~value;
+        else
+            _value = value;
+    }
+
+    public int Value
+    {
+        get
+        {
+            return (_value < 0) ? ~_value : _value;
+        }
+    }
+    public bool IsFromEnd => _value < 0;
+}
+
 public record RangeValue
 {
     public Index? LowerBound;
