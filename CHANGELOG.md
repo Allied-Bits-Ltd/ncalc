@@ -1,3 +1,7 @@
+#8.0.1 (Allied Bits)
+* The Index operator can now be used to access elements of strings (i.e., individual characters and substrings).
+* Added support for ranges as indexes (see documentation for details and examples).
+
 # 8.0.0 (Allied Bits)
 * Added support for C-Style (line and block) and Python-style comments.
 * Added support for indexed expressions (when an expression evaluates to a list, it is possible to access individual elements).

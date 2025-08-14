@@ -141,3 +141,9 @@ a := if (true; 2; 4); a + Max(2; 4)
 ```
 
 Assignment can be combined with an operator (such as "+=" for addition with assignment); please, see the [Operators](operators.md) topic for the list of supported operators with assignment.
+
+Assignment may be combined with indexed access:
+
+```
+a := (1; 2; 3); a[1] := -2;
+```

@@ -42,12 +42,28 @@ Lists are used to group expressions.
 secret_operation("my_db", 2) // Function arguments are actually a list!
 ```
 
-### Indexed Access to Lists
+### Indexed Access to Lists and Strings
 
-If an expression evaluates to a list, an element of the list can be accessed using a zero-based index (which may also be an expression):
+If an expression evaluates to a list or a string, an element or a range of elements of this list or string can be accessed using an index operator, where the index or the range may also be an expression or expressions. 
+The C# "from end" syntax using a caret (^) is also supported. Any boundary of the range may be omitted. 
+
 **Examples:**
 ```csharp
-(1;2;3)[1] // produces 2
+(1; 2; 3)[1] // produces 2
+'abcd'[1] // produces 'b'
+(1; 2; 3)[1..2] // produces 2
+(1; 2; 3)[0..2] // produces (1; 2)
+'abcd'[1..3] // produces "bc"
+'abcd'[^2..^1] // produces "bc"
+'abcd'[..^1] // produces "abc"
+'abcd'[2..] // produces "cd"
+'abcd'[..] // produces "abcd"
+```
+
+If an expression is a parameter (variable) that contains a list or a string, it is possible to update one of its elements using the index operator with an integer index (it is not possible to update the range at the moment):
+```
+a := "abcd"; a[0] := "X" // single-character strings work like chars in this type of assignment
+a := (1; 2; 3); a[1] := 'Y' // this is possible as our lists are lists of objects
 ```
 
 ## Unary

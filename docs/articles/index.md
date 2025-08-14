@@ -4,7 +4,7 @@ NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expres
 
 ## Project Description
 
-NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expression and evaluate the result, including static or dynamic parameters and custom functions.
+NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expression or a group of expressions and evaluate the result, including static or dynamic parameters and custom functions.
 
 ## Table of Contents
 - [Operators](operators.md): Available standard operators and structures.
@@ -39,6 +39,26 @@ var expression = new NCalc.Expression("{ 1; 2 }", ExpressionOptions.UseStatement
 ```c#
 var expression = new Expression("2 + 3 * 5");
 Debug.Assert(17 == expression.Evaluate());
+```
+
+### Conditional statements
+
+This branch of NCalc supports if statements with a common C-style syntax.
+To enable them, include the <xref:NCalc.ExpressionOptions.UseIfStatement> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
+
+```c#
+var expression = new NCalc.Expression("a = 1; if (a < 5) { a += 1; }; a", ExpressionOptions.UseIfStatement | ExpressionOptions.UseAssignments | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseStatementSequences);
+
+```
+
+### Loops
+
+This branch of NCalc supports while loops with a common C-style syntax.
+To enable them, include the <xref:NCalc.ExpressionOptions.UseLoops> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
+
+```c#
+var expression = new NCalc.Expression("a = 1; while (a < 5) { a += 1; }", ExpressionOptions.UseLoops | ExpressionOptions.UseAssignments | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseStatementSequences);
+
 ```
 
 ### .NET Data Types
@@ -105,10 +125,10 @@ Debug.Assert(function()); //3
 ### Comments
 
 This branch of NCalc supports line and block C-style comments and Python line comments. 
-To enable them, include the  <xref:NCalc.ExpressionOptions.SupportCStyleComments> or <xref:NCalc.ExpressionOptions.SupportPythonComments> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
+To enable them, include the <xref:NCalc.ExpressionOptions.SupportCStyleComments> or <xref:NCalc.ExpressionOptions.SupportPythonComments> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
 
 ```c#
-var expression = new NCalc.Expression("{ 1; 2 }", ExpressionOptions.SupportCStyleComments | ExpressionOptions.SupportPythonComments);
+var expression = new NCalc.Expression("{ 1 /* this produces 1 as a result */ }", ExpressionOptions.SupportCStyleComments | ExpressionOptions.SupportPythonComments);
 ```
 
 Note that when C-style comments are enabled, the "//" operator used in Python for integer division, cannot be used for this purpose. If C-style comments are disabled, this "//" integer division operator is supported.

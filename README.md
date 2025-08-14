@@ -17,7 +17,7 @@ This branch of NCalc contains a number of advanced features compared to the main
 
 * Assignable parameters (variables) including shortcut operators (+=, etc.).
 * Statement sequences (useful together with parameter assignments) which, in expressions, may be grouped using curly brackets (like in C-like languages).
-* Support for indexed expressions (when an expression evaluates to a list, it is possible to access individual elements).
+* Support for indexed expressions (when an expression evaluates to a list a string, it is possible to access individual elements or a range of elements and assign new values of individual elements).
 * Support for loops using the 'while' loop statement (it follows the regular C-like style) with 'break' and 'continue' flow control keywords.
 * Support for the 'if' statement, which follows the regular C-like style.
 * Support for C-Style (line and block) and Python-style comments.

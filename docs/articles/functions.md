@@ -19,6 +19,7 @@ The framework includes a set of already implemented functions.
 | Log                  | Returns the logarithm of a specified number.                                                                                                                                                                        | Log(1, 10)              | 0d     |
 | Log2 (.NET 8+)       | Returns the base 2 logarithm of a specified number.                                                                                                                                                                 | Log2(1)                 | 0d     |
 | Log10                | Returns the base 10 logarithm of a specified number.                                                                                                                                                                | Log10(1)                | 0d     |
+| MakeList             | Creates a new list with the specified number of elements. The elements of this list can then be set using an assignment with an index operator (list[x] := y)                                                       | MakeList(3)
 | Max                  | Returns the larger of two specified numbers.                                                                                                                                                                        | Max(1, 2)               | 2      |
 | Min                  | Returns the smaller of two numbers.                                                                                                                                                                                 | Min(1, 2)               | 1      |
 | PercentDiff          | Returns the answer to the question "What is the difference between arguments in percent?"                                                                                                                           | %(80,60)                | -20%   |   
@@ -36,14 +37,15 @@ It also includes other general purpose ones.
 | Name      | Description                                                                                          | Usage                                                | Result                                                                         |
 |-----------|------------------------------------------------------------------------------------------------------|------------------------------------------------------|-------------------------------------------------------------------------|
 | in        | Returns whether an element is in a set of values.                                                    | in(1 + 1, 1, 2, 3)                                   | true                                                                           |
-| if        | Returns a value based on a condition.                                                                | if(3 % 2 = 1, 'value is true', 'value is false')     | 'value is true'                                                                |
-|           |                                                                                                      | if(3 % 2 = 0, 'value is true')                       | null                                                                           |
+| iff       | Returns a value based on a condition.                                                                | iff(3 % 2 = 1, 'value is true', 'value is false')    | 'value is true'                                                                |
+| if        | If is an alias to iff, accessible when the use of If as a statement is disabled.                     | if(3 % 2 = 0, 'value is true')                       | null                                                                           |
 | ifs       | Returns a value based on evaluating a number of conditions, returning a default (when specified)     | ifs(foo > 50, "bar", foo > 75, "baz", "quux")        | if foo is between 50 and 75 "bar", foo greater than 75 "baz", otherwise "quux" |  
 |           | or null (when no default is specified) if none of the conditions are true.                           | ifs(foo > 50, "bar", foo > 75, "baz")                | if foo is between 50 and 75 "bar", foo greater than 75 "baz", otherwise null   |  
 
-You can use comma (,) or semicolon (;) as argument separator.
+You can use comma (,) or semicolon (;) as argument separator. A semicolon is recommended to avoid a possible conflict of a comma-as-a-separator with a coma being a decimal separator or number group separator. 
 
-If <xref:NCalc.ExpressionOptions.DecimalAsDefault> is used all functions will cast the arguments to <xref:System.Decimal>.
+When big numbers are not enabled or when they are enabled but the parameter is not a BigDecimal or BigInteger, the following applies: 
+if the <xref:NCalc.ExpressionOptions.DecimalAsDefault> flag is set and the System.Math class has a backing function that accepts decimal arguments, the function casts the argument(s) to <xref:System.Decimal> before calling the backing function; otherwise, it casts the argument(s) to <xref:System.Double>.
 
 ## Custom Functions
 Custom functions are created using the <xref:NCalc.ExpressionFunction> delegate. The parameters are <xref:NCalc.Expression> instances that can be lazy evaluated.
