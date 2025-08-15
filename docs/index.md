@@ -11,8 +11,7 @@ To getting started, click on this [link](articles/index.md).
 
 ## Useful Links
 * [GitHub](https://github.com/Allied-Bits-Ltd/ncalc)
-* [NuGet.Org](https://www.nuget.org/profiles/ncalc)
-* [Community Discord Server](https://discord.gg/YMyJWSDEVc)
+* [NuGet.Org](https://www.nuget.org/profiles/AlliedBits)
 
 <br>
 
