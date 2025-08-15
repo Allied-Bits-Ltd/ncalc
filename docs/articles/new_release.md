@@ -15,7 +15,7 @@ Each library build can be traced back to the original git commit. The installati
 6. Run `nbgv tag release/v1.0` to tag the last commit on the release branch with your current version number, i.e. v1.0.7.
 7. Push tags as suggested by nbgv tool: `git push origin v1.0.7`
 8. Go to the GitHub project page and create a release out of the last tag v1.0.7.
-9. Verify that [github workflow for publishing the NuGet package](https://github.com/ncalc/ncalc/actions/workflows/publish-nuget.yml) has completed.
+9. Verify that [github workflow for publishing the NuGet package](https://github.com/Allied-Bits-Ltd/ncalc/actions/workflows/publish-nuget.yml) has completed.
 10. Switch back to master and merge the release branch.
 
 ## NuGet package token
@@ -24,4 +24,4 @@ Each library build can be traced back to the original git commit. The installati
 * NuGet API token is required for publishing new package versions.
 * The token expires every year and should be regenerated upon expiration.
 * Please contact NuGet package owners for regenerating the package token.
-* API key: [Settings → Action secrets and variables](https://github.com/ncalc/ncalc/settings/secrets/actions) → `NUGET_NCALC_SYNC_API_TOKEN` secret.
+* API key: [Settings → Action secrets and variables](https://github.com/Allied-Bits-Ltd/ncalc/settings/secrets/actions) → `NUGET_NCALC_SYNC_API_TOKEN` secret.

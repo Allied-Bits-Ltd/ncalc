@@ -2,7 +2,7 @@
 
 [Antlr](https://www.antlr.org/) was the original parser of NCalc. While Antlr is a powerful and flexible parsing library, it is approximately 67% slower than [Parlot](https://github.com/sebastienros/parlot), the default parser
 used by NCalc. However, this example serves to illustrate the power of DI in allowing you to easily swap out components based 
-on your specific needs. See [the source code](https://github.com/ncalc/ncalc/tree/master/src/Plugins/NCalc.Antlr) for information in how to implement your own parser.
+on your specific needs. See [the source code](https://github.com/Allied-Bits-Ltd/ncalc/tree/master/src/Plugins/NCalc.Antlr) for information in how to implement your own parser.
 
 # Installation
 

@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
     <id>AlliedBits.NCalc</id>
-    <version>8.0.0</version>
+    <version>8.0.1</version>
     <authors>Sebastien Ros and contributors, Eugene Mayevski</authors>
     <copyright>Sebastien Ros and contributors, Eugene Mayevski</copyright>
     <license type="expression">MIT</license>
@@ -10,7 +10,7 @@
     <icon>NCalc.png</icon>
     <title>The mathematical expression evaluator for .NET</title>
     <tags>ncalc math expression evaluation</tags>
-    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="9d162dd21fd73f99123eba26a158e381bedfc440" />
+    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="0cae3892660a8e3a0f9cf15bf30786f1cb8ad18b" />
     <projectUrl>https://github.com/Allied-Bits-Ltd/ncalc</projectUrl>
     <readme>README.nuget.md</readme>
     <description>NCalc is a fast and lightweight expression evaluator library for .NET, designed for flexibility and high performance. It supports a wide range of mathematical and logical operations and flow control statements (loops and conditions). NCalc can parse any expression and evaluate the result,

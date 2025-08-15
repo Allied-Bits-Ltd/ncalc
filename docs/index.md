@@ -10,7 +10,7 @@ To getting started, click on this [link](articles/index.md).
 <br>
 
 ## Useful Links
-* [GitHub](https://github.com/ncalc/ncalc)
+* [GitHub](https://github.com/Allied-Bits-Ltd/ncalc)
 * [NuGet.Org](https://www.nuget.org/profiles/ncalc)
 * [Community Discord Server](https://discord.gg/YMyJWSDEVc)
 
