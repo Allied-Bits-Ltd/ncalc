@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
     <id>AlliedBits.NCalc</id>
-    <version>8.0.1</version>
+    <version>8.0.2</version>
     <authors>Sebastien Ros and contributors, Eugene Mayevski</authors>
     <copyright>Sebastien Ros and contributors, Eugene Mayevski</copyright>
     <license type="expression">MIT</license>
@@ -16,7 +16,7 @@
     <description>NCalc is a fast and lightweight expression evaluator library for .NET, designed for flexibility and high performance. It supports a wide range of mathematical and logical operations and flow control statements (loops and conditions). NCalc can parse any expression and evaluate the result,
 including static or dynamic parameters and custom functions. NCalc targets .NET 9, .NET 8, .NET Standard 2.0, and NET Framework 4.6.2 and later.
 
-This package by Allied Bits offers a number of advanced features compared to the main NCalc project.
+This package by Allied Bits offers a number of advanced features compared to the original NCalc project.
     </description>
     <dependencies>
       <group targetFramework=".NETFramework4.6.2">
