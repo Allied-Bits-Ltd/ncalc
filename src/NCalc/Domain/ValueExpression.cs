@@ -5,8 +5,19 @@ using NCalc.Visitors;
 
 namespace NCalc.Domain;
 
+internal enum StringKind
+{
+    SingleQuote,
+    DoubleQuote,
+    BackQuote,
+    RawDoubleQuote,
+}
+
 public sealed class ValueExpression : LogicalExpression
 {
+    internal StringKind StringKind { get; private set; }
+    internal string? OriginalString { get; private set; }
+
     public object? Value { get; set; }
     public ValueType Type { get; set; }
 
@@ -91,6 +102,18 @@ public sealed class ValueExpression : LogicalExpression
     {
         Value = value;
         Type = ValueType.Guid;
+    }
+
+    internal ValueExpression SetStringKind(StringKind kind)
+    {
+        StringKind = kind;
+        return this;
+    }
+
+    internal ValueExpression SetOriginalString(string original)
+    {
+        OriginalString = original;
+        return this;
     }
 
     public override T Accept<T>(ILogicalExpressionVisitor<T> visitor, CancellationToken cancellationToken = default)

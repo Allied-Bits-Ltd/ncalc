@@ -208,7 +208,18 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             ValueType.Boolean or ValueType.Integer => $"{value} ",
             ValueType.DateTime or ValueType.TimeSpan => $"#{value}# ",
             ValueType.Float => $"{decimal.Parse(value?.ToString() ?? string.Empty).ToString(_numberFormatInfo)} ",
-            ValueType.String or ValueType.Char => (value is Parlot.TextSpan) ?  $"{value} " : $"'{value}' ",
+            ValueType.Char => $"'{value}' ",
+            ValueType.String =>
+                (value is Parlot.TextSpan)
+                ? $"{value} "
+                : expression.StringKind switch
+                {
+                    StringKind.SingleQuote => $"'{expression.OriginalString}' ",
+                    StringKind.DoubleQuote => $"\"{expression.OriginalString}\" ",
+                    StringKind.RawDoubleQuote => $"@\"{value}\" ",
+                    StringKind.BackQuote => $"`{value}` ",
+                    _ => "",
+                },
             _ => "",
         };
     }

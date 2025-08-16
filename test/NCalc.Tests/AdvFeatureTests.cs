@@ -2265,6 +2265,40 @@ public class AdvFeatureTests
         Assert.Equal(input, actual);
         _ = ignorable;
     }
+
+    [Theory]
+    [InlineData("\"some \\\\ quoted string\"", "some \\ quoted string")]
+    [InlineData("@\"some \\ quoted string\"", "some \\ quoted string")]
+    [InlineData("@\"some \\t quoted string\"", "some \\t quoted string")]
+    [InlineData("\"some \\x61 quoted string\"", "some a quoted string")]
+    [InlineData("`some \\x61 quoted string`", "some \\x61 quoted string")]
+    [InlineData("\"some \\n quoted string\"", "some \n quoted string")]
+    [InlineData("\"some \n quoted string\"", "some \n quoted string")]
+    public void ShouldParseStringsRight(string input, string expected)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        Assert.False(expression.HasErrors());
+        var result = expression.Evaluate();
+        Assert.Equal(expected, result?.ToString());
+    }
+
+    [Theory]
+    [InlineData("\"some \\\\ quoted string\"")]
+    [InlineData("@\"some \\ quoted string\"")]
+    [InlineData("@\"some \\t quoted string\"")]
+    [InlineData("\"some \\x61 quoted string\"")]
+    [InlineData("\"some \n quoted string\"")]
+    [InlineData("`some \\x61 quoted string`")]
+    public void ShouldSerializeString(string input)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache );
+        if (expression.HasErrors())
+            Assert.Fail(expression.Error?.Message ?? "Undefined error in the expression");
+
+        string? actual = expression.LogicalExpression?.ToString();
+        Assert.NotNull(actual);
+        Assert.Equal(input, actual);
+    }
 }
 
 [Trait("Category", "Advanced")]

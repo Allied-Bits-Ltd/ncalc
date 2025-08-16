@@ -144,19 +144,19 @@ public static class LogicalExpressionParser
             .SkipAnd(Terms.Pattern(c => acceptableHexChars.Contains(c)))
             .Then<LogicalExpression>((ctx, x) =>
             {
-                string? stringValue = x.ToString();
+                string? strValue = x.ToString();
 
-                if (string.IsNullOrEmpty(stringValue))
-                    throw new ArgumentException($"{stringValue} is not a valid hex number");
+                if (string.IsNullOrEmpty(strValue))
+                    throw new ArgumentException($"{strValue} is not a valid hex number");
 
                 if (acceptUnderscores)
-                    stringValue = stringValue!.Replace("_", string.Empty);
+                    strValue = strValue!.Replace("_", string.Empty);
 
                 try
                 {
                     if (unsignedHexBinOct)
                     {
-                        ulong converted = Convert.ToUInt64(stringValue, 16);
+                        ulong converted = Convert.ToUInt64(strValue, 16);
                         if (converted <= uint.MaxValue)
                             return new ValueExpression((object)(uint)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
@@ -164,7 +164,7 @@ public static class LogicalExpressionParser
                     }
                     else
                     {
-                        long converted = Convert.ToInt64(stringValue, 16);
+                        long converted = Convert.ToInt64(strValue, 16);
                         if (converted >= int.MinValue && converted <= int.MaxValue)
                             return new ValueExpression((object)(int)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
@@ -184,8 +184,8 @@ public static class LogicalExpressionParser
                 // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
                 BigInteger result;
 
-                if (!BigIntegerParser.TryParseBigInteger(stringValue!, 16, out result))
-                    throw new ArgumentException($"{stringValue} is not a valid hex number");
+                if (!BigIntegerParser.TryParseBigInteger(strValue!, 16, out result))
+                    throw new ArgumentException($"{strValue} is not a valid hex number");
 
                 return new ValueExpression((object) result).SetLocation(new ParlotExpressionLocation(ctx));
             });
@@ -198,19 +198,19 @@ public static class LogicalExpressionParser
             .SkipAnd(Terms.Pattern(c => acceptableOctalChars.Contains(c)))
             .Then<LogicalExpression>((ctx, x) =>
             {
-                string? stringValue = x.ToString();
+                string? strValue = x.ToString();
 
-                if (string.IsNullOrEmpty(stringValue))
-                    throw new ArgumentException($"{stringValue} is not a valid octal number");
+                if (string.IsNullOrEmpty(strValue))
+                    throw new ArgumentException($"{strValue} is not a valid octal number");
 
                 if (acceptUnderscores)
-                    stringValue = stringValue!.Replace("_", string.Empty);
+                    strValue = strValue!.Replace("_", string.Empty);
 
                 try
                 {
                     if (unsignedHexBinOct)
                     {
-                        ulong converted = Convert.ToUInt64(stringValue, 8);
+                        ulong converted = Convert.ToUInt64(strValue, 8);
                         if (converted <= uint.MaxValue)
                             return new ValueExpression((object)(uint)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
@@ -218,7 +218,7 @@ public static class LogicalExpressionParser
                     }
                     else
                     {
-                        long converted = Convert.ToInt64(stringValue, 8);
+                        long converted = Convert.ToInt64(strValue, 8);
                         if (converted >= int.MinValue && converted <= int.MaxValue)
                             return new ValueExpression((object)(int)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
@@ -238,8 +238,8 @@ public static class LogicalExpressionParser
                 // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
                 BigInteger result;
 
-                if (!BigIntegerParser.TryParseBigInteger(stringValue!, 8, out result))
-                    throw new ArgumentException($"{stringValue} is not a valid octal number");
+                if (!BigIntegerParser.TryParseBigInteger(strValue!, 8, out result))
+                    throw new ArgumentException($"{strValue} is not a valid octal number");
 
                 return new ValueExpression((object)result).SetLocation(new ParlotExpressionLocation(ctx));
             });
@@ -248,19 +248,19 @@ public static class LogicalExpressionParser
             .SkipAnd(Terms.Pattern(c => c == '0' || c == '1' || (acceptUnderscores && c == '_')))
             .Then<LogicalExpression>((ctx, x) =>
             {
-                string? stringValue = x.ToString();
+                string? strValue = x.ToString();
 
-                if (string.IsNullOrEmpty(stringValue))
-                    throw new ArgumentException($"{stringValue} is not a valid binary number");
+                if (string.IsNullOrEmpty(strValue))
+                    throw new ArgumentException($"{strValue} is not a valid binary number");
 
                 if (acceptUnderscores)
-                    stringValue = stringValue!.Replace("_", string.Empty);
+                    strValue = strValue!.Replace("_", string.Empty);
 
                 try
                 {
                     if (unsignedHexBinOct)
                     {
-                        ulong converted = Convert.ToUInt64(stringValue, 2);
+                        ulong converted = Convert.ToUInt64(strValue, 2);
                         if (converted <= uint.MaxValue)
                             return new ValueExpression((object)(uint)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
@@ -268,7 +268,7 @@ public static class LogicalExpressionParser
                     }
                     else
                     {
-                        long converted = Convert.ToInt64(stringValue, 2);
+                        long converted = Convert.ToInt64(strValue, 2);
                         if (converted >= int.MinValue && converted <= int.MaxValue)
                             return new ValueExpression((object)(int)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         else
@@ -288,8 +288,8 @@ public static class LogicalExpressionParser
                 // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
                 BigInteger result;
 
-                if (!BigIntegerParser.TryParseBigInteger(stringValue!, 2, out result))
-                    throw new ArgumentException($"{stringValue} is not a valid hex number");
+                if (!BigIntegerParser.TryParseBigInteger(strValue!, 2, out result))
+                    throw new ArgumentException($"{strValue} is not a valid hex number");
 
                 return new ValueExpression((object)result);
             });
@@ -376,7 +376,7 @@ public static class LogicalExpressionParser
 
             Parser<LogicalExpression> bigIntNumberD = Terms.Number<BigInteger>((NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag), decimalSeparator, numGroupSeparator)
                 //.AndSkip(Not(OneOf(floatNumExclusions)))
-                .Then<LogicalExpression>(d =>
+                .Then<LogicalExpression>((d) =>
                 {
                     if (d >= ulong.MinValue && d <= ulong.MaxValue)
                         return new ValueExpression((object)(ulong)d);
@@ -556,6 +556,7 @@ public static class LogicalExpressionParser
         Parser<string>? root4 = useCharsForOps ? Terms.Text("\u221C") : null;
 
         var resultRefChar = Terms.Char('@');
+        var atChar = Terms.Char('@');
 
         // We don't let $ at the beginning of identifiers as it may be confused with currency
 
@@ -682,8 +683,7 @@ public static class LogicalExpressionParser
         var booleanFalse = Terms.Text("false", true)
             .Then<LogicalExpression>(False);
 
-        var singleQuotesStringValue =
-            Terms.String(quotes: StringLiteralQuotes.Single)
+        var singleQuotesStringValue = Terms.Char('\'').SkipAnd(Literals.NoneOf("'")).AndSkip(Terms.Char('\''))
                 .Then<LogicalExpression>(static (ctx, value) =>
                 {
                     if (value.Length == 1 &&
@@ -692,15 +692,36 @@ public static class LogicalExpressionParser
                         return new ValueExpression(value.Span[0]).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
-                    return new ValueExpression(value.ToString()).SetLocation(new ParlotExpressionLocation(ctx));
+                    string? originalValue = value.ToString();
+                    if (originalValue is null)
+                        return new ValueExpression(null);
+
+                    TextSpan decodedValue = Character.DecodeString(originalValue);
+
+                    return new ValueExpression(decodedValue.ToString()).SetOriginalString(originalValue).SetStringKind(StringKind.SingleQuote).SetLocation(new ParlotExpressionLocation(ctx));
                 });
 
-        var doubleQuotesStringValue =
-            Terms
-                .String(quotes: StringLiteralQuotes.Double)
-                .Then<LogicalExpression>((ctx, value) => new ValueExpression(value.ToString()!).SetLocation(new ParlotExpressionLocation(ctx)));
+        var rawStringValue = atChar.SkipAnd(Terms.Char('"')).SkipAnd(Literals.NoneOf("\"")).AndSkip(Terms.Char('"'))
+            .Then<LogicalExpression>((ctx, value) =>
+                new ValueExpression(value.ToString()!).SetStringKind(StringKind.RawDoubleQuote).SetLocation(new ParlotExpressionLocation(ctx)));
 
-        var stringValue = OneOf(singleQuotesStringValue, doubleQuotesStringValue);
+        var backQuoteStringValue = Terms.Char('`').SkipAnd(Literals.NoneOf("`")).AndSkip(Terms.Char('`'))
+            .Then<LogicalExpression>((ctx, value) =>
+                new ValueExpression(value.ToString()!).SetStringKind(StringKind.BackQuote).SetLocation(new ParlotExpressionLocation(ctx)));
+
+        var doubleQuotesStringValue = Terms.Char('"').SkipAnd(Literals.NoneOf("\"")).AndSkip(Terms.Char('"'))
+                .Then<LogicalExpression>((ctx, value) =>
+                {
+                    string? originalValue = value.ToString();
+                    if (originalValue is null)
+                        return new ValueExpression(null);
+
+                    TextSpan decodedValue = Character.DecodeString(originalValue);
+
+                    return new ValueExpression(decodedValue.ToString()).SetOriginalString(originalValue).SetStringKind(StringKind.DoubleQuote).SetLocation(new ParlotExpressionLocation(ctx));
+                });
+
+        var stringValue = OneOf(singleQuotesStringValue, doubleQuotesStringValue, backQuoteStringValue, rawStringValue);
 
         var charIsNumber = Literals.Pattern(char.IsNumber);
         var charIsNumberWithWhitespace = Terms.Pattern(char.IsNumber);
