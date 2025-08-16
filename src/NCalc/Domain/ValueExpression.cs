@@ -7,6 +7,7 @@ namespace NCalc.Domain;
 
 internal enum StringKind
 {
+    Undefined,
     SingleQuote,
     DoubleQuote,
     BackQuote,
@@ -48,6 +49,21 @@ public sealed class ValueExpression : LogicalExpression
     {
         Value = value;
         Type = ValueType.String;
+    }
+
+    internal ValueExpression(string? value, StringKind kind)
+    {
+        Value = value;
+        Type = ValueType.String;
+        StringKind = kind;
+    }
+
+    internal ValueExpression(string? value, string originalString, StringKind kind)
+    {
+        Value = value;
+        Type = ValueType.String;
+        OriginalString = originalString;
+        StringKind = kind;
     }
 
     public ValueExpression(char value)
@@ -102,18 +118,6 @@ public sealed class ValueExpression : LogicalExpression
     {
         Value = value;
         Type = ValueType.Guid;
-    }
-
-    internal ValueExpression SetStringKind(StringKind kind)
-    {
-        StringKind = kind;
-        return this;
-    }
-
-    internal ValueExpression SetOriginalString(string original)
-    {
-        OriginalString = original;
-        return this;
     }
 
     public override T Accept<T>(ILogicalExpressionVisitor<T> visitor, CancellationToken cancellationToken = default)

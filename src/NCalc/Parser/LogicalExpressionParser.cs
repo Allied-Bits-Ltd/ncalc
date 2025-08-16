@@ -683,7 +683,7 @@ public static class LogicalExpressionParser
         var booleanFalse = Terms.Text("false", true)
             .Then<LogicalExpression>(False);
 
-        var singleQuotesStringValue = Terms.Char('\'').SkipAnd(Literals.NoneOf("'")).AndSkip(Terms.Char('\''))
+        var singleQuotesStringValue = Terms.String(quotes: StringLiteralQuotes.Single, returnDecoded: false)
                 .Then<LogicalExpression>(static (ctx, value) =>
                 {
                     if (value.Length == 1 &&
@@ -698,18 +698,10 @@ public static class LogicalExpressionParser
 
                     TextSpan decodedValue = Character.DecodeString(originalValue);
 
-                    return new ValueExpression(decodedValue.ToString()).SetOriginalString(originalValue).SetStringKind(StringKind.SingleQuote).SetLocation(new ParlotExpressionLocation(ctx));
+                    return new ValueExpression(decodedValue.ToString(), originalValue, StringKind.SingleQuote).SetLocation(new ParlotExpressionLocation(ctx));
                 });
 
-        var rawStringValue = atChar.SkipAnd(Terms.Char('"')).SkipAnd(Literals.NoneOf("\"")).AndSkip(Terms.Char('"'))
-            .Then<LogicalExpression>((ctx, value) =>
-                new ValueExpression(value.ToString()!).SetStringKind(StringKind.RawDoubleQuote).SetLocation(new ParlotExpressionLocation(ctx)));
-
-        var backQuoteStringValue = Terms.Char('`').SkipAnd(Literals.NoneOf("`")).AndSkip(Terms.Char('`'))
-            .Then<LogicalExpression>((ctx, value) =>
-                new ValueExpression(value.ToString()!).SetStringKind(StringKind.BackQuote).SetLocation(new ParlotExpressionLocation(ctx)));
-
-        var doubleQuotesStringValue = Terms.Char('"').SkipAnd(Literals.NoneOf("\"")).AndSkip(Terms.Char('"'))
+        var doubleQuotesStringValue = Terms.String(quotes: StringLiteralQuotes.Double, returnDecoded: false)
                 .Then<LogicalExpression>((ctx, value) =>
                 {
                     string? originalValue = value.ToString();
@@ -718,10 +710,18 @@ public static class LogicalExpressionParser
 
                     TextSpan decodedValue = Character.DecodeString(originalValue);
 
-                    return new ValueExpression(decodedValue.ToString()).SetOriginalString(originalValue).SetStringKind(StringKind.DoubleQuote).SetLocation(new ParlotExpressionLocation(ctx));
+                    return new ValueExpression(decodedValue.ToString(), originalValue, StringKind.DoubleQuote).SetLocation(new ParlotExpressionLocation(ctx));
                 });
 
-        var stringValue = OneOf(singleQuotesStringValue, doubleQuotesStringValue, backQuoteStringValue, rawStringValue);
+        var rawStringValue = atChar.SkipAnd(Terms.Char('"')).SkipAnd(Literals.NoneOf("\"")).AndSkip(Terms.Char('"'))
+            .Then<LogicalExpression>((ctx, value) =>
+                new ValueExpression(value.ToString()!, StringKind.RawDoubleQuote).SetLocation(new ParlotExpressionLocation(ctx)));
+
+        var backQuoteStringValue = Terms.Char('`').SkipAnd(Literals.NoneOf("`")).AndSkip(Terms.Char('`'))
+            .Then<LogicalExpression>((ctx, value) =>
+                new ValueExpression(value.ToString()!, StringKind.BackQuote).SetLocation(new ParlotExpressionLocation(ctx)));
+
+        var stringValue = OneOf(singleQuotesStringValue, doubleQuotesStringValue, rawStringValue, backQuoteStringValue);
 
         var charIsNumber = Literals.Pattern(char.IsNumber);
         var charIsNumberWithWhitespace = Terms.Pattern(char.IsNumber);

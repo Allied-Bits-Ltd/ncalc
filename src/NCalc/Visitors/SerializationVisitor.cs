@@ -218,7 +218,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                     StringKind.DoubleQuote => $"\"{expression.OriginalString}\" ",
                     StringKind.RawDoubleQuote => $"@\"{value}\" ",
                     StringKind.BackQuote => $"`{value}` ",
-                    _ => "",
+                    _ => string.IsNullOrEmpty(expression.OriginalString) ? $"'{value}' " : $"'{expression.OriginalString}' ",
                 },
             _ => "",
         };
