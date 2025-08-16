@@ -1,5 +1,6 @@
 # 8.0.2 (Allied Bits)
 * Added parsing of "raw" strings which are not parsed for escape sequences.
+* SerializationVisitor improved to provide the original value of a string for ValueExpression. If the original string included escaped characters, SerializationVisitor will return that original string and not a decoded one.
 
 # 8.0.1 (Allied Bits)
 * The Index operator can now be used to access elements of strings (i.e., individual characters and substrings).
