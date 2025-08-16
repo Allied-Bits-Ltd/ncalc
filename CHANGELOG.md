@@ -1,4 +1,7 @@
-#8.0.1 (Allied Bits)
+# 8.0.2 (Allied Bits)
+* Added parsing of "raw" strings which are not parsed for escape sequences.
+
+# 8.0.1 (Allied Bits)
 * The Index operator can now be used to access elements of strings (i.e., individual characters and substrings).
 * Added support for ranges as indexes (see documentation for details and examples).
 

@@ -13,7 +13,7 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
 
 ## Advanced features
 
-This branch of NCalc contains a number of advanced features compared to the main NCalc project, such as 
+This branch of NCalc contains a number of advanced features compared to the original NCalc project, such as 
 
 * Assignable parameters (variables) including shortcut operators (+=, etc.).
 * Statement sequences (useful together with parameter assignments) which, in expressions, may be grouped using curly brackets (like in C-like languages).
@@ -29,6 +29,7 @@ This branch of NCalc contains a number of advanced features compared to the main
 * Underscores in numbers and currency values. Modern programming languages support underscores for readability. Support is built-in with binary, octal, and hex numbers, while support in decimal numbers requires a [custom branch of Parlot](https://github.com/Allied-Bits-Ltd/parlot/tree/ABCalc). 
 * Custom decimal and group separators in numbers and currency.
 * An optional secondary decimal number separator (requires a [custom branch of Parlot](https://github.com/Allied-Bits-Ltd/parlot/tree/ABCalc) ). 
+* Raw strings which are not parsed for escape sequences.
 * C-Style octal literals.
 * Result Reference character. A pseudo-function that would let a user application return some value, such as the result of a previous calculation. This is handy when an expression should include this result multiple times.
 * Percent calculations.

@@ -101,7 +101,7 @@ true
 ```
 ## Strings
 
-Any character between single or double quotes are evaluated as <xref:System.String>. 
+Any characters between single or double quotes are evaluated as <xref:System.String>. 
 
 ```
 'hello'
@@ -110,10 +110,20 @@ Any character between single or double quotes are evaluated as <xref:System.Stri
 ```
 greeting("Chers")
 ```
-You can escape special characters using \\, \', \n, \r, \t.
+You can escape special characters using a backslash("\\"). The parser will decode \\', \\", \\\\,\0, \a, \b, \f, \n, \r, \t, \v and convert them into the corresponding character. 
+The parser will also decode unicode in hex notation escaped as \\u{abcd}, where {abcd} is exactly four (4) hex characters and as \\x{abcd}, where {abcd} is one to four characters.
+
+Additionally, the parser will recognize raw strings, i.e., the strings with no escaping in them. Such strings may be enclosed in double quotes with the @ (at) before the opening double quote (@"raw string here") or in back quotes '\`' (\`raw string here\`). 
+Of course, a raw string still may not contain a closing character ( " and \` respectively) in it. 
+```
+`This will be parsed as is without translating \t into a tab`
+@"And this will also be parsed as is without translating \t into a tab"
+
+@"But this string with "quotes" unfortunately won't work"
+```
 
 ## Chars
-If you use <xref:NCalc.ExpressionOptions.AllowCharValues>, single quoted strings are interpreted as <xref:System.Char>
+If you use <xref:NCalc.ExpressionOptions.AllowCharValues>, single quoted strings with one character are interpreted as <xref:System.Char>
 ```
 var expression = new Expression("'g'", ExpressionOptions.AllowCharValues);
 var result = expression.Evalutate();
@@ -141,9 +151,9 @@ doSomething(1, 'dummy')
 
 Please read the [functions page](functions.md) for details.
 
-## Parameters
+## Parameters (variables)
 
-A parameter is a name that can be optionally contained inside brackets or double quotes.
+A parameter (variable) is a name that can be optionally contained inside brackets or double quotes.
 
 ```
 2 + x, 2 + [x]
@@ -154,6 +164,7 @@ Please read the [parameters page](parameters.md) for details.
 ## Lists
 
 Lists are collections of expressions enclosed in parentheses. They are the equivalent of `List<LogicalExpression>` at CLR.
+The elements of the list may be separated with a comma (",") or a semicolon (";"). A semicolon is recommended to avoid the possible conflict with a decimal separator or a number group separator.
 ```
-('Chers', secretOperation(), 3.14)
+('Chers'; secretOperation(); 3.14)
 ```

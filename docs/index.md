@@ -18,4 +18,4 @@ To getting started, click on this [link](articles/index.md).
 ## Bugs and feature requests
 Have a bug or a feature request?
 Please first search for existing and closed issues.</br>
-If your problem or idea is not addressed yet, [please open a new issue](https://github.com/ncalc/ncalc/issues/new).
+If your problem or idea is not addressed yet, [please open a new issue](https://github.com/Allied-Bits-Ltd/ncalc/issues/new).
