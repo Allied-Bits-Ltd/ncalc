@@ -27,7 +27,7 @@ This package by Allied Bits offers a number of advanced features compared to the
         <dependency id="Microsoft.Extensions.Logging.TraceSource" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.ObjectPool" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="NETStandard.Library" version="2.0.3" exclude="Build,Analyzers" />
-        <dependency id="AlliedBits.Parlot" version="1.4" exclude="Build,Analyzers" />
+        <dependency id="AlliedBits.Parlot" version="1.4.2.1" exclude="Build,Analyzers" />
         <dependency id="System.Collections.Immutable" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="System.ValueTuple" version="4.5.0" exclude="Build,Analyzers" />
       </group>
@@ -37,7 +37,7 @@ This package by Allied Bits offers a number of advanced features compared to the
         <dependency id="Microsoft.Extensions.Logging.Console" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.Logging.TraceSource" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.ObjectPool" version="9.0.2" exclude="Build,Analyzers" />
-        <dependency id="AlliedBits.Parlot" version="1.4" exclude="Build,Analyzers" />
+        <dependency id="AlliedBits.Parlot" version="1.4.2.1" exclude="Build,Analyzers" />
       </group>
       <group targetFramework="net9.0">
         <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.4.132" exclude="Build,Analyzers" />
@@ -45,7 +45,7 @@ This package by Allied Bits offers a number of advanced features compared to the
         <dependency id="Microsoft.Extensions.Logging.Console" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.Logging.TraceSource" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.ObjectPool" version="9.0.2" exclude="Build,Analyzers" />
-        <dependency id="AlliedBits.Parlot" version="1.4" exclude="Build,Analyzers" />
+        <dependency id="AlliedBits.Parlot" version="1.4.2.1" exclude="Build,Analyzers" />
         <dependency id="System.Collections.Immutable" version="9.0.2" exclude="Build,Analyzers" />
       </group>
       <group targetFramework=".NETStandard2.0">
@@ -55,7 +55,7 @@ This package by Allied Bits offers a number of advanced features compared to the
         <dependency id="Microsoft.Extensions.Logging.Console" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.Logging.TraceSource" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.ObjectPool" version="9.0.2" exclude="Build,Analyzers" />
-        <dependency id="AlliedBits.Parlot" version="1.4" exclude="Build,Analyzers" />
+        <dependency id="AlliedBits.Parlot" version="1.4.2.1" exclude="Build,Analyzers" />
         <dependency id="System.Collections.Immutable" version="9.0.2" exclude="Build,Analyzers" />
       </group>
     </dependencies>
