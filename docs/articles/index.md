@@ -10,7 +10,7 @@ NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expres
 - [Operators](operators.md): Available standard operators and structures.
 - [Values](values.md): Authorized values like types and functions.
 - [Advanced Value Formats](advanced_value_formats.md): Advanced Value Formats and Operations
-- [Functions](functions.md):  List of already implemented functions.
+- [Functions](functions.md): List of already implemented functions.
 - [Parameters/Variables](parameters.md): How to use parameters (variables) in expressions.
 - [Handling Errors](handling_errors.md): How to handle errors.
 - [Case Sensitivity](case_sensitivity.md): Options in how to handle case sensitivity.
@@ -132,3 +132,9 @@ var expression = new NCalc.Expression("{ 1 /* this produces 1 as a result */ }",
 ```
 
 Note that when C-style comments are enabled, the "//" operator used in Python for integer division, cannot be used for this purpose. If C-style comments are disabled, this "//" integer division operator is supported.
+
+### Recursive and non-recursive evaluation
+
+By default, the evaluator works by recursively traversing the expression tree. Note that even linear expressions like "1+2+...+99+100" would be parsed into a tree with plenty of nodes (about 200 nodes ni the given example). This can cause a StackOverflow error.
+If you need to evaluate such long or deeply nested expressions, you can enable a non-recursive evaluator by setting the <xref:NCalc.ExpressionOptions.UseNonRecursiveEvaluator> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class.
+This evaluator is slower than a recursive one, so it is disabled by default.

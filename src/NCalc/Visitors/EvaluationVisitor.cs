@@ -12,7 +12,7 @@ namespace NCalc.Visitors;
 /// <summary>
 /// Class responsible to evaluating <see cref="LogicalExpression"/> objects into CLR objects.
 /// </summary>
-public class EvaluationVisitor : ILogicalExpressionVisitor<object?>
+public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILogicalExpressionNoRecurseVisitor<object?>
 {
     private readonly ExpressionContext context;
 
@@ -915,7 +915,7 @@ public class EvaluationVisitor : ILogicalExpressionVisitor<object?>
 
         // Don't call parameters right now, instead let the function do it as needed.
         // Some parameters shouldn't be called, for instance, in a if(), the "not" value might be a division by zero
-        // Evaluating every value could produce unexpected behaviour
+        // Evaluating every value could produce unexpected behavior
         for (var i = 0; i < argsCount; i++)
         {
             args[i] = new Expression(function.Parameters[i], context);
@@ -1062,6 +1062,41 @@ public class EvaluationVisitor : ILogicalExpressionVisitor<object?>
     protected object? Evaluate(LogicalExpression expression, CancellationToken cancellationToken = default)
     {
         return expression.Accept(this, cancellationToken);
+    }
+
+    internal object? EvaluateNoRecurse(LogicalExpression expression, CancellationToken cancellationToken = default)
+    {
+        List<ExpressionTask<object?>> stack = [];
+        ExpressionTask<object?> root = new ExpressionTask<object?>(null, new ExpressionState<object?>(expression));
+        stack.Add(root);
+        ExpressionTask<object?> currentTask;
+        while (stack.Count > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // Ask visitor to visit the expression. Pass the task to it.
+            // The visitor may
+            // a) return the value
+            // b) add an expression to the task that must be evaluated first.
+            currentTask = stack[^1];
+            currentTask.State.Expression.AcceptNoRecurse(this, currentTask, cancellationToken);
+            if (currentTask.State.ValueSet)
+            {
+                // Remove the current task from the stack
+                stack.Remove(currentTask);
+            }
+            else
+            {
+                foreach (var state in currentTask.ChildStates)
+                {
+                    if (!state.ValueSet)
+                    {
+                        stack.Add(new ExpressionTask<object?>(currentTask, state));
+                    }
+                }
+            }
+        }
+
+        return root.State.ValueSet ? root.State.Value : null;
     }
 
     public object? Visit(ExpressionGroup group, CancellationToken cancellationToken = default)

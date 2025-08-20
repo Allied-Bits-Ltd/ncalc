@@ -129,10 +129,16 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
     public object? Evaluate()
     {
+        if (UseNonRecursiveEvaluator)
+            Options |= ExpressionOptions.UseNonRecursiveEvaluator;
+
         LogicalExpression ??= GetLogicalExpression();
 
         if (Error is not null)
             throw Error;
+
+        if (LogicalExpression is null)
+            return null;
 
         if (Options.HasFlag(ExpressionOptions.AllowNullParameter))
             Parameters["null"] = null;
@@ -142,7 +148,11 @@ public partial class Expression : ExpressionBase<ExpressionContext>
             return IterateParameters();
 
         var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
-        return LogicalExpression?.Accept(evaluationVisitor);
+
+        if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+            return evaluationVisitor.EvaluateNoRecurse(LogicalExpression);
+        else
+            return LogicalExpression.Accept(evaluationVisitor);
     }
 
     private object? IterateParameters()
@@ -151,9 +161,16 @@ public partial class Expression : ExpressionBase<ExpressionContext>
 
         var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
 
-        if (size == null)
-            return LogicalExpression?.Accept(evaluationVisitor);
+        if (LogicalExpression is null)
+            return null;
 
+        if (size == null)
+        {
+            if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+                return evaluationVisitor.EvaluateNoRecurse(LogicalExpression);
+            else
+                return LogicalExpression.Accept(evaluationVisitor);
+        }
         var results = new List<object?>();
 
         for (int i = 0; i < size; i++)
@@ -164,7 +181,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
                 Parameters[kvp.Key] = kvp.Value.Current;
             }
 
-            results.Add(LogicalExpression?.Accept(evaluationVisitor));
+            results.Add((Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator)) ? evaluationVisitor.EvaluateNoRecurse(LogicalExpression!) : LogicalExpression?.Accept(evaluationVisitor));
         }
 
         return results;

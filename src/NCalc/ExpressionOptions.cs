@@ -176,5 +176,10 @@ public enum ExpressionOptions
     /// When set, recognizes the if() statement, and "if" is not used for a function.
     /// When not set, if() is used as an alias to the built-in "iff" function.
     /// </summary>
-    UseIfStatement = 1 << 33
+    UseIfStatement = 1 << 33,
+
+    /// <summary>
+    /// When set, the non-recursive evaluator is used. It is slower but enables evaluation of deeply-nested or just very long expressions.
+    /// </summary>
+    UseNonRecursiveEvaluator = 1 << 34,
 }

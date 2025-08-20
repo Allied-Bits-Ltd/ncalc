@@ -1,4 +1,5 @@
-﻿using NCalc.Visitors;
+﻿using NCalc.Helpers;
+using NCalc.Visitors;
 
 namespace NCalc.Domain
 {
@@ -14,6 +15,11 @@ namespace NCalc.Domain
         public override T Accept<T>(ILogicalExpressionVisitor<T> visitor, CancellationToken cancellationToken = default)
         {
             return visitor.Visit(this, cancellationToken);
+        }
+
+        internal override T AcceptNoRecurse<T>(ILogicalExpressionNoRecurseVisitor<T> visitor, ExpressionTask<T> task, CancellationToken cancellationToken = default)
+        {
+            return visitor.Visit(this, task, cancellationToken);
         }
     }
 }

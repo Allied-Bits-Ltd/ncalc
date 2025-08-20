@@ -5,6 +5,7 @@ using System.Diagnostics.Contracts;
 
 using NCalc.Visitors;
 using NCalc.Parser;
+using NCalc.Helpers;
 
 namespace NCalc.Domain;
 
@@ -82,4 +83,7 @@ public abstract class LogicalExpression
 
     [Pure]
     public abstract T Accept<T>(ILogicalExpressionVisitor<T> visitor, CancellationToken cancellationToken = default);
+
+    [Pure]
+    internal abstract T AcceptNoRecurse<T>(ILogicalExpressionNoRecurseVisitor<T> visitor, ExpressionTask<T> task, CancellationToken cancellationToken = default);
 }

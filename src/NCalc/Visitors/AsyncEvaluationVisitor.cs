@@ -13,7 +13,7 @@ namespace NCalc.Visitors;
 /// <summary>
 /// Class responsible to asynchronous evaluating <see cref="LogicalExpression"/> objects into CLR objects.
 /// </summary>
-public class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTask<object?>>
+public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTask<object?>>, ILogicalExpressionNoRecurseVisitor<ValueTask<object?>>
 {
     private readonly AsyncExpressionContext context;
 
@@ -1055,6 +1055,10 @@ public class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTask<object
         return result;
     }
 
+    public ValueTask<object?> Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
+    {
+        return group.Expression.Accept(this, cancellationToken);
+    }
     protected bool Compare(object? a, object? b, ComparisonType comparisonType)
     {
         if (context.Options.HasFlag(ExpressionOptions.StrictTypeMatching) && a?.GetType() != b?.GetType())
@@ -1087,8 +1091,38 @@ public class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTask<object
         return expression.Accept(this, cancellationToken);
     }
 
-    public ValueTask<object?> Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
+    internal async ValueTask<object?> EvaluateNoRecurseAsync(LogicalExpression expression, CancellationToken cancellationToken = default)
     {
-        return group.Expression.Accept(this, cancellationToken);
+        List<ExpressionTask<ValueTask<object?>>> stack = [];
+        ExpressionTask<ValueTask<object?>> root = new ExpressionTask<ValueTask<object?>>(null, new ExpressionState<ValueTask<object?>>(expression));
+        stack.Add(root);
+        ExpressionTask<ValueTask<object?>> currentTask;
+        while (stack.Count > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // Ask visitor to visit the expression. Pass the task to it.
+            // The visitor may
+            // a) return the value
+            // b) add an expression to the task that must be evaluated first.
+            currentTask = stack[^1];
+            await currentTask.State.Expression.AcceptNoRecurse<ValueTask<object?>>(this, currentTask, cancellationToken).ConfigureAwait(false);
+            if (currentTask.State.ValueSet)
+            {
+                // Remove the current task from the stack
+                stack.Remove(currentTask);
+            }
+            else
+            {
+                foreach (var state in currentTask.ChildStates)
+                {
+                    if (!state.ValueSet)
+                    {
+                        stack.Add(new ExpressionTask<ValueTask<object?>>(currentTask, state));
+                    }
+                }
+            }
+        }
+
+        return root.State.ValueSet ? root.State.Value : null;
     }
 }

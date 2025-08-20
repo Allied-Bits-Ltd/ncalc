@@ -5,6 +5,7 @@ using NCalc.DependencyInjection;
 using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Factories;
+using NCalc.Helpers;
 using NCalc.Visitors;
 
 namespace NCalc.Tests;
@@ -143,6 +144,16 @@ public class ServiceCollectionExtensionsTests
 
             return base.Visit(expression, cancellationToken);
         }
+
+        public override object Visit(ValueExpression expression, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
+        {
+            if (expression.Value is 42)
+            {
+                return SetTaskValue(task, "The answer");
+            }
+
+            return base.Visit(expression, task, cancellationToken);
+        }
     }
 
     private class CustomEvaluationVisitorFactory : IEvaluationVisitorFactory
@@ -161,6 +172,16 @@ public class ServiceCollectionExtensionsTests
                 return new("The answer");
 
             return base.Visit(expression, cancellationToken);
+        }
+
+        public override ValueTask<object> Visit(ValueExpression expression, ExpressionTask<ValueTask<object>> task, CancellationToken cancellationToken = default)
+        {
+            if (expression.Value is 42)
+            {
+                return ValueTask.FromResult(SetTaskValue(task, "The answer"));
+            }
+
+            return base.Visit(expression, task, cancellationToken);
         }
     }
 

@@ -129,10 +129,16 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
     public ValueTask<object?> EvaluateAsync(CancellationToken cancellationToken = default)
     {
+        if (UseNonRecursiveEvaluator)
+            Options |= ExpressionOptions.UseNonRecursiveEvaluator;
+
         LogicalExpression ??= GetLogicalExpression();
 
         if (Error is not null)
             throw Error;
+
+        if (LogicalExpression is null)
+            return ValueTask.FromResult((object?)null);
 
         if (Options.HasFlag(ExpressionOptions.AllowNullParameter))
             Context.StaticParameters["null"] = null;
@@ -146,7 +152,10 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         if (LogicalExpression is null)
             return new ValueTask<object?>();
 
-        return LogicalExpression.Accept(evaluationVisitor, cancellationToken);
+        if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+            return evaluationVisitor.EvaluateNoRecurseAsync(LogicalExpression, cancellationToken);
+        else
+            return LogicalExpression.Accept(evaluationVisitor, cancellationToken);
     }
 
     private async ValueTask<object?> IterateParametersAsync(CancellationToken cancellationToken = default)
@@ -159,7 +168,12 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
             return null;
 
         if (size == null)
-            return await LogicalExpression.Accept(evaluationVisitor, cancellationToken).ConfigureAwait(false);
+        {
+            if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+                return await evaluationVisitor.EvaluateNoRecurseAsync(LogicalExpression, cancellationToken).ConfigureAwait(false);
+            else
+                return await LogicalExpression.Accept(evaluationVisitor, cancellationToken).ConfigureAwait(false);
+        }
 
         var results = new List<object?>();
 
@@ -171,7 +185,9 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
                 Parameters[kvp.Key] = kvp.Value.Current;
             }
 
-            results.Add(await LogicalExpression.Accept(evaluationVisitor, cancellationToken).ConfigureAwait(false));
+            results.Add((Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+                ? await evaluationVisitor.EvaluateNoRecurseAsync(LogicalExpression, cancellationToken).ConfigureAwait(false)
+                : await LogicalExpression.Accept(evaluationVisitor, cancellationToken).ConfigureAwait(false));
         }
 
         return results;
