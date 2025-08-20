@@ -29,6 +29,7 @@ This branch of NCalc contains a number of advanced features compared to the orig
 * Logical XOR operations.
 * Certain Unicode characters can be used as operators.
 * Lowercase lookup for parameter and function names.
+* Optional non-recursive evaluator for large and complex expressions.
 * The possibility to re-initialize the parser before parsing an expression.
 * New flags in ExpressionOptions to skip date and GUID parsers in order to speed up parsing.
 * Minor improvements in the asyncrhonous code (CancellationToken and ConfigureAwait(false) are present in all calls).

@@ -1,3 +1,6 @@
+# 8.1.0 (Allied Bits)
+* Added a non-recursive evaluator to help with a StackOverflow error with long or deep expressions.
+
 # 8.0.2 (Allied Bits)
 * Added parsing of "raw" strings which are not parsed for escape sequences.
 * SerializationVisitor improved to provide the original value of a string for ValueExpression. If the original string included escaped characters, SerializationVisitor will return that original string and not a decoded one.
