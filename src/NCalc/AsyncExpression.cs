@@ -137,9 +137,6 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         if (Error is not null)
             throw Error;
 
-        if (LogicalExpression is null)
-            return ValueTask.FromResult((object?)null);
-
         if (Options.HasFlag(ExpressionOptions.AllowNullParameter))
             Context.StaticParameters["null"] = null;
 
@@ -150,7 +147,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
 
         if (LogicalExpression is null)
-            return new ValueTask<object?>();
+            return new ValueTask<object?>((object?)null);
 
         if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
             return evaluationVisitor.EvaluateNoRecurseAsync(LogicalExpression, cancellationToken);

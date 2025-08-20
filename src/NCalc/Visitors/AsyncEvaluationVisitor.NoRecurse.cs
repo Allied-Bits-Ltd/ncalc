@@ -53,22 +53,41 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
         // Request the value of the condition
         if (!ExpressionEvaluated(task, 0, expression.LeftExpression))
+#if NET8_0_OR_GREATER
             return ValueTask.FromResult((object?)null);
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
 
         // Request the value of the middle or right expression
         if (task.ChildStates.Count == 1)
         {
             if (!TryGetValueOrNull(task.ChildStates[0].Value, out value))
+#if NET8_0_OR_GREATER
                 return ValueTask.FromResult((object?)null);
-
+#else
+                return new ValueTask<object?>((object?)null);
+#endif
             task.ChildStates.Add(new ExpressionState<ValueTask<object?>>(Convert.ToBoolean(value, context.CultureInfo) ? expression.MiddleExpression : expression.RightExpression));
+#if NET8_0_OR_GREATER
             return ValueTask.FromResult((object?)null);
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
         }
         else
         if (!task.ChildStates[1].ValueSet)
+#if NET8_0_OR_GREATER
             return ValueTask.FromResult((object?)null);
-
-        return ValueTask.FromResult(SetTaskValue(task, task.ChildStates[1].Value));
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
+#if NET8_0_OR_GREATER
+        return ValueTask.FromResult(
+#else
+        return new ValueTask<object?>(
+#endif
+        SetTaskValue(task, task.ChildStates[1].Value));
     }
 
     public virtual async ValueTask<object?> Visit(BinaryExpression expression, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
@@ -941,37 +960,68 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     {
         // Request the value of the backing expression
         if (!ExpressionEvaluated(task, 0, expression.Expression))
-            return ValueTask.FromResult((object?) null);
+#if NET8_0_OR_GREATER
+            return ValueTask.FromResult((object?)null);
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
 
         object? result = null;
         if (!TryGetValueOrNull(task.ChildStates[0].Value, out result))
         {
             SetTaskValue(task, null);
+#if NET8_0_OR_GREATER
             return ValueTask.FromResult((object?)null);
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
         }
 
-        return ValueTask.FromResult(SetTaskValue(task, EvaluationHelper.Unary(expression, result, context)));
+#if NET8_0_OR_GREATER
+        return ValueTask.FromResult(
+#else
+        return new ValueTask<object?>(
+#endif
+            SetTaskValue(task, EvaluationHelper.Unary(expression, result, context)));
     }
 
     public virtual ValueTask<object?> Visit(PercentExpression expression, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
     {
         // Request the value of the backing expression
         if (!ExpressionEvaluated(task, 0, expression.Expression))
+#if NET8_0_OR_GREATER
             return ValueTask.FromResult((object?)null);
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
 
         object? result = null;
         if (!TryGetValueOrNull(task.ChildStates[0].Value, out result))
         {
             SetTaskValue(task, null);
+#if NET8_0_OR_GREATER
             return ValueTask.FromResult((object?)null);
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
         }
 
-        return ValueTask.FromResult(SetTaskValue(task, new Percent(result!)));
+#if NET8_0_OR_GREATER
+        return ValueTask.FromResult(
+#else
+        return new ValueTask<object?>(
+#endif
+            SetTaskValue(task, new Percent(result!)));
     }
 
     public virtual ValueTask<object?> Visit(ValueExpression expression, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
     {
-        return ValueTask.FromResult(SetTaskValue(task, expression.Value));
+#if NET8_0_OR_GREATER
+        return ValueTask.FromResult(
+#else
+        return new ValueTask<object?>(
+#endif
+            SetTaskValue(task, expression.Value));
     }
 
     public virtual async ValueTask<object?> Visit(Function function, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
@@ -991,12 +1041,20 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             foreach(LogicalExpression expression in list)
                 if (task.ChildStates.Any(e => e.Expression == expression) == false)
                     task.ChildStates.Add(new ExpressionState<ValueTask<object?>>(expression));
+#if NET8_0_OR_GREATER
             return ValueTask.FromResult((object?)null);
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
         }
         foreach (var state in task.ChildStates)
         {
             if (!state.ValueSet)
-                return ValueTask.FromResult((object?)null);
+#if NET8_0_OR_GREATER
+            return ValueTask.FromResult((object?)null);
+#else
+                return new ValueTask<object?>((object?)null);
+#endif
         }
 
         List<object?> result = [];
@@ -1006,15 +1064,29 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             result.Add(state.Value);
         }
 
-        return ValueTask.FromResult(SetTaskValue(task, result));
+#if NET8_0_OR_GREATER
+        return ValueTask.FromResult(
+#else
+        return new ValueTask<object?>(
+#endif
+            SetTaskValue(task, result));
     }
 
     public virtual ValueTask<object?> Visit(ExpressionGroup group, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
     {
         // Request the value of the backing expression
         if (!ExpressionEvaluated(task, 0, group.Expression))
+#if NET8_0_OR_GREATER
             return ValueTask.FromResult((object?)null);
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
 
-        return ValueTask.FromResult(SetTaskValue(task, task.ChildStates[0].Value));
+#if NET8_0_OR_GREATER
+        return ValueTask.FromResult(
+#else
+        return new ValueTask<object?>(
+#endif
+            SetTaskValue(task, task.ChildStates[0].Value));
     }
 }
