@@ -60,7 +60,7 @@ public static class LogicalExpressionParser
     static LogicalExpressionParser()
     {
         // InternalInit sets Parser (as before), and then we set it again here to satisfy the compiler's requirements
-        Parsers[CultureInfo.CurrentCulture] = CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null /*AdvancedExpressionOptions.DefaultOptions*/);
+        Parsers[CultureInfo.CurrentCulture] = CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null /*AdvancedExpressionOptions.DefaultOptions*/, null);
     }
 
     /// <summary>
@@ -77,10 +77,10 @@ public static class LogicalExpressionParser
     /// <returns>An instance of the newly created parser</returns>
     private static Parser<LogicalExpression> CreateExpressionParser()
     {
-        return CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null /*AdvancedExpressionOptions.DefaultOptions*/);
+        return CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null /*AdvancedExpressionOptions.DefaultOptions*/, null);
     }
 
-    private static Parser<LogicalExpression> CreateExpressionParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions)
+    private static Parser<LogicalExpression> CreateExpressionParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions, LogicalExpressionParserContext? parserContext)
     {
         /*
          * Grammar:
@@ -112,14 +112,13 @@ public static class LogicalExpressionParser
         var expression = Deferred<LogicalExpression>();
 
         var expressionOrBracedStatementSequence = Deferred<LogicalExpression>();
-        //var expressionOrBracedStatementSequenceForIndex = Deferred<LogicalExpression>();
         var bracedExpressionOrStatementSequence = Deferred<LogicalExpression>();
 
         bool useBigNumbers = options.HasFlag(ExpressionOptions.UseBigNumbers);
 
         bool unsignedHexBinOct = options.HasFlag(ExpressionOptions.HexBinOctAreUnsigned);
 
-        bool acceptUnderscores = (extOptions != null) && extOptions.Flags.HasFlag(AdvExpressionOptions.AcceptUnderscoresInNumbers);
+        bool acceptUnderscores = extOptions?.Flags.HasFlag(AdvExpressionOptions.AcceptUnderscoresInNumbers) ?? false;
 
         string acceptableHexChars = acceptUnderscores ? "0123456789abcdefABCDEF_" : "0123456789abcdefABCDEF";
 
@@ -142,19 +141,19 @@ public static class LogicalExpressionParser
 
         var hexNumber = Terms.Text("0x")
             .SkipAnd(Terms.Pattern(c => acceptableHexChars.Contains(c)))
-            .Then<LogicalExpression>((ctx, x) =>
+            .Then<LogicalExpression>(static (ctx, x) =>
             {
                 string? strValue = x.ToString();
 
                 if (string.IsNullOrEmpty(strValue))
                     throw new ArgumentException($"{strValue} is not a valid hex number");
 
-                if (acceptUnderscores)
+                if (((LogicalExpressionParserContext)ctx).AcceptUnderscores)
                     strValue = strValue!.Replace("_", string.Empty);
 
                 try
                 {
-                    if (unsignedHexBinOct)
+                    if (((LogicalExpressionParserContext)ctx).UnsignedHexBinOct)
                     {
                         ulong converted = Convert.ToUInt64(strValue, 16);
                         if (converted <= uint.MaxValue)
@@ -173,7 +172,7 @@ public static class LogicalExpressionParser
                 }
                 catch (Exception ex)
                 {
-                    if (useBigNumbers && (ex is OverflowException))
+                    if (((LogicalExpressionParserContext)ctx).UseBigNumbers && (ex is OverflowException))
                     {
                         // do nothing and try to convert to BigInteger below
                     }
@@ -196,19 +195,19 @@ public static class LogicalExpressionParser
 
         var octalNumber = octalPrefixParser
             .SkipAnd(Terms.Pattern(c => acceptableOctalChars.Contains(c)))
-            .Then<LogicalExpression>((ctx, x) =>
+            .Then<LogicalExpression>(static (ctx, x) =>
             {
                 string? strValue = x.ToString();
 
                 if (string.IsNullOrEmpty(strValue))
                     throw new ArgumentException($"{strValue} is not a valid octal number");
 
-                if (acceptUnderscores)
+                if (((LogicalExpressionParserContext)ctx).AcceptUnderscores)
                     strValue = strValue!.Replace("_", string.Empty);
 
                 try
                 {
-                    if (unsignedHexBinOct)
+                    if (((LogicalExpressionParserContext)ctx).UnsignedHexBinOct)
                     {
                         ulong converted = Convert.ToUInt64(strValue, 8);
                         if (converted <= uint.MaxValue)
@@ -227,7 +226,7 @@ public static class LogicalExpressionParser
                 }
                 catch (Exception ex)
                 {
-                    if (useBigNumbers && (ex is OverflowException))
+                    if (((LogicalExpressionParserContext)ctx).UseBigNumbers && (ex is OverflowException))
                     {
                         // do nothing and try to convert to BigInteger below
                     }
@@ -246,19 +245,19 @@ public static class LogicalExpressionParser
 
         var binaryNumber = Terms.Text("0b")
             .SkipAnd(Terms.Pattern(c => c == '0' || c == '1' || (acceptUnderscores && c == '_')))
-            .Then<LogicalExpression>((ctx, x) =>
+            .Then<LogicalExpression>(static (ctx, x) =>
             {
                 string? strValue = x.ToString();
 
                 if (string.IsNullOrEmpty(strValue))
                     throw new ArgumentException($"{strValue} is not a valid binary number");
 
-                if (acceptUnderscores)
+                if (((LogicalExpressionParserContext)ctx).AcceptUnderscores)
                     strValue = strValue!.Replace("_", string.Empty);
 
                 try
                 {
-                    if (unsignedHexBinOct)
+                    if (((LogicalExpressionParserContext)ctx).UnsignedHexBinOct)
                     {
                         ulong converted = Convert.ToUInt64(strValue, 2);
                         if (converted <= uint.MaxValue)
@@ -277,7 +276,7 @@ public static class LogicalExpressionParser
                 }
                 catch (Exception ex)
                 {
-                    if (useBigNumbers && (ex is OverflowException))
+                    if (((LogicalExpressionParserContext)ctx).UseBigNumbers && (ex is OverflowException))
                     {
                         // do nothing and try to convert to BigInteger below
                     }
@@ -312,11 +311,11 @@ public static class LogicalExpressionParser
 
         var intNumber = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
             .AndSkip(Not(OneOf(floatNumExclusions)))
-            .Then<LogicalExpression>((ctx, d) => new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx)));
+            .Then<LogicalExpression>(static (ctx, d) => new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var longNumber = Terms.Number<long>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
             .AndSkip(Not(OneOf(floatNumExclusions)))
-            .Then<LogicalExpression>((ctx, d) => new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx)));
+            .Then<LogicalExpression>(static (ctx, d) => new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx)));
 
         Parser<LogicalExpression>? bigIntNumber = null;
 
@@ -324,7 +323,7 @@ public static class LogicalExpressionParser
         {
             bigIntNumber = Terms.Number<BigInteger>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
                 .AndSkip(Not(OneOf(floatNumExclusions)))
-                .Then<LogicalExpression>((ctx, d) =>
+                .Then<LogicalExpression>(static (ctx, d) =>
                     {
                         if (d >= ulong.MinValue && d <= ulong.MaxValue)
                             return new ValueExpression((object)(ulong)d).SetLocation(new ParlotExpressionLocation(ctx));
@@ -376,7 +375,7 @@ public static class LogicalExpressionParser
 
             Parser<LogicalExpression> bigIntNumberD = Terms.Number<BigInteger>((NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag), decimalSeparator, numGroupSeparator)
                 //.AndSkip(Not(OneOf(floatNumExclusions)))
-                .Then<LogicalExpression>((d) =>
+                .Then<LogicalExpression>(static (d) =>
                 {
                     if (d >= ulong.MinValue && d <= ulong.MaxValue)
                         return new ValueExpression((object)(ulong)d);
@@ -384,7 +383,7 @@ public static class LogicalExpressionParser
                         return new ValueExpression(d);
                 });
             Parser<LogicalExpression> bigUIntNumberD = Terms.Pattern(c => acceptableDecChars.Contains(c))
-                .Then<LogicalExpression>(s =>
+                .Then<LogicalExpression>(static s =>
                 {
                     return new ValueExpression(s);
                 });
@@ -396,11 +395,11 @@ public static class LogicalExpressionParser
                 .And(ZeroOrOne(Terms.AnyOf("Ee")))
                 .And(ZeroOrOne(bigIntNumberD))
                 .When((ctx, val) => TryParseDecimal(val, acceptUnderscores) != null)
-                .Then<LogicalExpression>((ctx, val) =>
+                .Then<LogicalExpression>(static (ctx, val) =>
                 {
                     bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
 
-                    BigDecimal? value = TryParseDecimal(val, acceptUnderscores);
+                    BigDecimal? value = TryParseDecimal(val, ((LogicalExpressionParserContext)ctx).AcceptUnderscores);
 
                     if (value == null)
                         return new ValueExpression();  // never happens - the When condition ensures that val can be parsed
@@ -648,9 +647,9 @@ public static class LogicalExpressionParser
         var populatedList =
             Between(openParen, Separated(comma.Or(semicolon)/*(decimalSeparator == ',' || decimalSeparator2 == ',' || numGroupSeparator == ',' ? semicolon : comma.Or(semicolon))*/, expressionOrBracedStatementSequence),
                     closeParen.ElseError("Parenthesis not closed."))
-                .Then<LogicalExpression>((ctx, values) => new LogicalExpressionList(values).SetLocation(new ParlotExpressionLocation(ctx)));
+                .Then<LogicalExpression>(static (ctx, values) => new LogicalExpressionList(values).SetLocation(new ParlotExpressionLocation(ctx)));
 
-        var emptyList = openParen.AndSkip(closeParen).Then<LogicalExpression>(_ => new LogicalExpressionList());
+        var emptyList = openParen.AndSkip(closeParen).Then<LogicalExpression>(static _ => new LogicalExpressionList());
 
         var list = OneOf(emptyList, populatedList);
 
@@ -702,7 +701,7 @@ public static class LogicalExpressionParser
                 });
 
         var doubleQuotesStringValue = Terms.String(quotes: StringLiteralQuotes.Double, returnDecoded: false)
-                .Then<LogicalExpression>((ctx, value) =>
+                .Then<LogicalExpression>(static (ctx, value) =>
                 {
                     string? originalValue = value.ToString();
                     if (originalValue is null)
@@ -714,11 +713,11 @@ public static class LogicalExpressionParser
                 });
 
         var rawStringValue = atChar.SkipAnd(Terms.Char('"')).SkipAnd(Literals.NoneOf("\"")).AndSkip(Terms.Char('"'))
-            .Then<LogicalExpression>((ctx, value) =>
+            .Then<LogicalExpression>(static (ctx, value) =>
                 new ValueExpression(value.ToString()!, StringKind.RawDoubleQuote).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var backQuoteStringValue = Terms.Char('`').SkipAnd(Literals.NoneOf("`")).AndSkip(Terms.Char('`'))
-            .Then<LogicalExpression>((ctx, value) =>
+            .Then<LogicalExpression>(static (ctx, value) =>
                 new ValueExpression(value.ToString()!, StringKind.BackQuote).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var stringValue = OneOf(singleQuotesStringValue, doubleQuotesStringValue, rawStringValue, backQuoteStringValue);
@@ -1618,14 +1617,14 @@ public static class LogicalExpressionParser
                     .And(fourHexSequence)
                     .AndSkip(minus)
                     .And(twelveHexSequence)
-                .Then<LogicalExpression>((ctx, g) =>
+                .Then<LogicalExpression>(static (ctx, g) =>
                         new ValueExpression(Guid.Parse(g.Item1.ToString() + g.Item2 + g.Item3 + g.Item4 + g.Item5)).SetLocation(new ParlotExpressionLocation(ctx)));
 
             Parser<LogicalExpression> guidWithoutHyphens;
 
             guidWithoutHyphens = thirtyTwoHexSequence
                 .AndSkip(Not(decimalOrDoubleNumber))
-                .Then<LogicalExpression>((ctx, g) => new ValueExpression(Guid.Parse(g.ToString()!)).SetLocation(new ParlotExpressionLocation(ctx)));
+                .Then<LogicalExpression>(static (ctx, g) => new ValueExpression(Guid.Parse(g.ToString()!)).SetLocation(new ParlotExpressionLocation(ctx)));
 
             guid = OneOf(guidWithHyphens, guidWithoutHyphens);
         }
@@ -1739,7 +1738,7 @@ public static class LogicalExpressionParser
         if (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent))
         {
             Parser<LogicalExpression>? numberPercent = factorial.And(ZeroOrOne(percentChar, '\0'))
-                .Then<LogicalExpression>((ctx, x) =>
+                .Then<LogicalExpression>(static (ctx, x) =>
                 {
                     if (x.Item2 == '\0')
                     {
@@ -1749,7 +1748,7 @@ public static class LogicalExpressionParser
                     return new PercentExpression(x.Item1).SetLocation(new ParlotExpressionLocation(ctx));
                 });
             Parser<LogicalExpression>? numberPercent2 = percentChar.And(factorial)
-                .Then<LogicalExpression>((ctx, x) =>
+                .Then<LogicalExpression>(static (ctx, x) =>
                 {
                     return new PercentExpression(x.Item2).SetLocation(new ParlotExpressionLocation(ctx));
                 });
@@ -1761,7 +1760,7 @@ public static class LogicalExpressionParser
         // Either a factorial, primary, or exponential
         // exponential => factorial ( "**" factorial )* ;
         var exponential = factorialOrPercent.And(ZeroOrMany(exponent.And(factorial)))
-            .Then((ctx, x) =>
+            .Then(static (ctx, x) =>
             {
                 LogicalExpression result = null!;
 
@@ -1792,25 +1791,25 @@ public static class LogicalExpressionParser
         // ( "-" | "!" | "not" | "~" | root2 | root3 | root4 ) factorial | exponential | primary;
         List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)> unaryOps =
         [
-            (not, (ctx, value) => new UnaryExpression(UnaryExpressionType.Not, value).SetLocation(new ParlotExpressionLocation(ctx))),
-            (minus, (ctx, value)  => new UnaryExpression(UnaryExpressionType.Negate, value).SetLocation(new ParlotExpressionLocation(ctx))),
-            (bitwiseNot, (ctx, value) => new UnaryExpression(UnaryExpressionType.BitwiseNot, value).SetLocation(new ParlotExpressionLocation(ctx))),
+            (not, static (ctx, value) => new UnaryExpression(UnaryExpressionType.Not, value).SetLocation(new ParlotExpressionLocation(ctx))),
+            (minus, static (ctx, value)  => new UnaryExpression(UnaryExpressionType.Negate, value).SetLocation(new ParlotExpressionLocation(ctx))),
+            (bitwiseNot, static (ctx, value) => new UnaryExpression(UnaryExpressionType.BitwiseNot, value).SetLocation(new ParlotExpressionLocation(ctx))),
         ];
         if (root2 != null)
-            unaryOps.Add((root2, (ctx, value) => new UnaryExpression(UnaryExpressionType.SqRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
+            unaryOps.Add((root2, static (ctx, value) => new UnaryExpression(UnaryExpressionType.SqRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
 #if NET8_0_OR_GREATER
         if (root3 != null)
-            unaryOps.Add((root3, (ctx, value) => new UnaryExpression(UnaryExpressionType.CbRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
+            unaryOps.Add((root3, static (ctx, value) => new UnaryExpression(UnaryExpressionType.CbRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
 #endif
         if (root4 != null)
-            unaryOps.Add((root4, (ctx, value) => new UnaryExpression(UnaryExpressionType.FourthRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
+            unaryOps.Add((root4, static (ctx, value) => new UnaryExpression(UnaryExpressionType.FourthRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
         var unary = exponential.Unary(unaryOps.ToArray());
 
         List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression, LogicalExpression>)>  multiplicativeList = [
-            (intDivB, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.IntDivB, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
-            (divided, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Div, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
-            (times, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Times, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
-            (modulo, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Modulo, a, b).SetLocation(new ParlotExpressionLocation(ctx)))];
+            (intDivB, static (ctx, a, b) => new BinaryExpression(BinaryExpressionType.IntDivB, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
+            (divided, static  (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Div, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
+            (times, static  (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Times, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
+            (modulo, static  (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Modulo, a, b).SetLocation(new ParlotExpressionLocation(ctx)))];
         if (!options.HasFlag(ExpressionOptions.SupportCStyleComments))
         {
             multiplicativeList.Insert(1, (intDivP, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.IntDivP, a, b).SetLocation(new ParlotExpressionLocation(ctx))));
@@ -1820,14 +1819,14 @@ public static class LogicalExpressionParser
 
         // additive => multiplicative ( ( "-" | "+" ) multiplicative )* ;
         var additive = multiplicative.LeftAssociative(
-            (plus, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Plus, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
-            (minus, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Minus, a, b).SetLocation(new ParlotExpressionLocation(ctx)))
+            (plus, static (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Plus, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
+            (minus, static (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Minus, a, b).SetLocation(new ParlotExpressionLocation(ctx)))
         );
 
         // shift => additive ( ( "<<" | ">>" ) additive )* ;
         var shift = additive.LeftAssociative(
-            (leftShift, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.LeftShift, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
-            (rightShift, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.RightShift, a, b).SetLocation(new ParlotExpressionLocation(ctx)))
+            (leftShift, static (ctx, a, b) => new BinaryExpression(BinaryExpressionType.LeftShift, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
+            (rightShift, static (ctx, a, b) => new BinaryExpression(BinaryExpressionType.RightShift, a, b).SetLocation(new ParlotExpressionLocation(ctx)))
         );
 
         // relational => shift ( ( ">=" | "<=" | "<" | ">" | "in" | "not in" ) shift )* ;
@@ -1875,7 +1874,7 @@ public static class LogicalExpressionParser
 
         // ternary => logical("?" logical ":" logical) ?
         var ternary = logical.And(ZeroOrOne(questionMark.SkipAnd(logical).AndSkip(colon).And(logical)))
-            .Then((ctx, x) =>
+            .Then(static (ctx, x) =>
                 x.Item2.Item1 == null
                     ? x.Item1
                     : new TernaryExpression(x.Item1, x.Item2.Item1, x.Item2.Item2).SetLocation(new ParlotExpressionLocation(ctx)))
@@ -1898,7 +1897,7 @@ public static class LogicalExpressionParser
         if (options.HasFlag(ExpressionOptions.UseLoops))
         {
             var whileLoop = Terms.Text("while", caseInsensitive: true).SkipAnd(Terms.Text("(")).SkipAnd(expressionOrBracedStatementSequence).AndSkip(Terms.Text(")")).And(expressionOrBracedStatementSequence)
-                .Then<LogicalExpression>((ctx, x) =>
+                .Then<LogicalExpression>(static (ctx, x) =>
                     new BinaryExpression(BinaryExpressionType.WhileLoop, x.Item1, x.Item2)
                 );
             statements.Add(whileLoop);
@@ -1907,7 +1906,7 @@ public static class LogicalExpressionParser
         if (options.HasFlag(ExpressionOptions.UseIfStatement))
         {
             var ifStatement = Terms.Text("if", caseInsensitive: true).SkipAnd(Terms.Text("(")).SkipAnd(expressionOrBracedStatementSequence).AndSkip(Terms.Text(")")).And(expressionOrBracedStatementSequence).And(ZeroOrOne(Terms.Text("else", caseInsensitive: true).SkipAnd(expressionOrBracedStatementSequence)))
-                    .Then<LogicalExpression>((ctx, x) =>
+                    .Then<LogicalExpression>(static (ctx, x) =>
                         new IfStatementExpression(x.Item1, x.Item2, x.Item3 is null ? new ValueExpression() : x.Item3)
                     );
 
@@ -1923,7 +1922,7 @@ public static class LogicalExpressionParser
             var assignmentTypeParser = assignmentOperator.Then(BinaryExpressionType.Assignment);
 
             var assignment = OneOf(indexedAccess, identifierExpression).And(OneOf(assignmentOperator, plusAssign, minusAssign, multiplyAssign, divAssign, orAssign, xorAssign, andAssign)).And(expressionOrBracedStatementSequence)
-            .Then<LogicalExpression>((ctx, x) =>
+            .Then<LogicalExpression>(static (ctx, x) =>
                 {
                     LogicalExpression result = null!;
                     BinaryExpressionType expressionType;
@@ -1958,7 +1957,7 @@ public static class LogicalExpressionParser
                             break;
                     }
                     ExpressionLocation loc = new ParlotExpressionLocation(ctx);
-                    result = (BinaryExpression)new BinaryExpression(expressionType, x.Item1, x.Item3/*[0]*/).SetLocation(loc).SetOptions(options, cultureInfo, extOptions);
+                    result = (BinaryExpression)new BinaryExpression(expressionType, x.Item1, x.Item3/*[0]*/).SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
                     /*if (x.Item3.Count > 1)
                     {
                         for (int i = 1; i < x.Item3.Count; i++)
@@ -1984,7 +1983,7 @@ public static class LogicalExpressionParser
             var separator = Terms.Pattern((c) => c == ';');
             var statementSequence = expressionOrAssignment.And(ZeroOrMany(separator.SkipAnd(expressionOrAssignment))).And(ZeroOrMany(separator));
             var statementSequenceParser = statementSequence
-                .Then((ctx, x) =>
+                .Then(static (ctx, x) =>
                 {
                     LogicalExpression result = null!;
                     ExpressionLocation loc = new ParlotExpressionLocation(ctx);
@@ -1994,14 +1993,14 @@ public static class LogicalExpressionParser
                             result = x.Item1;
                             break;
                         case 1:
-                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetLocation(loc).SetOptions(options, cultureInfo, extOptions);
+                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
                             break;
                         default:
                         {
-                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetLocation(loc).SetOptions(options, cultureInfo, extOptions);
+                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
                             for (int i = 1; i < x.Item2.Count; i++)
                             {
-                                result = new BinaryExpression(BinaryExpressionType.StatementSequence, result, x.Item2[i]).SetLocation(loc).SetOptions(options, cultureInfo, extOptions);
+                                result = new BinaryExpression(BinaryExpressionType.StatementSequence, result, x.Item2[i]).SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
                             }
                             break;
                         }
@@ -2013,7 +2012,7 @@ public static class LogicalExpressionParser
         }
 
         var curlyBracedTopLevel = openCurlyBrace.SkipAnd(topLevel.AndSkip(closeCurlyBrace))
-            .Then<LogicalExpression>((ctx, x) =>
+            .Then<LogicalExpression>(static (ctx, x) =>
               new ExpressionGroup(x).SetLocation(new ParlotExpressionLocation(ctx)));
 
         expression.Parser = expressionOrAssignment;
@@ -2072,7 +2071,7 @@ public static class LogicalExpressionParser
             return parser;
         }
 
-        var newParser = CreateExpressionParser(cultureInfo, context.Options, context.AdvancedOptions);
+        var newParser = CreateExpressionParser(cultureInfo, context.Options, context.AdvancedOptions, context);
         if (context.Options == ExpressionOptions.None)
         {
             Parsers.TryAdd(cultureInfo, newParser);
@@ -2097,7 +2096,7 @@ public static class LogicalExpressionParser
     {
         Parser<LogicalExpression> parserToUse;
         if (context.AdvancedOptions is not null)
-            parserToUse = CreateExpressionParser(context.CultureInfo, context.Options, context.AdvancedOptions);
+            parserToUse = CreateExpressionParser(context.CultureInfo, context.Options, context.AdvancedOptions, context);
         else
             parserToUse = GetOrCreateExpressionParser(context.CultureInfo, context);
 

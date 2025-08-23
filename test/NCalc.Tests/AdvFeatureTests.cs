@@ -800,7 +800,8 @@ public class AdvFeatureTests
     [Theory]
     [InlineData("0x10_00", 4096)]
     [InlineData("0o_0_100", 64)]
-    public void ShouldHandleUnderscoresInHexOct(string formula, object expectedValue)
+    [InlineData("0b_0_100", 4)]
+    public void ShouldHandleUnderscoresInHexBinOct(string formula, object expectedValue)
     {
         var expression = new Expression(formula, CultureInfo.InvariantCulture);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
