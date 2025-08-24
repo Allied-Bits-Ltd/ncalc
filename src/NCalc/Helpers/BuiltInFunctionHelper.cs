@@ -188,8 +188,8 @@ public static class BuiltInFunctionHelper
         }
         if (functionName.Equals("MakeList", comparison))
         {
-            if (arguments.Length != 1)
-                throw new NCalcEvaluationException("MakeList() takes exactly 1 argument", location);
+            if (arguments.Length != 1 && arguments.Length != 2)
+                throw new NCalcEvaluationException("MakeList() takes 1 or 2 arguments", location);
             var sizeObj = arguments[0].Evaluate();
             if (sizeObj is null)
                 throw new NCalcEvaluationException("List size is evaluated to null in a call to MakeList()", location);
@@ -199,7 +199,64 @@ public static class BuiltInFunctionHelper
             if (size <= 0)
                 throw new NCalcEvaluationException($"List size is {size}, and it must be positive in a call to MakeList()", location);
 
-            return new object?[size];
+            if (arguments.Length == 2)
+            {
+                object? value = arguments[1].Evaluate();
+                object?[] result = new object?[size];
+                for (int i = 0; i < size; i++)
+                    result[i] = value;
+                return result;
+            }
+            else
+                return new object?[size];
+        }
+        if ((functionName.Equals("MakeStr", comparison)) || (functionName.Equals("MakeString", comparison)))
+        {
+            if (arguments.Length != 2)
+                throw new NCalcEvaluationException("MakeStr() takes exactly 2 arguments", location);
+            var sizeObj = arguments[0].Evaluate();
+            if (sizeObj is null)
+                throw new NCalcEvaluationException("String length is evaluated to null in a call to MakeStr()", location);
+            if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(sizeObj))
+                throw new NCalcEvaluationException("String length is not evaluated to an integer number in a call to MakeStr()", location);
+            int size = MathHelper.ConvertToInt(sizeObj, context);
+            if (size <= 0)
+                throw new NCalcEvaluationException($"String length is {size}, and it must be positive in a call to MakeStr()", location);
+
+            object? value = arguments[1].Evaluate();
+            if (value is null)
+                throw new NCalcEvaluationException("The string element in `value` is evaluated to null in a call to MakeStr()", location);
+
+            string? valueStr = null;
+
+            if (MathHelper.IsBoxedIntegerNumberOrBigNumber(value))
+            {
+                Int32 valueCode = Convert.ToInt32(value);
+                if (valueCode < 1 || valueCode > 65535)
+                    throw new NCalcEvaluationException("If a string element in `value` in a call to MakeStr() is provided as a character code, it must be in the range of [1..65535]", location);
+                valueStr = ((char)valueCode).ToString();
+            }
+            else
+            if (!((value is Percent)) || (value is IList))
+                valueStr = value.ToString();
+            else
+                throw new NCalcEvaluationException("The string element in `value` in a call to MakeStr() must be a character, a character code (an integer number), or a string", location);
+
+            if (valueStr is null)
+                throw new NCalcEvaluationException("The string element in `value` is evaluated to null in a call to MakeStr()", location);
+
+            if (size == 1)
+                return valueStr;
+            else
+            if (size == 2)
+                return valueStr + valueStr;
+            else
+            {
+                StringBuilder sb = new(size * valueStr.Length);
+                for (int i = 0; i < size; i++)
+                    sb.Append(valueStr);
+                return sb.ToString();
+            }
         }
         if (functionName.Equals("ifs", comparison))
         {

@@ -1,3 +1,4 @@
+using NCalc.Exceptions;
 using NCalc.Tests.TestData;
 using Assert = Xunit.Assert;
 
@@ -458,4 +459,51 @@ public class MathsTests
     {
         Assert.Equal(expected, new Expression(expression, options | ExpressionOptions.NoCache).Evaluate());
     }
+
+    [Fact]
+    public void ShouldHandleMakeList()
+    {
+        var expression = new Expression("MakeList(1)");
+        var result = expression.Evaluate();
+        Assert.True(result is IList);
+        Assert.Single((IList)result);
+        Assert.Null(((IList)result)[0]);
+
+        expression = new Expression("MakeList(2; 'c')", ExpressionOptions.AllowCharValues);
+        result = expression.Evaluate();
+        Assert.True(result is IList);
+        Assert.Equal(2, ((IList)result).Count);
+        Assert.Equal('c', ((IList)result)[0]);
+        Assert.Equal('c', ((IList)result)[1]);
+
+        expression = new Expression("MakeList(2; \"cc\")");
+        result = expression.Evaluate();
+        Assert.True(result is IList);
+        Assert.Equal(2, ((IList)result).Count);
+        Assert.Equal("cc", ((IList)result)[0]);
+        Assert.Equal("cc", ((IList)result)[1]);
+
+        expression = new Expression("MakeList(-1; null)");
+        Assert.Throws<NCalcEvaluationException>(expression.Evaluate);
+    }
+
+    [Fact]
+    public void ShouldHandleMakeStr()
+    {
+        var expression = new Expression("MakeStr(5, 32)");
+        var result = expression.Evaluate();
+        Assert.Equal("     ", result.ToString());
+
+        expression = new Expression("MakeStr(1; 'c')", ExpressionOptions.AllowCharValues);
+        result = expression.Evaluate();
+        Assert.Equal("c", result);
+
+        expression = new Expression("MakeStr(2; \"ab\")");
+        result = expression.Evaluate();
+        Assert.Equal("abab", result);
+
+        expression = new Expression("MakeStr(-1; null)");
+        Assert.Throws<NCalcEvaluationException>(expression.Evaluate);
+    }
+
 }
