@@ -15,7 +15,7 @@ namespace NCalc.Domain;
 #if NET
 [JsonPolymorphic]
 [JsonDerivedType(typeof(BinaryExpression), typeDiscriminator: "binary")]
-[JsonDerivedType(typeof(Function), typeDiscriminator: "function")]
+[JsonDerivedType(typeof(FunctionCall), typeDiscriminator: "function")]
 [JsonDerivedType(typeof(Identifier), typeDiscriminator: "identifier")]
 [JsonDerivedType(typeof(LogicalExpressionList), typeDiscriminator: "list")]
 [JsonDerivedType(typeof(TernaryExpression), typeDiscriminator: "ternary")]

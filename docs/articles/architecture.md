@@ -56,7 +56,7 @@ To create expressions you can combine several [Operators](operators.md) and [Val
 Multiple expressions can be combined into a sequence by joning them with a ";" (semicolon) character. 
 Such an expression sequence returns the value of its latest expression as a value.
 Expression sequences may be useful to [assign and update parameters](parameters.md) and then perform a calculation using these updated parameters. 
-Support for expression sequences must be enabled by including the `UseStatementSequences` flag into <xref:NCalc.ExpressionOptions> of an <xref:NCalc.Expression>.
+Support for expression sequences must be enabled by including the <xref:NCalc.ExpressionOptions.UseStatementSequences> flag into <xref:NCalc.ExpressionOptions> of an <xref:NCalc.Expression>.
 
 ## Learn More
 For additional information on the technique we used to create this library please read [this

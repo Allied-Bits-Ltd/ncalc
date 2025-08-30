@@ -2,7 +2,6 @@ namespace NCalc.Domain;
 
 public enum BinaryExpressionType
 {
-    StatementSequence,
     Assignment,
     PlusAssignment,
     MinusAssignment,

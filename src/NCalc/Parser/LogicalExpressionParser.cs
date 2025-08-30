@@ -22,17 +22,16 @@ public static class LogicalExpressionParser
 
     private static readonly ValueExpression True = new(true);
     private static readonly ValueExpression False = new(false);
+    private static readonly ValueExpression Null = new();
 
-    private static readonly double MinDecDouble = (double)decimal.MinValue;
-    private static readonly double MaxDecDouble = (double)decimal.MaxValue;
+    private const double MinDecDouble = (double)decimal.MinValue;
+    private const double MaxDecDouble = (double)decimal.MaxValue;
 
     private const string InvalidTokenMessage = "Invalid token in expression";
 
     // Support of underscores in decimal literals requires a patch in Parlot,
     // currently available in https://github.com/Allied-Bits-Ltd/parlot
     // and offered to the main project as a pull request https://github.com/sebastienros/parlot/pull/221
-
-    private static readonly bool _hasAllowUnderscore = Enum.GetNames(typeof(NumberOptions)).Contains("AllowUnderscore");
 
     const string errFailedToParsePeriodIndicator = "Failed to parse the element '{0}' of a period definition.";
     const string errDuplicatePeriodIndicator = "Period indicator '{0}' has been already used in the period definition";
@@ -60,7 +59,7 @@ public static class LogicalExpressionParser
     static LogicalExpressionParser()
     {
         // InternalInit sets Parser (as before), and then we set it again here to satisfy the compiler's requirements
-        Parsers[CultureInfo.CurrentCulture] = CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null /*AdvancedExpressionOptions.DefaultOptions*/, null);
+        Parsers[CultureInfo.CurrentCulture] = CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null /*AdvancedExpressionOptions.DefaultOptions*/);
     }
 
     /// <summary>
@@ -77,10 +76,10 @@ public static class LogicalExpressionParser
     /// <returns>An instance of the newly created parser</returns>
     private static Parser<LogicalExpression> CreateExpressionParser()
     {
-        return CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null /*AdvancedExpressionOptions.DefaultOptions*/, null);
+        return CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null /*AdvancedExpressionOptions.DefaultOptions*/);
     }
 
-    private static Parser<LogicalExpression> CreateExpressionParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions, LogicalExpressionParserContext? parserContext)
+    private static Parser<LogicalExpression> CreateExpressionParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions)
     {
         /*
          * Grammar:
@@ -123,12 +122,12 @@ public static class LogicalExpressionParser
         string acceptableHexChars = acceptUnderscores ? "0123456789abcdefABCDEF_" : "0123456789abcdefABCDEF";
 
         // Comments
-        var pythonLineComment = Terms.Text("#").And(AnyCharBefore(new PatternLiteral((x => x == '\n'), 1, 0), canBeEmpty: true, consumeDelimiter: true));
-        var cLineComment = Terms.Text("//").And(AnyCharBefore(new PatternLiteral((x => x == '\n'), 1, 0), canBeEmpty: true, consumeDelimiter: true));
-        var blockComment = Terms.Text("/*").And(AnyCharBefore(Terms.Text("*/"), canBeEmpty: true, consumeDelimiter: true, failOnEof: true)
+        var pythonLineComment = Terms.Text("#").SkipAnd(AnyCharBefore(new PatternLiteral((x => x == '\n'), 1, 0), canBeEmpty: true, consumeDelimiter: true));
+        var cLineComment = Terms.Text("//").SkipAnd(AnyCharBefore(new PatternLiteral((x => x == '\n'), 1, 0), canBeEmpty: true, consumeDelimiter: true));
+        var blockComment = Terms.Text("/*").SkipAnd(AnyCharBefore(Terms.Text("*/"), canBeEmpty: true, failOnEof: true, consumeDelimiter: true)
                 .ElseError("Comment not closed."));
 
-        List<Sequence<string, TextSpan>> comments = [];
+        List<SequenceSkipAnd<string, TextSpan>> comments = [];
         if (options.HasFlag(ExpressionOptions.SupportPythonComments))
             comments.Add(pythonLineComment);
         if (options.HasFlag(ExpressionOptions.SupportCStyleComments))
@@ -170,20 +169,14 @@ public static class LogicalExpressionParser
                             return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (((LogicalExpressionParserContext)ctx).UseBigNumbers && (ex is OverflowException))
                 {
-                    if (((LogicalExpressionParserContext)ctx).UseBigNumbers && (ex is OverflowException))
-                    {
-                        // do nothing and try to convert to BigInteger below
-                    }
-                    else
-                        throw;
+                    // do nothing and try to convert to BigInteger below
                 }
 
                 // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
-                BigInteger result;
 
-                if (!BigIntegerParser.TryParseBigInteger(strValue!, 16, out result))
+                if (!BigIntegerParser.TryParseBigInteger(strValue!, 16, out BigInteger result))
                     throw new ArgumentException($"{strValue} is not a valid hex number");
 
                 return new ValueExpression((object) result).SetLocation(new ParlotExpressionLocation(ctx));
@@ -191,7 +184,7 @@ public static class LogicalExpressionParser
 
         string acceptableOctalChars = acceptUnderscores ? "01234567_" : "01234567";
 
-        Parser<string> octalPrefixParser = (extOptions != null) && extOptions.Flags.HasFlag(AdvExpressionOptions.AcceptCStyleOctals) ? OneOf(Terms.Text("0o"), Terms.Text("0")) : Terms.Text("0o");
+        Parser<string> octalPrefixParser = (extOptions?.Flags.HasFlag(AdvExpressionOptions.AcceptCStyleOctals) == true) ? OneOf(Terms.Text("0o"), Terms.Text("0")) : Terms.Text("0o");
 
         var octalNumber = octalPrefixParser
             .SkipAnd(Terms.Pattern(c => acceptableOctalChars.Contains(c)))
@@ -224,20 +217,14 @@ public static class LogicalExpressionParser
                             return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (((LogicalExpressionParserContext)ctx).UseBigNumbers && (ex is OverflowException))
                 {
-                    if (((LogicalExpressionParserContext)ctx).UseBigNumbers && (ex is OverflowException))
-                    {
-                        // do nothing and try to convert to BigInteger below
-                    }
-                    else
-                        throw;
+                    // do nothing and try to convert to BigInteger below
                 }
 
                 // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
-                BigInteger result;
 
-                if (!BigIntegerParser.TryParseBigInteger(strValue!, 8, out result))
+                if (!BigIntegerParser.TryParseBigInteger(strValue!, 8, out BigInteger result))
                     throw new ArgumentException($"{strValue} is not a valid octal number");
 
                 return new ValueExpression((object)result).SetLocation(new ParlotExpressionLocation(ctx));
@@ -274,20 +261,14 @@ public static class LogicalExpressionParser
                             return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (((LogicalExpressionParserContext)ctx).UseBigNumbers && (ex is OverflowException))
                 {
-                    if (((LogicalExpressionParserContext)ctx).UseBigNumbers && (ex is OverflowException))
-                    {
-                        // do nothing and try to convert to BigInteger below
-                    }
-                    else
-                        throw;
+                    // do nothing and try to convert to BigInteger below
                 }
 
                 // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
-                BigInteger result;
 
-                if (!BigIntegerParser.TryParseBigInteger(strValue!, 2, out result))
+                if (!BigIntegerParser.TryParseBigInteger(strValue!, 2, out BigInteger result))
                     throw new ArgumentException($"{strValue} is not a valid hex number");
 
                 return new ValueExpression((object)result);
@@ -298,11 +279,11 @@ public static class LogicalExpressionParser
         hexOctBinNumber = OneOf(hexNumber!, octalNumber!, binaryNumber!);
 
         char decimalSeparator = (extOptions != null) ? extOptions.GetDecimalSeparatorChar() : Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator; // this method will return the default separator, if needed
-        char decimalSeparator2 = (extOptions != null) ? extOptions.GetSecondaryDecimalSeparatorChar() : '\0';
+        char decimalSeparator2 = (extOptions?.GetSecondaryDecimalSeparatorChar()) ?? '\0';
         char numGroupSeparator = (extOptions != null) ? extOptions.GetNumberGroupSeparatorChar() : Parlot.Fluent.NumberLiterals.DefaultGroupSeparator; // this method will return the default separator, if needed
 
         NumberOptions useNumberGroupSeparatorFlag = ((extOptions != null) && (numGroupSeparator != '\0')) ? NumberOptions.AllowGroupSeparators : NumberOptions.None;
-        NumberOptions useUnderscoreFlag = (_hasAllowUnderscore && acceptUnderscores) ? (NumberOptions)16 : NumberOptions.None;
+        NumberOptions useUnderscoreFlag = acceptUnderscores ? NumberOptions.AllowUnderscore : NumberOptions.None;
 
         Parser<string>[] floatNumExclusions =
             (decimalSeparator2 != '\0')
@@ -383,10 +364,7 @@ public static class LogicalExpressionParser
                         return new ValueExpression(d);
                 });
             Parser<LogicalExpression> bigUIntNumberD = Terms.Pattern(c => acceptableDecChars.Contains(c))
-                .Then<LogicalExpression>(static s =>
-                {
-                    return new ValueExpression(s);
-                });
+                .Then<LogicalExpression>(static s => new ValueExpression(s));
 
             bigDecimalNumber =
                 ZeroOrOne(bigIntNumberD)
@@ -394,7 +372,7 @@ public static class LogicalExpressionParser
                 .And(bigUIntNumberD)
                 .And(ZeroOrOne(Terms.AnyOf("Ee")))
                 .And(ZeroOrOne(bigIntNumberD))
-                .When((ctx, val) => TryParseDecimal(val, acceptUnderscores) != null)
+                .When((_, val) => TryParseDecimal(val, acceptUnderscores) != null)
                 .Then<LogicalExpression>(static (ctx, val) =>
                 {
                     bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
@@ -433,7 +411,7 @@ public static class LogicalExpressionParser
 
         // Add currency support
 
-        bool supportCurrency = (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.AcceptCurrencySymbol));
+        bool supportCurrency = (extOptions?.Flags.HasFlag(AdvExpressionOptions.AcceptCurrencySymbol) == true);
 
         Parser<LogicalExpression>? currency = null;
 
@@ -458,35 +436,25 @@ public static class LogicalExpressionParser
                     }
                 }
 
-                //Parser<string> currencyChar;
-                List <Parser<string>> currencyChars = new List<Parser<string>>();
+                List <Parser<string>> currencyChars = [];
 
                 if (!string.IsNullOrEmpty(currencySymbol)) currencyChars.Add(Terms.Text(currencySymbol, true));
                 if (!string.IsNullOrEmpty(currencySymbol2)) currencyChars.Add(Terms.Text(currencySymbol2, true));
                 if (!string.IsNullOrEmpty(currencySymbol3)) currencyChars.Add(Terms.Text(currencySymbol3, true));
 
-                Parser<string>[] currencyCharsArray = currencyChars.ToArray();
+                Parser<string>[] currencyCharsArray = [.. currencyChars];
 
                 Parser<LogicalExpression>? currency1 = null;
                 Parser<LogicalExpression>? currency2 = null;
 
                 var decimalCurrencyNumber = Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | useNumberGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator, currencyDecimalSeparator2)
-                .Then<LogicalExpression>(static (ctx, val) =>
-                {
-                    return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
-                });
+                    .Then<LogicalExpression>(static (ctx, val) => new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx)));
 
                 currency1 = OneOf(currencyCharsArray).SkipAnd(SkipWhiteSpace(OneOf(decimalCurrencyNumber, intNumber, longNumber)))
-                    .Then<LogicalExpression>(static (ctx, val) =>
-                    {
-                        return val;
-                    });
+                    .Then<LogicalExpression>(static (_, val) => val);
 
                 currency2 = OneOf(decimalCurrencyNumber, intNumber, longNumber).AndSkip(SkipWhiteSpace(OneOf(currencyCharsArray)))
-                    .Then<LogicalExpression>(static (ctx, val) =>
-                    {
-                        return val;
-                    });
+                    .Then<LogicalExpression>(static (_, val) => val);
 
                 currency = OneOf(currency1!, currency2!);
             }
@@ -494,7 +462,7 @@ public static class LogicalExpressionParser
 
         // Add percent support
 
-        bool calculatePercent = (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent));
+        bool calculatePercent = (extOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true);
         bool useCharsForOps = !options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars);
         bool useUnicodeForOps = options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations);
         bool useAssignments = options.HasFlag(ExpressionOptions.UseAssignments);
@@ -557,13 +525,15 @@ public static class LogicalExpressionParser
         var resultRefChar = Terms.Char('@');
         var atChar = Terms.Char('@');
 
-        // We don't let $ at the beginning of identifiers as it may be confused with currency
-
-        var identifier =
+        var letterIdentifier =
 #if NET8_0_OR_GREATER
-            supportCurrency ? Terms.Identifier(SearchValues.Create("_" + Character.AZ), SearchValues.Create("_" + Character.AlphaNumeric)) :
-#endif
+            Terms.Identifier(SearchValues.Create("_" + Character.AZ), SearchValues.Create("_" + Character.AlphaNumeric));
+#else
             Terms.Identifier();
+#endif
+
+        var identifier = supportCurrency ? letterIdentifier : Terms.Identifier();
+        // We don't let $ at the beginning of identifiers as it may be confused with currency
 
         Parser<string>? not;
         Parser<string>? and;
@@ -592,6 +562,7 @@ public static class LogicalExpressionParser
         var bitwiseOr = useCharsForOps ? OneOf(Terms.Text("BIT_OR", true), Terms.Text("|"))  : Terms.Text("BIT_OR", true);
         var bitwiseXOr = useCharsForOps ? OneOf(Terms.Text("BIT_XOR", true), Terms.Text("^")) : Terms.Text("BIT_XOR", true);
         var bitwiseNot = useCharsForOps ? OneOf(Terms.Text("BIT_NOT", true), Terms.Text("~")) : Terms.Text("BIT_NOT", true);
+        var returnParser = Terms.Text("return");
 
         var assignmentOperator = useUnicodeForOps
                                     ? OneOf(Terms.Text("\u2254"),
@@ -617,17 +588,17 @@ public static class LogicalExpressionParser
         var groupExpression = Between(openParen, expression, closeParen);
 
         var braceIdentifier = openBrace
-            .SkipAnd(AnyCharBefore(closeBrace, consumeDelimiter: true, failOnEof: true).ElseError("Bracket not closed."));
+            .SkipAnd(AnyCharBefore(closeBrace, failOnEof: true, consumeDelimiter: true).ElseError("Bracket not closed."));
 
         var curlyBraceIdentifier =
-            openCurlyBrace.SkipAnd(AnyCharBefore(closeCurlyBrace, consumeDelimiter: true, failOnEof: true)
+            openCurlyBrace.SkipAnd(AnyCharBefore(closeCurlyBrace, failOnEof: true, consumeDelimiter: true)
                 .ElseError("Brace not closed."));
 
         var resultReference = resultRefChar
             .Then<LogicalExpression>(static (ctx, x) =>
             {
                 ExpressionLocation loc = new ParlotExpressionLocation(ctx);
-                return new Function((Identifier) new Identifier(x.ToString()!).SetLocation(loc), new LogicalExpressionList()).SetLocation(loc);
+                return new FunctionCall((Identifier)new Identifier(x.ToString()!).SetLocation(loc), []).SetLocation(loc);
             });
 
         // ("[" | "{") identifier ("]" | "}")
@@ -637,11 +608,6 @@ public static class LogicalExpressionParser
                 .Then<LogicalExpression>(static (ctx, x) => new Identifier(x.ToString()!).SetBracketed(true).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var rangedIndex = openBrace.SkipAnd(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).And(ZeroOrOne(rangeText)).And(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).AndSkip(closeBrace);
-
-        /*var indexedIdentifierExpression = OneOf(braceIdentifier, identifier).And(index)
-        .Then<LogicalExpression>(x =>
-            new IndexedIdentifier(x.Item1.ToString() ?? string.Empty, x.Item2)
-            );*/
 
         // list => "(" (expression ("," expression)*)? ")"
         var populatedList =
@@ -658,20 +624,20 @@ public static class LogicalExpressionParser
             .Then<LogicalExpression>(static (ctx, x) =>
             {
                 ExpressionLocation loc = new ParlotExpressionLocation(ctx);
-                return new Function((Identifier) new Identifier(x.Item1.ToString()!).SetLocation(loc), (LogicalExpressionList)x.Item2).SetLocation(loc);
+                return new FunctionCall((Identifier)new Identifier(x.Item1.ToString()!).SetLocation(loc), (LogicalExpressionList)x.Item2).SetLocation(loc);
             });
         var percentFunction = percentChar
             .And(list)
             .Then<LogicalExpression>(static (ctx, x) =>
             {
                 ExpressionLocation loc = new ParlotExpressionLocation(ctx);
-                return new Function((Identifier) new Identifier("%").SetLocation(loc), (LogicalExpressionList)x.Item2).SetLocation(loc);
+                return new FunctionCall((Identifier)new Identifier("%").SetLocation(loc), (LogicalExpressionList)x.Item2).SetLocation(loc);
             });
 
         Parser<LogicalExpression> functionOrResultRef;
 
         List<Parser<LogicalExpression>> funcList = [function];
-        if (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.UseResultReference))
+        if (extOptions?.Flags.HasFlag(AdvExpressionOptions.UseResultReference) == true)
             funcList.Add(resultReference);
         if (calculatePercent)
             funcList.Add(percentFunction);
@@ -681,6 +647,9 @@ public static class LogicalExpressionParser
                 .Then<LogicalExpression>(True);
         var booleanFalse = Terms.Text("false", true)
             .Then<LogicalExpression>(False);
+
+        var theNull = Terms.Text("null", true)
+            .Then<LogicalExpression>(Null);
 
         var singleQuotesStringValue = Terms.String(quotes: StringLiteralQuotes.Single, returnDecoded: false)
                 .Then<LogicalExpression>(static (ctx, value) =>
@@ -714,11 +683,11 @@ public static class LogicalExpressionParser
 
         var rawStringValue = atChar.SkipAnd(Terms.Char('"')).SkipAnd(Literals.NoneOf("\"")).AndSkip(Terms.Char('"'))
             .Then<LogicalExpression>(static (ctx, value) =>
-                new ValueExpression(value.ToString()!, StringKind.RawDoubleQuote).SetLocation(new ParlotExpressionLocation(ctx)));
+                new ValueExpression(value.ToString(), StringKind.RawDoubleQuote).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var backQuoteStringValue = Terms.Char('`').SkipAnd(Literals.NoneOf("`")).AndSkip(Terms.Char('`'))
             .Then<LogicalExpression>(static (ctx, value) =>
-                new ValueExpression(value.ToString()!, StringKind.BackQuote).SetLocation(new ParlotExpressionLocation(ctx)));
+                new ValueExpression(value.ToString(), StringKind.BackQuote).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var stringValue = OneOf(singleQuotesStringValue, doubleQuotesStringValue, rawStringValue, backQuoteStringValue);
 
@@ -879,15 +848,15 @@ public static class LogicalExpressionParser
             {
                 if (!string.IsNullOrEmpty(dateTimeFormat.AMDesignator))
                 {
-                    amTimeFirstChar = dateTimeFormat.AMDesignator.Substring(0, 1);
-                    amTimeFirstCharLower = dateTimeFormat.AMDesignator.Substring(0, 1).ToLower();
+                    amTimeFirstChar = dateTimeFormat.AMDesignator[..1];
+                    amTimeFirstCharLower = dateTimeFormat.AMDesignator[..1].ToLower();
 
                     amTimeIndicatorFirstChar = Terms.Text(amTimeFirstChar, true);
                 }
                 if (!string.IsNullOrEmpty(dateTimeFormat.PMDesignator))
                 {
-                    pmTimeFirstChar = dateTimeFormat.PMDesignator.Substring(0, 1);
-                    pmTimeFirstCharLower = dateTimeFormat.PMDesignator.Substring(0, 1).ToLower();
+                    pmTimeFirstChar = dateTimeFormat.PMDesignator[..1];
+                    pmTimeFirstCharLower = dateTimeFormat.PMDesignator[..1].ToLower();
                     pmTimeIndicatorFirstChar = Terms.Text(pmTimeFirstChar, true);
                 }
 
@@ -1388,7 +1357,7 @@ public static class LogicalExpressionParser
 
             Parser<LogicalExpression>? humaneTimeSpan = null;
 
-            if (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.ParseHumanePeriods))
+            if (extOptions?.Flags.HasFlag(AdvExpressionOptions.ParseHumanePeriods) == true)
             {
                 Parser<string>? alphaText = Terms.Pattern(c => char.IsLetter(c) || c == '\'').Then<string>(x => x.ToString() ?? string.Empty);
 
@@ -1425,60 +1394,60 @@ public static class LogicalExpressionParser
                         if (extOptions.PeriodYearIndicators.Contains(indicator))
                         {
                             if (yearValue != 0)
-                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2));
                             yearValue = elemValue;
                         }
                         else
                         if (extOptions.PeriodMonthIndicators.Contains(indicator))
                         {
                             if (monthValue != 0)
-                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2));
                             monthValue = elemValue;
                         }
                         else
                         if (extOptions.PeriodWeekIndicators.Contains(indicator))
                         {
                             if (weekValue != 0)
-                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2));
                             weekValue = elemValue;
                         }
                         else
                         if (extOptions.PeriodDayIndicators.Contains(indicator))
                         {
                             if (dayValue != 0)
-                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2));
                             dayValue = elemValue;
                         }
                         else
                         if (extOptions.PeriodHourIndicators.Contains(indicator))
                         {
                             if (hourValue != 0)
-                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2));
                             hourValue = elemValue;
                         }
                         else
                         if (extOptions.PeriodMinuteIndicators.Contains(indicator))
                         {
                             if (minuteValue != 0)
-                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2));
                             minuteValue = elemValue;
                         }
                         else
                         if (extOptions.PeriodSecondIndicators.Contains(indicator))
                         {
                             if (secondValue != 0)
-                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2));
                             secondValue = elemValue;
                         }
                         else
                         if (extOptions.PeriodMSecIndicators.Contains(indicator))
                         {
                             if (msecValue != 0)
-                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2.ToString()));
+                                throw new FormatException(string.Format(errDuplicatePeriodIndicator, entry.Item2));
                             msecValue = elemValue;
                         }
                         else
-                            throw new FormatException(string.Format(errUnrecognizedPeriodIndicator, entry.Item2.ToString()));
+                            throw new FormatException(string.Format(errUnrecognizedPeriodIndicator, entry.Item2));
                     }
 
                     if (string.IsNullOrEmpty(prefix) && string.IsNullOrEmpty(suffix))
@@ -1631,7 +1600,7 @@ public static class LogicalExpressionParser
 
         // primary => GUID | Percent | NUMBER | identifier | DateTime | string | resultReference | function | boolean | groupExpression | identifier | list ;
 
-        List<Parser<LogicalExpression>> enabledParsers = new List<Parser<LogicalExpression>>();
+        List<Parser<LogicalExpression>> enabledParsers = [];
 
         if (guid != null)
             enabledParsers.Add(guid);
@@ -1735,7 +1704,7 @@ public static class LogicalExpressionParser
 
         Parser<LogicalExpression> factorialOrPercent;
 
-        if (extOptions != null && extOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent))
+        if (extOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true)
         {
             Parser<LogicalExpression>? numberPercent = factorial.And(ZeroOrOne(percentChar, '\0'))
                 .Then<LogicalExpression>(static (ctx, x) =>
@@ -1748,10 +1717,7 @@ public static class LogicalExpressionParser
                     return new PercentExpression(x.Item1).SetLocation(new ParlotExpressionLocation(ctx));
                 });
             Parser<LogicalExpression>? numberPercent2 = percentChar.And(factorial)
-                .Then<LogicalExpression>(static (ctx, x) =>
-                {
-                    return new PercentExpression(x.Item2).SetLocation(new ParlotExpressionLocation(ctx));
-                });
+                .Then<LogicalExpression>(static (ctx, x) => new PercentExpression(x.Item2).SetLocation(new ParlotExpressionLocation(ctx)));
             factorialOrPercent = OneOf(numberPercent, numberPercent2);
         }
         else
@@ -1767,11 +1733,9 @@ public static class LogicalExpressionParser
                 switch (x.Item2.Count)
                 {
                     case 0:
-                        result = x.Item1;
-                        break;
+                        return x.Item1;
                     case 1:
-                        result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, x.Item2[0].Item2).SetLocation(new ParlotExpressionLocation(ctx));
-                        break;
+                        return new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, x.Item2[0].Item2).SetLocation(new ParlotExpressionLocation(ctx));
                     default:
                     {
                         for (int i = x.Item2.Count - 1; i > 0; i--)
@@ -1780,12 +1744,9 @@ public static class LogicalExpressionParser
                                 x.Item2[i].Item2).SetLocation(new ParlotExpressionLocation(ctx));
                         }
 
-                        result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, result).SetLocation(new ParlotExpressionLocation(ctx));
-                        break;
+                        return new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, result).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
-
-                return result;
             });
 
         // ( "-" | "!" | "not" | "~" | root2 | root3 | root4 ) factorial | exponential | primary;
@@ -1794,6 +1755,7 @@ public static class LogicalExpressionParser
             (not, static (ctx, value) => new UnaryExpression(UnaryExpressionType.Not, value).SetLocation(new ParlotExpressionLocation(ctx))),
             (minus, static (ctx, value)  => new UnaryExpression(UnaryExpressionType.Negate, value).SetLocation(new ParlotExpressionLocation(ctx))),
             (bitwiseNot, static (ctx, value) => new UnaryExpression(UnaryExpressionType.BitwiseNot, value).SetLocation(new ParlotExpressionLocation(ctx))),
+            (returnParser, static (ctx, value) => new UnaryExpression(UnaryExpressionType.Return, value).SetLocation(new ParlotExpressionLocation(ctx))),
         ];
         if (root2 != null)
             unaryOps.Add((root2, static (ctx, value) => new UnaryExpression(UnaryExpressionType.SqRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
@@ -1897,7 +1859,7 @@ public static class LogicalExpressionParser
         if (options.HasFlag(ExpressionOptions.UseLoops))
         {
             var whileLoop = Terms.Text("while", caseInsensitive: true).SkipAnd(Terms.Text("(")).SkipAnd(expressionOrBracedStatementSequence).AndSkip(Terms.Text(")")).And(expressionOrBracedStatementSequence)
-                .Then<LogicalExpression>(static (ctx, x) =>
+                .Then<LogicalExpression>(static (_, x) =>
                     new BinaryExpression(BinaryExpressionType.WhileLoop, x.Item1, x.Item2)
                 );
             statements.Add(whileLoop);
@@ -1906,12 +1868,73 @@ public static class LogicalExpressionParser
         if (options.HasFlag(ExpressionOptions.UseIfStatement))
         {
             var ifStatement = Terms.Text("if", caseInsensitive: true).SkipAnd(Terms.Text("(")).SkipAnd(expressionOrBracedStatementSequence).AndSkip(Terms.Text(")")).And(expressionOrBracedStatementSequence).And(ZeroOrOne(Terms.Text("else", caseInsensitive: true).SkipAnd(expressionOrBracedStatementSequence)))
-                    .Then<LogicalExpression>(static (ctx, x) =>
-                        new IfStatementExpression(x.Item1, x.Item2, x.Item3 is null ? new ValueExpression() : x.Item3)
+                    .Then<LogicalExpression>(static (_, x) =>
+                        new IfStatementExpression(x.Item1, x.Item2, (LogicalExpression?)x.Item3 ?? new ValueExpression())
                     );
 
             statements.Add(ifStatement);
         }
+
+        enabledParsers.Clear();
+        if (guid != null)
+            enabledParsers.Add(guid);
+        enabledParsers.Add(hexOctBinNumber);
+        if (currency != null)
+            enabledParsers.Add(currency);
+        enabledParsers.Add(intNumber);
+        enabledParsers.Add(longNumber);
+        if (bigIntNumber != null)
+            enabledParsers.Add(bigIntNumber);
+        enabledParsers.Add(decimalOrDoubleNumber);
+        enabledParsers.Add(booleanTrue);
+        enabledParsers.Add(booleanFalse);
+        enabledParsers.Add(theNull);
+        if (dateTime != null) // dateTime will be initialized unless options.HasFlag(ExpressionOptions.DontParseDates)
+            enabledParsers.Add(dateTime);
+        enabledParsers.Add(stringValue);
+
+        var paramName = letterIdentifier.And(ZeroOrOne(Terms.Char('=').SkipAnd(OneOf(enabledParsers.ToArray())))).Then<FunctionParameter>(static x => new FunctionParameter(x.Item1.ToString()!, x.Item2 != null, x.Item2));
+
+        var populatedParamList =
+            Between(openParen, Separated(comma.Or(semicolon), paramName),
+                    closeParen.ElseError("Parenthesis not closed."));
+
+        Parser<IReadOnlyList<FunctionParameter>>? emptyParamList = openParen.AndSkip(closeParen).Then<IReadOnlyList<FunctionParameter>>(static _ => []);
+
+        var paramList = OneOf(emptyParamList, populatedParamList);
+
+        Parser<LogicalExpression> funcBodyExpression = Terms.Text("=>").SkipAnd(expression)
+            .Then<LogicalExpression>(static (ctx, x) => x.SetLocation(new ParlotExpressionLocation(ctx)));
+
+        Parser<LogicalExpression> functionDecl = ZeroOrOne(comment).AndSkip(Terms.Text("fn")).And(letterIdentifier).And(paramList).And(OneOf(bracedExpressionOrStatementSequence, funcBodyExpression))
+             .Then<LogicalExpression>(static (ctx, x) =>
+             {
+                 Function function = new(x.Item2.ToString()!, x.Item4)
+                 {
+                     Description = x.Item1.ToString()
+                 };
+                 bool optionalFound = false;
+                 int mandatoryParams = 0;
+                 StringComparison paramNameCompareRule = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                 foreach (var param in x.Item3)
+                 {
+                     if (param.IsOptional)
+                         optionalFound = true;
+                     else
+                     if (optionalFound)
+                         throw new NCalcParserException($"In the declaration of the function '{function.Name}', optional parameters may not be declared ahead of required ones", ctx.Scanner.Cursor.Position);
+                     else
+                         mandatoryParams++;
+
+                     if (function.Parameters.Any((x) => x.Name.Equals(param.Name, paramNameCompareRule)))
+                         throw new NCalcParserException($"Duplicate parameter name '{param.Name}' in the declaration of the function '{function.Name}'", ctx.Scanner.Cursor.Position);
+
+                     function.Parameters.Add(param);
+                     function.MandatoryParamCount = mandatoryParams;
+                 }
+                 ((LogicalExpressionParserContext)ctx).UserFunctions.Add(function.Name, function);
+                 return new FunctionExpression(function);
+             }).Named("FunctionDeclaration");
 
         statements.Add(operatorSequence);
 
@@ -1924,50 +1947,22 @@ public static class LogicalExpressionParser
             var assignment = OneOf(indexedAccess, identifierExpression).And(OneOf(assignmentOperator, plusAssign, minusAssign, multiplyAssign, divAssign, orAssign, xorAssign, andAssign)).And(expressionOrBracedStatementSequence)
             .Then<LogicalExpression>(static (ctx, x) =>
                 {
-                    LogicalExpression result = null!;
-                    BinaryExpressionType expressionType;
-                    switch (x.Item2)
+                    var expressionType = x.Item2 switch
                     {
-                        case "+=":
-                            expressionType = BinaryExpressionType.PlusAssignment;
-                            break;
-                        case "-=":
-                            expressionType = BinaryExpressionType.MinusAssignment;
-                            break;
-                        case "\u00D7=":
-                        case "\u2219=":
-                        case "*=":
-                            expressionType = BinaryExpressionType.MultiplyAssignment;
-                            break;
-                        case "/=":
-                        case "\u00F7=":
-                            expressionType = BinaryExpressionType.DivAssignment;
-                            break;
-                        case "&=":
-                            expressionType = BinaryExpressionType.AndAssignment;
-                            break;
-                        case "|=":
-                            expressionType = BinaryExpressionType.OrAssignment;
-                            break;
-                        case "^=":
-                            expressionType = BinaryExpressionType.XOrAssignment;
-                            break;
-                        default:
-                            expressionType = BinaryExpressionType.Assignment;
-                            break;
-                    }
+                        "+=" => BinaryExpressionType.PlusAssignment,
+                        "-=" => BinaryExpressionType.MinusAssignment,
+                        "\u00D7=" or "\u2219=" or "*=" => BinaryExpressionType.MultiplyAssignment,
+                        "/=" or "\u00F7=" => BinaryExpressionType.DivAssignment,
+                        "&=" => BinaryExpressionType.AndAssignment,
+                        "|=" => BinaryExpressionType.OrAssignment,
+                        "^=" => BinaryExpressionType.XOrAssignment,
+                        _ => BinaryExpressionType.Assignment,
+                    };
                     ExpressionLocation loc = new ParlotExpressionLocation(ctx);
-                    result = (BinaryExpression)new BinaryExpression(expressionType, x.Item1, x.Item3/*[0]*/).SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
-                    /*if (x.Item3.Count > 1)
-                    {
-                        for (int i = 1; i < x.Item3.Count; i++)
-                        {
-                            result = (BinaryExpression)(new BinaryExpression(expressionType, result, x.Item3[i])).SetOptions(options, cultureInfo, extOptions).SetLocation(new ParlotExpressionLocation(ctx));
-                        }
-                    }*/
-                    return result;
+
+                    return (BinaryExpression)new BinaryExpression(expressionType, x.Item1, x.Item3/*[0]*/).SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
                 }
-            );
+            ).Named("Assignment");
 
             statements.Insert(0, assignment);
         }
@@ -1980,33 +1975,30 @@ public static class LogicalExpressionParser
 
         if (options.HasFlag(ExpressionOptions.UseStatementSequences))
         {
+            statements.Insert(0, functionDecl);
+            var expressionOrAssignmentOrFunctionDecl = OneOf(statements.ToArray());
             var separator = Terms.Pattern((c) => c == ';');
-            var statementSequence = expressionOrAssignment.And(ZeroOrMany(separator.SkipAnd(expressionOrAssignment))).And(ZeroOrMany(separator));
+            var statementSequence = expressionOrAssignmentOrFunctionDecl.And(ZeroOrMany(separator.SkipAnd(expressionOrAssignmentOrFunctionDecl))).And(ZeroOrMany(separator));
             var statementSequenceParser = statementSequence
                 .Then(static (ctx, x) =>
                 {
+                    StatementSequence seq;
                     LogicalExpression result = null!;
                     ExpressionLocation loc = new ParlotExpressionLocation(ctx);
-                    switch (x.Item2.Count)
+                    if (x.Item2.Count == 0)
+                        result = x.Item1;
+                    else
                     {
-                        case 0:
-                            result = x.Item1;
-                            break;
-                        case 1:
-                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
-                            break;
-                        default:
-                        {
-                            result = new BinaryExpression(BinaryExpressionType.StatementSequence, x.Item1, x.Item2[0]).SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
-                            for (int i = 1; i < x.Item2.Count; i++)
-                            {
-                                result = new BinaryExpression(BinaryExpressionType.StatementSequence, result, x.Item2[i]).SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
-                            }
-                            break;
-                        }
+                        seq = new(x.Item3.Count > 0);
+                        seq.Add(x.Item1);
+                        for (int i = 0; i < x.Item2.Count; i++)
+                            seq.Add(x.Item2[i]);
+
+                        seq.SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
+                        result = seq;
                     }
                     return result;
-                });
+                }).Named("StatementSequence");
 
             topLevel = statementSequenceParser;
         }
@@ -2030,7 +2022,7 @@ public static class LogicalExpressionParser
 
     private static BigDecimal? TryParseDecimal((LogicalExpression, TextSpan, LogicalExpression, TextSpan, LogicalExpression) val, bool useUnderscores)
     {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new();
         if (val.Item1 != null)
             sb.Append(val.Item1.ToString());
         else
@@ -2057,8 +2049,7 @@ public static class LogicalExpressionParser
             sb.Append('E');
             sb.Append(val.Item5.ToString()); // fractional part
         }
-        BigDecimal result;
-        if (BigDecimal.TryParse(sb.ToString(), out result))
+        if (BigDecimal.TryParse(sb.ToString(), out BigDecimal result))
             return result;
         else
             return null;
@@ -2071,7 +2062,7 @@ public static class LogicalExpressionParser
             return parser;
         }
 
-        var newParser = CreateExpressionParser(cultureInfo, context.Options, context.AdvancedOptions, context);
+        var newParser = CreateExpressionParser(cultureInfo, context.Options, context.AdvancedOptions);
         if (context.Options == ExpressionOptions.None)
         {
             Parsers.TryAdd(cultureInfo, newParser);
@@ -2096,7 +2087,7 @@ public static class LogicalExpressionParser
     {
         Parser<LogicalExpression> parserToUse;
         if (context.AdvancedOptions is not null)
-            parserToUse = CreateExpressionParser(context.CultureInfo, context.Options, context.AdvancedOptions, context);
+            parserToUse = CreateExpressionParser(context.CultureInfo, context.Options, context.AdvancedOptions);
         else
             parserToUse = GetOrCreateExpressionParser(context.CultureInfo, context);
 

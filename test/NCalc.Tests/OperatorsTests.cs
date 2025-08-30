@@ -12,7 +12,7 @@ public class OperatorsTests
     {
         var logicalExpression = LogicalExpressionFactory.Create(expression);
         var expr = new Expression(logicalExpression);
-        Assert.False((bool)expr.Evaluate()!);
+        Assert.False((bool)expr.Evaluate(TestContext.Current.CancellationToken)!);
     }
 
     [Theory]
@@ -108,6 +108,6 @@ public class OperatorsTests
         var e = new Expression(expression);
         e.Parameters["a"] = 0;
 
-        Assert.Equal(expected, (bool)e.Evaluate()!);
+        Assert.Equal(expected, (bool)e.Evaluate(TestContext.Current.CancellationToken)!);
     }
 }

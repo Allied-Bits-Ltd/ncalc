@@ -65,7 +65,7 @@ public class ExceptionsTests
 
         Assert.Throws<InvalidOperationException>(() =>
         {
-            e.Evaluate();
+            e.Evaluate(TestContext.Current.CancellationToken);
         });
     }
 
@@ -97,7 +97,7 @@ public class ExceptionsTests
         var expression = new Expression("42a");
         try
         {
-            expression.Evaluate();
+            expression.Evaluate(TestContext.Current.CancellationToken);
             Assert.Throws<NCalcParserException>(() => true);
         }
         catch (NCalcParserException ex)
@@ -110,7 +110,7 @@ public class ExceptionsTests
     public void Should_Throw_Function_Not_Found()
     {
         var expression = new Expression("drop_database()");
-        var exception = Assert.Throws<NCalcFunctionNotFoundException>(() => expression.Evaluate());
+        var exception = Assert.Throws<NCalcFunctionNotFoundException>(() => expression.Evaluate(TestContext.Current.CancellationToken));
         Assert.Equal("drop_database", exception.FunctionName);
     }
 
@@ -118,7 +118,7 @@ public class ExceptionsTests
     public void Should_Throw_Parameter_Not_Found()
     {
         var expression = new Expression("{Name} == 'Spinella'");
-        var exception = Assert.Throws<NCalcParameterNotDefinedException>(() => expression.Evaluate());
+        var exception = Assert.Throws<NCalcParameterNotDefinedException>(() => expression.Evaluate(TestContext.Current.CancellationToken));
         Assert.Equal("Name", exception.ParameterName);
     }
 
@@ -129,14 +129,14 @@ public class ExceptionsTests
     public void Should_Throw_Issue_195(string expressionString)
     {
         var expression = new Expression(expressionString);
-        Assert.Throws<NCalcParserException>(() => expression.Evaluate());
+        Assert.Throws<NCalcParserException>(() => expression.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public void Should_Throw_Issue_208()
     {
         var expression = new Expression("1.3,4.5");
-        Assert.Throws<NCalcParserException>(() => expression.Evaluate());
+        Assert.Throws<NCalcParserException>(() => expression.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]

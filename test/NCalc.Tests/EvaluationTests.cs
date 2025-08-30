@@ -20,7 +20,7 @@ public class EvaluationTests
     {
         var expression = new Expression(input);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         if (expectedValue is double expectedDouble)
         {
@@ -73,7 +73,7 @@ public class EvaluationTests
             }
         };
 
-        Assert.Equal(true, expression.Evaluate());
+        Assert.Equal(true, expression.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class EvaluationTests
         surface.Parameters["l"] = 1;
         surface.Parameters["L"] = 2;
 
-        Assert.Equal(6, volume.Evaluate());
+        Assert.Equal(6, volume.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -185,7 +185,7 @@ public class EvaluationTests
         var volume = new Expression("{h}");
         volume.Parameters["h"] = 3;
 
-        Assert.Equal(3, volume.Evaluate());
+        Assert.Equal(3, volume.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public class EvaluationTests
         surface.Parameters["l"] = 1;
         surface.Parameters["L"] = 2;
 
-        Assert.Equal(6, volume.Evaluate());
+        Assert.Equal(6, volume.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -206,7 +206,7 @@ public class EvaluationTests
     public void ShouldAllowOperatorsWithNulls(string expression, object expected)
     {
         var e = new Expression(expression, ExpressionOptions.AllowNullParameter);
-        var result = e.Evaluate();
+        var result = e.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expected, result);
     }
 
@@ -221,7 +221,7 @@ public class EvaluationTests
             }
         };
 
-        var result = (IList<object>?)e.Evaluate();
+        var result = (IList<object>?)e.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.Equal(0, result[0]);
@@ -242,7 +242,7 @@ public class EvaluationTests
             }
         };
 
-        var result = (IList<object>?)e.Evaluate();
+        var result = (IList<object>?)e.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.Equal(0.51, result[0]);

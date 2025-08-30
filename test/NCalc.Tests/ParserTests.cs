@@ -15,7 +15,7 @@ public class ParserTests
     public void ShouldIgnoreWhitespacesIssue222(string formula, object expectedValue)
     {
         var expression = new Expression(formula, CultureInfo.InvariantCulture);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, result);
     }
@@ -28,7 +28,7 @@ public class ParserTests
     public void NotBehaviorIssue226(string formula, object expectedValue)
     {
         var expression = new Expression(formula, CultureInfo.InvariantCulture);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, result);
     }
@@ -43,7 +43,7 @@ public class ParserTests
                                """;
 
         var expression = new Expression(formula, CultureInfo.InvariantCulture);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(5, result);
     }
@@ -65,7 +65,7 @@ public class ParserTests
     {
         const string formula = "'c'";
 
-        var logicalExpression = LogicalExpressionFactory.Create(formula, ExpressionOptions.AllowCharValues);
+        var logicalExpression = LogicalExpressionFactory.Create(formula, null, ExpressionOptions.AllowCharValues);
 
         Assert.IsType<ValueExpression>(logicalExpression);
 
@@ -85,7 +85,7 @@ public class ParserTests
 
         var expression = new Expression(logicalExpression);
 
-        Assert.Equal(expectedResult, expression.Evaluate());
+        Assert.Equal(expectedResult, expression.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [InlineData("(1,2,3,4,5)", 5)]
@@ -127,7 +127,7 @@ public class ParserTests
     {
         var logicalExpression = LogicalExpressionFactory.Create("getUser(78b1941f4e7941c9bef656fad7326538)");
 
-        if (logicalExpression is Function function)
+        if (logicalExpression is FunctionCall function)
         {
             Assert.True(function.Parameters[0] is ValueExpression { Value: Guid });
         }
@@ -183,7 +183,7 @@ public class ParserTests
         {
             var expressionOptions = ExpressionOptions.DecimalAsDefault | ExpressionOptions.NoCache;
             var expression = new Expression("0.3333333333333333333333 + 1.6666666666666666666667", expressionOptions, CultureInfo.InvariantCulture);
-            var result = expression.Evaluate();
+            var result = expression.Evaluate(TestContext.Current.CancellationToken);
         }
         catch
         {

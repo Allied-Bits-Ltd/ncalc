@@ -1,3 +1,4 @@
+using NCalc.Domain;
 using Parlot;
 using Parlot.Fluent;
 
@@ -8,6 +9,8 @@ public sealed class LogicalExpressionParserContext : ParseContext
     private AdvancedExpressionOptions? _advancedOptions;
 
     public ExpressionOptions Options { get; }
+
+    public IDictionary<string, Function> UserFunctions { get; } = new Dictionary<string, Function>();
 
     public AdvancedExpressionOptions? AdvancedOptions { get => _advancedOptions;
         internal set

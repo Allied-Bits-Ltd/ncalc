@@ -52,7 +52,7 @@ public sealed class ParameterExtractionVisitor : ILogicalExpressionVisitor<List<
         return leftParameters.Distinct().ToList();
     }
 
-    public List<string> Visit(Function function, CancellationToken cancellationToken = default)
+    public List<string> Visit(FunctionCall function, CancellationToken cancellationToken = default)
     {
         var parameters = new List<string>();
 
@@ -67,4 +67,27 @@ public sealed class ParameterExtractionVisitor : ILogicalExpressionVisitor<List<
     public List<string> Visit(ValueExpression expression, CancellationToken cancellationToken = default) => [];
 
     public List<string> Visit(ExpressionGroup group, CancellationToken cancellationToken = default) => group.Expression.Accept(this, cancellationToken);
+
+    public List<string> Visit(FunctionExpression expression, CancellationToken cancellationToken = default) => expression.Function.Body.Accept(this, cancellationToken);
+
+    public List<string> Visit(StatementSequence seq, CancellationToken cancellationToken = default)
+    {
+        var parameters = new List<string>();
+        foreach (var value in seq)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (value is Identifier identifier)
+            {
+                if (!parameters.Contains(identifier.Name))
+                {
+                    parameters.Add(identifier.Name);
+                }
+            }
+            else
+            {
+                parameters.AddRange(value.Accept(this, cancellationToken));
+            }
+        }
+        return parameters;
+    }
 }

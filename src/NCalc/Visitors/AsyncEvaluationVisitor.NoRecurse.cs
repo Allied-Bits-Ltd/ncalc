@@ -49,8 +49,6 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual ValueTask<object?> Visit(TernaryExpression expression, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
     {
-        object? value;
-
         // Request the value of the condition
         if (!ExpressionEvaluated(task, 0, expression.LeftExpression))
 #if NET8_0_OR_GREATER
@@ -62,7 +60,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         // Request the value of the middle or right expression
         if (task.ChildStates.Count == 1)
         {
-            if (!TryGetValueOrNull(task.ChildStates[0].Value, out value))
+            if (!TryGetValueOrNull(task.ChildStates[0].Value, out object? value))
 #if NET8_0_OR_GREATER
                 return ValueTask.FromResult((object?)null);
 #else
@@ -92,26 +90,13 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(BinaryExpression expression, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
     {
-        var handlePercent = context.AdvancedOptions != null && context.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent);
+        var handlePercent = context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true;
 
         object? leftValue = null;
         object? rightValue = null;
 
         switch (expression.Type)
         {
-            case BinaryExpressionType.StatementSequence:
-            {
-                if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
-                    return null;
-
-                if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
-
-                if (handlePercent && rightValue is Percent rValPercent)
-                    rightValue = rValPercent.Value;
-                return SetTaskValue(task, rightValue);
-            }
-
             case BinaryExpressionType.Assignment:
             {
                 if (!ExpressionEvaluated(task, 0, expression.RightExpression))
@@ -851,7 +836,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             throw new NCalcParameterIndexException($"The index range [{lowerBound}..{upperBound}] goes out out of the list bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
 
                         if (upperBound == lowerBound)
-                            return SetTaskValue(task, new object?[0]);
+                            return SetTaskValue(task, Array.Empty<object?>());
 
                         object?[] resultArr = new object?[upperBound - lowerBound];
                         for (int i = 0; i < resultArr.Length; i++)
@@ -966,8 +951,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             return new ValueTask<object?>((object?)null);
 #endif
 
-        object? result = null;
-        if (!TryGetValueOrNull(task.ChildStates[0].Value, out result))
+        if (!TryGetValueOrNull(task.ChildStates[0].Value, out object? result))
         {
             SetTaskValue(task, null);
 #if NET8_0_OR_GREATER
@@ -995,8 +979,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             return new ValueTask<object?>((object?)null);
 #endif
 
-        object? result = null;
-        if (!TryGetValueOrNull(task.ChildStates[0].Value, out result))
+        if (!TryGetValueOrNull(task.ChildStates[0].Value, out object? result))
         {
             SetTaskValue(task, null);
 #if NET8_0_OR_GREATER
@@ -1024,7 +1007,17 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             SetTaskValue(task, expression.Value));
     }
 
-    public virtual async ValueTask<object?> Visit(Function function, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
+    public virtual ValueTask<object?> Visit(FunctionExpression expression, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
+    {
+#if NET8_0_OR_GREATER
+        return ValueTask.FromResult(
+#else
+        return new ValueTask<object?>(
+#endif
+            SetTaskValue(task, null));
+    }
+
+    public virtual async ValueTask<object?> Visit(FunctionCall function, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
     {
         return SetTaskValue(task, await Visit(function, cancellationToken).ConfigureAwait(false));
     }
@@ -1088,5 +1081,51 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         return new ValueTask<object?>(
 #endif
             SetTaskValue(task, task.ChildStates[0].Value));
+    }
+
+    public virtual ValueTask<object?> Visit(StatementSequence seq, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
+    {
+        object? result = null;
+
+        if (seq.Count == 0)
+#if NET8_0_OR_GREATER
+            return ValueTask.FromResult(
+#else
+            return new ValueTask<object?>(
+#endif
+                SetTaskValue(task, null));
+
+        if (task.ChildStates.Count < seq.Count)
+        {
+            foreach (LogicalExpression expression in seq)
+                if (task.ChildStates.Any(e => e.Expression == expression) == false)
+                    task.ChildStates.Add(new ExpressionState<ValueTask<object?>>(expression));
+#if NET8_0_OR_GREATER
+            return ValueTask.FromResult((object?)null);
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
+        }
+        foreach (var state in task.ChildStates)
+        {
+            if (!state.ValueSet)
+#if NET8_0_OR_GREATER
+              return ValueTask.FromResult((object?)null);
+#else
+                return new ValueTask<object?>((object?)null);
+#endif
+        }
+
+        result = task.ChildStates[^1].Value;
+
+        /*if ((context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true) && result is Percent valPercent)
+            result = valPercent.Value;*/
+
+#if NET8_0_OR_GREATER
+        return ValueTask.FromResult(
+#else
+        return new ValueTask<object?>(
+#endif
+            SetTaskValue(task, result));
     }
 }

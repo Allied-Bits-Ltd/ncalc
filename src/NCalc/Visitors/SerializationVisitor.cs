@@ -101,12 +101,11 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             if (expression.Type is BinaryExpressionType.RangeIndex)
                 parensNeeded = !(expression.LeftExpression is Identifier || expression.LeftExpression is ValueExpression) && !(expression.LeftExpression is UnaryExpression unExp && unExp.Type == UnaryExpressionType.FromEnd);
 
-            appendSpace = expression.Type != BinaryExpressionType.IndexAccess && expression.Type != BinaryExpressionType.RangeIndex && expression.Type != BinaryExpressionType.StatementSequence;
+            appendSpace = expression.Type != BinaryExpressionType.IndexAccess && expression.Type != BinaryExpressionType.RangeIndex;
             resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, appendSpace, parensNeeded));
 
             resultBuilder.Append(expression.Type switch
             {
-                BinaryExpressionType.StatementSequence => "; ",
                 BinaryExpressionType.Assignment => context.Options.HasFlag(ExpressionOptions.UseCStyleAssignments) ? "= " : ":= ",
                 BinaryExpressionType.PlusAssignment => "+= ",
                 BinaryExpressionType.MinusAssignment => "-= ",
@@ -127,7 +126,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                 BinaryExpressionType.Less => "< ",
                 BinaryExpressionType.LessOrEqual => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2264 " : "<= ",
                 BinaryExpressionType.Minus => "- ",
-                BinaryExpressionType.Modulo => (context.AdvancedOptions != null && context.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent)) ? "mod " : "% ",
+                BinaryExpressionType.Modulo => (context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true) ? "mod " : "% ",
                 BinaryExpressionType.NotEqual => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u2260 " : "!= ",
                 BinaryExpressionType.Plus => "+ ",
                 BinaryExpressionType.Times => context.Options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations) ? "\u00D7 " : "* ",
@@ -181,6 +180,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             UnaryExpressionType.CbRoot => "\u221b",
 #endif
             UnaryExpressionType.FourthRoot => "\u221c",
+            UnaryExpressionType.Return => "return ",
             _ => string.Empty
         };
 
@@ -224,7 +224,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         };
     }
 
-    public string Visit(Function function, CancellationToken cancellationToken = default)
+    public string Visit(FunctionCall function, CancellationToken cancellationToken = default)
     {
         function.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
@@ -237,7 +237,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
         for (int i = 0; i < function.Parameters.Count; i++)
         {
-            resultBuilder.Append(function.Parameters[i].Accept(this));
+            resultBuilder.Append(function.Parameters[i].Accept(this, cancellationToken));
             if (i < function.Parameters.Count - 1)
             {
                 resultBuilder.Remove(resultBuilder.Length - 1, 1);
@@ -283,6 +283,86 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         return string.Join(group.Expression.Accept(this, cancellationToken).Trim(), "{ ", " }");
     }
 
+    public string Visit(FunctionExpression expression, CancellationToken cancellationToken = default)
+    {
+        StringBuilder resultBuilder = new();
+        Function function = expression.Function;
+        if (!string.IsNullOrEmpty(function.Description))
+        {
+            string desc = function.Description!;
+            if (context.Options.HasFlag(ExpressionOptions.SupportCStyleComments))
+            {
+                resultBuilder.Append("/* ");
+                resultBuilder.Append(desc);
+                resultBuilder.AppendLine(" */");
+            }
+            else
+            if (context.Options.HasFlag(ExpressionOptions.SupportPythonComments))
+            {
+                if (desc.Contains('\n'))
+                {
+                    foreach (var line in desc.Split('\n'))
+                    {
+                        resultBuilder.Append("# ");
+                        resultBuilder.AppendLine(line);
+                    }
+                }
+                else
+                {
+                    resultBuilder.Append("# ");
+                    resultBuilder.AppendLine(desc);
+                }
+            }
+        }
+        resultBuilder.Append("fn (");
+        bool paramAdded = false;
+        foreach (var param in function.Parameters)
+        {
+            if (paramAdded)
+                resultBuilder.Append(", ");
+            else
+                paramAdded = true;
+
+            resultBuilder.Append(param.Name);
+            if (param.IsOptional)
+            {
+                resultBuilder.Append(" = ");
+                resultBuilder.Append(param.DefaultValue?.ToString() ?? "null");
+            }
+        }
+        resultBuilder.Append(')');
+        if (function.Body is ExpressionGroup)
+        {
+            resultBuilder.AppendLine();
+            resultBuilder.Append(function.Body.Accept(this, cancellationToken));
+        }
+        else
+        {
+            resultBuilder.Append(" => ");
+            resultBuilder.Append(function.Body.Accept(this, cancellationToken));
+        }
+        return resultBuilder.ToString();
+    }
+
+    public string Visit(StatementSequence seq, CancellationToken cancellationToken = default)
+    {
+        seq.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
+
+        var resultBuilder = new StringBuilder();
+        for (var i = 0; i < seq.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            resultBuilder.Append(seq[i].Accept(this, cancellationToken).TrimEnd());
+            if (i < seq.Count - 1)
+            {
+                resultBuilder.Append("; ");
+            }
+            else
+                if (seq.EndsWithSeparator)
+                resultBuilder.Append(';');
+        }
+        return resultBuilder.ToString();
+    }
     protected virtual string EncapsulateNoValue(LogicalExpression expression, bool appendSpace = true, bool parensNeeded = false)
     {
         if (expression is ValueExpression valueExpression)

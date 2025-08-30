@@ -51,8 +51,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
-        object? value;
-        if (!TryGetValueOrNull(await expression.LeftExpression.Accept(this, cancellationToken).ConfigureAwait(false), out value))
+        if (!TryGetValueOrNull(await expression.LeftExpression.Accept(this, cancellationToken).ConfigureAwait(false), out object? value))
             return null;
 
         return await (Convert.ToBoolean(value, context.CultureInfo) ? expression.MiddleExpression : expression.RightExpression).Accept(this, cancellationToken).ConfigureAwait(false);
@@ -88,8 +87,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return value;
                 }
 
-                object? staticParam = null;
-                if (!context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out staticParam) || staticParam is null)
+                if (!context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out object? staticParam) || staticParam is null)
                     throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not set and cannot be assigned to by index", binExpr.LeftExpression.Location);
 
                 if (staticParam is string strParam)
@@ -99,7 +97,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         if (strParam.Length <= index)
                             throw new NCalcParameterIndexException(identifierName, $"A character in the '{identifierName}' string cannot be updated by index: the string has the length of {strParam.Length}, while the index is {index}", binExpr.RightExpression.Location);
 
-                        char charValue = '\0';
+                        char charValue;
 
                         if (value is string strValue)
                             charValue = strValue[0];
@@ -156,22 +154,13 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         var right = new Lazy<ValueTask<object?>>(() => EvaluateAsync(expression.RightExpression, cancellationToken),
             LazyThreadSafetyMode.None);
 
-        var handlePercent = context.AdvancedOptions != null && context.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent);
+        var handlePercent = context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true;
 
         object? leftValue = null;
         object? rightValue = null;
 
         switch (expression.Type)
         {
-            case BinaryExpressionType.StatementSequence:
-            {
-                _ = await left.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-                if (handlePercent && rightValue is Percent rValPercent)
-                    rightValue = rValPercent.Value;
-                return rightValue;
-            }
             case BinaryExpressionType.Assignment:
                 if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
                     return null;
@@ -465,23 +454,14 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         if (!noConvertToDouble)
                             leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
 
-                        object? result = MathHelper.DividePercent(leftValue, rightValue, context);
-                        if (result is null)
-                            return null;
-
-                        return result;
+                        return MathHelper.DividePercent(leftValue, rightValue, context);
                     }
                 }
 
                 if (!noConvertToDouble)
                     leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
 
-                {
-                    object? result = MathHelper.Divide(leftValue, rightValue, true, context);
-                    if (result is null)
-                        return null;
-                    return result;
-                }
+                return MathHelper.Divide(leftValue, rightValue, true, context);
             }
             case BinaryExpressionType.IntDivB:
             case BinaryExpressionType.IntDivP:
@@ -625,11 +605,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     {
                         rightValue = rValPercent.Value;
 
-                        object? result = MathHelper.MultiplyPercent(leftValue, rightValue, context);
-                        if (result is null)
-                            return null;
-
-                        return result;
+                        return MathHelper.MultiplyPercent(leftValue, rightValue, context);
                     }
                 }
 
@@ -809,7 +785,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             throw new NCalcParameterIndexException($"The index range [{lowerBound}..{upperBound}] goes out out of the list bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
 
                         if (upperBound == lowerBound)
-                            return new object?[0];
+                            return Array.Empty<object?>();
 
                         object?[] resultArr = new object?[upperBound - lowerBound];
                         for (int i = 0; i < resultArr.Length; i++)
@@ -902,9 +878,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     {
                         if (fc.Type == NCalcFlowControl.FlowControlType.Break)
                             break;
-                        /*else
+                        else
                         if (fc.Type == NCalcFlowControl.FlowControlType.Continue)
-                            continue;*/
+                            continue;
                     }
                 }
                 return result;
@@ -929,9 +905,21 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         return new Percent(result);
     }
 
-    public virtual async ValueTask<object?> Visit(Function function, CancellationToken cancellationToken = default)
+    public virtual async ValueTask<object?> Visit(FunctionCall functionCall, CancellationToken cancellationToken = default)
     {
-        var argsCount = function.Parameters.Count;
+        var argsCount = functionCall.Parameters.Count;
+
+        var functionName = functionCall.Identifier.Name;
+
+        if (context.UserFunctions.Count > 0)
+        {
+            if (context.UserFunctions.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? functionName.ToLowerInvariant() : functionName, out Function? userFunction) && userFunction is not null)
+            {
+                EvaluationHelper.EnsureProperParamNumInFunctionCall(userFunction, functionCall);
+                return await ExecuteUserFunctionCallAsync(userFunction, functionCall, context, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         var args = new AsyncExpression[argsCount];
 
         // Don't call parameters right now, instead let the function do it as needed.
@@ -939,11 +927,10 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         // Evaluating every value could produce unexpected behavior
         for (var i = 0; i < argsCount; i++)
         {
-            args[i] = new AsyncExpression(function.Parameters[i], context);
+            args[i] = new AsyncExpression(functionCall.Parameters[i], context);
         }
 
-        var functionName = function.Identifier.Name;
-        var functionArgs = new AsyncFunctionArgs(function.Identifier.Id, args);
+        var functionArgs = new AsyncFunctionArgs(functionCall.Identifier.Id, args);
 
         await OnEvaluateFunctionAsync(functionName, functionArgs, cancellationToken).ConfigureAwait(false);
 
@@ -954,10 +941,10 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
         if (context.Functions.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? functionName.ToLowerInvariant() : functionName, out var expressionFunction))
         {
-            return await expressionFunction(new AsyncExpressionFunctionData(function.Identifier.Id, args, context), cancellationToken).ConfigureAwait(false);
+            return await expressionFunction(new AsyncExpressionFunctionData(functionCall.Identifier.Id, args, context), cancellationToken).ConfigureAwait(false);
         }
 
-        return await AsyncBuiltInFunctionHelper.EvaluateAsync(functionName, args, context, function.Location, cancellationToken).ConfigureAwait(false);
+        return await AsyncBuiltInFunctionHelper.EvaluateAsync(functionName, args, context, functionCall.Location, cancellationToken).ConfigureAwait(false);
     }
 
     public virtual async ValueTask<object?> Visit(Identifier identifier, CancellationToken cancellationToken = default)
@@ -1041,14 +1028,15 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     }
 
     public virtual ValueTask<object?> Visit(ValueExpression expression, CancellationToken cancellationToken = default) => new(expression.Value);
+    public virtual ValueTask<object?> Visit(FunctionExpression expression, CancellationToken cancellationToken = default) => new((object?)null);
 
     public virtual async ValueTask<object?> Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
         List<object?> result = [];
 
-        foreach (var value in list)
+        foreach (var expr in list)
         {
-            result.Add(await EvaluateAsync(value, cancellationToken).ConfigureAwait(false));
+            result.Add(await EvaluateAsync(expr, cancellationToken).ConfigureAwait(false));
             cancellationToken.ThrowIfCancellationRequested();
         }
 
@@ -1059,6 +1047,20 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     {
         return group.Expression.Accept(this, cancellationToken);
     }
+
+    public virtual async ValueTask<object?> Visit(StatementSequence seq, CancellationToken cancellationToken = default)
+    {
+        object? result = null;
+
+        foreach (var expr in seq)
+        {
+            result = await EvaluateAsync(expr, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        return result;
+    }
+
     protected bool Compare(object? a, object? b, ComparisonType comparisonType)
     {
         if (context.Options.HasFlag(ExpressionOptions.StrictTypeMatching) && a?.GetType() != b?.GetType())
@@ -1094,7 +1096,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     internal async ValueTask<object?> EvaluateNoRecurseAsync(LogicalExpression expression, CancellationToken cancellationToken = default)
     {
         List<ExpressionTask<ValueTask<object?>>> stack = [];
-        ExpressionTask<ValueTask<object?>> root = new ExpressionTask<ValueTask<object?>>(null, new ExpressionState<ValueTask<object?>>(expression));
+        ExpressionTask<ValueTask<object?>> root = new(null, new ExpressionState<ValueTask<object?>>(expression));
         stack.Add(root);
         ExpressionTask<ValueTask<object?>> currentTask;
         while (stack.Count > 0)
@@ -1113,8 +1115,12 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             }
             else
             {
-                foreach (var state in currentTask.ChildStates)
+                ExpressionState<ValueTask<object?>> state;
+                // We add child expressions starting from the end to let different expression types put the child expressions in the order in which those child expressions happen in the evaluated expression,
+                // but the leftmost child must appear at the top of the stack so that it is evaluated first
+                for (int i = currentTask.ChildStates.Count - 1; i >= 0; i--)
                 {
+                    state = currentTask.ChildStates[i];
                     if (!state.ValueSet)
                     {
                         stack.Add(new ExpressionTask<ValueTask<object?>>(currentTask, state));
@@ -1124,5 +1130,108 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         }
 
         return root.State.ValueSet ? root.State.Value : null;
+    }
+
+    internal static async ValueTask<object?> ExecuteUserFunctionCallAsync(Function userFunction, FunctionCall functionCall, AsyncExpressionContext context, CancellationToken cancellationToken = default)
+    {
+        Dictionary<string, ArgumentStateBase> argumentStates = [];
+
+        EvaluationHelper.PopulateArgumentStates(userFunction, functionCall, argumentStates, context, (expression, context) => new AsyncArgumentState(expression, context));
+
+        var expression = new AsyncExpression(userFunction.Body, context.Options, context.CultureInfo)
+        {
+            AdvancedOptions = context.AdvancedOptions
+        };
+
+        bool ignoreCase = context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);
+
+        expression.EvaluateParameterAsync += async (name, args, cancellationToken) =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string paramName = ignoreCase ? name.ToLowerInvariant() : name;
+            if (argumentStates.TryGetValue(paramName, out var state))
+            {
+                args.Result = await ((AsyncArgumentState)state).GetValueAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            if (context.AsyncEvaluateParameterHandler != null)
+                await context.AsyncEvaluateParameterHandler.Invoke(name, args, cancellationToken).ConfigureAwait(false);
+        };
+
+        expression.UpdateParameterAsync +=
+            (name, args, cancellationToken) =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string paramName = ignoreCase ? name.ToLowerInvariant() : name;
+            if (argumentStates.TryGetValue(paramName, out var state))
+            {
+                ((AsyncArgumentState)state).SetValue(args.Value);
+                args.UpdateParameterLists = false;
+            }
+#if NET8_0_OR_GREATER
+            return ValueTask.CompletedTask;
+#else
+            return new ValueTask(Task.CompletedTask);
+#endif
+        };
+
+        expression.EvaluateFunctionAsync += (name, args, cancellationToken) =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (context.AsyncEvaluateFunctionHandler != null)
+                return context.AsyncEvaluateFunctionHandler.Invoke(name, args, cancellationToken);
+            else
+#if NET8_0_OR_GREATER
+                return ValueTask.CompletedTask;
+#else
+                return new ValueTask(Task.CompletedTask);
+#endif
+        };
+
+        expression.MatchStringAsync += (args, cancellationToken) =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (context.AsyncMatchStringHandler != null)
+                return context.AsyncMatchStringHandler.Invoke(args, cancellationToken);
+            else
+#if NET8_0_OR_GREATER
+            return ValueTask.CompletedTask;
+#else
+                return new ValueTask(Task.CompletedTask);
+#endif
+        };
+
+        try
+        {
+            return await expression.EvaluateAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (NCalcFlowControl ex) when (ex.Type == NCalcFlowControl.FlowControlType.Return)
+        {
+            return ex.ReturnValue;
+        }
+    }
+}
+
+internal class AsyncArgumentState(LogicalExpression expression, ExpressionContextBase context) : ArgumentStateBase
+{
+    internal async ValueTask<object?> GetValueAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_valueSet)
+        {
+            var expr = new AsyncExpression(expression, context as AsyncExpressionContext);
+            _value = await expr.EvaluateAsync(cancellationToken).ConfigureAwait(false);
+            _valueSet = true;
+        }
+        return _value;
+    }
+
+    internal void SetValue(object? value)
+    {
+        _value = value;
+        _valueSet = true;
     }
 }

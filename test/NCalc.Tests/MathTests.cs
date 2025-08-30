@@ -256,7 +256,7 @@ public class MathsTests
     public void IncorrectCalculation_NCalcAsync_Issue_4()
     {
         Expression e = new Expression("(1604326026000-1604325747000)/60000");
-        var evalutedResult = e.Evaluate();
+        var evalutedResult = e.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.IsType<double>(evalutedResult);
         Assert.Equal(4.65, (double)evalutedResult, 3);
@@ -291,20 +291,20 @@ public class MathsTests
     {
         var e = new Expression("x/2");
         e.Parameters["x"] = 2F;
-        Assert.IsType<float>(e.Evaluate());
+        Assert.IsType<float>(e.Evaluate(TestContext.Current.CancellationToken));
 
         e = new Expression("x/2");
         e.Parameters["x"] = 2D;
-        Assert.IsType<double>(e.Evaluate());
+        Assert.IsType<double>(e.Evaluate(TestContext.Current.CancellationToken));
 
         e = new Expression("x/2");
         e.Parameters["x"] = 2m;
-        Assert.IsType<decimal>(e.Evaluate());
+        Assert.IsType<decimal>(e.Evaluate(TestContext.Current.CancellationToken));
 
         e = new Expression("a / b * 100");
         e.Parameters["a"] = 20M;
         e.Parameters["b"] = 20M;
-        Assert.Equal(100M, e.Evaluate());
+        Assert.Equal(100M, e.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -313,7 +313,7 @@ public class MathsTests
     public void ShouldHandleDivision(string input, double expected)
     {
         var expression = new Expression(input);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, result);
     }
@@ -324,7 +324,7 @@ public class MathsTests
     public void ShouldHandleDivisionAsInteger(string input, int expected)
     {
         var expression = new Expression(input, ExpressionOptions.ReduceDivResultToInteger);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, result);
     }
@@ -334,7 +334,7 @@ public class MathsTests
     {
         const decimal minValue = decimal.MinValue;
         var expr = new Expression(minValue.ToString(CultureInfo.InvariantCulture), ExpressionOptions.DecimalAsDefault, CultureInfo.InvariantCulture);
-        Assert.Equal(minValue, expr.Evaluate());
+        Assert.Equal(minValue, expr.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -352,7 +352,7 @@ public class MathsTests
         var expression = new Expression(formula, ExpressionOptions.AllowBooleanCalculation);
         expression.Parameters["X1"] = 1;
 
-        Assert.Equal(expectedValue, expression.Evaluate());
+        Assert.Equal(expectedValue, expression.Evaluate(TestContext.Current.CancellationToken));
 
         var lambda = expression.ToLambda<double>();
 
@@ -363,7 +363,7 @@ public class MathsTests
     public void Should_Evaluate_Floor_Of_Double_Max_Value()
     {
         var expr = new Expression($"Floor({double.MaxValue.ToString(CultureInfo.InvariantCulture)})");
-        var res = expr.Evaluate();
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
 #if NET8_0_OR_GREATER
         Assert.Equal(Math.Floor(double.MaxValue), res);
@@ -376,7 +376,7 @@ public class MathsTests
     public void Should_Not_Change_Double_Precision()
     {
         var expr = new Expression("Floor(12e+100)");
-        var res = expr.Evaluate();
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(Math.Floor(12e+100), res);
     }
@@ -389,7 +389,7 @@ public class MathsTests
     public void Should_Correctly_Parse_Floating_Point_Numbers(string formula, object expectedValue)
     {
         var expr = new Expression(formula, CultureInfo.InvariantCulture);
-        var res = expr.Evaluate();
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, res);
     }
@@ -403,7 +403,7 @@ public class MathsTests
     public void Should_Not_Overflow_Bitwise(string formula, object expectedValue)
     {
         var e = new Expression(formula, CultureInfo.InvariantCulture);
-        var res = e.Evaluate();
+        var res = e.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, res);
     }
@@ -418,7 +418,7 @@ public class MathsTests
         e.Parameters["a"] = a;
         e.Parameters["b"] = b;
 
-        Assert.Throws<OverflowException>(() => e.Evaluate());
+        Assert.Throws<OverflowException>(() => e.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -432,7 +432,7 @@ public class MathsTests
         e.Parameters["a"] = a;
         e.Parameters["b"] = b;
 
-        Assert.Throws<OverflowException>(() => e.Evaluate());
+        Assert.Throws<OverflowException>(() => e.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -446,7 +446,7 @@ public class MathsTests
         e.Parameters["a"] = a;
         e.Parameters["b"] = b;
 
-        Assert.Throws<OverflowException>(() => e.Evaluate());
+        Assert.Throws<OverflowException>(() => e.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -464,20 +464,20 @@ public class MathsTests
     public void ShouldHandleMakeList()
     {
         var expression = new Expression("MakeList(1)");
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.True(result is IList);
         Assert.Single((IList)result);
         Assert.Null(((IList)result)[0]);
 
         expression = new Expression("MakeList(2; 'c')", ExpressionOptions.AllowCharValues);
-        result = expression.Evaluate();
+        result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.True(result is IList);
         Assert.Equal(2, ((IList)result).Count);
         Assert.Equal('c', ((IList)result)[0]);
         Assert.Equal('c', ((IList)result)[1]);
 
         expression = new Expression("MakeList(2; \"cc\")");
-        result = expression.Evaluate();
+        result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.True(result is IList);
         Assert.Equal(2, ((IList)result).Count);
         Assert.Equal("cc", ((IList)result)[0]);
@@ -491,19 +491,18 @@ public class MathsTests
     public void ShouldHandleMakeStr()
     {
         var expression = new Expression("MakeStr(5, 32)");
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal("     ", result.ToString());
 
         expression = new Expression("MakeStr(1; 'c')", ExpressionOptions.AllowCharValues);
-        result = expression.Evaluate();
+        result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal("c", result);
 
         expression = new Expression("MakeStr(2; \"ab\")");
-        result = expression.Evaluate();
+        result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal("abab", result);
 
         expression = new Expression("MakeStr(-1; null)");
         Assert.Throws<NCalcEvaluationException>(expression.Evaluate);
     }
-
 }

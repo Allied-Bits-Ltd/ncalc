@@ -6,6 +6,7 @@ using ExtendedNumerics;
 using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Helpers;
+using NCalc.Parser;
 using NCalc.Reflection;
 
 using Linq = System.Linq.Expressions;
@@ -106,7 +107,6 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
         return expression.Type switch
         {
-            BinaryExpressionType.StatementSequence => SkipAndReturn(left, right),
             BinaryExpressionType.Assignment => UpdateParameter<object?>(expression.LeftExpression, right),
 
             BinaryExpressionType.PlusAssignment => UpdateParameter<object?>(expression.LeftExpression, _checked ? WithCommonNumericType(left, right, LinqExpression.AddChecked, BinaryExpressionType.Plus) : WithCommonNumericType(left, right, LinqExpression.Add, BinaryExpressionType.Plus)),
@@ -148,7 +148,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
-        var operand = expression.Expression.Accept(this);
+        var operand = expression.Expression.Accept(this, cancellationToken);
 
         return expression.Type switch
         {
@@ -161,6 +161,8 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 #endif
             UnaryExpressionType.FourthRoot => Frthrt(operand),
             UnaryExpressionType.Positive => operand,
+            UnaryExpressionType.Return => BuildThrowNCalcFlowControl(operand, expression.Location),
+
             _ => throw new ArgumentOutOfRangeException()
         };
     }
@@ -184,7 +186,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         return LinqExpression.Constant(expression.Value);
     }
 
-    public LinqExpression Visit(Function function, CancellationToken cancellationToken = default)
+    public LinqExpression Visit(FunctionCall function, CancellationToken cancellationToken = default)
     {
         var args = new LinqExpression[function.Parameters.Count];
         for (var i = 0; i < function.Parameters.Count; i++)
@@ -348,6 +350,20 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         throw new NotSupportedException("Lists are not supported for Lambda expressions.");
     }
 
+    public LinqExpression Visit(FunctionExpression expression, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+    public LinqExpression Visit(StatementSequence expression, CancellationToken cancellationToken = default)
+    {
+        List<LinqExpression> expressions = [];
+        foreach (LogicalExpression expr in expression)
+        {
+            expressions.Add(expr.Accept(this, cancellationToken));
+        }
+        return SkipAndReturn(expressions);
+    }
+
     private ExtendedMethodInfo? FindMethod(string methodName, LinqExpression[] methodArgs)
     {
         if (_context == null)
@@ -485,6 +501,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         _expressionContext?.UpdateParameterHandler?.Invoke(name, args);
     }
 
+/*
     private LinqExpression SkipAndReturn(LinqExpression left, LinqExpression right)
     {
         // Combine into a block: evaluate both, return right
@@ -492,7 +509,22 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             LinqExpression.Convert(left, typeof(object)), // Evaluate and discard
             right // Result returned
         );
+        return block;
+    }
+*/
+    private LinqExpression SkipAndReturn(IList<LinqExpression> expressions)
+    {
+        // Combine into a block: evaluate all, return last
 
+        List<LinqExpression> convertedExpressions = [];
+        for (int i = 0; i < expressions.Count - 1; i++)
+        {
+            convertedExpressions.Add(LinqExpression.Convert(expressions[i], typeof(object)));
+        }
+        LinqExpression last = expressions[^1];
+        convertedExpressions.Add(last);
+
+        var block = LinqExpression.Block(last.Type, convertedExpressions);
         return block;
     }
 
@@ -1070,5 +1102,28 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
     {
         LinqExpression result = OfPercentAsNumeric(left, right, action, expressionType);
         return WrapWithPercent(result);
+    }
+
+    public static LinqExpression BuildThrowNCalcFlowControl(LinqExpression returnValueExpr, ExpressionLocation location)
+    {
+        if (returnValueExpr is null) throw new ArgumentNullException(nameof(returnValueExpr));
+
+        // Find ctor: NCalcFlowControl(object? returnValue, ExpressionLocation location)
+        var ctor = typeof(NCalcFlowControl).GetConstructor(new[] { typeof(object), typeof(ExpressionLocation) })
+                   ?? throw new InvalidOperationException("Matching constructor not found on NCalcFlowControl.");
+
+        // Coerce/box return value to object
+        var coercedReturn = returnValueExpr.Type == typeof(object)
+            ? returnValueExpr
+            : LinqExpression.Convert(returnValueExpr, typeof(object));
+
+        // Location is a concrete value
+        var locationConst = LinqExpression.Constant(location, typeof(ExpressionLocation));
+
+        // new NCalcFlowControl(returnValue, location)
+        var newException = LinqExpression.New(ctor, coercedReturn, locationConst);
+
+        // throw new NCalcFlowControl(...)
+        return LinqExpression.Throw(newException);
     }
 }

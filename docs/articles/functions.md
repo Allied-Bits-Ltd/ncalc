@@ -1,11 +1,13 @@
 # Functions
 
+NCalc supports built-in functions,  custom functions, handled by the application, and user-defined functions defined right in an expression.
+
 ## Built-in Functions
 
 The framework includes a set of already implemented functions.
 
-| Name                 | Description                                                                                                                                                                                                         | Usage                   | Result |
-|--------------------|---------------------------------------------------------------------------------------------------------------------------------------|----------------------|--------|
+| Name                 | Description                                                                                                                                         | Usage                   | Result |
+|----------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------|--------|
 | Abs                  | Returns the absolute value of a specified number.                                                                                                   | Abs(-1)                 | 1d     |
 | Acos                 | Returns the angle whose cosine is the specified number.                                                                                             | Acos(1)                 | 0d     |
 | Asin                 | Returns the angle whose sine is the specified number.                                                                                               | Asin(0)                 | 0d     |
@@ -38,7 +40,7 @@ The framework includes a set of already implemented functions.
 It also includes other general purpose ones.
 
 | Name      | Description                                                                                          | Usage                                                | Result                                                                         |
-|-----------|------------------------------------------------------------------------------------------------------|------------------------------------------------------|-------------------------------------------------------------------------|
+|-----------|------------------------------------------------------------------------------------------------------|------------------------------------------------------|--------------------------------------------------------------------------------|
 | in        | Returns whether an element is in a set of values.                                                    | in(1 + 1, 1, 2, 3)                                   | true                                                                           |
 | iff       | Returns a value based on a condition.                                                                | iff(3 % 2 = 1, 'value is true', 'value is false')    | 'value is true'                                                                |
 | if        | If is an alias to iff, accessible when the use of If as a statement is disabled.                     | if(3 % 2 = 0, 'value is true')                       | null                                                                           |
@@ -56,8 +58,23 @@ Custom functions are created using the <xref:NCalc.ExpressionFunction> delegate.
 expression.Functions["SecretOperation"] = (args) => {
     return (int)args[0].Evaluate() + (int)args[1].Evaluate();
 };
+```
+
+## User-Defined Functions
+
+A user can define a function right in the expression. Such a function can be called in the other parts of the expression. For user-defined functions to work, include the <xref:NCalc.ExpressionOptions.UseStatementSequences> flag into <xref:NCalc.ExpressionOptions> of an <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression>. The declaration syntax is similar to C# or Rust as shown in the below example:
 
 ```
+// This is a description of a function with all mandatory parameters
+fn sum3(a,b,c) { a + b + c }; sum3(1;2;3) // will return 6
+
+// This is a description of a function with an optional parameter
+fn sum3(a, b = 0, c = 3) => a + b + c; sum3(1;2) // will return 6 too
+```
+
+After an expression is parsed, user-defined functions are available in the <xref:NCalc.Expression.UserFunctions> dictionary. A <xref:NCalc.Domain.Function> object includes a description if it was included in the expression in the form of a comment immediately before the function declaration. 
+
+To return a value from a function, one can use a common `return` keyword followed by the value to return.
 
 ## Using Event Handlers
 You can also use event handlers to handle functions.

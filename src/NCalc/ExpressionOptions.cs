@@ -4,7 +4,7 @@ namespace NCalc;
 /// Options used for both parsing and evaluation of an expression.
 /// </summary>
 [Flags]
-public enum ExpressionOptions
+public enum ExpressionOptions : long
 {
     /// <summary>
     /// Specifies that no options are set.
@@ -170,16 +170,16 @@ public enum ExpressionOptions
     /// When set, while() loop statement is supported.
     /// The safety fuse, a limit of loop iterations, is set via Expression.MaxLoopIterations/AsyncExpression.MaxLoopIterations. The default value is 65536.
     /// </summary>
-    UseLoops = 1 << 32,
+    UseLoops = ((long)1) << 32,
 
     /// <summary>
     /// When set, recognizes the if() statement, and "if" is not used for a function.
     /// When not set, if() is used as an alias to the built-in "iff" function.
     /// </summary>
-    UseIfStatement = 1 << 33,
+    UseIfStatement = ((long)1) << 33,
 
     /// <summary>
     /// When set, the non-recursive evaluator is used. It is slower but enables evaluation of deeply-nested or just very long expressions.
     /// </summary>
-    UseNonRecursiveEvaluator = 1 << 34,
+    UseNonRecursiveEvaluator = ((long)1) << 34,
 }

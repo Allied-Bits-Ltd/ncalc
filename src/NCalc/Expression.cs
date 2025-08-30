@@ -129,6 +129,16 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
     public object? Evaluate()
     {
+        return Evaluate(default);
+    }
+
+    /// <summary>
+    /// Evaluates the logical expression.
+    /// </summary>
+    /// <returns>The result of the evaluation.</returns>
+    /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
+    public object? Evaluate(CancellationToken cancellationToken)
+    {
         if (UseNonRecursiveEvaluator)
             Options |= ExpressionOptions.UseNonRecursiveEvaluator;
 
@@ -150,9 +160,9 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
 
         if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
-            return evaluationVisitor.EvaluateNoRecurse(LogicalExpression);
+            return evaluationVisitor.EvaluateNoRecurse(LogicalExpression, cancellationToken);
         else
-            return LogicalExpression.Accept(evaluationVisitor);
+            return LogicalExpression.Accept(evaluationVisitor, cancellationToken);
     }
 
     private object? IterateParameters()

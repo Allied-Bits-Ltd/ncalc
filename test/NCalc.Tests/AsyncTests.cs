@@ -23,7 +23,7 @@ public class AsyncTests
         expression.Functions["database_operation"] = async (_, cancellationToken) =>
         {
             // My heavy database work.
-            await Task.Delay(1);
+            await Task.Delay(1, cancellationToken);
 
             return "FOO";
         };
@@ -39,7 +39,7 @@ public class AsyncTests
         expression.Parameters["b"] = new AsyncExpression("'eo'");
         expression.DynamicParameters["a"] = async (_, cancellationToken) =>
         {
-            await Task.Delay(1);
+            await Task.Delay(1, cancellationToken);
             return "L";
         };
 
@@ -56,7 +56,7 @@ public class AsyncTests
             if (name == "database_operation")
             {
                 //My heavy database work.
-                await Task.Delay(100);
+                await Task.Delay(100, cancellationToken);
 
                 args.Result = "FOO";
             }
@@ -195,16 +195,16 @@ public class AsyncTests
     }
 
     [Fact]
-    public void ShouldEvaluateSubExpressionsAsync()
+    public async Task ShouldEvaluateSubExpressionsAsync()
     {
-        var volume = new Expression("[surface] * h");
-        var surface = new Expression("[l] * [L]");
+        var volume = new AsyncExpression("[surface] * h");
+        var surface = new AsyncExpression("[l] * [L]");
         volume.Parameters["surface"] = surface;
         volume.Parameters["h"] = 3;
         surface.Parameters["l"] = 1;
         surface.Parameters["L"] = 2;
 
-        Assert.Equal(6, volume.Evaluate());
+        Assert.Equal(6, await volume.EvaluateAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

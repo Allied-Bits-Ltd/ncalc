@@ -104,7 +104,8 @@ public static class EvaluationHelper
         return rightValue switch
         {
             string rightValueString => Contains(leftValue, rightValueString, context),
-            IEnumerable<object?> rightValueEnumerable => Contains(leftValue, rightValueEnumerable, context),
+            IEnumerable<object?> rightValueEnumerableOfObj => Contains(leftValue, rightValueEnumerableOfObj, context),
+            IEnumerable rightValueEnumerable => Contains(leftValue, rightValueEnumerable, context),
             { } rightValueObject => Contains(leftValue, [rightValueObject], context),
             _ => throw new NCalcEvaluationException(
                 "'in' operator right value must implement IEnumerable, be a string or an object.")
@@ -148,6 +149,47 @@ public static class EvaluationHelper
 
         return rightArray.Contains(leftValue,
             noStringTypeCoercion ? EqualityComparer<object?>.Default : StringCoercionComparer.Default);
+    }
+
+    private static bool Contains(object? leftValue, IEnumerable rightValue, ExpressionContextBase context)
+    {
+        // Null rightValue means nothing to iterate
+        if (rightValue == null)
+            return false;
+
+        // Null leftValue means check if collection contains any null
+        if (leftValue == null)
+        {
+            foreach (var item in rightValue)
+            {
+                if (item == null)
+                    return true;
+            }
+            return false;
+        }
+
+        // Cache the runtime type of leftValue once
+        var leftType = leftValue.GetType();
+
+        ComparisonOptions options = context;
+
+        foreach (var item in rightValue)
+        {
+            if (item == null)
+                continue;
+            var rightType = item.GetType();
+            // If the element type matches, Equals is fast and precise
+            if (rightType == leftType)
+            {
+                if (leftValue.Equals(item))
+                    return true;
+            }
+            else
+            if (Compare(leftValue, item, ComparisonType.Equal, options))
+                return true;
+        }
+
+        return false;
     }
 
     public static bool Compare(object? a, object? b, ComparisonType comparisonType, ComparisonOptions options)
@@ -249,9 +291,9 @@ public static class EvaluationHelper
             UnaryExpressionType.Not => !Convert.ToBoolean(result, context.CultureInfo),
             UnaryExpressionType.Negate =>
                 (result is BigDecimal)
-                    ? MathHelper.Subtract((object)(long)0, (BigDecimal) result)
+                    ? MathHelper.Subtract((object)(long)0, (BigDecimal)result)
                     : ((result is BigInteger)
-                        ? MathHelper.TryReduceToUInt64(MathHelper.Subtract((object)(long)0, (BigInteger) result))
+                        ? MathHelper.TryReduceToUInt64(MathHelper.Subtract((object)(long)0, (BigInteger)result))
                         : MathHelper.Subtract(0, result, true, context)),
             UnaryExpressionType.FromEnd => new NCalc.Domain.Index(MathHelper.ConvertToInt(result, context), true),
             UnaryExpressionType.BitwiseNot =>
@@ -262,6 +304,7 @@ public static class EvaluationHelper
 #endif
             UnaryExpressionType.FourthRoot => MathHelper.Fthrt(result, context.CultureInfo),
             UnaryExpressionType.Positive => result,
+            UnaryExpressionType.Return => throw new NCalcFlowControl(result, expression.Location),
             _ => throw new InvalidOperationException("Unknown UnaryExpressionType")
         };
     }
@@ -467,4 +510,49 @@ public static class EvaluationHelper
         // Use ^ and $ to match the start and end of the string
         return Regex.IsMatch(lValue, $"^{regexPattern}$", options);
     }
+
+    internal static void EnsureProperParamNumInFunctionCall(Function userFunction, FunctionCall functionCall)
+    {
+        int argsCount = functionCall.Parameters.Count;
+
+        if (argsCount > userFunction.Parameters.Count)
+        {
+            if (userFunction.MandatoryParamCount < userFunction.Parameters.Count)
+                throw new NCalcEvaluationException($"Too many arguments in a call to '{userFunction.Name}' which expects between {userFunction.MandatoryParamCount} and {userFunction.Parameters.Count} arguments", functionCall.Location);
+            else
+                throw new NCalcEvaluationException($"Too many arguments in a call to '{userFunction.Name}' which expects {userFunction.MandatoryParamCount} arguments", functionCall.Location);
+        }
+        if (argsCount < userFunction.MandatoryParamCount)
+        {
+            if (userFunction.MandatoryParamCount < userFunction.Parameters.Count)
+                throw new NCalcEvaluationException($"Too few arguments in a call to '{userFunction.Name}' which expects between {userFunction.MandatoryParamCount} and {userFunction.Parameters.Count} arguments", functionCall.Location);
+            else
+                throw new NCalcEvaluationException($"Too few arguments in a call to '{userFunction.Name}' which expects {userFunction.MandatoryParamCount} arguments", functionCall.Location);
+        }
+    }
+
+    internal static void PopulateArgumentStates(Function userFunction, FunctionCall functionCall, Dictionary<string, ArgumentStateBase> argumentStates, ExpressionContextBase context, Func<LogicalExpression, ExpressionContextBase, ArgumentStateBase> stateFactory)
+    {
+        ArgumentStateBase? state;
+        string paramName;
+        bool ignoreCase = context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);
+        for (int i = 0; i < userFunction.Parameters.Count; i++)
+        {
+            if (i < functionCall.Parameters.Count)
+                state = stateFactory(functionCall.Parameters[i], context);
+            else
+            if (userFunction.Parameters[i].IsOptional)
+                state = stateFactory(userFunction.Parameters[i].DefaultValue ?? new ValueExpression(), context);
+            else
+                state = stateFactory(new ValueExpression(), context);
+            paramName = ignoreCase ? userFunction.Parameters[i].Name.ToLowerInvariant() : userFunction.Parameters[i].Name;
+            argumentStates.Add(paramName, state);
+        }
+    }
+}
+
+internal class ArgumentStateBase
+{
+    protected object? _value = null;
+    protected bool _valueSet = false;
 }

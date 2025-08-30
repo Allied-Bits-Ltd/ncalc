@@ -498,7 +498,7 @@ public class LambdaTests
                         expression.Parameters["y"] = currentContext.y;
                     }
 
-                    currentContext.ExpressionResult = (double)expression.Evaluate()!;
+                    currentContext.ExpressionResult = (double)expression.Evaluate(TestContext.Current.CancellationToken)!;
                     currentContext.LambdaResult = lambda(currentContext);
 
                     testResults.Add(currentContext);
@@ -551,7 +551,7 @@ public class LambdaTests
                         var expression = new Expression(expressionString);
                         var lambda = expression.ToLambda<double>();
 
-                        currentContext.ExpressionResult = Convert.ToDouble(expression.Evaluate());
+                        currentContext.ExpressionResult = Convert.ToDouble(expression.Evaluate(TestContext.Current.CancellationToken));
                         currentContext.LambdaResult = lambda();
                         testResults.Add(currentContext);
                     }

@@ -1,4 +1,5 @@
-﻿using NCalc.Helpers;
+﻿using NCalc.Domain;
+using NCalc.Helpers;
 
 namespace NCalc;
 
@@ -8,6 +9,8 @@ public abstract record ExpressionContextBase
     public AdvancedExpressionOptions? AdvancedOptions { get; set; } = null;
     public CultureInfo CultureInfo { get; set; } = CultureInfo.CurrentCulture;
     public IDictionary<string, object?> StaticParameters { get; set; } = new Dictionary<string, object?>();
+
+    public IDictionary<string, Function> UserFunctions { get;  } = new Dictionary<string, Function>();
 
     public static implicit operator MathHelperOptions(ExpressionContextBase context)
     {

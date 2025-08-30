@@ -13,8 +13,10 @@ public interface ILogicalExpressionVisitor<out T>
     T Visit(UnaryExpression expression, CancellationToken cancellationToken = default);
     T Visit(PercentExpression expression, CancellationToken cancellationToken = default);
     T Visit(ValueExpression expression, CancellationToken cancellationToken = default);
-    T Visit(Function function, CancellationToken cancellationToken = default);
+    T Visit(FunctionExpression expression, CancellationToken cancellationToken = default);
+    T Visit(FunctionCall function, CancellationToken cancellationToken = default);
     T Visit(Identifier identifier, CancellationToken cancellationToken = default);
     T Visit(LogicalExpressionList list, CancellationToken cancellationToken = default);
     T Visit(ExpressionGroup group, CancellationToken cancellationToken = default);
+    T Visit(StatementSequence group, CancellationToken cancellationToken = default);
 }

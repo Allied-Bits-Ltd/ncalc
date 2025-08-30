@@ -118,13 +118,13 @@ public class SerializationTests
     [Fact]
     public void Function_Serialization_Test()
     {
-        Assert.Equal("test(True and False, -(True and False))", new Function(new Identifier("test"), [
+        Assert.Equal("test(True and False, -(True and False))", new FunctionCall(new Identifier("test"), [
             new BinaryExpression(BinaryExpressionType.And, new ValueExpression(true), new ValueExpression(false)),
             new UnaryExpression(UnaryExpressionType.Negate,
                 new BinaryExpression(BinaryExpressionType.And, new ValueExpression(true), new ValueExpression(false)))
         ]).ToString());
 
-        Assert.Equal("Sum(1 + 2)", new Function(new Identifier("Sum"), [
+        Assert.Equal("Sum(1 + 2)", new FunctionCall(new Identifier("Sum"), [
             new BinaryExpression(BinaryExpressionType.Plus, new ValueExpression(1), new ValueExpression(2))
         ]).ToString());
     }

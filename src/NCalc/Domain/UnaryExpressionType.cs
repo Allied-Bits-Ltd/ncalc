@@ -11,5 +11,6 @@ public enum UnaryExpressionType
 #if NET8_0_OR_GREATER
     CbRoot,
 #endif
-    FourthRoot
+    FourthRoot,
+    Return,
 }

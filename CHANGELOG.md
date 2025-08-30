@@ -1,3 +1,8 @@
+# 8.5.0 (Allied Bits)
+* Added support for user-defined functions.
+* Added support for a return statement that can return a value from the expression (or a function).
+* Fixed ExpressionOptions.(UseIfStatement,UseLoops,UseNonRecursiveEvaluator) which overlapped with other options due to the overflow of a 32-bit enumeration.
+
 # 8.1.0 (Allied Bits)
 * Added a non-recursive evaluator to help with a StackOverflow error with long or deep expressions.
 

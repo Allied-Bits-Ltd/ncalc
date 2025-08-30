@@ -1409,7 +1409,7 @@ public partial class NCalcParser : Parser {
 					{
 					State = 240;
 					_localctx._arguments = arguments();
-					_localctx.retValue =  new Function(_localctx._identifier.retValue, new LogicalExpressionList(_localctx._arguments.retValue));
+					_localctx.retValue =  new FunctionCall(_localctx._identifier.retValue, new LogicalExpressionList(_localctx._arguments.retValue));
 					}
 				}
 

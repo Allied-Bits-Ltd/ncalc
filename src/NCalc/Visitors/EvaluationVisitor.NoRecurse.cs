@@ -73,14 +73,14 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(BinaryExpression expression, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
     {
-        var handlePercent = context.AdvancedOptions != null && context.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent);
+        var handlePercent = context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true;
 
         object? leftValue = null;
         object? rightValue = null;
 
         switch (expression.Type)
         {
-            case BinaryExpressionType.StatementSequence:
+            /*case BinaryExpressionType.StatementSequence:
             {
                 if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
                     return null;
@@ -91,7 +91,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (handlePercent && rightValue is Percent rValPercent)
                     rightValue = rValPercent.Value;
                 return SetTaskValue(task, rightValue);
-            }
+            }*/
 
             case BinaryExpressionType.Assignment:
             {
@@ -101,7 +101,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out rightValue))
                     return SetTaskValue(task, null);
 
-                return SetTaskValue(task, UpdateParameter(expression.LeftExpression, rightValue));
+                return SetTaskValue(task, UpdateParameter(expression.LeftExpression, rightValue, cancellationToken));
             }
 
             case BinaryExpressionType.PlusAssignment:
@@ -134,11 +134,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         object? result = MathHelper.Add(leftValue, rightValue, true, context);
                         if (result is null)
                             return SetTaskValue(task, null);
-                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result)));
+                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken));
                     }
                     else
                     if (rightPercent)
-                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.AddPercent(leftValue, rightValue, context)));
+                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.AddPercent(leftValue, rightValue, context), cancellationToken));
                     else
                     if (leftPercent)
                     {
@@ -146,7 +146,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     }
                 }
 
-                return SetTaskValue(task, UpdateParameter(expression.LeftExpression, EvaluationHelper.Plus(leftValue, rightValue, context)));
+                return SetTaskValue(task, UpdateParameter(expression.LeftExpression, EvaluationHelper.Plus(leftValue, rightValue, context), cancellationToken));
             }
             case BinaryExpressionType.MinusAssignment:
             {
@@ -178,11 +178,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         object? result = MathHelper.Subtract(leftValue, rightValue, true, context);
                         if (result is null)
                             return SetTaskValue(task, null);
-                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result)));
+                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken));
                     }
                     else
                     if (rightPercent)
-                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.SubtractPercent(leftValue, rightValue, context)));
+                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.SubtractPercent(leftValue, rightValue, context), cancellationToken));
                     else
                     if (leftPercent)
                     {
@@ -190,7 +190,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     }
                 }
 
-                return SetTaskValue(task, UpdateParameter(expression.LeftExpression, EvaluationHelper.Minus(leftValue, rightValue, context)));
+                return SetTaskValue(task, UpdateParameter(expression.LeftExpression, EvaluationHelper.Minus(leftValue, rightValue, context), cancellationToken));
             }
             case BinaryExpressionType.MultiplyAssignment:
             {
@@ -208,7 +208,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         object? result = MathHelper.MultiplyPercent(lValPerc.Value, rValPerc.Value, context);
                         if (result is null)
                             return SetTaskValue(task, null);
-                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result)));
+                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken));
                     }
                     else
                     if (leftValue is Percent lValPercent)
@@ -218,7 +218,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (result is null)
                             return SetTaskValue(task, null);
 
-                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result)));
+                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken));
                     }
                     else
                     if (rightValue is Percent rValPercent)
@@ -229,11 +229,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (result is null)
                             return SetTaskValue(task, null);
 
-                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, result));
+                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, result, cancellationToken));
                     }
                 }
 
-                return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.Multiply(leftValue, rightValue, true, context)));
+                return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.Multiply(leftValue, rightValue, true, context), cancellationToken));
             }
 
             case BinaryExpressionType.DivAssignment:
@@ -258,7 +258,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
                         if (result is null)
                             return SetTaskValue(task, null);
-                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result)));
+                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken));
                     }
                     if (leftValue is Percent lValPercent)
                     {
@@ -269,7 +269,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (result is null)
                             return SetTaskValue(task, null);
 
-                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result)));
+                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken));
                     }
                     else
                     if (rightValue is Percent rValPercent)
@@ -282,7 +282,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (result is null)
                             return SetTaskValue(task, null);
 
-                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, result));
+                        return SetTaskValue(task, UpdateParameter(expression.LeftExpression, result, cancellationToken));
                     }
                 }
 
@@ -293,7 +293,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     object? result = MathHelper.Divide(leftValue, rightValue, true, context);
                     if (result is null)
                         return SetTaskValue(task, null);
-                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, result));
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, result, cancellationToken));
                 }
             }
 
@@ -307,12 +307,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     return SetTaskValue(task, null);
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
-                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue)));
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken));
 
-                return SetTaskValue(task, UpdateParameter(expression.LeftExpression,
-                    Convert.ToUInt64(leftValue, context.CultureInfo) &
+                return SetTaskValue(task, UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) &
                     Convert.ToUInt64(rightValue, context.CultureInfo)
-                    ));
+, cancellationToken));
 
             case BinaryExpressionType.OrAssignment:
                 if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
@@ -323,11 +322,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     return SetTaskValue(task, null);
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
-                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue)));
-                return SetTaskValue(task, UpdateParameter(expression.LeftExpression,
-                    Convert.ToUInt64(leftValue, context.CultureInfo) |
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken));
+                return SetTaskValue(task, UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) |
                     Convert.ToUInt64(rightValue, context.CultureInfo)
-                    ));
+, cancellationToken));
 
             case BinaryExpressionType.XOrAssignment:
                 if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
@@ -338,11 +336,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     return SetTaskValue(task, null);
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
-                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue)));
-                return SetTaskValue(task, UpdateParameter(expression.LeftExpression,
-                    Convert.ToUInt64(leftValue, context.CultureInfo) ^
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken));
+                return SetTaskValue(task, UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) ^
                     Convert.ToUInt64(rightValue, context.CultureInfo)
-                    ));
+, cancellationToken));
 
             case BinaryExpressionType.And:
                 if (!ExpressionEvaluated(task, 0, expression.LeftExpression))
@@ -896,7 +893,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         result = identString[index];
                     }
                     if (result is LogicalExpression expr)
-                        result = expr.Accept(this);
+                        result = expr.Accept(this, cancellationToken);
                 }
                 return SetTaskValue(task, result);
             }
@@ -968,7 +965,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         return SetTaskValue(task, expression.Value);
     }
 
-    public virtual object? Visit(Function function, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
+    public virtual object? Visit(FunctionExpression expression, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
+    {
+        return SetTaskValue(task, null);
+    }
+
+    public virtual object? Visit(FunctionCall function, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
     {
         return SetTaskValue(task, Visit(function, cancellationToken));
     }
@@ -1010,5 +1012,32 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             return null;
 
         return SetTaskValue(task, task.ChildStates[0].Value);
+    }
+
+    public object? Visit(StatementSequence seq, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
+    {
+        object? result = null;
+
+        if (seq.Count == 0)
+            return SetTaskValue(task, null);
+
+        if (task.ChildStates.Count < seq.Count)
+        {
+            foreach (LogicalExpression expression in seq)
+                if (task.ChildStates.Any(e => e.Expression == expression) == false)
+                    task.ChildStates.Add(new ExpressionState<object?>(expression));
+            return null;
+        }
+        foreach (var state in task.ChildStates)
+        {
+            if (!state.ValueSet)
+                return null;
+        }
+        result = task.ChildStates[^1].Value;
+
+        /*if ((context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true) && result is Percent valPercent)
+            result = valPercent.Value;*/
+
+        return SetTaskValue(task, result);
     }
 }

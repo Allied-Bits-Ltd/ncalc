@@ -3,9 +3,9 @@ using NCalc.Domain;
 namespace NCalc.Visitors;
 
 /// <summary>
-/// Visitor dedicated to extract <see cref="Function"/> names from a <see cref="LogicalExpression"/>.
+/// Visitor dedicated to extract <see cref="FunctionCall"/> names from a <see cref="LogicalExpression"/>.
 /// </summary>
-public sealed class FunctionExtractionVisitor : ILogicalExpressionVisitor<List<string>>
+public sealed class FunctionCallExtractionVisitor : ILogicalExpressionVisitor<List<string>>
 {
     public List<string> Visit(Identifier identifier, CancellationToken cancellationToken = default) => [];
 
@@ -14,7 +14,7 @@ public sealed class FunctionExtractionVisitor : ILogicalExpressionVisitor<List<s
         var functions = new List<string>();
         foreach (var value in list)
         {
-            if (value is Function function)
+            if (value is FunctionCall function)
             {
                 if (!functions.Contains(function.Identifier.Name))
                 {
@@ -59,7 +59,7 @@ public sealed class FunctionExtractionVisitor : ILogicalExpressionVisitor<List<s
         return leftParameters.Distinct().ToList();
     }
 
-    public List<string> Visit(Function function, CancellationToken cancellationToken = default)
+    public List<string> Visit(FunctionCall function, CancellationToken cancellationToken = default)
     {
         var functions = new List<string> { function.Identifier.Name };
 
@@ -74,4 +74,34 @@ public sealed class FunctionExtractionVisitor : ILogicalExpressionVisitor<List<s
     public List<string> Visit(ValueExpression expression, CancellationToken cancellationToken = default) => [];
 
     public List<string> Visit(ExpressionGroup group, CancellationToken cancellationToken = default) => group.Expression.Accept(this, cancellationToken);
+
+    public List<string> Visit(FunctionExpression expression, CancellationToken cancellationToken = default) => expression.Function.Body.Accept(this, cancellationToken);
+
+    public List<string> Visit(StatementSequence seq, CancellationToken cancellationToken = default)
+    {
+        var functions = new List<string>();
+        foreach (var value in seq)
+        {
+            if (value is FunctionCall function)
+            {
+                if (!functions.Contains(function.Identifier.Name))
+                {
+                    functions.Add(function.Identifier.Name);
+                }
+
+                foreach (var parameter in function.Parameters)
+                {
+                    if (parameter is not null)
+                    {
+                        functions.AddRange(parameter.Accept(this, cancellationToken));
+                    }
+                }
+            }
+            else
+            {
+                functions.AddRange(value.Accept(this, cancellationToken));
+            }
+        }
+        return functions;
+    }
 }

@@ -21,7 +21,7 @@ public class AdvFeatureTests
     public void ShouldHandleBraces(string input, int expectedValue)
     {
         var expr = new Expression(input, ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences, CultureInfo.InvariantCulture);
-        var res = expr.Evaluate();
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, res);
     }
@@ -34,7 +34,7 @@ public class AdvFeatureTests
     public void ShouldSkipCStyleComments(string input, int expectedValue)
     {
         var expr = new Expression(input, ExpressionOptions.SupportCStyleComments, CultureInfo.InvariantCulture);
-        var res = expr.Evaluate();
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, res);
     }
@@ -45,7 +45,7 @@ public class AdvFeatureTests
     public void ShouldSkipPythonComments(string input, int expectedValue)
     {
         var expr = new Expression(input, ExpressionOptions.SupportPythonComments | ExpressionOptions.DontParseDates, CultureInfo.InvariantCulture);
-        var res = expr.Evaluate();
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, res);
     }
@@ -56,7 +56,7 @@ public class AdvFeatureTests
         var expectedValue = new BigInteger(ulong.MaxValue);
         expectedValue = expectedValue * 3;
         var expression = new Expression("55340232221128654845", ExpressionOptions.UseBigNumbers);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.True(result is BigInteger);
         Assert.Equal(expectedValue, (BigInteger) result);
@@ -72,7 +72,7 @@ public class AdvFeatureTests
     public void ShouldParseBigDecimal(string input)
     {
         var expression = new Expression(input, ExpressionOptions.UseBigNumbers | ExpressionOptions.DecimalAsDefault);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.True(result is BigDecimal);
     }
@@ -87,12 +87,12 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
         expression.AdvancedOptions.DecimalSeparator = ",";
         expression.AdvancedOptions.SecondaryDecimalSeparator = ".";
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
 
         if (result is BigDecimal bdA)
-            Assert.True(((BigDecimal)result).WholeValue == expectedWhole);
+            Assert.True(bdA.WholeValue == expectedWhole);
         else
         if (result is decimal dA)
             Assert.True(Math.Truncate(dA) == expectedWhole);
@@ -110,7 +110,7 @@ public class AdvFeatureTests
     public void ShouldParseBigFloatingPointNumbers(string formula, decimal expectedValue)
     {
         var expr = new Expression(formula, ExpressionOptions.UseBigNumbers | ExpressionOptions.DecimalAsDefault, CultureInfo.InvariantCulture);
-        var res = expr.Evaluate();
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, res);
     }
@@ -125,7 +125,7 @@ public class AdvFeatureTests
         var expression = new Expression(input, ExpressionOptions.HexBinOctAreUnsigned);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags = AdvExpressionOptions.AcceptCStyleOctals;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.True(result is ulong);
 
@@ -144,7 +144,7 @@ public class AdvFeatureTests
     public void ShouldCalculateBigIntegers(string input, string expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.UseBigNumbers);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.True(result is BigInteger || result is long);
 
@@ -163,7 +163,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DateSeparator = separator;
         expression.AdvancedOptions.DateOrder = dateOrder;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -187,7 +187,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DateSeparator = separator;
         expression.AdvancedOptions.DateOrder = dateOrder;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -210,7 +210,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.FromCulture;
         expression.CultureInfo = new CultureInfo(cultureName);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -228,7 +228,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.BuiltIn;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
@@ -260,7 +260,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.TimeSeparator = separator;
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -287,7 +287,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.TimeSeparator = separator;
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always12Hour;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -315,7 +315,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.FromCulture;
         expression.AdvancedOptions.CultureInfo = new CultureInfo("en-US");
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -343,7 +343,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.FromCulture;
         expression.AdvancedOptions.CultureInfo = new CultureInfo("de-DE");
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -379,7 +379,7 @@ public class AdvFeatureTests
         CultureInfo cultureInfo = new CultureInfo(cultureName);
         expression.CultureInfo = cultureInfo;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -405,7 +405,7 @@ public class AdvFeatureTests
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3]);
 
@@ -429,7 +429,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.BuiltIn;
         expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.BuiltIn;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
@@ -498,7 +498,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.FromCulture;
         expression.CultureInfo = new CultureInfo(cultureName);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
@@ -531,7 +531,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.TimeSeparator = separator;
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour; // for simplicity
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
@@ -567,7 +567,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.BuiltIn;
         expression.CultureInfo = new CultureInfo(cultureName);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
@@ -648,7 +648,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.FromCulture;
         expression.CultureInfo = new CultureInfo(cultureName);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
@@ -677,7 +677,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.TimeSeparator = timeSeparator;
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.FromCulture;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
@@ -709,7 +709,7 @@ public class AdvFeatureTests
 
         expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.BuiltIn;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
@@ -741,7 +741,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.FromCulture;
         expression.AdvancedOptions.CultureInfo = new CultureInfo(cultureName);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
@@ -769,7 +769,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.TimeSeparator = timeSeparator;
         expression.AdvancedOptions.HoursFormat = use12Hours ? AdvancedExpressionOptions.HoursFormatKind.Always12Hour : AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
@@ -787,14 +787,13 @@ public class AdvFeatureTests
         // Support of underscores in decimal literals requires a patch in Parlot,
         // currently available in https://github.com/Allied-Bits-Ltd/parlot
         // and offered to the main project as a pull request https://github.com/sebastienros/parlot/pull/221
-        if (Enum.GetNames(typeof(Parlot.Fluent.NumberOptions)).Contains("AllowUnderscore"))
-        {
-            var expression = new Expression(formula, CultureInfo.InvariantCulture);
+
+        var expression = new Expression(formula, CultureInfo.InvariantCulture);
             expression.AdvancedOptions = new AdvancedExpressionOptions();
             expression.AdvancedOptions.Flags |= AdvExpressionOptions.AcceptUnderscoresInNumbers;
-            var result = expression.Evaluate();
+            var result = expression.Evaluate(TestContext.Current.CancellationToken);
             Assert.Equal(expectedValue, result);
-        }
+
     }
 
     [Theory]
@@ -806,7 +805,7 @@ public class AdvFeatureTests
         var expression = new Expression(formula, CultureInfo.InvariantCulture);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.AcceptUnderscoresInNumbers;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
 
@@ -817,7 +816,7 @@ public class AdvFeatureTests
         var expression = new Expression(formula, CultureInfo.InvariantCulture);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.AcceptCStyleOctals;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
 
@@ -832,7 +831,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
         expression.AdvancedOptions.DecimalSeparator = separator;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, result);
     }
@@ -849,7 +848,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.FromCulture;
         expression.AdvancedOptions.CultureInfo = new CultureInfo(cultureName);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, result);
     }
@@ -867,7 +866,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.NumberGroupSeparatorType = AdvancedExpressionOptions.GroupSeparatorType.Custom;
         expression.AdvancedOptions.NumberGroupSeparator = separator;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, result);
     }
@@ -885,7 +884,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.NumberGroupSeparatorType = AdvancedExpressionOptions.GroupSeparatorType.FromCulture;
         expression.AdvancedOptions.CultureInfo = new CultureInfo(cultureName);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, result);
     }
@@ -900,7 +899,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.UseResultReference;
         expression.EvaluateFunction += (string name, Handlers.FunctionArgs args) => { if (name.Equals("@")) args.Result = previousResult; };
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, result);
     }
@@ -920,7 +919,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.CalculatePercent;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         if (result?.GetType() == typeof(System.Double))
         {
@@ -948,7 +947,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.CalculatePercent;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         if (expectedValue.Contains('.') && CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator != ".")
             expectedValue = expectedValue.Replace(".", CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
 
@@ -1040,7 +1039,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
         expression.AdvancedOptions.DateSeparator = "/";
         expression.AdvancedOptions.DateOrder = AdvancedExpressionOptions.DateOrderKind.YMD;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4], expectedValue[5]);
 
@@ -1076,7 +1075,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
         expression.AdvancedOptions.TimeSeparator = ":";
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -1110,7 +1109,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
         expression.AdvancedOptions.DateSeparator = "/";
         expression.AdvancedOptions.DateOrder = AdvancedExpressionOptions.DateOrderKind.YMD;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
 
@@ -1146,7 +1145,7 @@ public class AdvFeatureTests
         var expression = new Expression(input, ExpressionOptions.NoCache);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4]);
 
@@ -1163,7 +1162,7 @@ public class AdvFeatureTests
         var expression = new Expression(input, ExpressionOptions.NoCache);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         DateTime expectedDate = DateTime.Now + new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4]);
         DateTime actualDate = (result as DateTime?) ?? DateTime.MinValue;
@@ -1181,7 +1180,7 @@ public class AdvFeatureTests
         var expression = new Expression(input, ExpressionOptions.NoCache);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         DateTime expectedDate = compareTime ? DateTime.Now : DateTime.Now.Date;
         DateTime actualDate = (result as DateTime?) ?? DateTime.MinValue;
@@ -1226,7 +1225,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.PeriodSecondIndicators.Add("s");
         expression.AdvancedOptions.PeriodMSecIndicators.Add("ms");
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4]);
 
@@ -1326,7 +1325,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.AcceptCurrencySymbol;
         expression.AdvancedOptions.CurrencySymbolsType = AdvancedExpressionOptions.CurrencySymbolType.FromCulture;
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
 
@@ -1357,7 +1356,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.CurrencySymbolsType = AdvancedExpressionOptions.CurrencySymbolType.Custom;
         expression.AdvancedOptions.CurrencySymbol = currencySymbol;
         expression.AdvancedOptions.CurrencySymbol2 = currencySymbol2;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, result);
     }
@@ -1376,7 +1375,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.CurrencySymbolsType = AdvancedExpressionOptions.CurrencySymbolType.Custom;
         expression.AdvancedOptions.CurrencySymbol = "EUR";
         expression.AdvancedOptions.CurrencySymbol2 = "\x20ac";
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, result);
     }
@@ -1389,7 +1388,7 @@ public class AdvFeatureTests
     public void ShouldCalculateSmallFactorials(string input, long expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
 
@@ -1399,7 +1398,7 @@ public class AdvFeatureTests
     public void ShouldCalculateLargeFactorials(string input, string expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseBigNumbers);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         var expected = BigInteger.Parse(expectedValue);
         Assert.Equal(expectedValue, result?.ToString());
     }
@@ -1413,7 +1412,7 @@ public class AdvFeatureTests
     public void ShouldCalculateOperationsWithFactorials(string input, long expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         if (result?.GetType() == typeof(System.Double))
         {
             double dResult = (double)result;
@@ -1494,7 +1493,7 @@ public class AdvFeatureTests
     public void ShouldCalculateRoots(string input, double expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseUnicodeCharsForOperations);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
 
@@ -1549,7 +1548,7 @@ public class AdvFeatureTests
         };
 
         long iResult;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
 
@@ -1577,7 +1576,7 @@ public class AdvFeatureTests
         var expression = new Expression(input, ExpressionOptions.NoCache  | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
 
         long iResult;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
 
@@ -1601,7 +1600,7 @@ public class AdvFeatureTests
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.AllowCharValues | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
 
@@ -1614,7 +1613,7 @@ public class AdvFeatureTests
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.IgnoreCaseAtBuiltInFunctions);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
 
@@ -1674,7 +1673,7 @@ public class AdvFeatureTests
         };
 
         long iResult;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
 
@@ -1755,9 +1754,9 @@ public class AdvFeatureTests
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
         expression.Functions["Length"] = (args) =>
         {
-            return ((string)args[0].Evaluate()!).Length;
+            return ((string)args[0].Evaluate(TestContext.Current.CancellationToken)!).Length;
         };
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
 
@@ -1783,7 +1782,7 @@ public class AdvFeatureTests
     public void ShouldHandleBinaryStatements(string input, object expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache  /*| ExpressionOptions.UseAssignments*/ | ExpressionOptions.UseStatementSequences);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         if (result.GetType() == typeof(System.Double))
@@ -1830,7 +1829,7 @@ public class AdvFeatureTests
                 Assert.Equal(expectedVarValue, args.Value);
             }
         };
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.True(eventFired);
         Assert.Equal(expectedExprValue, result);
     }
@@ -1851,7 +1850,7 @@ public class AdvFeatureTests
                 Assert.Equal("a", name);
             }
         };
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.True(eventFired);
         Assert.Equal(expectedValue, result);
     }
@@ -1872,7 +1871,7 @@ public class AdvFeatureTests
                 Assert.Equal("a", name);
             }
         };
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.True(eventFired);
         if (result is long lResult)
             Assert.Equal(expectedValue, (int) lResult);
@@ -1886,7 +1885,7 @@ public class AdvFeatureTests
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         if (result is long lResult)
             Assert.Equal(expectedValue, (int)lResult);
         else
@@ -1899,7 +1898,7 @@ public class AdvFeatureTests
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, result);
     }
@@ -1960,7 +1959,7 @@ public class AdvFeatureTests
 
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
         expression.UpdateParameter += (name, args) => eventFired = true;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.True(eventFired);
 
@@ -2084,7 +2083,7 @@ public class AdvFeatureTests
     public void ShouldHandleStatementsWithAssignmentsEnabled(string input, object expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
 
@@ -2094,7 +2093,7 @@ public class AdvFeatureTests
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.LowerCaseIdentifierLookup);
         expression.Functions.Add("length", (x) => x[0].Evaluate()?.ToString()?.Length ?? 0);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
 
@@ -2136,7 +2135,7 @@ public class AdvFeatureTests
             Assert.Equal(expectedVarValue, args.Value);
         };
 
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.True(eventFired);
         Assert.Equal(expectedExprValue, result);
@@ -2173,7 +2172,7 @@ public class AdvFeatureTests
     public void ShouldCalculateIntegerDiv(string input, long expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue.ToString(), result?.ToString());
     }
@@ -2183,7 +2182,7 @@ public class AdvFeatureTests
     public void ShouldEvaluateIfStatement(string input, string? expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseIfStatement);
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result?.ToString());
     }
 
@@ -2194,7 +2193,7 @@ public class AdvFeatureTests
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseLoops);
 
         int iResult;
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
 
@@ -2279,7 +2278,7 @@ public class AdvFeatureTests
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
         Assert.False(expression.HasErrors());
-        var result = expression.Evaluate();
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expected, result?.ToString());
     }
 
@@ -2674,7 +2673,7 @@ public class AsyncAdvFeatureTests
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
         expression.Functions["Length"] = async (args, cancellationToken) =>
         {
-            return ((await args[0].EvaluateAsync()) as string)?.Length ?? 0;
+            return ((await args[0].EvaluateAsync(cancellationToken)) as string)?.Length ?? 0;
         };
         var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
@@ -2745,7 +2744,7 @@ public class AsyncAdvFeatureTests
     public async Task ShouldHandleFunctionsInLowercaseAsync(string input, object expectedValue)
     {
         var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.LowerCaseIdentifierLookup);
-        expression.Functions.Add("length", async (x, cancellationToken) => (await (x[0].EvaluateAsync()))?.ToString()?.Length ?? 0);
+        expression.Functions.Add("length", async (x, cancellationToken) => (await (x[0].EvaluateAsync(cancellationToken)))?.ToString()?.Length ?? 0);
         var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }

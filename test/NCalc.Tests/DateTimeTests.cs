@@ -10,7 +10,7 @@ public class DateTimeTests
     {
         var timeSeparator = CultureInfo.CurrentCulture.DateTimeFormat.TimeSeparator;
         var expr = new Expression($"#20{timeSeparator}42{timeSeparator}12#");
-        Assert.Equal(new TimeSpan(20, 42, 12), expr.Evaluate());
+        Assert.Equal(new TimeSpan(20, 42, 12), expr.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class DateTimeTests
         Assert.False(string.IsNullOrEmpty(exprStr));
 
         var expr = new Expression(exprStr);
-        Assert.Equal(new DateTime(2001, 1, 1), expr.Evaluate());
+        Assert.Equal(new DateTime(2001, 1, 1), expr.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -76,11 +76,11 @@ public class DateTimeTests
         try
         {
             var expr = new Expression("#05/27/2025 12:00:00#", ExpressionOptions.None);
-            var res = expr.Evaluate();
+            var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ru-RU");
             var expr2 = new Expression("#27.05.2025 12:00:00#");
-            var res2 = expr.Evaluate();
+            var res2 = expr.Evaluate(TestContext.Current.CancellationToken);
 
             var dt = new DateTime(2025, 05, 27, 12, 0, 0);
 
@@ -102,11 +102,11 @@ public class DateTimeTests
         try
         {
             var expr = new Expression("#05/27/2025 12:00:00#", ExpressionOptions.None);
-            var res = expr.Evaluate();
+            var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
             var ruCulture = CultureInfo.GetCultureInfo("ru-RU");
             var expr2 = new Expression("#27.05.2025 12:00:00#", ExpressionOptions.None, ruCulture);
-            var res2 = expr.Evaluate();
+            var res2 = expr.Evaluate(TestContext.Current.CancellationToken);
 
             var dt = new DateTime(2025, 05, 27, 12, 0, 0);
 

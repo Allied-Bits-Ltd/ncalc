@@ -50,8 +50,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
-        object? value;
-        if (!TryGetValueOrNull(expression.LeftExpression.Accept(this, cancellationToken), out value))
+        if (!TryGetValueOrNull(expression.LeftExpression.Accept(this, cancellationToken), out object? value))
             return null;
 
         return (Convert.ToBoolean(value, context.CultureInfo) ? expression.MiddleExpression : expression.RightExpression).Accept(this, cancellationToken);
@@ -84,8 +83,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     return value;
                 }
 
-                object? staticParam = null;
-                if (!context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out staticParam) || staticParam is null)
+                if (!context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out object? staticParam) || staticParam is null)
                     throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not set and cannot be assigned to by index", binExpr.LeftExpression.Location);
 
                 if (staticParam is string strParam)
@@ -95,7 +93,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (strParam.Length <= index)
                             throw new NCalcParameterIndexException(identifierName, $"A character in the '{identifierName}' string cannot be updated by index: the string has the length of {strParam.Length}, while the index is {index}", binExpr.RightExpression.Location);
 
-                        char charValue = '\0';
+                        char charValue;
 
                         if (value is string strValue)
                             charValue = strValue[0];
@@ -149,29 +147,19 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         var left = new Lazy<object?>(() => Evaluate(expression.LeftExpression, cancellationToken), LazyThreadSafetyMode.None);
         var right = new Lazy<object?>(() => Evaluate(expression.RightExpression, cancellationToken), LazyThreadSafetyMode.None);
 
-        var handlePercent = context.AdvancedOptions != null && context.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent);
+        var handlePercent = context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true;
 
         object? leftValue = null;
         object? rightValue = null;
 
         switch (expression.Type)
         {
-            case BinaryExpressionType.StatementSequence:
-            {
-                _ = left.Value;
-                if (!TryGetValueOrNull(right.Value, out rightValue))
-                    return null;
-                if (handlePercent && rightValue is Percent rValPercent)
-                    rightValue = rValPercent.Value;
-                return rightValue;
-            }
-
             case BinaryExpressionType.Assignment:
             {
                 if (!TryGetValueOrNull(right.Value, out rightValue))
                     return null;
 
-                return UpdateParameter(expression.LeftExpression, rightValue);
+                return UpdateParameter(expression.LeftExpression, rightValue, cancellationToken);
             }
 
             case BinaryExpressionType.PlusAssignment:
@@ -194,11 +182,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         object? result = MathHelper.Add(leftValue, rightValue, true, context);
                         if (result is null)
                             return null;
-                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                        return UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken);
                     }
                     else
                     if (right.Value is Percent)
-                        return UpdateParameter(expression.LeftExpression, MathHelper.AddPercent(leftValue, rightValue, context));
+                        return UpdateParameter(expression.LeftExpression, MathHelper.AddPercent(leftValue, rightValue, context), cancellationToken);
                     else
                     if (left.Value is Percent)
                     {
@@ -206,7 +194,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     }
                 }
 
-                return UpdateParameter(expression.LeftExpression, EvaluationHelper.Plus(leftValue, rightValue, context));
+                return UpdateParameter(expression.LeftExpression, EvaluationHelper.Plus(leftValue, rightValue, context), cancellationToken);
             }
             case BinaryExpressionType.MinusAssignment:
             {
@@ -228,11 +216,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         object? result = MathHelper.Subtract(leftValue, rightValue, true, context);
                         if (result is null)
                             return null;
-                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                        return UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken);
                     }
                     else
                     if (right.Value is Percent)
-                        return UpdateParameter(expression.LeftExpression, MathHelper.SubtractPercent(leftValue, rightValue, context));
+                        return UpdateParameter(expression.LeftExpression, MathHelper.SubtractPercent(leftValue, rightValue, context), cancellationToken);
                     else
                     if (left.Value is Percent)
                     {
@@ -240,7 +228,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     }
                 }
 
-                return UpdateParameter(expression.LeftExpression, EvaluationHelper.Minus(leftValue, rightValue, context));
+                return UpdateParameter(expression.LeftExpression, EvaluationHelper.Minus(leftValue, rightValue, context), cancellationToken);
             }
             case BinaryExpressionType.MultiplyAssignment:
             {
@@ -256,7 +244,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         object? result = MathHelper.MultiplyPercent(lValPerc.Value, rValPerc.Value, context);
                         if (result is null)
                             return null;
-                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                        return UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken);
                     }
                     else
                     if (leftValue is Percent lValPercent)
@@ -266,7 +254,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (result is null)
                             return null;
 
-                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                        return UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken);
                     }
                     else
                     if (rightValue is Percent rValPercent)
@@ -277,11 +265,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (result is null)
                             return null;
 
-                        return UpdateParameter(expression.LeftExpression, result);
+                        return UpdateParameter(expression.LeftExpression, result, cancellationToken);
                     }
                 }
 
-                return UpdateParameter(expression.LeftExpression, MathHelper.Multiply(leftValue, rightValue, true, context));
+                return UpdateParameter(expression.LeftExpression, MathHelper.Multiply(leftValue, rightValue, true, context), cancellationToken);
             }
 
             case BinaryExpressionType.DivAssignment:
@@ -304,7 +292,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
                         if (result is null)
                             return null;
-                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                        return UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken);
                     }
                     if (leftValue is Percent lValPercent)
                     {
@@ -315,7 +303,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (result is null)
                             return null;
 
-                        return UpdateParameter(expression.LeftExpression, new Percent(result));
+                        return UpdateParameter(expression.LeftExpression, new Percent(result), cancellationToken);
                     }
                     else
                     if (rightValue is Percent rValPercent)
@@ -328,7 +316,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (result is null)
                             return null;
 
-                        return UpdateParameter(expression.LeftExpression, result);
+                        return UpdateParameter(expression.LeftExpression, result, cancellationToken);
                     }
                 }
 
@@ -339,7 +327,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     object? result = MathHelper.Divide(leftValue, rightValue, true, context);
                     if (result is null)
                         return null;
-                    return UpdateParameter(expression.LeftExpression, result);
+                    return UpdateParameter(expression.LeftExpression, result, cancellationToken);
                 }
             }
 
@@ -351,11 +339,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     return null;
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
-                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue));
-                return UpdateParameter(expression.LeftExpression,
-                    Convert.ToUInt64(leftValue, context.CultureInfo) &
+                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken);
+                return UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) &
                     Convert.ToUInt64(rightValue, context.CultureInfo)
-                    );
+, cancellationToken);
 
             case BinaryExpressionType.OrAssignment:
                 if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -364,11 +351,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     return null;
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
-                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue));
-                return UpdateParameter(expression.LeftExpression,
-                    Convert.ToUInt64(leftValue, context.CultureInfo) |
+                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken);
+                return UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) |
                     Convert.ToUInt64(rightValue, context.CultureInfo)
-                    );
+, cancellationToken);
 
             case BinaryExpressionType.XOrAssignment:
                 if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -377,11 +363,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     return null;
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
-                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue));
-                return UpdateParameter(expression.LeftExpression,
-                    Convert.ToUInt64(leftValue, context.CultureInfo) ^
+                    return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken);
+                return UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) ^
                     Convert.ToUInt64(rightValue, context.CultureInfo)
-                    );
+, cancellationToken);
 
             case BinaryExpressionType.And:
                 if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -452,23 +437,14 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (!noConvertToDouble)
                             leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
 
-                        object? result = MathHelper.DividePercent(leftValue, rightValue, context);
-                        if (result is null)
-                            return null;
-
-                        return result;
+                        return MathHelper.DividePercent(leftValue, rightValue, context);
                     }
                 }
 
                 if (!noConvertToDouble)
                     leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
 
-                {
-                    object? result = MathHelper.Divide(leftValue, rightValue, true, context);
-                    if (result is null)
-                        return null;
-                    return result;
-                }
+                return MathHelper.Divide(leftValue, rightValue, true, context);
             }
 
             case BinaryExpressionType.IntDivB:
@@ -606,11 +582,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     {
                         rightValue = rValPercent.Value;
 
-                        object? result = MathHelper.MultiplyPercent(leftValue, rightValue, context);
-                        if (result is null)
-                            return null;
-
-                        return result;
+                        return MathHelper.MultiplyPercent(leftValue, rightValue, context);
                     }
                 }
 
@@ -765,7 +737,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                 if (expression.RightExpression is BinaryExpression binExpr && binExpr.Type == BinaryExpressionType.RangeIndex)
                 {
-                    RangeValue? range = (RangeValue?) binExpr.Accept(this);
+                    RangeValue? range = (RangeValue?) binExpr.Accept(this, cancellationToken);
                     if (range is null)
                         return null;
 
@@ -784,14 +756,14 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                             throw new NCalcParameterIndexException($"The index range [{lowerBound}..{upperBound}] goes out out of the list bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
 
                         if (upperBound == lowerBound)
-                            return new object?[0];
+                            return Array.Empty<object?>();
 
                         object?[] resultArr = new object?[upperBound - lowerBound];
                         for (int i = 0; i < resultArr.Length; i++)
                         {
                             result = resultArr[lowerBound + i];
                             if (result is LogicalExpression expr)
-                                result = expr.Accept(this);
+                                result = expr.Accept(this, cancellationToken);
                             resultArr[i] = result;
                         }
                         result = resultArr;
@@ -845,7 +817,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         result = identString[index];
                     }
                     if (result is LogicalExpression expr)
-                        result = expr.Accept(this);
+                        result = expr.Accept(this, cancellationToken);
                 }
                 return result;
             }
@@ -874,9 +846,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     {
                         if (fc.Type == NCalcFlowControl.FlowControlType.Break)
                             break;
-                        /*else
+                        else
                         if (fc.Type == NCalcFlowControl.FlowControlType.Continue)
-                            continue;*/
+                            continue;
                     }
                 }
                 return result;
@@ -889,8 +861,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     public virtual object? Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
         // Recursively evaluates the underlying expression
-        object? result = null;
-        if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out result))
+        if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out object? result))
             return null;
 
         return EvaluationHelper.Unary(expression, result, context);
@@ -899,30 +870,41 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     public virtual object? Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
         // Recursively evaluates the underlying expression
-        object? result = null;
-        if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out result))
+        if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out object? result))
             return null;
 
         return new Percent(result!);
     }
 
     public virtual object? Visit(ValueExpression expression, CancellationToken cancellationToken = default) => expression.Value;
+    public virtual object? Visit(FunctionExpression expression, CancellationToken cancellationToken = default) => null;
 
-    public virtual object? Visit(Function function, CancellationToken cancellationToken = default)
+    public virtual object? Visit(FunctionCall functionCall, CancellationToken cancellationToken = default)
     {
-        var argsCount = function.Parameters.Count;
-        var args = new Expression[argsCount];
+        var argsCount = functionCall.Parameters.Count;
+
+        var functionName = functionCall.Identifier.Name;
+
+        if (context.UserFunctions.Count > 0)
+        {
+            if (context.UserFunctions.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? functionName.ToLowerInvariant() : functionName, out Function? userFunction) && userFunction is not null)
+            {
+                EvaluationHelper.EnsureProperParamNumInFunctionCall(userFunction, functionCall);
+                return ExecuteUserFunctionCall(userFunction, functionCall, context, cancellationToken);
+            }
+        }
+
+        Expression[] args = new Expression[argsCount];
 
         // Don't call parameters right now, instead let the function do it as needed.
         // Some parameters shouldn't be called, for instance, in a if(), the "not" value might be a division by zero
         // Evaluating every value could produce unexpected behavior
         for (var i = 0; i < argsCount; i++)
         {
-            args[i] = new Expression(function.Parameters[i], context);
+            args[i] = new Expression(functionCall.Parameters[i], context);
         }
 
-        var functionName = function.Identifier.Name;
-        var functionArgs = new FunctionArgs(function.Identifier.Id, args);
+        var functionArgs = new FunctionArgs(functionCall.Identifier.Id, args);
 
         OnEvaluateFunction(functionName, functionArgs);
 
@@ -931,10 +913,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
         if (context.Functions.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? functionName.ToLowerInvariant() : functionName, out var expressionFunction))
         {
-            return expressionFunction(new ExpressionFunctionData(function.Identifier.Id, args, context));
+            return expressionFunction(new ExpressionFunctionData(functionCall.Identifier.Id, args, context));
         }
 
-        return BuiltInFunctionHelper.Evaluate(functionName, args, context, function.Location);
+        return BuiltInFunctionHelper.Evaluate(functionName, args, context, functionCall.Location);
     }
 
     public virtual object? Visit(Identifier identifier, CancellationToken cancellationToken = default)
@@ -981,7 +963,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     expression.UpdateParameter += context.UpdateParameterHandler;
                     expression.MatchString += context.MatchStringHandler;
 
-                    result = expression.Evaluate();
+                    result = expression.Evaluate(cancellationToken);
                     if (result is null)
                     {
                         return result;
@@ -1021,6 +1003,26 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         List<object?> result = [];
 
         result.AddRange(list.Select(Evaluate));
+
+        return result;
+    }
+
+    public object? Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
+    {
+        return group.Expression.Accept(this, cancellationToken);
+    }
+
+    public object? Visit(StatementSequence seq, CancellationToken cancellationToken = default)
+    {
+        object? result = null;
+        foreach (var expr in seq)
+            result = Evaluate(expr, cancellationToken);
+
+        if (!TryGetValueOrNull(result, out result))
+            return null;
+
+        /*if ((context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true) && result is Percent valPercent)
+            result = valPercent.Value;*/
 
         return result;
     }
@@ -1067,7 +1069,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     internal object? EvaluateNoRecurse(LogicalExpression expression, CancellationToken cancellationToken = default)
     {
         List<ExpressionTask<object?>> stack = [];
-        ExpressionTask<object?> root = new ExpressionTask<object?>(null, new ExpressionState<object?>(expression));
+        ExpressionTask<object?> root = new(null, new ExpressionState<object?>(expression));
         stack.Add(root);
         ExpressionTask<object?> currentTask;
         while (stack.Count > 0)
@@ -1078,7 +1080,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             // a) return the value
             // b) add an expression to the task that must be evaluated first.
             currentTask = stack[^1];
-            currentTask.State.Expression.AcceptNoRecurse(this, currentTask, cancellationToken);
+            _ = currentTask.State.Expression.AcceptNoRecurse(this, currentTask, cancellationToken);
             if (currentTask.State.ValueSet)
             {
                 // Remove the current task from the stack
@@ -1086,8 +1088,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             }
             else
             {
-                foreach (var state in currentTask.ChildStates)
+                ExpressionState<object?> state;
+                // We add child expressions starting from the end to let different expression types put the child expressions in the order in which those child expressions happen in the evaluated expression,
+                // but the leftmost child must appear at the top of the stack so that it is evaluated first
+                for (int i = currentTask.ChildStates.Count -1; i >= 0; i--)
                 {
+                    state = currentTask.ChildStates[i];
                     if (!state.ValueSet)
                     {
                         stack.Add(new ExpressionTask<object?>(currentTask, state));
@@ -1099,8 +1105,86 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         return root.State.ValueSet ? root.State.Value : null;
     }
 
-    public object? Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
+    internal static object? ExecuteUserFunctionCall(Function userFunction, FunctionCall functionCall, ExpressionContext context, CancellationToken cancellationToken = default)
     {
-        return group.Expression.Accept(this, cancellationToken);
+        Dictionary<string, ArgumentStateBase> argumentStates = [];
+
+        EvaluationHelper.PopulateArgumentStates(userFunction, functionCall, argumentStates, context, (expression, context) => new ArgumentState(expression, context));
+
+        var expression = new Expression(userFunction.Body, context.Options, context.CultureInfo);
+        expression.AdvancedOptions = context.AdvancedOptions;
+
+        bool ignoreCase = context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);
+
+        expression.EvaluateParameter += (name, args) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string paramName = ignoreCase ? name.ToLowerInvariant() : name;
+                if (argumentStates.TryGetValue(paramName, out var state))
+                {
+                    args.Result = ((ArgumentState)state).Value;
+                    return;
+                }
+                context.EvaluateParameterHandler?.Invoke(name, args);
+            };
+
+        expression.UpdateParameter += (name, args) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string paramName = ignoreCase ? name.ToLowerInvariant() : name;
+                if (argumentStates.TryGetValue(paramName, out var state))
+                {
+                    ((ArgumentState)state).Value = args.Value;
+                    args.UpdateParameterLists = false;
+                }
+            };
+
+        expression.EvaluateFunction += (name, args) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                context.EvaluateFunctionHandler?.Invoke(name, args);
+            };
+
+        expression.MatchString += (args) =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                context.MatchStringHandler?.Invoke(args);
+            };
+
+        try
+        {
+            return expression.Evaluate(cancellationToken);
+        }
+        catch (NCalcFlowControl ex) when (ex.Type == NCalcFlowControl.FlowControlType.Return)
+        {
+            return ex.ReturnValue;
+        }
+    }
+}
+
+internal class ArgumentState(LogicalExpression expression, ExpressionContextBase context) : ArgumentStateBase
+{
+    internal object? Value
+    {
+        get
+        {
+            if (!_valueSet)
+            {
+                var expr = new Expression(expression, context as ExpressionContext);
+                _value = expr.Evaluate();
+                _valueSet = true;
+            }
+            return _value;
+        }
+
+        set
+        {
+            _value = value;
+            _valueSet = true;
+        }
     }
 }

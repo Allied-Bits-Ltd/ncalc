@@ -41,7 +41,7 @@ var expression = new Expression("2 + 3 * 5");
 Debug.Assert(17 == expression.Evaluate());
 ```
 
-### Conditional statements
+### Conditional Statements
 
 This branch of NCalc supports if statements with a common C-style syntax.
 To enable them, include the <xref:NCalc.ExpressionOptions.UseIfStatement> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
@@ -53,13 +53,17 @@ var expression = new NCalc.Expression("a = 1; if (a < 5) { a += 1; }; a", Expres
 
 ### Loops
 
-This branch of NCalc supports while loops with a common C-style syntax.
+This branch of NCalc supports `while` loops with a common C-style syntax.
 To enable them, include the <xref:NCalc.ExpressionOptions.UseLoops> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
 
 ```c#
 var expression = new NCalc.Expression("a = 1; while (a < 5) { a += 1; }", ExpressionOptions.UseLoops | ExpressionOptions.UseAssignments | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseStatementSequences);
 
 ```
+
+### Returning of Value
+
+An expression always evaluates to some value. In complex expressions which include conditional statements and loops, it may be desired to return a value without evaluating the expression completely. For this, one can use a common `return` keyword followed by the value to return. 
 
 ### .NET Data Types
 
@@ -136,5 +140,5 @@ Note that when C-style comments are enabled, the "//" operator used in Python fo
 ### Recursive and non-recursive evaluation
 
 By default, the evaluator works by recursively traversing the expression tree. Note that even linear expressions like "1+2+...+99+100" would be parsed into a tree with plenty of nodes (about 200 nodes ni the given example). This can cause a StackOverflow error.
-If you need to evaluate such long or deeply nested expressions, you can enable a non-recursive evaluator by setting the <xref:NCalc.ExpressionOptions.UseNonRecursiveEvaluator> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class.
-This evaluator is slower than a recursive one, so it is disabled by default.
+If you need to evaluate such long or deeply nested expressions, you can enable the non-recursive evaluator by setting the <xref:NCalc.ExpressionOptions.UseNonRecursiveEvaluator> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class.
+This non-recursive evaluator is slower than the recursive one, so it is disabled by default.

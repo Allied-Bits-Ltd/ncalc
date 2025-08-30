@@ -21,6 +21,8 @@ This branch of NCalc contains a number of advanced features compared to the orig
 * Support for loops using the 'while' loop statement (it follows the regular C-like style) with 'break' and 'continue' flow control keywords.
 * Support for the 'if' statement, which follows the regular C-like style.
 * Support for C-Style (line and block) and Python-style comments.
+* User-defined functions with named parameters (right in the expression, yes).
+* The 'return' flow control keyword that lets one return a value without completely evaluating the expression (useful in complex expressions with multiple statements, conditions, or loops, as well as with user-defined functions). 
 * Advanced date and time parsing, which takes into account culture settings (current or specific culture or custom separators) and supports times with or without seconds as well as 12-hour time.
 * Parsing of humane period expressions like "3 weeks 2 days 5 hours" (period identifiers are customizable and multiple identifier per period are supported).
 * Basic calculations with dates and time spans - one can add and subtract dates and times. Without these operations, date and time values are of little use (if only with custom functions).
