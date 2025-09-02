@@ -13,7 +13,7 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
 
 ## Advanced features
 
-This branch of NCalc contains a number of advanced features compared to the original NCalc project, such as 
+This version of NCalc contains a number of advanced features compared to the original NCalc project, such as 
 
 * Assignable parameters (variables) including shortcut operators (+=, etc.).
 * Statement sequences (useful together with parameter assignments) which, in expressions, may be grouped using curly brackets (like in C-like languages).
@@ -50,12 +50,6 @@ This version borrows some updates of the main NCalc project, which resides [here
 ## Docs
 
 Need help or want to learn more? [Check core NCalc docs](https://ncalc.github.io/ncalc) (documentation there does not include the advanced features listed above; those are documented in the .md files within the branch).
-
-## Learn more
-
-For additional information on the technique we used to create this framework please check these articles;
-- [How to execute mathematical expressions in a string in .NET](https://www.jjconsulting.com.br/en-us/blog/programming/ncalc)
-- [State of the Art Expression Evaluation](https://www.codeproject.com/Articles/18880/State-of-the-Art-Expression-Evaluation)
 
 ## Help
 
@@ -189,19 +183,5 @@ Developed by David, Dan and all at [Panoramic Data](https://github.com/panoramic
 
 ### [Jint](https://github.com/sebastienros/jint)
 
-JavaScript Interpreter for .NET by [Sébastien Ros](https://github.com/sebastienros), the author of NCalc library.  
+JavaScript Interpreter for .NET by [Sébastien Ros](https://github.com/sebastienros), the original author of NCalc library.  
 Runs on any modern .NET platform as it supports .NET Standard 2.0 and .NET 4.6.1 targets (and up).
-
-### [NCalcJS](https://github.com/thomashambach/ncalcjs)
-
-A TypeScript/JavaScript port of NCalc.
-
-### [NCalc101](https://ncalc101.magicsuite.net)
-
-NCalc 101 is a simple web application that allows you to try out the NCalc expression evaluator, developed
-by [Panoramic Data](https://github.com/panoramicdata).
-
-### [JJMasterData](https://github.com/JJConsulting/JJMasterData/)
-
-JJMasterData is a runtime form generator from database metadata. It uses NCalc to evaluate expressions used in field
-visibility and other dynamic behaviors.

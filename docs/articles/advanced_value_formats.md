@@ -150,11 +150,9 @@ expression.AdvancedOptions.PeriodMSecIndicators.Add("ms");
 ## Basic Calculations with Dates and Time Spans
 
 This version of NCalc supports basic operations (add, subtract) between a DateTime and a TimeSpan, as well as between two TimeSpans. Also, one can subtract one DateTime from another DateTime.
-To enable date and timespan calculations, include the <xref:NCalc.AdvExpressionOptions.SupportTimeOperations> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class:
+To enable date and timespan calculations, include the <xref:NCalc.ExpressionOptions.SupportTimeOperations> flag into <xref:NCalc.ExpressionOptions> of an <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression>:
 ```c#
-var expression = new NCalc.Expression("#11:00:00# - #3:00:00#");
-expression.AdvancedOptions = new NCalc.AdvancedExpressionOptions();
-expression.AdvancedOptions.Flags |= NCalc.AdvExpressionOptions.SupportTimeOperations;
+var expression = new NCalc.Expression("#11:00:00# - #3:00:00#", ExpressionOptions.SupportTimeOpertions);
 ```
 
 When the calculations are enabled, you can write expressions like "#11:00:00# - #3:00:00#" or "#01/01/2001# + #1yr 3mon 5days#", and they will produce a new TimeSpan or DateTime depending on the type of the left operand.

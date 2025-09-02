@@ -10,7 +10,7 @@ A value is a terminal token representing a concrete element. This can be:
 - A <xref:System.Boolean>
 - A <xref:System.String>
 - A <xref:System.Char>
-- A <xref:NCalc.Domain.Function>
+- A <xref:NCalc.Domain.FunctionCall>
 - An <xref:NCalc.Domain.Identifier> (parameter)
 - A <xref:NCalc.Domain.LogicalExpressionList>  (List of other expressions)
 
@@ -40,7 +40,7 @@ Use '.' (dot) to separate an interer and a fractional part. When [Advanced Optio
 
 Note, that the fractional part (the one after the dot) must be present for the number to be recognized as a floating point one.
 
-Floating point numbers are evaluated either as <xref:System.Double> or, if the <xref:NCalc.ExpressionOptions.DecimalAsDefault> flag in set in <xref:NCalc.ExpressionOptions>, as <xref:System.Decimal>. When the <xref:NCalc.ExpressionOptions.UseBigNumbers> flag in set in <xref:NCalc.ExpressionOptions>, <xref:ExtendedNumerics.BigDecimal> may be used in expressions and may be returned by certain math operations.
+Floating point numbers are evaluated either as <xref:System.Double> or, if the <xref:NCalc.ExpressionOptions.DecimalAsDefault> flag is set in <xref:NCalc.ExpressionOptions>, as <xref:System.Decimal>. When the <xref:NCalc.ExpressionOptions.UseBigNumbers> flag in set in <xref:NCalc.ExpressionOptions>, <xref:ExtendedNumerics.BigDecimal> may be used in expressions and may be returned by certain math operations.
 
 Additionally, when [Advanced Options](advanced_value_formats.md) are used, a number may contain a currency symbol or identifier before or after the numeric value. Such a symbol is ignored in calculations. However, currency values are evaluated as <xref:System.Decimal> regardless of whether decimal is the default type for floating-point numbers.
 

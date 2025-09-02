@@ -5,7 +5,7 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
 
 ## Advanced features
 
-This branch of NCalc contains a number of advanced features compared to the original NCalc project, such as 
+This version of NCalc contains a number of advanced features compared to the original NCalc project, such as 
 
 * Assignable parameters (variables) including shortcut operators (+=, etc.).
 * Statement sequences (useful together with parameter assignments) which, in expressions, may be grouped using curly brackets (like in C-like languages).
@@ -37,4 +37,4 @@ This branch of NCalc contains a number of advanced features compared to the orig
 * Minor improvements in the asyncrhonous code (CancellationToken and ConfigureAwait(false) are present in all calls).
 * The main projects have been combined into one project.
 
-This version attempts to be synchronized with the main NCalc project, which resides [here on github](https://github.com/ncalc/ncalc).
+This version has its roots in the original NCalc project, which resides [here on github](https://github.com/ncalc/ncalc). Updates in the original project are brought to Allied Bits' NCalc. 

@@ -4,7 +4,7 @@ NCalc supports asynchronous evaluating an expression. Unlike popular belief, `as
 It's recommended to use `async` if your expression is doing any CPU or IO bound work at some dynamic function or parameter, so your UI don't freeze or your web-server do can another things.
 Learn more about `async` [in this article](https://learn.microsoft.com/en-us/dotnet/csharp/asynchronous-programming/async-scenarios).
 
-In this branch of NCalc, asynchronous classes are included in the same package and assembly as the regular ones.
+In Allied Bits NCalc, asynchronous classes are included in the same package and assembly as the regular ones.
 
 # Install
 ```shell

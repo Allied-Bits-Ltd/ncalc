@@ -54,12 +54,12 @@
     "dest": "_site",
     "globalMetadata": {
       "_appName":"NCalc",
-      "_disableContribution": false,
+      "_disableContribution": true,
       "_enableSearch": true,
       "_gitContribute": {
         "branch": "master",
         "apiSpecFolder":"api",
-        "repo": "https://github.com/ncalc/ncalc"
+        "repo": "https://github.com/Allied-Bits-ltd/ncalc"
       },
       "_gitUrlPattern": "github",
       "_disableSideFilter":true,

@@ -23,14 +23,14 @@ Our AST is represented by <xref:NCalc.Domain.LogicalExpression> class.
 
 Evaluation refers to the process of determining the value of an expression. We use the visitor pattern at evaluation.
 This pattern allows you to add new operations to existing object structures without modifying those structures.
-With the method <xref:NCalc.Domain.LogicalExpression.Accept``1(NCalc.Visitors.ILogicalExpressionVisitor{``0})> is possible to accept any kind of visitor that
+With the NCalc.Domain.LogicalExpression.Accept method, it is possible to accept any kind of visitor that
 implements <xref:NCalc.Visitors.ILogicalExpressionVisitor`1>. Example implementations
 include <xref:NCalc.Visitors.EvaluationVisitor> that returns a <xref:System.Object>
 and <xref:NCalc.Visitors.SerializationVisitor> that converts the AST into a <xref:System.String>.
 
 If you are creating your custom implementation, beware it should be stateless to be easier to debug and read. This is
 enforced by the [PureAttribute](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.contracts.pureattribute0) and generic return at
-the <xref:NCalc.Domain.LogicalExpression.Accept``1(NCalc.Visitors.ILogicalExpressionVisitor{``0})> method.
+the NCalc.Domain.LogicalExpression.Accept method.
 
 ## <xref:NCalc.Expression> Class
 

@@ -26,7 +26,7 @@ NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expres
 
 ### Expressions and statements 
 
-This branch of NCalc handles expressions which include variable assignment statements (which are also expressions as they return the assigned value) and groups of expressions. 
+Allied Bits NCalc handles expressions which include variable assignment statements (which are also expressions as they return the assigned value) and groups of expressions. 
 Expressions in a group are separated with a semicolon. One or several expressions may be wrapped with curly braces '{' and '}' to make a single expression, which is useful when a group of expressions should be treated as one expression (e.g., in function parameters).
 To enable expression sequences, include the <xref:NCalc.ExpressionOptions.UseStatementSequences> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
 
@@ -43,7 +43,7 @@ Debug.Assert(17 == expression.Evaluate());
 
 ### Conditional Statements
 
-This branch of NCalc supports if statements with a common C-style syntax.
+Allied Bits NCalc supports if statements with a common C-style syntax.
 To enable them, include the <xref:NCalc.ExpressionOptions.UseIfStatement> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
 
 ```c#
@@ -53,7 +53,7 @@ var expression = new NCalc.Expression("a = 1; if (a < 5) { a += 1; }; a", Expres
 
 ### Loops
 
-This branch of NCalc supports `while` loops with a common C-style syntax.
+Allied Bits NCalc supports `while` loops with a common C-style syntax.
 To enable them, include the <xref:NCalc.ExpressionOptions.UseLoops> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
 
 ```c#
@@ -128,7 +128,7 @@ Debug.Assert(function()); //3
 
 ### Comments
 
-This branch of NCalc supports line and block C-style comments and Python line comments. 
+Allied Bits NCalc supports line and block C-style comments and Python line comments. 
 To enable them, include the <xref:NCalc.ExpressionOptions.SupportCStyleComments> or <xref:NCalc.ExpressionOptions.SupportPythonComments> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class:
 
 ```c#

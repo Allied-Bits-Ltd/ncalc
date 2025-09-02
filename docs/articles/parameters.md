@@ -57,7 +57,7 @@ var expression = new Expression("[My First Parameter] + [My Second Parameter]");
 
 ## Curly Braces Parameters
 
-In this branch of NCalc, curly braces are used to group expressions. 
+In Allied Bits NCalc, curly braces are used to group expressions. 
 So while the '{PageState}' will work when referencing the value of the parameter, assigning to '{PageState}' will not work (use square brackets instead). 
 
 ## Multi-Valued Parameters
@@ -131,7 +131,7 @@ See [case_sensitivity](case_sensitivity.md) for more info.
 Parameters can be assigned in expressions. 
 Support for assignments must be enabled by including the <xref:NCalc.ExpressionOptions.UseAssignments> flag into <xref:NCalc.ExpressionOptions> of an <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression>.
 
-When a parameter is assigned, first the <xref:NCalc.Expression.OnUpdateParameter> event is fired. An event handler may tell the evaluation engine to update the static parameter table or bypass this step by setting the UpdateParameterArgs.<xref:NCalc.Handlers.UpdateParameterArgs.UpdateParameterLists> or AsyncUpdateParameterArgs.<xref:NCalc.Handlers.AsyncUpdateParameterArgs.UpdateParameterLists> property to `true` or `false` respectively.
+When a parameter is assigned, first the <xref:NCalc.Expression.UpdateParameter> event is fired. An event handler may tell the evaluation engine to update the static parameter table or bypass this step by setting the UpdateParameterArgs.<xref:NCalc.Handlers.UpdateParameterArgs.UpdateParameterLists> or AsyncUpdateParameterArgs.<xref:NCalc.Handlers.AsyncUpdateParameterArgs.UpdateParameterLists> property to `true` or `false` respectively.
 
 An assignment is an expression, so it can be used wherever a value is accepted. E.g., the following operations are equivalent:
 
