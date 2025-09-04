@@ -49,7 +49,7 @@ This version borrows some updates of the main NCalc project, which resides [here
 
 ## Docs
 
-Need help or want to learn more? [Check core NCalc docs](https://ncalc.github.io/ncalc) (documentation there does not include the advanced features listed above; those are documented in the .md files within the branch).
+Need help or want to learn more? [Check NCalc docs](https://alliedbits.com/ncalc).
 
 ## Help
 

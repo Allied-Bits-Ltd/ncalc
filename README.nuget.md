@@ -37,4 +37,4 @@ This version of NCalc contains a number of advanced features compared to the ori
 * Minor improvements in the asyncrhonous code (CancellationToken and ConfigureAwait(false) are present in all calls).
 * The main projects have been combined into one project.
 
-This version has its roots in the original NCalc project, which resides [here on github](https://github.com/ncalc/ncalc). Updates in the original project are brought to Allied Bits' NCalc. 
+This version has its roots in the original NCalc project, which resides [here on github](https://github.com/ncalc/ncalc). Updates in the original project are brought to Allied Bits' NCalc unless they conflict with this version. 
