@@ -103,7 +103,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return null;
 
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false));
 
                 return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, rightValue, cancellationToken).ConfigureAwait(false));
             }
@@ -115,7 +115,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false));
 
                 if (handlePercent)
                 {
@@ -159,7 +159,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false));
 
                 if (handlePercent)
                 {
@@ -203,7 +203,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false));
 
                 if (handlePercent)
                 {
@@ -247,7 +247,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false));
 
                 bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
 
@@ -308,7 +308,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false));
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken).ConfigureAwait(false));
@@ -324,7 +324,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false));
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false));
@@ -339,7 +339,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false));
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false));

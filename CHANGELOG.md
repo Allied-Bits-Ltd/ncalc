@@ -1,3 +1,6 @@
+# 8.5.0.1 (Allied Bits)
+* Assignments should assign null if it is in the right operand.
+
 # 8.5.0 (Allied Bits)
 * Added support for user-defined functions.
 * Added support for a return statement that can return a value from the expression (or a function).

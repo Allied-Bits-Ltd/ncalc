@@ -157,7 +157,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             case BinaryExpressionType.Assignment:
             {
                 if (!TryGetValueOrNull(right.Value, out rightValue))
-                    return null;
+                    return UpdateParameter(expression.LeftExpression, null, cancellationToken);
 
                 return UpdateParameter(expression.LeftExpression, rightValue, cancellationToken);
             }
@@ -167,7 +167,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(left.Value, out leftValue))
                     return null;
                 if (!TryGetValueOrNull(right.Value, out rightValue))
-                    return null;
+                    return UpdateParameter(expression.LeftExpression, null, cancellationToken);
 
                 if (handlePercent)
                 {
@@ -201,7 +201,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(left.Value, out leftValue))
                     return null;
                 if (!TryGetValueOrNull(right.Value, out rightValue))
-                    return null;
+                    return UpdateParameter(expression.LeftExpression, null, cancellationToken);
 
                 if (handlePercent)
                 {
@@ -235,7 +235,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(left.Value, out leftValue))
                     return null;
                 if (!TryGetValueOrNull(right.Value, out rightValue))
-                    return null;
+                    return UpdateParameter(expression.LeftExpression, null, cancellationToken);
 
                 if (handlePercent)
                 {
@@ -277,7 +277,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(left.Value, out leftValue))
                     return null;
                 if (!TryGetValueOrNull(right.Value, out rightValue))
-                    return null;
+                    return UpdateParameter(expression.LeftExpression, null, cancellationToken);
 
                 bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
 
@@ -336,7 +336,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(left.Value, out leftValue))
                     return null;
                 if (!TryGetValueOrNull(right.Value, out rightValue))
-                    return null;
+                    return UpdateParameter(expression.LeftExpression, null, cancellationToken);
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken);
@@ -347,8 +347,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             case BinaryExpressionType.OrAssignment:
                 if (!TryGetValueOrNull(left.Value, out leftValue))
                     return null;
+
                 if (!TryGetValueOrNull(right.Value, out rightValue))
-                    return null;
+                    return UpdateParameter(expression.LeftExpression, null, cancellationToken);
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken);
@@ -360,7 +361,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(left.Value, out leftValue))
                     return null;
                 if (!TryGetValueOrNull(right.Value, out rightValue))
-                    return null;
+                    return UpdateParameter(expression.LeftExpression, null, cancellationToken);
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken);

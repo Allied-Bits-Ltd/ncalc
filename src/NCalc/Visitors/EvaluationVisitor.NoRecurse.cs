@@ -99,7 +99,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     return null;
 
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, null, cancellationToken));
 
                 return SetTaskValue(task, UpdateParameter(expression.LeftExpression, rightValue, cancellationToken));
             }
@@ -111,7 +111,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, null, cancellationToken));
 
                 if (handlePercent)
                 {
@@ -155,7 +155,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, null, cancellationToken));
 
                 if (handlePercent)
                 {
@@ -199,7 +199,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, null, cancellationToken));
 
                 if (handlePercent)
                 {
@@ -243,7 +243,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, null, cancellationToken));
 
                 bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
 
@@ -304,14 +304,13 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, null, cancellationToken));
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken));
 
                 return SetTaskValue(task, UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) &
-                    Convert.ToUInt64(rightValue, context.CultureInfo)
-, cancellationToken));
+                    Convert.ToUInt64(rightValue, context.CultureInfo), cancellationToken));
 
             case BinaryExpressionType.OrAssignment:
                 if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
@@ -319,13 +318,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, null, cancellationToken));
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken));
                 return SetTaskValue(task, UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) |
-                    Convert.ToUInt64(rightValue, context.CultureInfo)
-, cancellationToken));
+                    Convert.ToUInt64(rightValue, context.CultureInfo), cancellationToken));
 
             case BinaryExpressionType.XOrAssignment:
                 if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
@@ -333,13 +331,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                     return SetTaskValue(task, null);
                 if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
-                    return SetTaskValue(task, null);
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, null, cancellationToken));
 
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken));
                 return SetTaskValue(task, UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) ^
-                    Convert.ToUInt64(rightValue, context.CultureInfo)
-, cancellationToken));
+                    Convert.ToUInt64(rightValue, context.CultureInfo), cancellationToken));
 
             case BinaryExpressionType.And:
                 if (!ExpressionEvaluated(task, 0, expression.LeftExpression))

@@ -163,7 +163,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         {
             case BinaryExpressionType.Assignment:
                 if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
+                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
+
                 return await UpdateParameterAsync(expression.LeftExpression, rightValue, cancellationToken).ConfigureAwait(false);
 
             case BinaryExpressionType.PlusAssignment:
@@ -173,7 +174,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return null;
                 var rval = await right.Value.ConfigureAwait(false);
                 if (!TryGetValueOrNull(rval, out rightValue))
-                    return null;
+                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
 
                 if (handlePercent)
                 {
@@ -210,7 +211,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return null;
                 var rval = await right.Value.ConfigureAwait(false);
                 if (!TryGetValueOrNull(rval, out rightValue))
-                    return null;
+                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
 
                 if (handlePercent)
                 {
@@ -247,7 +248,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return null;
                 var rval = await right.Value.ConfigureAwait(false);
                 if (!TryGetValueOrNull(rval, out rightValue))
-                    return null;
+                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
 
                 if (handlePercent)
                 {
@@ -291,7 +292,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return null;
                 var rval = await right.Value.ConfigureAwait(false);
                 if (!TryGetValueOrNull(rval, out rightValue))
-                    return null;
+                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
 
                 bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
 
@@ -350,7 +351,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
                     return null;
                 if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
+                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
+
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return await UpdateParameterAsync(expression.LeftExpression,
                         MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
@@ -364,7 +366,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
                     return null;
                 if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
+                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
+
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return await UpdateParameterAsync(expression.LeftExpression,
                         MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
@@ -378,7 +381,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
                     return null;
                 if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
+                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
+
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return await UpdateParameterAsync(expression.LeftExpression,
                         MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
