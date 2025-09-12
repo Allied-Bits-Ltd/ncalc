@@ -297,7 +297,8 @@ public static class BuiltInFunctionHelper
             var evaluation = false;
             for (var i = 1; i < arguments.Length; i++)
             {
-                if (TypeHelper.CompareUsingMostPreciseType(parameter, arguments[i].Evaluate(), context) != 0) continue;
+                int compareResult;
+                if (!TypeHelper.CompareUsingMostPreciseType(parameter, arguments[i].Evaluate(), context, out compareResult) || compareResult != 0) continue;
                 evaluation = true;
                 break;
             }

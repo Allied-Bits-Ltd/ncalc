@@ -93,6 +93,15 @@ public class ComparerTests
     }
 
     [Fact]
+    public void DifferentTypesShouldEvaluateToFalse()
+    {
+        var e = new Expression("'' == 1", ExpressionOptions.CompareIncompatibleTypes);
+
+        var result = e.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(false, result);
+    }
+
+    [Fact]
     public void ExpressionDoesNotDefineNullParameterWithoutNullOption()
     {
         var e = new Expression("'a string' == null");

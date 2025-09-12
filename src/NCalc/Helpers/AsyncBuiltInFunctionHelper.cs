@@ -232,7 +232,8 @@ public static class AsyncBuiltInFunctionHelper
             var evaluation = false;
             for (var i = 1; i < arguments.Length; i++)
             {
-                if (TypeHelper.CompareUsingMostPreciseType(parameter, await arguments[i].EvaluateAsync(cancellationToken).ConfigureAwait(false), context) != 0) continue;
+                int compareResult;
+                if (!TypeHelper.CompareUsingMostPreciseType(parameter, await arguments[i].EvaluateAsync(cancellationToken).ConfigureAwait(false), context, out compareResult) || compareResult != 0) continue;
                 evaluation = true;
                 break;
             }

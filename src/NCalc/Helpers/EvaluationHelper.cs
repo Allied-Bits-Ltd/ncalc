@@ -262,7 +262,22 @@ public static class EvaluationHelper
             }
         }
         else
-            result = TypeHelper.CompareUsingMostPreciseType(a, b, options);
+        {
+            if (!TypeHelper.CompareUsingMostPreciseType(a, b, options, out result))
+            {
+                // false is returned when incompatible types are compared
+                return comparisonType switch
+                {
+                    ComparisonType.Equal => false,
+                    ComparisonType.Greater => false,
+                    ComparisonType.GreaterOrEqual => false,
+                    ComparisonType.Less => false,
+                    ComparisonType.LessOrEqual => false,
+                    ComparisonType.NotEqual => true,
+                    _ => throw new ArgumentOutOfRangeException(nameof(comparisonType), comparisonType, null)
+                };
+            }
+        }
 
         return comparisonType switch
         {

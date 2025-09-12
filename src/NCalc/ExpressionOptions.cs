@@ -182,4 +182,9 @@ public enum ExpressionOptions : long
     /// When set, the non-recursive evaluator is used. It is slower but enables evaluation of deeply-nested or just very long expressions.
     /// </summary>
     UseNonRecursiveEvaluator = ((long)1) << 34,
+
+    /// <summary>
+    /// Specifies that if incompatible types are compared, the comparison evaluates to false instead of failing with an exception
+    /// </summary>
+    CompareIncompatibleTypes = ((long)1) << 35,
 }

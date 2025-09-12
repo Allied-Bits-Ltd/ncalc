@@ -9,4 +9,5 @@ public readonly struct ComparisonOptions(CultureInfo cultureInfo, ExpressionOpti
     public bool IsOrdinal { get; } = options.HasFlag(ExpressionOptions.OrdinalStringComparer);
 
     public bool CompareNullValues { get; } = options.HasFlag(ExpressionOptions.CompareNullValues);
+    public bool CompareIncompatibleTypes { get; } = options.HasFlag(ExpressionOptions.CompareIncompatibleTypes);
 }

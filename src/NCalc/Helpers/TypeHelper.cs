@@ -127,15 +127,29 @@ public static class TypeHelper
         };
     }
 
-    public static int CompareUsingMostPreciseType(object? a, object? b, ComparisonOptions options)
+    public static bool CompareUsingMostPreciseType(object? a, object? b, ComparisonOptions options, out int outcome)
     {
         var mpt = GetMostPreciseType(a?.GetType(), b?.GetType());
 
-        var aValue = a != null ? Convert.ChangeType(a, mpt, options.CultureInfo) : null;
-        var bValue = b != null ? Convert.ChangeType(b, mpt, options.CultureInfo) : null;
+        try
+        {
+            var aValue = a != null ? Convert.ChangeType(a, mpt, options.CultureInfo) : null;
+            var bValue = b != null ? Convert.ChangeType(b, mpt, options.CultureInfo) : null;
 
-        var comparer = GetStringComparer(options);
+            var comparer = GetStringComparer(options);
 
-        return comparer.Compare(aValue, bValue);
+            outcome = comparer.Compare(aValue, bValue);
+            return true;
+        }
+        catch (Exception)
+        {
+            if (options.CompareIncompatibleTypes)
+            {
+                outcome = -1;
+                return false;
+            }
+            else
+                throw;
+        }
     }
 }
