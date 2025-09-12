@@ -10,7 +10,7 @@
     <icon>NCalc.png</icon>
     <title>The mathematical expression evaluator for .NET</title>
     <tags>ncalc math expression evaluation</tags>
-    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="663a335d3e94357cd52997dae3e8c660f8cd0de1" />
+    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="76db4539ef0cd4ced3e8b185646b9b808000af27" />
     <projectUrl>https://github.com/Allied-Bits-Ltd/ncalc</projectUrl>
     <readme>README.nuget.md</readme>
     <description>NCalc is a fast and lightweight expression evaluator library for .NET, designed for flexibility and high performance. It supports a wide range of mathematical and logical operations and flow control statements (loops and conditions). NCalc can parse any expression and evaluate the result,
