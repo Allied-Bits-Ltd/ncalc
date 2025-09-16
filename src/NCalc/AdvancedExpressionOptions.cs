@@ -50,6 +50,14 @@
 
     public class AdvancedExpressionOptions : IFormatProvider
     {
+        public enum ArgumentSeparatorKind
+        {
+            CommaOrSemicolon,
+            Comma,
+            Semicolon,
+            Colon
+        }
+
         public enum SeparatorType
         {
             BuiltIn,
@@ -146,6 +154,8 @@
 
         public DateOrderKind DateOrder { get; set; }
         public HoursFormatKind HoursFormat { get; set; }
+
+        public ArgumentSeparatorKind ArgumentSeparator { get; set; }
 
         public CultureInfo? CultureInfo
         {

@@ -47,7 +47,9 @@ It also includes other general purpose ones.
 | ifs       | Returns a value based on evaluating a number of conditions, returning a default (when specified)     | ifs(foo > 50, "bar", foo > 75, "baz", "quux")        | if foo is between 50 and 75 "bar", foo greater than 75 "baz", otherwise "quux" |  
 |           | or null (when no default is specified) if none of the conditions are true.                           | ifs(foo > 50, "bar", foo > 75, "baz")                | if foo is between 50 and 75 "bar", foo greater than 75 "baz", otherwise null   |  
 
-You can use comma (,) or semicolon (;) as argument separator. A semicolon is recommended to avoid a possible conflict of a comma-as-a-separator with a coma being a decimal separator or number group separator. 
+By default, you can use comma (,) or semicolon (;) as argument separator. A semicolon is recommended to avoid a possible conflict of a comma-as-a-separator with a coma being a decimal separator or number group separator. 
+You can change the argument separator using the <xref:NCalc.AdvExpressionOptions.ArgumentSeparator> property of the <xref:NCalc.AdvExpressionOptions> class, an instance of which you create and assign to the 
+`AdvancedOptions` property of <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression>. 
 
 When big numbers are not enabled or when they are enabled but the parameter is not a BigDecimal or BigInteger, the following applies: 
 if the <xref:NCalc.ExpressionOptions.DecimalAsDefault> flag is set and the System.Math class has a backing function that accepts decimal arguments, the function casts the argument(s) to <xref:System.Decimal> before calling the backing function; otherwise, it casts the argument(s) to <xref:System.Double>.

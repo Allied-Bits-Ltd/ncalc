@@ -1,3 +1,5 @@
+* Added the `ArgumentSeparator` property to the AdvancedExpressionOptions class. This property lets one control the character used as an argument separator in function calls.
+
 # 8.5.0.1 (Allied Bits)
 * Fixed the behavior of assignments which should assign null if it is in the right operand.
 * Fixed the comparison of an empty string with a numeric value: by default, an exception is thrown (as before), but if the "CompareIncompatibleTypes" flag is included in ExpressionOptions, comparison will evaluate to `false`.

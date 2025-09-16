@@ -609,9 +609,20 @@ public static class LogicalExpressionParser
 
         var rangedIndex = openBrace.SkipAnd(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).And(ZeroOrOne(rangeText)).And(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).AndSkip(closeBrace);
 
+        AdvancedExpressionOptions.ArgumentSeparatorKind argumentSeparator = extOptions?.ArgumentSeparator ?? AdvancedExpressionOptions.ArgumentSeparatorKind.CommaOrSemicolon;
+
+        Parser<char> argumentSeparatorChar = argumentSeparator switch
+        {
+            AdvancedExpressionOptions.ArgumentSeparatorKind.CommaOrSemicolon => comma.Or(semicolon),
+            AdvancedExpressionOptions.ArgumentSeparatorKind.Comma => comma,
+            AdvancedExpressionOptions.ArgumentSeparatorKind.Semicolon => semicolon,
+            AdvancedExpressionOptions.ArgumentSeparatorKind.Colon => colon,
+            _ => comma.Or(semicolon),
+        };
+
         // list => "(" (expression ("," expression)*)? ")"
         var populatedList =
-            Between(openParen, Separated(comma.Or(semicolon)/*(decimalSeparator == ',' || decimalSeparator2 == ',' || numGroupSeparator == ',' ? semicolon : comma.Or(semicolon))*/, expressionOrBracedStatementSequence),
+            Between(openParen, Separated(argumentSeparatorChar/*(decimalSeparator == ',' || decimalSeparator2 == ',' || numGroupSeparator == ',' ? semicolon : comma.Or(semicolon))*/, expressionOrBracedStatementSequence),
                     closeParen.ElseError("Parenthesis not closed."))
                 .Then<LogicalExpression>(static (ctx, values) => new LogicalExpressionList(values).SetLocation(new ParlotExpressionLocation(ctx)));
 

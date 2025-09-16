@@ -2097,6 +2097,42 @@ public class AdvFeatureTests
         Assert.Equal(expectedValue, result);
     }
 
+    [Theory]
+    [InlineData("Max(1, 3)", 3)]
+    public void ShouldHandleCommaAsSeparator(string input, object expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.Comma;
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("Max(1:3)", 3)]
+    public void ShouldHandleColonAsSeparator(string input, object expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.Colon;
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("ifs(0; 2, 1, 3)", 3)]
+    public void ShouldHandleDifferentSeparators(string input, object expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.CommaOrSemicolon;
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expectedValue, result);
+    }
+
     class InLowercaseLambdaTestsContext
     {
         public int a { get; set; }
