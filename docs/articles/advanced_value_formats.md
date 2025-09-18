@@ -13,7 +13,7 @@ Some of the behavior and support for advanced parsing features is controlled by 
 * Percent calculations
 
 Advanced options are configured by assigning an instance of the <xref:NCalc.AdvancedExpressionOptions> class to the 
-`AdvancedOptions` property of the <xref:NCalc.Expression> you create and adjusting its properties:
+`AdvancedOptions` property of <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> that you create and adjusting its properties:
 
 ```c#
 var expression = new NCalc.Expression("<your expression here>");
