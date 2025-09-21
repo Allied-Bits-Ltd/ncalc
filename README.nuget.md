@@ -32,7 +32,7 @@ This version of NCalc contains a number of advanced features compared to the ori
 * Certain Unicode characters can be used as operators.
 * Lowercase lookup for parameter and function names.
 * Optional non-recursive evaluator for large and complex expressions.
-* The possibility to re-initialize the parser before parsing an expression.
+* The possibility to reuse a pre-created parser or parsers when parsing multiple expressions.
 * New flags in ExpressionOptions to skip date and GUID parsers in order to speed up parsing.
 * Minor improvements in the asyncrhonous code (CancellationToken and ConfigureAwait(false) are present in all calls).
 * The main projects have been combined into one project.

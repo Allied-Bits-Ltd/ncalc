@@ -4,6 +4,7 @@ using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Logging;
 using NCalc.Parser;
+using Parlot.Fluent;
 
 namespace NCalc.Factories;
 
@@ -47,20 +48,7 @@ public sealed class LogicalExpressionFactory(ILogger<LogicalExpressionFactory> l
         }
     }
 
-    public static LogicalExpression Create(string expression, ExpressionContextBase? expressionContext = null, ExpressionOptions options = ExpressionOptions.None, AdvancedExpressionOptions? advancedOptions = null)
-    {
-        var parserContext = new LogicalExpressionParserContext(expression, options);
-        parserContext.AdvancedOptions = advancedOptions;
-        LogicalExpression result = LogicalExpressionParser.Parse(parserContext);
-
-        if (expressionContext is not null)
-            foreach (var function in parserContext.UserFunctions)
-                expressionContext.UserFunctions.Add(function);
-
-        return result;
-    }
-
-    public static LogicalExpression Create(string expression, ExpressionContextBase? expressionContext, CultureInfo cultureInfo, ExpressionOptions options = ExpressionOptions.None, AdvancedExpressionOptions? advancedOptions = null)
+    public static LogicalExpression Create(string expression, ExpressionContextBase? expressionContext = null, CultureInfo? cultureInfo = null, ExpressionOptions options = ExpressionOptions.None, AdvancedExpressionOptions? advancedOptions = null)
     {
         var parserContext = new LogicalExpressionParserContext(expression, options, cultureInfo);
         parserContext.AdvancedOptions = advancedOptions;
@@ -71,5 +59,10 @@ public sealed class LogicalExpressionFactory(ILogger<LogicalExpressionFactory> l
                 expressionContext.UserFunctions.Add(function);
 
        return result;
+    }
+
+    public static LogicalExpression Create(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext)
+    {
+        return LogicalExpressionParser.Parse(parser, parserContext);
     }
 }

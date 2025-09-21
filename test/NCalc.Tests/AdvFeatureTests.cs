@@ -3,7 +3,9 @@
 using System.Numerics;
 using ExtendedNumerics;
 using NCalc.Domain;
+using NCalc.Parser;
 using NCalc.Tests.TestData;
+using Parlot.Fluent;
 
 namespace NCalc.Tests;
 
@@ -2335,6 +2337,19 @@ public class AdvFeatureTests
         Assert.NotNull(actual);
         Assert.Equal(input, actual);
     }
+
+    [Fact]
+    public void ShouldUsePrecreatedParser()
+    {
+        var expression = new Expression(string.Empty);
+        Parser<LogicalExpression> parser = LogicalExpressionParser.CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null);
+        LogicalExpressionParserContext parserContext = new LogicalExpressionParserContext("2+2", ExpressionOptions.None, CultureInfo.CurrentCulture);
+        var result = expression.Evaluate(parser, parserContext, TestContext.Current.CancellationToken);
+        Assert.Equal(4, result);
+        parserContext = new LogicalExpressionParserContext("2*3", ExpressionOptions.None, CultureInfo.CurrentCulture);
+        result = expression.Evaluate(parser, parserContext, TestContext.Current.CancellationToken);
+        Assert.Equal(6, result);
+    }
 }
 
 [Trait("Category", "Advanced")]
@@ -2853,6 +2868,20 @@ public class AsyncAdvFeatureTests
             iResult = (int)result;
 
         Assert.Equal(expectedValue, iResult);
+    }
+
+
+    [Fact]
+    public async Task ShouldUsePrecreatedParserAsync()
+    {
+        var expression = new AsyncExpression(string.Empty);
+        Parser<LogicalExpression> parser = LogicalExpressionParser.CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null);
+        LogicalExpressionParserContext parserContext = new LogicalExpressionParserContext("2+2", ExpressionOptions.None, CultureInfo.CurrentCulture);
+        var result = await expression.EvaluateAsync(parser, parserContext, TestContext.Current.CancellationToken);
+        Assert.Equal(4, result);
+        parserContext = new LogicalExpressionParserContext("2*3", ExpressionOptions.None, CultureInfo.CurrentCulture);
+        result = await expression.EvaluateAsync(parser, parserContext, TestContext.Current.CancellationToken);
+        Assert.Equal(6, result);
     }
 }
 

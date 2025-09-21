@@ -4,6 +4,8 @@ using NCalc.Exceptions;
 using NCalc.Factories;
 using NCalc.Handlers;
 using NCalc.Helpers;
+using NCalc.Parser;
+using Parlot.Fluent;
 
 namespace NCalc;
 
@@ -129,13 +131,30 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
     public ValueTask<object?> EvaluateAsync(CancellationToken cancellationToken = default)
     {
-        if (UseNonRecursiveEvaluator)
-            Options |= ExpressionOptions.UseNonRecursiveEvaluator;
-
         LogicalExpression ??= GetLogicalExpression();
 
+        return InternalEvaluateAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously evaluates the logical expression.
+    /// </summary>
+    /// <returns>The result of the evaluation.</returns>
+    /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
+    public ValueTask<object?> EvaluateAsync(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext, CancellationToken cancellationToken = default)
+    {
+        LogicalExpression = GetLogicalExpression(parser, parserContext);
+
+        return InternalEvaluateAsync(cancellationToken);
+    }
+
+    private ValueTask<object?> InternalEvaluateAsync(CancellationToken cancellationToken = default)
+    {
         if (Error is not null)
             throw Error;
+
+        if (UseNonRecursiveEvaluator)
+            Options |= ExpressionOptions.UseNonRecursiveEvaluator;
 
         if (Options.HasFlag(ExpressionOptions.AllowNullParameter))
             Context.StaticParameters["null"] = null;

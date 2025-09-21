@@ -23,25 +23,23 @@ public sealed class LogicalExpressionParserContext : ParseContext
 
     public CultureInfo CultureInfo { get; }
 
-    public LogicalExpressionParserContext(string text, ExpressionOptions options) : base(new Scanner(text))
+    public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo? cultureInfo) : base(new Scanner(text))
     {
         Options = options;
-        CultureInfo = CultureInfo.CurrentCulture;
+        CultureInfo = cultureInfo ?? CultureInfo.CurrentCulture;
         SetupSecondaryProperties();
     }
 
-    public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo cultureInfo) : this(text, options)
+    public LogicalExpressionParserContext(string text, ExpressionOptions options) : this(text, options, CultureInfo.CurrentCulture)
     {
-        CultureInfo = cultureInfo;
     }
 
-    public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo cultureInfo, AdvancedExpressionOptions? advancedOptions) : this(text, options)
+    public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo cultureInfo, AdvancedExpressionOptions? advancedOptions) : this(text, options, cultureInfo)
     {
-        CultureInfo = cultureInfo;
         AdvancedOptions = advancedOptions;
     }
 
-    public LogicalExpressionParserContext(string text, ExpressionOptions options, AdvancedExpressionOptions? advancedOptions) : this(text, options)
+    public LogicalExpressionParserContext(string text, ExpressionOptions options, AdvancedExpressionOptions? advancedOptions) : this(text, options, CultureInfo.CurrentCulture)
     {
         AdvancedOptions = advancedOptions;
     }
