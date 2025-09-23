@@ -4,6 +4,8 @@ using NCalc.Exceptions;
 using NCalc.Factories;
 using NCalc.Handlers;
 using NCalc.Helpers;
+using NCalc.Parser;
+using Parlot.Fluent;
 
 namespace NCalc;
 
@@ -139,16 +141,43 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
     public object? Evaluate(CancellationToken cancellationToken)
     {
-        if (UseNonRecursiveEvaluator)
-            Options |= ExpressionOptions.UseNonRecursiveEvaluator;
-
         LogicalExpression ??= GetLogicalExpression();
 
+        return InternalEvaluate(cancellationToken);
+    }
+
+    /// <summary>
+    /// Evaluates the logical expression.
+    /// </summary>
+    /// <returns>The result of the evaluation.</returns>
+    /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
+    public object? Evaluate(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext)
+    {
+        return Evaluate(parser, parserContext, default);
+    }
+
+    /// <summary>
+    /// Evaluates the logical expression.
+    /// </summary>
+    /// <returns>The result of the evaluation.</returns>
+    /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
+    public object? Evaluate(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext, CancellationToken cancellationToken)
+    {
+        LogicalExpression = GetLogicalExpression(parser, parserContext);
+
+        return InternalEvaluate(cancellationToken);
+    }
+
+    private object? InternalEvaluate(CancellationToken cancellationToken = default)
+    {
         if (Error is not null)
             throw Error;
 
         if (LogicalExpression is null)
             return null;
+
+        if (UseNonRecursiveEvaluator)
+            Options |= ExpressionOptions.UseNonRecursiveEvaluator;
 
         if (Options.HasFlag(ExpressionOptions.AllowNullParameter))
             Parameters["null"] = null;

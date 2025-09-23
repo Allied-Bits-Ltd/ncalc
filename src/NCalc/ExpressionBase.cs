@@ -3,7 +3,9 @@ using NCalc.Cache;
 using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Factories;
+using NCalc.Parser;
 using NCalc.Visitors;
+using Parlot.Fluent;
 
 namespace NCalc;
 
@@ -181,5 +183,29 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         }
 
         return logicalExpression;
+    }
+
+    protected LogicalExpression? GetLogicalExpression(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext)
+    {
+        if (string.IsNullOrEmpty(parserContext.Scanner.Buffer))
+        {
+            if (Options.HasFlag(ExpressionOptions.AllowNullOrEmptyExpressions))
+            {
+                return ExpressionString?.Length == 0 ? new ValueExpression(string.Empty) : null;
+            }
+
+            throw new NCalcException($"{nameof(ExpressionString)} cannot be null or empty.");
+        }
+
+        try
+        {
+            return NCalc.Factories.LogicalExpressionFactory.Create(parser, parserContext);
+        }
+        catch (Exception exception)
+        {
+            Error = exception;
+        }
+
+        return null;
     }
 }

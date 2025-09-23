@@ -1,3 +1,6 @@
+# 8.6.0 (Allied Bits)
+* Added a way to re-use the parser when multiple expressions must be evaluated.
+* Removed the no-useless cache of parsers. Also, a default parser is not created anymore as it was almost always useless.
 * Added the `ArgumentSeparator` property to the AdvancedExpressionOptions class. This property lets one control the character used as an argument separator in function calls.
 
 # 8.5.0.1 (Allied Bits)

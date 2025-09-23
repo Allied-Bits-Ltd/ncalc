@@ -18,8 +18,6 @@ namespace NCalc.Parser;
 /// </summary>
 public static class LogicalExpressionParser
 {
-    private static readonly ConcurrentDictionary<CultureInfo, Parser<LogicalExpression>> Parsers = new();
-
     private static readonly ValueExpression True = new(true);
     private static readonly ValueExpression False = new(false);
     private static readonly ValueExpression Null = new();
@@ -56,20 +54,6 @@ public static class LogicalExpressionParser
 
     private static IFormatProvider _currentCultureFormatProvider = new CurrentCultureDateTimeFormatProvider();
 
-    static LogicalExpressionParser()
-    {
-        // InternalInit sets Parser (as before), and then we set it again here to satisfy the compiler's requirements
-        Parsers[CultureInfo.CurrentCulture] = CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null /*AdvancedExpressionOptions.DefaultOptions*/);
-    }
-
-    /// <summary>
-    /// Creates the parser with the options that exist at the moment of call
-    /// </summary>
-    public static void ReInitialize()
-    {
-        Parsers[CultureInfo.CurrentCulture] = CreateExpressionParser();
-    }
-
     /// <summary>
     /// Creates the parser with the options that exist at the moment of call
     /// </summary>
@@ -79,7 +63,7 @@ public static class LogicalExpressionParser
         return CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null /*AdvancedExpressionOptions.DefaultOptions*/);
     }
 
-    private static Parser<LogicalExpression> CreateExpressionParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions)
+    public static Parser<LogicalExpression> CreateExpressionParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions)
     {
         /*
          * Grammar:
@@ -2066,22 +2050,6 @@ public static class LogicalExpressionParser
             return null;
     }
 
-    private static Parser<LogicalExpression> GetOrCreateExpressionParser(CultureInfo cultureInfo, LogicalExpressionParserContext context)
-    {
-        if (context.Options == ExpressionOptions.None && Parsers.TryGetValue(cultureInfo, out var parser))
-        {
-            return parser;
-        }
-
-        var newParser = CreateExpressionParser(cultureInfo, context.Options, context.AdvancedOptions);
-        if (context.Options == ExpressionOptions.None)
-        {
-            Parsers.TryAdd(cultureInfo, newParser);
-        }
-
-        return newParser;
-    }
-
     private static LogicalExpression ParseBinaryExpression(ParseContext ctx, (LogicalExpression, IReadOnlyList<(BinaryExpressionType, LogicalExpression)>) x)
     {
         var result = x.Item1;
@@ -2096,12 +2064,13 @@ public static class LogicalExpressionParser
 
     public static LogicalExpression Parse(LogicalExpressionParserContext context)
     {
-        Parser<LogicalExpression> parserToUse;
-        if (context.AdvancedOptions is not null)
-            parserToUse = CreateExpressionParser(context.CultureInfo, context.Options, context.AdvancedOptions);
-        else
-            parserToUse = GetOrCreateExpressionParser(context.CultureInfo, context);
+        Parser<LogicalExpression> parserToUse = CreateExpressionParser(context.CultureInfo, context.Options, context.AdvancedOptions);
 
+        return Parse(parserToUse, context);
+    }
+
+    public static LogicalExpression Parse(Parser<LogicalExpression> parserToUse, LogicalExpressionParserContext context)
+    {
         if (parserToUse.TryParse(context, out var result, out var error))
             return result;
 

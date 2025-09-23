@@ -58,6 +58,29 @@ Such an expression sequence returns the value of its latest expression as a valu
 Expression sequences may be useful to [assign and update parameters](parameters.md) and then perform a calculation using these updated parameters. 
 Support for expression sequences must be enabled by including the <xref:NCalc.ExpressionOptions.UseStatementSequences> flag into <xref:NCalc.ExpressionOptions> of an <xref:NCalc.Expression>.
 
+### Reuse of Parser In Evaluation
+
+The default Parlot-based parser can be used for evaluating multiple expressions without a need to re-create the parser class.
+For this, create an instance of <xref:NCalc.Parser.LogicalExpressionParser> and an instance of <xref:NCalc.Parser.LogicalExpressionParserContext>. Both must be created with the same CultureInfo and options to ensure consistent processing of expressions. 
+
+The created objects can then be passed to an overload of the <xref:NCalc.Expression.Evaluate> or <xref:NCalc.AsyncExpression.EvaluateAsync> method. 
+To change the expression, create a new instance of <xref:NCalc.Parser.LogicalExpressionParserContext>, whereas <xref:NCalc.Parser.LogicalExpressionParser> and the Expression or AsyncExpression object would remain the same.
+
+Example: 
+
+```c#
+// We don't specify an expression here - it goes to the parser context object
+var expression = new Expression(string.Empty);
+Parser<LogicalExpression> parser = LogicalExpressionParser.CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.None, null);
+LogicalExpressionParserContext parserContext = new LogicalExpressionParserContext("2+2", ExpressionOptions.None, CultureInfo.CurrentCulture);
+var result = expression.Evaluate(parser, parserContext, TestContext.Current.CancellationToken); // returns 4
+
+// New expression context is needed for each evaluation
+parserContext = new LogicalExpressionParserContext("2*3", ExpressionOptions.None, CultureInfo.CurrentCulture);
+// the parser is reused there
+result = expression.Evaluate(parser, parserContext, TestContext.Current.CancellationToken); // returns 6
+```
+
 ## Learn More
 For additional information on the technique we used to create this library please read [this
 article](http://www.codeproject.com/KB/recipes/sota_expression_evaluator.aspx).
