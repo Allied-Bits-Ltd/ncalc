@@ -9,17 +9,17 @@ refer to the [Microsoft documentation](https://docs.microsoft.com/en-us/dotnet/c
 
 ## Installation and Usage
 
-First, you will need to add a reference to `NCalc.DependencyInjection` to your project.
-If you are using ASP.NET Core, no need to install a DI container.
-If you are in a Console App or older framework, you will need to set up a DI
-container, [Microsoft.Extensions.DependencyInjection](https://www.nuget.org/packages/Microsoft.Extensions.DependencyInjection)
-is a DI container for example.
+In Allied Bits NCalc, dependency injection support is included in the same package and assembly as the regular ones.
+If you are using ASP.NET Core, there is no need to install a DI container.
+If you are in a Console App or older framework, you will need to set up a DI container. 
+[Microsoft.Extensions.DependencyInjection](https://www.nuget.org/packages/Microsoft.Extensions.DependencyInjection)
+is an example of a DI container.
 
 ```shell
-dotnet add package NCalc.DependencyInjection
+dotnet add package NCalc
 ```
 
-At your `Program.cs` simply:
+In your `Program.cs`, add:
 
 ```cs
 builder.Services.AddNCalc();
@@ -67,9 +67,8 @@ services.AddNCalc()
 
 ### `WithLogicalExpressionFactory`
 Use this method to specify a custom implementation of <xref:NCalc.Factories.ILogicalExpressionFactory>. This factory is
-responsible for creating
-<xref:NCalc.Domain.LogicalExpression> objects. These objects represent a parsed string into an expression. You can for
-example create a custom parser using another library instead of [Parlot](https://github.com/sebastienros/parlot) and
+responsible for creating <xref:NCalc.Domain.LogicalExpression> objects. These objects represent a parsed string into an expression. 
+You can create a custom parser using another library instead of [Parlot](https://github.com/sebastienros/parlot) and
 implement this interface.
 
 **Example:**
