@@ -48,7 +48,7 @@ It also includes other general purpose ones.
 |           | or null (when no default is specified) if none of the conditions are true.                           | ifs(foo > 50, "bar", foo > 75, "baz")                | if foo is between 50 and 75 "bar", foo greater than 75 "baz", otherwise null   |  
 
 By default, you can use comma (,) or semicolon (;) as argument separator. A semicolon is recommended to avoid a possible conflict of a comma-as-a-separator with a coma being a decimal separator or number group separator. 
-You can change the argument separator using the <xref:NCalc.AdvExpressionOptions.ArgumentSeparator> property of the <xref:NCalc.AdvExpressionOptions> class, an instance of which you create and assign to the 
+You can change the argument separator using the <xref:NCalc.AdvancedExpressionOptions.ArgumentSeparator> property of the <xref:NCalc.AdvancedExpressionOptions> class, an instance of which you create and assign to the 
 `AdvancedOptions` property of <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression>. 
 
 When big numbers are not enabled or when they are enabled but the parameter is not a BigDecimal or BigInteger, the following applies: 

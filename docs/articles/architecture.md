@@ -60,10 +60,10 @@ Support for expression sequences must be enabled by including the <xref:NCalc.Ex
 
 ### Reuse of Parser In Evaluation
 
-The default Parlot-based parser can be used for evaluating multiple expressions without a need to re-create the parser class.
+The Parlot-based parser class (<xref:NCalc.Parser.LogicalExpressionParser>) can be used for evaluating multiple expressions without a need to create another instance of the class.
 For this, create an instance of <xref:NCalc.Parser.LogicalExpressionParser> and an instance of <xref:NCalc.Parser.LogicalExpressionParserContext>. Both must be created with the same CultureInfo and options to ensure consistent processing of expressions. 
 
-The created objects can then be passed to an overload of the <xref:NCalc.Expression.Evaluate> or <xref:NCalc.AsyncExpression.EvaluateAsync> method. 
+The created objects can then be passed to the corresponding overload of the <xref:NCalc.Expression.Evaluate(Parlot.Fluent.Parser{NCalc.Domain.LogicalExpression},NCalc.Parser.LogicalExpressionParserContext)> or <xref:NCalc.AsyncExpression.EvaluateAsync(Parlot.Fluent.Parser{NCalc.Domain.LogicalExpression},NCalc.Parser.LogicalExpressionParserContext,System.Threading.CancellationToken)> method. 
 To change the expression, create a new instance of <xref:NCalc.Parser.LogicalExpressionParserContext>, whereas <xref:NCalc.Parser.LogicalExpressionParser> and the Expression or AsyncExpression object would remain the same.
 
 Example: 
@@ -82,5 +82,5 @@ result = expression.Evaluate(parser, parserContext, TestContext.Current.Cancella
 ```
 
 ## Learn More
-For additional information on the technique we used to create this library please read [this
+For additional information on the technique used to create this library please read [this
 article](http://www.codeproject.com/KB/recipes/sota_expression_evaluator.aspx).

@@ -3,10 +3,10 @@
 Expressions can be combined using operators, each with a specific precedence priority. The precedence rules determine the order in which operations are performed in an expression. Below is a list of operator precedence in descending order:
 
 1. **Primary**
-2. **Unary**
-3. **Factorial**
-4. **Percent**
-5. **Exponential**
+2. **Factorial**
+3. **Percent**
+4. **Exponential**
+5. **Unary**
 6. **Multiplicative**
 7. **Additive**
 8. **Relational**
@@ -14,7 +14,7 @@ Expressions can be combined using operators, each with a specific precedence pri
 
 ## Handling of null values
 
-In some cases, null values can appear in expressions. If the <xref:NCalc.ExpressionOptions.TreatNullAsZero> flag in <xref:NCalc.ExpressionOptions> is set, nulls are converted to zeros for all operations except for comparison and matchiing; for the latter operations, null takes place in comparison/matching. If `TreatNullAsZero` is not set and null is found in one of the values, null is immediately returned without evaluating the expression.
+In some cases, null values can appear in expressions. If the <xref:NCalc.ExpressionOptions.TreatNullAsZero> flag in <xref:NCalc.ExpressionOptions> is set, nulls are converted to zeros for all operations except for comparison and matchiing; for the latter operations, null takes place in comparison/matching. If `TreatNullAsZero` is not set and null is found in one of the values, `null` is immediately returned without evaluating the expression.
 
 ## Primary
 
@@ -66,35 +66,6 @@ a := "abcd"; a[0] := "X" // single-character strings work like chars in this typ
 a := (1; 2; 3); a[1] := 'Y' // this is possible as our lists are lists of objects
 ```
 
-## Unary
-
-Unary operators operate on a single operand.
-
-* `!` : Logical NOT  (unless the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
-* `not` : Logical NOT
-* `-` : Negation
-* `~` : Bitwise NOT (unless the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
-* `bit_not` : Bitwise NOT
-
-**Examples:**
-```csharp
-not true
-!(1 != 2)
-```
-
-When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
-
-* `¬` (U+00AC) : Logical NOT
-* `√` (U+221A) : Square root
-* `∛` (U+221B) : Cube root
-* `∜` (U+221C) : Fourth root
-
-**Examples:**
-```csharp
-√4
-∜(4*4)
-```
-
 ## Factorial
 
 Factorial ('!') is a special post-operator that is applicable to a value or expression that evaluates to an integer value. The resulting expression is binary, and the number of exclamation marks determines the type of factorial (standard, double, triple etc.). 
@@ -141,6 +112,35 @@ Exponential operators perform exponentiation.
 ```
 When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
 * `↑` (U+2291): Exponentiation
+
+## Unary
+
+Unary operators operate on a single operand.
+
+* `!` : Logical NOT  (unless the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
+* `not` : Logical NOT
+* `-` : Negation
+* `~` : Bitwise NOT (unless the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in  <xref:NCalc.ExpressionOptions>)
+* `bit_not` : Bitwise NOT
+
+**Examples:**
+```csharp
+not true
+!(1 != 2)
+```
+
+When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
+
+* `¬` (U+00AC) : Logical NOT
+* `√` (U+221A) : Square root
+* `∛` (U+221B) : Cube root
+* `∜` (U+221C) : Fourth root
+
+**Examples:**
+```csharp
+√4
+∜(4*4)
+```
 
 ## Multiplicative
 
@@ -234,6 +234,8 @@ When Unicode Characters are enabled for operations using the <xref:NCalc.Express
 * `≤` (U+2264) : Less than or equal to
 * `≥` (U+2265) : Greater than or equal to
 
+When an attempt is made to compare the values that are not compatible (e.g., a string and a number), the outcome depends on whether the <xref:NCalc.ExpressionOptions.CompareIncompatibleTypes> flag is set in <xref:NCalc.ExpressionOptions>. If it is set, `false` is returned; otherwise, an exception is thrown.
+
 ### IN and NOT IN
 
 The `IN` and `NOT IN` operators check whether a value is present or absent within a specified collection or string.
@@ -285,6 +287,7 @@ Logical operators perform logical comparisons between expressions.
 * `or`, `||` : Logical OR
 * `and`, `&&` : Logical AND
 * `xor` : Logical XOR
+
 **Examples:**
 ```csharp
 true or false and true    // Evaluates to true
@@ -318,11 +321,13 @@ By default, when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars>
 ```
 
 When the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in <xref:NCalc.ExpressionOptions>, the following operators are used:
+
 * `BIT_OR` : Bitwise OR
 * `BIT_AND` : Bitwise AND
 * `BIT_XOR` : Bitwise XOR
 
 When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignments> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported (regardless of the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag):
+
 * `&=` : Bitwise AND with assignment of the result to the left operand
 * `|=` : Bitwise OR with assignment of the result to the left operand
 * `^=` : Bitwise XOR with assignment of the result to the left operand 
