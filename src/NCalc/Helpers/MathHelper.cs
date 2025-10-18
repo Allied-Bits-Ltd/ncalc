@@ -99,17 +99,20 @@ public static class MathHelper
 
     public static object? Add(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
 
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigNumbers)
-        {
-            if (a == null || b == null)
-                return null;
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
 
+        if (typeCode == TypeCode.Empty)
+            throw new InvalidOperationException(
+                $"Addition is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+
+        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        {
             if (a is BigDecimal bdA)
             {
                 return Add(bdA, b);
@@ -164,19 +167,19 @@ public static class MathHelper
         }
 
         var func = options.OverflowProtection ? AddFuncChecked : AddFunc;
-        return ExecuteOperation(a, b, '+', func);
+        return ExecuteOperation(a, b, '+', func, options, typeCode);
     }
 
     public static object? AddPercent(object? a, object? b, MathHelperOptions options)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
 
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
         var func = options.OverflowProtection ? AddPercentFuncChecked : AddPercentFunc;
-        return ExecuteOperation(a, b, '+', func);
+        return ExecuteOperation(a, b, '+', func, options);
     }
 
    /* public static object? Subtract(object? a, object? b)
@@ -191,17 +194,20 @@ public static class MathHelper
 
     public static object? Subtract(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
 
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigNumbers)
-        {
-            if (a == null || b == null)
-                return null;
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
 
+        if (typeCode == TypeCode.Empty)
+            throw new InvalidOperationException(
+                $"Subtraction is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+
+        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        {
             BigInteger? result = null;
             BigDecimal? bdResult = null;
 
@@ -291,19 +297,19 @@ public static class MathHelper
         }
 
         var func = options.OverflowProtection ? SubtractFuncChecked : SubtractFunc;
-        return ExecuteOperation(a, b, '-', func);
+        return ExecuteOperation(a, b, '-', func, options);
     }
 
     public static object? SubtractPercent(object? a, object? b, MathHelperOptions options)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
 
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
         var func = options.OverflowProtection ? SubtractPercentFuncChecked : SubtractPercentFunc;
-        return ExecuteOperation(a, b, '-', func);
+        return ExecuteOperation(a, b, '-', func, options);
     }
 
     /*public static object? Multiply(object? a, object? b)
@@ -318,17 +324,20 @@ public static class MathHelper
 
     public static object? Multiply(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
 
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigNumbers)
-        {
-            if (a == null || b == null)
-                return null;
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
 
+        if (typeCode == TypeCode.Empty)
+            throw new InvalidOperationException(
+                $"Multiplication is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+
+        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        {
             if (a is BigDecimal bdA)
             {
                 return Multiply(bdA, b);
@@ -382,19 +391,19 @@ public static class MathHelper
             }
         }
         var func = options.OverflowProtection ? MultiplyFuncChecked : MultiplyFunc;
-        return ExecuteOperation(a, b, '*', func);
+        return ExecuteOperation(a, b, '*', func, options);
     }
 
     public static object? MultiplyPercent(object? a, object? b, MathHelperOptions options)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
 
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
         var func = options.OverflowProtection ? MultiplyPercentFuncChecked : MultiplyPercentFunc;
-        return ExecuteOperation(a, b, '*', func);
+        return ExecuteOperation(a, b, '*', func, options);
     }
 
    /* public static object? Divide(object? a, object? b)
@@ -404,7 +413,7 @@ public static class MathHelper
 */
     public static object? Divide(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
 
         a = ConvertIfNeeded(a, options);
@@ -412,11 +421,14 @@ public static class MathHelper
 
         bool useInteger = false;
 
-        if (options.UseBigNumbers)
-        {
-            if (a == null || b == null)
-                return null;
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
 
+        if (typeCode == TypeCode.Empty)
+            throw new InvalidOperationException(
+                $"Division is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+
+        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        {
             BigDecimal? bdResult = null;
 
             if (a is BigDecimal bdA)
@@ -530,8 +542,11 @@ public static class MathHelper
             }
         }
 
+        if (a is null || b is null)
+            return null;
+
         var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
-        object? result = ExecuteOperation(a, b, '/', func);
+        object? result = ExecuteOperation(a, b, '/', func, options);
         if (result == null || !useInteger)
             return result;
 
@@ -568,17 +583,20 @@ public static class MathHelper
 
     public static object? IntegerDivide(object? a, object? b, bool truncateFirst, bool reduceTypes, MathHelperOptions options)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
 
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigNumbers)
-        {
-            if (a == null || b == null)
-                return null;
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
 
+        if (typeCode == TypeCode.Empty)
+            throw new InvalidOperationException(
+                $"Integer division is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+
+        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        {
             BigInteger? biResult = null;
             if (a is BigDecimal bdA)
             {
@@ -669,7 +687,7 @@ public static class MathHelper
         }
 
         var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
-        object? result = ExecuteOperation(a, b, '/', func);
+        object? result = ExecuteOperation(a, b, '/', func, options);
         if (result == null || IsBoxedIntegerNumber(result))
             return result;
 
@@ -705,14 +723,14 @@ public static class MathHelper
 
     public static object? DividePercent(object? a, object? b, MathHelperOptions options)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
 
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
         var func = options.OverflowProtection ? DividePercentFuncChecked : DividePercentFunc;
-        return ExecuteOperation(a, b, '/', func);
+        return ExecuteOperation(a, b, '/', func, options);
     }
 
     /*public static object? Modulo(object? a, object? b)
@@ -722,17 +740,20 @@ public static class MathHelper
 
     public static object? Modulo(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
 
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigNumbers)
-        {
-            if (a == null || b == null)
-                return null;
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
 
+        if (typeCode == TypeCode.Empty)
+            throw new InvalidOperationException(
+                $"Modulo operation is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+
+        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        {
             BigInteger? biResult = null;
             if (a is BigDecimal bdA)
             {
@@ -807,27 +828,22 @@ public static class MathHelper
             }
         }
 
-        return ExecuteOperation(a, b, '%', ModuloFunc);
+        return ExecuteOperation(a, b, '%', ModuloFunc, options);
     }
-
-/*    public static object? Max(object a, object b)
-    {
-        return Max(a, b, CultureInfo.CurrentCulture);
-    }*/
 
     public static object? Max(object? a, object? b, MathHelperOptions options)
     {
-        if (a == null && b == null)
+        if (a is null && b is null)
         {
             return null;
         }
 
-        if (a == null)
+        if (a is null)
         {
             return b;
         }
 
-        if (b == null)
+        if (b is null)
         {
             return a;
         }
@@ -835,11 +851,14 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigNumbers)
-        {
-            if (a == null || b == null)
-                return null;
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
 
+        if (typeCode == TypeCode.Empty)
+            throw new InvalidOperationException(
+                $"Maximum is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+
+        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        {
             if (a is BigInteger biA)
             {
                 return Max(b, biA);
@@ -850,8 +869,6 @@ public static class MathHelper
                 return Max(a, biB);
             }
         }
-
-        var typeCode = ConvertToHighestPrecision(ref a, ref b, options.CultureInfo);
 
         return typeCode switch
         {
@@ -869,28 +886,20 @@ public static class MathHelper
             _ => null,
         };
     }
-/*
-    public static object? Min(object? a, object? b)
-    {
-        return Min(a, b, CultureInfo.CurrentCulture);
-    }
-*/
 
     public static object? Min(object? a, object? b, MathHelperOptions options)
     {
-        var cultureInfo = options.CultureInfo;
-
-        if (a == null && b == null)
+        if (a is null && b is null)
         {
             return null;
         }
 
-        if (a == null)
+        if (a is null)
         {
             return b;
         }
 
-        if (b == null)
+        if (b is null)
         {
             return a;
         }
@@ -898,11 +907,14 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        if (options.UseBigNumbers)
-        {
-            if (a == null || b == null)
-                return null;
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
 
+        if (typeCode == TypeCode.Empty)
+            throw new InvalidOperationException(
+                $"Minimum is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+
+        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        {
             if (a is BigInteger biA)
             {
                 return Min(b, biA);
@@ -913,8 +925,6 @@ public static class MathHelper
                 return Min(a, biB);
             }
         }
-
-        var typeCode = ConvertToHighestPrecision(ref a, ref b, cultureInfo);
 
         return typeCode switch
         {
@@ -933,10 +943,15 @@ public static class MathHelper
         };
     }
 
-    private static TypeCode ConvertToHighestPrecision(ref object? a, ref object? b, CultureInfo cultureInfo)
+    private static TypeCode ConvertToHighestPrecision(ref object a, ref object b, MathHelperOptions options)
     {
-        if (a == null || b == null)
-            return TypeCode.Empty;
+        if (options.AllowCharValues)
+        {
+            if (a is char)
+                a = Convert.ChangeType(a, TypeCode.UInt16, options.CultureInfo);
+            if (b is char)
+                b = Convert.ChangeType(b, TypeCode.UInt16, options.CultureInfo);
+        }
 
         var typeCodeA = Type.GetTypeCode(a.GetType());
         var typeCodeB = Type.GetTypeCode(b.GetType());
@@ -950,14 +965,101 @@ public static class MathHelper
         if (TypeCodeBitSize(typeCodeB, out var floatingPointB) is not { } bitSizeB)
             return TypeCode.Empty;
 
-        if ((floatingPointA && !floatingPointB) || (bitSizeA > bitSizeB))
+        if (options.UseBigNumbers && (typeCodeA == TypeCode.Object || typeCodeB == TypeCode.Object))
         {
-            b = Convert.ChangeType(b, typeCodeA, cultureInfo);
-            return typeCodeA;
+            if (a is BigInteger)
+            {
+                if (b is BigDecimal)
+                    a = ConvertToBigDecimal(a);
+                else
+                    b = ConvertToBigInteger(b);
+                return TypeCode.Object;
+            }
+            if (b is BigInteger)
+            {
+                if (a is BigDecimal)
+                    b = ConvertToBigDecimal(b);
+                else
+                    a = ConvertToBigInteger(a);
+                return TypeCode.Object;
+            }
+            if (a is BigDecimal)
+            {
+                b = ConvertToBigDecimal(b);
+                return TypeCode.Object;
+            }
+            if (b is BigDecimal)
+            {
+                a = ConvertToBigDecimal(a);
+                return TypeCode.Object;
+            }
         }
 
-        a = Convert.ChangeType(a, typeCodeB, cultureInfo);
-        return typeCodeB;
+        if ((floatingPointA && !floatingPointB) || (bitSizeA > bitSizeB))
+        {
+            try
+            {
+                b = Convert.ChangeType(b, typeCodeA, options.CultureInfo);
+                return typeCodeA;
+            }
+            catch (OverflowException)
+            {
+                // the code below is used to upgrade both variables
+                return TypeCodeExpandBits(typeCodeA, ref a, ref b, options);
+            }
+        }
+
+        try
+        {
+            a = Convert.ChangeType(a, typeCodeB, options.CultureInfo);
+            return typeCodeB;
+        }
+        catch (OverflowException)
+        {
+            // the code below is used to upgrade both variables
+            return TypeCodeExpandBits(typeCodeB, ref a, ref b, options);
+        }
+    }
+
+    private static TypeCode TypeCodeExpandBits(TypeCode typeCode, ref object a, ref object b, MathHelperOptions options)
+    {
+        TypeCode result = TypeCode.Empty;
+        switch (typeCode)
+        {
+            case TypeCode.SByte:
+            case TypeCode.Byte:
+                result = TypeCode.Int16;
+                break;
+            case TypeCode.Int16:
+            case TypeCode.UInt16:
+                result = TypeCode.Int32;
+                break;
+            case TypeCode.Int32:
+            case TypeCode.UInt32:
+                result = TypeCode.Int64;
+                break;
+            case TypeCode.Int64:
+            case TypeCode.UInt64:
+                a = ConvertToBigInteger(a);
+                b = ConvertToBigInteger(b);
+                return TypeCode.Object;
+            case TypeCode.Single:
+                result = TypeCode.Double;
+                break;
+            case TypeCode.Double:
+            case TypeCode.Decimal:
+                a = ConvertToBigDecimal(a);
+                b = ConvertToBigDecimal(b);
+                return TypeCode.Object;
+            default:
+                return TypeCode.Empty;
+        }
+        if (result != TypeCode.Empty && result != TypeCode.Object)
+        {
+            a = Convert.ChangeType(a, result, options.CultureInfo);
+            b = Convert.ChangeType(b, result, options.CultureInfo);
+        }
+        return result;
     }
 
     private static int? TypeCodeBitSize(TypeCode typeCode, out bool floatingPoint)
@@ -986,6 +1088,8 @@ public static class MathHelper
             case TypeCode.Decimal:
                 floatingPoint = true;
                 return 128;
+            case TypeCode.Object:
+                return int.MaxValue;
             default: return null;
         }
     }
@@ -1393,7 +1497,7 @@ public static class MathHelper
 
     public static object? Sqrt(object? a, MathHelperOptions options)
     {
-        if (a == null)
+        if (a is null)
             return null;
 
         if (options.UseBigNumbers)
@@ -1415,7 +1519,7 @@ public static class MathHelper
 
     public static object? Fthrt(object? a, MathHelperOptions options)
     {
-        if (a == null)
+        if (a is null)
             return null;
 
         if (options.UseBigNumbers)
@@ -1438,7 +1542,7 @@ public static class MathHelper
 #if NET8_0_OR_GREATER
     public static object? Cbrt(object? a, MathHelperOptions options)
     {
-        if (a == null)
+        if (a is null)
             return null;
 
         if (options.UseBigNumbers)
@@ -1507,7 +1611,7 @@ public static class MathHelper
         return Math.Truncate(ConvertToDouble(a, options));
     }
 
-    private static object? ConvertIfNeeded(object? value, MathHelperOptions options)
+    private static object ConvertIfNeeded(object value, MathHelperOptions options)
     {
         return value switch
         {
@@ -1570,190 +1674,19 @@ public static class MathHelper
         };
     }
 
-    private static object ExecuteOperation(object? a, object? b, char operatorName, Func<object, object, object> func)
+    private static object ExecuteOperation(object a, object b, char operatorName, Func<object, object, object> func, MathHelperOptions options, TypeCode typeCode = TypeCode.Empty)
     {
-        return a switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'bool' and {b?.GetType().ToString() ?? "null"}"),
-            byte b1 => ExecuteByteOperation(b1, b, operatorName, func),
-            char @char => ExecuteCharOperation(@char, b, operatorName, func),
-            sbyte @sbyte => ExecuteSByteOperation(@sbyte, b, operatorName, func),
-            short s => ExecuteShortOperation(s, b, operatorName, func),
-            ushort @ushort => ExecuteUShortOperation(@ushort, b, operatorName, func),
-            int i => ExecuteIntOperation(i, b, operatorName, func),
-            uint u => ExecuteUIntOperation(u, b, operatorName, func),
-            long l => ExecuteLongOperation(l, b, operatorName, func),
-            ulong @ulong => ExecuteULongOperation(@ulong, b, operatorName, func),
-            float f => ExecuteFloatOperation(f, b, operatorName, func),
-            double d => ExecuteDoubleOperation(d, b, operatorName, func),
-            decimal @decimal => ExecuteDecimalOperation(@decimal, b, operatorName, func),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for operands of types {a?.GetType().ToString() ?? "null"} and {b?.GetType().ToString() ?? "null"}"),
-        };
-    }
+        if (typeCode == TypeCode.Empty)
+            typeCode = ConvertToHighestPrecision(ref a, ref b, options);
+        if (typeCode == TypeCode.Empty)
+            throw new InvalidOperationException(
+                                $"Operator '{operatorName}' is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
 
-    private static object ExecuteByteOperation(byte left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'byte' and 'bool'"),
-            byte or char or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal => func(left, right),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for 'byte' and {right?.GetType().ToString() ?? "null"}"),
-        };
-    }
-
-    private static object ExecuteCharOperation(char left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                $"Operator '{operatorName}' can't be applied to operands of types 'char' and 'bool'"),
-            byte or char or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal => func(left, right),
-            _ => throw new InvalidOperationException(
-                $"Operator '{operatorName}' not implemented for 'char' and {right?.GetType().ToString() ?? "null"}"),
-        };
-    }
-
-    private static object ExecuteSByteOperation(sbyte left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'sbyte' and 'bool'"),
-            byte or char or sbyte or short or ushort or int or uint or long or float or double or decimal => func(left, right),
-            ulong => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'sbyte' and 'ulong'"),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for 'sbyte' and {right?.GetType().ToString() ?? "null"}"),
-        };
-    }
-
-    private static object ExecuteShortOperation(short left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'short' and 'bool'"),
-            byte or char or sbyte or short or ushort or int or uint or long or float or double or decimal => func(left, right),
-            ulong => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'short' and 'ulong'"),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for types 'short' and {right?.GetType().ToString() ?? "null"}"),
-        };
-    }
-
-    private static object ExecuteUShortOperation(ushort left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'ushort' and 'bool'"),
-            byte or char or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal => func(left, right),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for types 'ushort' and {right?.GetType().ToString() ?? "null"}"),
-        };
-    }
-
-    private static object ExecuteIntOperation(int left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'int' and 'bool'"),
-            byte or char or sbyte or short or ushort or int or uint or long or float or double or decimal => func(left, right),
-            ulong => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'int' and 'ulong'"),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for types 'int' and {right?.GetType().ToString() ?? "null"}"),
-        };
-    }
-
-    private static object ExecuteUIntOperation(uint left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'uint' and 'bool'"),
-            byte or char or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal => func(left, right),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for types 'uint' and {right?.GetType().ToString() ?? "null"}"),
-        };
-    }
-
-    private static object ExecuteLongOperation(long left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'long' and 'bool'"),
-            byte or char or sbyte or short or ushort or int or uint or long or float or double or decimal => func(left, right),
-            ulong => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'long' and 'ulong'"),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for types 'long' and {right?.GetType().ToString() ?? "null"}"),
-        };
-    }
-
-    private static object ExecuteULongOperation(ulong left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'ulong' and 'bool'"),
-            sbyte => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'ulong' and 'sbyte'"),
-            short => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'ulong' and 'short'"),
-            int => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'ulong' and 'int'"),
-            long => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'ulong' and 'long'"),
-            byte or char or ushort or uint or ulong or float or double or decimal => func(left, right),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for types 'ulong' and {right?.GetType().ToString() ?? "null"}"),
-        };
-    }
-
-    private static object ExecuteFloatOperation(float left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'float' and 'bool'"),
-            byte or char or sbyte or short or ushort or int or uint or long or ulong or float or double => func(left, right),
-            decimal => func(Convert.ToDecimal(left), right),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for types 'float' and {right?.GetType().ToString() ?? "null"}"),
-        };
-    }
-
-    private static object ExecuteDoubleOperation(double left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'double' and 'bool'"),
-            byte or char or sbyte or short or ushort or int or uint or long or ulong or float or double => func(left, right),
-            decimal => func(Convert.ToDecimal(left), right),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for types 'double' and {right?.GetType().ToString() ?? "null"}"),
-        };
-    }
-
-    private static object ExecuteDecimalOperation(decimal left, object? right, char operatorName, Func<object, object, object> func)
-    {
-        return right switch
-        {
-            bool => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' can't be applied to operands of types 'decimal' and 'bool'"),
-            byte or char or sbyte or short or ushort or int or uint or long or ulong or decimal => func(left, right),
-            float or double => func(left, Convert.ToDecimal(right)),
-            _ => throw new InvalidOperationException(
-                                $"Operator '{operatorName}' not implemented for types 'decimal' and {right?.GetType().ToString() ?? "null"}"),
-        };
+        if (IsBoxedNumber(a) || typeCode is TypeCode.Char)
+            return func(a, b);
+        else
+            throw new InvalidOperationException(
+                                $"Operator '{operatorName}' is not implemented for operands of type '{typeCode.ToString()}'");
     }
 
     private static void CheckOverflow(dynamic value)
@@ -1802,7 +1735,7 @@ public static class MathHelper
             case BigInteger value: return a * new BigDecimal(value);
             case BigDecimal value: return a * value;
             default:
-                throw new ArgumentException("When multiplying BigInteger, the second parameter must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
+                throw new ArgumentException("When multiplying BigInteger, the second parameter must be a boxed numeric type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
         }
     }
 
@@ -1852,7 +1785,7 @@ public static class MathHelper
             case BigInteger value: return a + new BigDecimal(value);
             case BigDecimal value: return a + value;
             default:
-                throw new ArgumentException("When adding to a BigDecimal, the second parameter must be a boxed number type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
+                throw new ArgumentException("When adding to a BigDecimal, the second parameter must be a boxed numeric type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
         }
     }
 
@@ -1892,7 +1825,7 @@ public static class MathHelper
             case BigInteger value: return a - new BigDecimal(value);
             case BigDecimal value: return a - value;
             default:
-                throw new ArgumentException("When subtracting from a BigDecimal, the second parameter must be a boxed number type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
+                throw new ArgumentException("When subtracting from a BigDecimal, the second parameter must be a boxed numeric type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
         }
     }
 
@@ -1930,7 +1863,7 @@ public static class MathHelper
             case BigInteger value: result = a / new BigDecimal(value); break;
             case BigDecimal value: result = a / value; break;
             default:
-                throw new ArgumentException("When dividing a BigInteger, the second parameter must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger).", nameof(b));
+                throw new ArgumentException("When dividing a BigInteger, the second parameter must be a boxed numeric type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger, BigDecimal).", nameof(b));
         }
         return result.WholeValue;
     }
@@ -1953,7 +1886,7 @@ public static class MathHelper
             case BigInteger value: return a / new BigDecimal(value);
             case BigDecimal value: return a / value;
             default:
-                throw new ArgumentException("When dividing a BigDecimal, the second parameter must be a boxed number type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
+                throw new ArgumentException("When dividing a BigDecimal, the second parameter must be a boxed numeric type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(b));
         }
     }
 
@@ -2054,13 +1987,13 @@ public static class MathHelper
             case BigInteger value: return new BigDecimal(value);
             case BigDecimal value: return value;
             default:
-                throw new ArgumentException("The source of the conversion to a BigDecimal must be a boxed number type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(a));
+                throw new ArgumentException("The source of the conversion to a BigDecimal must be a boxed numeric type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(a));
         }
     }
 
     public static BigInteger? BitwiseAnd(object? a, object? b)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
         BigInteger valueA = ConvertToBigInteger(a);
         BigInteger valueB = ConvertToBigInteger(b);
@@ -2069,7 +2002,7 @@ public static class MathHelper
 
     public static BigInteger? BitwiseOr(object? a, object? b)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
         BigInteger valueA = ConvertToBigInteger(a);
         BigInteger valueB = ConvertToBigInteger(b);
@@ -2078,7 +2011,7 @@ public static class MathHelper
 
     public static BigInteger? BitwiseXOr(object? a, object? b)
     {
-        if (a == null || b == null)
+        if (a is null || b is null)
             return null;
         BigInteger valueA = ConvertToBigInteger(a);
         BigInteger valueB = ConvertToBigInteger(b);
@@ -2087,7 +2020,7 @@ public static class MathHelper
 
     public static BigInteger? BitwiseNot(object? a)
     {
-        if (a == null)
+        if (a is null)
             return null;
         BigInteger valueA = ConvertToBigInteger(a);
         return ~valueA;
@@ -2095,7 +2028,7 @@ public static class MathHelper
 
     public static BigInteger? LeftShift(BigInteger a, object? b, MathHelperOptions options)
     {
-        if (b == null)
+        if (b is null)
             return null;
         int intB = ConvertToInt(b, options);
         return a << intB;
@@ -2103,7 +2036,7 @@ public static class MathHelper
 
     public static BigInteger? RightShift(BigInteger a, object? b, MathHelperOptions options)
     {
-        if (b == null)
+        if (b is null)
             return null;
         int intB = ConvertToInt(b, options);
         return a >> intB;

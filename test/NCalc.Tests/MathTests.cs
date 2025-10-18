@@ -1,5 +1,6 @@
 using NCalc.Exceptions;
 using NCalc.Tests.TestData;
+
 using Assert = Xunit.Assert;
 
 namespace NCalc.Tests;
@@ -11,7 +12,7 @@ public class MathsTests
     [ClassData(typeof(BuiltInFunctionsTestData))]
     public void BuiltInFunctions_Test(string expression, object expected, double? tolerance)
     {
-        var result = new Expression(expression).Evaluate();
+        var result = new Expression(expression).Evaluate(TestContext.Current.CancellationToken);
 
         if (tolerance.HasValue)
         {
@@ -40,16 +41,15 @@ public class MathsTests
 
         var shouldNotWork = new Dictionary<TypeCode, List<TypeCode>>
         {
-            // We want to test all of the cases in numbers.cs which means we need to test both LHS/RHS
             [TypeCode.Boolean] = allTypes,
             [TypeCode.Byte] = [TypeCode.Boolean],
-            [TypeCode.SByte] = [TypeCode.Boolean, TypeCode.UInt64],
-            [TypeCode.Int16] = [TypeCode.Boolean, TypeCode.UInt64],
+            [TypeCode.SByte] = [TypeCode.Boolean],
+            [TypeCode.Int16] = [TypeCode.Boolean],
             [TypeCode.UInt16] = [TypeCode.Boolean],
-            [TypeCode.Int32] = [TypeCode.Boolean, TypeCode.UInt64],
+            [TypeCode.Int32] =  [TypeCode.Boolean],
             [TypeCode.UInt32] = [TypeCode.Boolean],
-            [TypeCode.Int64] = [TypeCode.Boolean, TypeCode.UInt64],
-            [TypeCode.UInt64] = [TypeCode.Boolean, TypeCode.SByte, TypeCode.Int16, TypeCode.Int32, TypeCode.Int64],
+            [TypeCode.Int64] = [TypeCode.Boolean],
+            [TypeCode.UInt64] = [TypeCode.Boolean],
             [TypeCode.Single] = [TypeCode.Boolean],
             [TypeCode.Double] = [TypeCode.Boolean],
             [TypeCode.Decimal] = [TypeCode.Boolean]
@@ -72,7 +72,7 @@ public class MathsTests
                                 ["y"] = Convert.ChangeType(rhsValue, typecodeB)
                             }
                     }
-                        .Evaluate();
+                        .Evaluate(TestContext.Current.CancellationToken);
                     Assert.True(Convert.ToInt64(result) == expectedResult,
                         $"{expr}: {typecodeA} = {lhsValue}, {typecodeB} = {rhsValue} should return {expectedResult}");
                 }
@@ -94,7 +94,7 @@ public class MathsTests
                                 ["y"] = Convert.ChangeType(rhsValue, typecodeB)
                             }
                 }
-                        .Evaluate());
+                        .Evaluate(TestContext.Current.CancellationToken));
             }
         }
     }
@@ -116,16 +116,15 @@ public class MathsTests
 
         var shouldNotWork = new Dictionary<TypeCode, List<TypeCode>>
         {
-            // We want to test all of the cases in numbers.cs which means we need to test both LHS/RHS
             [TypeCode.Boolean] = allTypes,
             [TypeCode.Byte] = [TypeCode.Boolean],
-            [TypeCode.SByte] = [TypeCode.Boolean, TypeCode.UInt64],
-            [TypeCode.Int16] = [TypeCode.Boolean, TypeCode.UInt64],
+            [TypeCode.SByte] = [TypeCode.Boolean],
+            [TypeCode.Int16] = [TypeCode.Boolean],
             [TypeCode.UInt16] = [TypeCode.Boolean],
-            [TypeCode.Int32] = [TypeCode.Boolean, TypeCode.UInt64],
+            [TypeCode.Int32] = [TypeCode.Boolean],
             [TypeCode.UInt32] = [TypeCode.Boolean],
-            [TypeCode.Int64] = [TypeCode.Boolean, TypeCode.UInt64],
-            [TypeCode.UInt64] = [TypeCode.Boolean, TypeCode.SByte, TypeCode.Int16, TypeCode.Int32, TypeCode.Int64],
+            [TypeCode.Int64] = [TypeCode.Boolean],
+            [TypeCode.UInt64] = [TypeCode.Boolean],
             [TypeCode.Single] = [TypeCode.Boolean],
             [TypeCode.Double] = [TypeCode.Boolean],
             [TypeCode.Decimal] = [TypeCode.Boolean]
@@ -148,7 +147,7 @@ public class MathsTests
                                 ["y"] = Convert.ChangeType(rhsValue, typecodeB)
                             }
                     }
-                        .Evaluate();
+                        .Evaluate(TestContext.Current.CancellationToken);
                     Assert.True(Convert.ToInt64(result) == expectedResult,
                         $"{expr}: {typecodeA} = {lhsValue}, {typecodeB} = {rhsValue} should return {expectedResult}");
                 }
@@ -171,7 +170,7 @@ public class MathsTests
                                 ["y"] = Convert.ChangeType(1, typecodeB)
                             }
                 }
-                        .Evaluate());
+                        .Evaluate(TestContext.Current.CancellationToken));
             }
         }
     }
@@ -193,16 +192,15 @@ public class MathsTests
 
         var shouldNotWork = new Dictionary<TypeCode, List<TypeCode>>
         {
-            // We want to test all of the cases in numbers.cs which means we need to test both LHS/RHS
             [TypeCode.Boolean] = allTypes,
             [TypeCode.Byte] = [TypeCode.Boolean],
-            [TypeCode.SByte] = [TypeCode.Boolean, TypeCode.UInt64],
-            [TypeCode.Int16] = [TypeCode.Boolean, TypeCode.UInt64],
+            [TypeCode.SByte] = [TypeCode.Boolean],
+            [TypeCode.Int16] = [TypeCode.Boolean],
             [TypeCode.UInt16] = [TypeCode.Boolean],
-            [TypeCode.Int32] = [TypeCode.Boolean, TypeCode.UInt64],
+            [TypeCode.Int32] = [TypeCode.Boolean],
             [TypeCode.UInt32] = [TypeCode.Boolean],
-            [TypeCode.Int64] = [TypeCode.Boolean, TypeCode.UInt64],
-            [TypeCode.UInt64] = [TypeCode.Boolean, TypeCode.SByte, TypeCode.Int16, TypeCode.Int32, TypeCode.Int64],
+            [TypeCode.Int64] = [TypeCode.Boolean],
+            [TypeCode.UInt64] = [TypeCode.Boolean],
             [TypeCode.Single] = [TypeCode.Boolean],
             [TypeCode.Double] = [TypeCode.Boolean],
             [TypeCode.Decimal] = [TypeCode.Boolean]
@@ -225,7 +223,7 @@ public class MathsTests
                                 ["y"] = Convert.ChangeType(rhsValue, typecodeB)
                             }
                     }
-                        .Evaluate();
+                        .Evaluate(TestContext.Current.CancellationToken);
                     Assert.True(Convert.ToInt64(result) == expectedResult,
                         $"{expr}: {typecodeA} = {lhsValue}, {typecodeB} = {rhsValue} should return {expectedResult}");
                 }
@@ -247,7 +245,7 @@ public class MathsTests
                                 ["x"] = Convert.ChangeType(lhsValue, typecodeA),
                                 ["y"] = Convert.ChangeType(rhsValue, typecodeB)
                         }
-                }.Evaluate());
+                }.Evaluate(TestContext.Current.CancellationToken));
             }
         }
     }
@@ -271,19 +269,19 @@ public class MathsTests
     [InlineData("1e10", 10000000000d)]
     public void ShouldParseScientificNotation(string expression, double expected)
     {
-        Assert.Equal(expected, new Expression(expression).Evaluate());
+        Assert.Equal(expected, new Expression(expression).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public void ShouldHandleLongValues()
     {
-        Assert.Equal(40_000_000_000 + 1, new Expression("40000000000+1").Evaluate());
+        Assert.Equal(40_000_000_000 + 1, new Expression("40000000000+1").Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public void ShouldCompareLongValues()
     {
-        Assert.Equal(false, new Expression("(0=1500000)||(((0+2200000000)-1500000)<0)").Evaluate());
+        Assert.Equal(false, new Expression("(0=1500000)||(((0+2200000000)-1500000)<0)").Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -457,7 +455,7 @@ public class MathsTests
     [InlineData("'4' + '2'", ExpressionOptions.None, 6d)]
     public void ShouldHandleCharAddition(string expression, ExpressionOptions options, object expected)
     {
-        Assert.Equal(expected, new Expression(expression, options | ExpressionOptions.NoCache).Evaluate());
+        Assert.Equal(expected, new Expression(expression, options | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -504,5 +502,37 @@ public class MathsTests
 
         expression = new Expression("MakeStr(-1; null)");
         Assert.Throws<NCalcEvaluationException>(expression.Evaluate);
+    }
+
+    [Fact]
+    public void ShouldHandleSignedAndUnsigned()
+    {
+        //Fails with: System.InvalidOperationException: 'Operator '+' can't be applied to operands of types 'int' and 'ulong''
+        var failExp = new NCalc.Expression("1+(v3^v4)");
+        failExp.Parameters["v3"] = (double)2;
+        failExp.Parameters["v4"] = (double)3;
+        var failRes = failExp.Evaluate(TestContext.Current.CancellationToken);
+
+        //Fails with: System.InvalidOperationException: 'Operator '+' can't be applied to operands of types 'int' and 'ulong''
+        var failExp2 = new NCalc.Expression("v1+(v2^v3)");
+        failExp2.Parameters["v1"] = 1;
+        failExp2.Parameters["v2"] = 2;
+        failExp2.Parameters["v3"] = 3;
+        var failRes2 = failExp2.Evaluate(TestContext.Current.CancellationToken);
+    }
+
+    [Theory]
+    [InlineData(-32767, 65535, 32768)]
+    [InlineData(-32768, 65535, 32767)]
+    [InlineData(-1, 65535, 65534)]
+    [InlineData(2, 65535, 65537)]
+    public void ShouldHandleSignedAndUnsignedShorts(short a, ushort b, int expected)
+    {
+        //Fails with: System.InvalidOperationException: 'Operator '+' can't be applied to operands of types 'int' and 'ulong''
+        var failExp = new NCalc.Expression("a+b");
+        failExp.Parameters["a"] = a;
+        failExp.Parameters["b"] = b;
+        var result = failExp.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expected, result);
     }
 }
