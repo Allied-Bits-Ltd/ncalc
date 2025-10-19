@@ -1,3 +1,6 @@
+# 8.6.2 (Allied Bits)
+* Added protection against overflow by upscaling the parameters of basic math operations and repeating the operation in the case when an operation causes an overflow error.
+
 # 8.6.1 (Allied Bits)
 * Fixed the issue where values of different types were not always properly converted, which could lead to the type incompatibility error during a basic math operation.
 
