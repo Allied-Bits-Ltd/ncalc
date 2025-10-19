@@ -2,6 +2,8 @@
 
 using ExtendedNumerics;
 
+using Parlot.Fluent;
+
 namespace NCalc.Helpers;
 
 /// <summary>
@@ -105,7 +107,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -167,7 +169,17 @@ public static class MathHelper
         }
 
         var func = options.OverflowProtection ? AddFuncChecked : AddFunc;
-        return ExecuteOperation(a, b, '+', func, options, typeCode);
+        try
+        {
+            return ExecuteOperation(a, b, '+', func, options, typeCode);
+        }
+        catch (OverflowException)
+        {
+            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
+            if (newTypeCode == TypeCode.Empty)
+                throw;
+            return Add(a, b, reduceTypes, options);
+        }
     }
 
     public static object? AddPercent(object? a, object? b, MathHelperOptions options)
@@ -200,7 +212,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -297,7 +309,17 @@ public static class MathHelper
         }
 
         var func = options.OverflowProtection ? SubtractFuncChecked : SubtractFunc;
-        return ExecuteOperation(a, b, '-', func, options);
+        try
+        {
+            return ExecuteOperation(a, b, '-', func, options, typeCode);
+        }
+        catch (OverflowException)
+        {
+            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
+            if (newTypeCode == TypeCode.Empty)
+                throw;
+            return Subtract(a, b, reduceTypes, options);
+        }
     }
 
     public static object? SubtractPercent(object? a, object? b, MathHelperOptions options)
@@ -330,7 +352,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -391,7 +413,17 @@ public static class MathHelper
             }
         }
         var func = options.OverflowProtection ? MultiplyFuncChecked : MultiplyFunc;
-        return ExecuteOperation(a, b, '*', func, options);
+        try
+        {
+            return ExecuteOperation(a, b, '*', func, options, typeCode);
+        }
+        catch (OverflowException)
+        {
+            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
+            if (newTypeCode == TypeCode.Empty)
+                throw;
+            return Multiply(a, b, reduceTypes, options);
+        }
     }
 
     public static object? MultiplyPercent(object? a, object? b, MathHelperOptions options)
@@ -421,7 +453,7 @@ public static class MathHelper
 
         bool useInteger = false;
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -546,7 +578,20 @@ public static class MathHelper
             return null;
 
         var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
-        object? result = ExecuteOperation(a, b, '/', func, options);
+
+        object? result = null;
+
+        try
+        {
+            result = ExecuteOperation(a, b, '/', func, options);
+        }
+        catch (OverflowException)
+        {
+            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
+            if (newTypeCode == TypeCode.Empty)
+                throw;
+            result = Divide(a, b, reduceTypes, options);
+        }
         if (result == null || !useInteger)
             return result;
 
@@ -589,7 +634,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -687,7 +732,20 @@ public static class MathHelper
         }
 
         var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
-        object? result = ExecuteOperation(a, b, '/', func, options);
+        object? result = null;
+
+        try
+        {
+            result = ExecuteOperation(a, b, '/', func, options);
+        }
+        catch (OverflowException)
+        {
+            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
+            if (newTypeCode == TypeCode.Empty)
+                throw;
+            result = Divide(a, b, reduceTypes, options);
+        }
+
         if (result == null || IsBoxedIntegerNumber(result))
             return result;
 
@@ -746,7 +804,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -828,7 +886,17 @@ public static class MathHelper
             }
         }
 
-        return ExecuteOperation(a, b, '%', ModuloFunc, options);
+        try
+        {
+            return ExecuteOperation(a, b, '%', ModuloFunc, options, typeCode);
+        }
+        catch (OverflowException)
+        {
+            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
+            if (newTypeCode == TypeCode.Empty)
+                throw;
+            return Modulo(a, b, reduceTypes, options);
+        }
     }
 
     public static object? Max(object? a, object? b, MathHelperOptions options)
@@ -851,7 +919,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -907,7 +975,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -943,7 +1011,7 @@ public static class MathHelper
         };
     }
 
-    private static TypeCode ConvertToHighestPrecision(ref object a, ref object b, MathHelperOptions options)
+    private static TypeCode ConvertToHighestPrecision(ref object a, ref object b, bool forceExpandBits, MathHelperOptions options)
     {
         if (options.AllowCharValues)
         {
@@ -956,7 +1024,7 @@ public static class MathHelper
         var typeCodeA = Type.GetTypeCode(a.GetType());
         var typeCodeB = Type.GetTypeCode(b.GetType());
 
-        if (typeCodeA == typeCodeB)
+        if (typeCodeA == typeCodeB && !forceExpandBits)
             return typeCodeA;
 
         if (TypeCodeBitSize(typeCodeA, out var floatingPointA) is not { } bitSizeA)
@@ -972,6 +1040,7 @@ public static class MathHelper
                 if (b is BigDecimal)
                     a = ConvertToBigDecimal(a);
                 else
+                if (b is not BigInteger)
                     b = ConvertToBigInteger(b);
                 return TypeCode.Object;
             }
@@ -985,6 +1054,7 @@ public static class MathHelper
             }
             if (a is BigDecimal)
             {
+                if (b is not BigDecimal)
                 b = ConvertToBigDecimal(b);
                 return TypeCode.Object;
             }
@@ -1008,16 +1078,28 @@ public static class MathHelper
                 return TypeCodeExpandBits(typeCodeA, ref a, ref b, options);
             }
         }
-
-        try
+        else
+        if ((!floatingPointA && floatingPointB) || bitSizeB > bitSizeA)
         {
-            a = Convert.ChangeType(a, typeCodeB, options.CultureInfo);
-            return typeCodeB;
+            try
+            {
+                a = Convert.ChangeType(a, typeCodeB, options.CultureInfo);
+                return typeCodeB;
+            }
+            catch (OverflowException)
+            {
+                // the code below is used to upgrade both variables
+                return TypeCodeExpandBits(typeCodeB, ref a, ref b, options);
+            }
         }
-        catch (OverflowException)
+        else // same size, different types
         {
             // the code below is used to upgrade both variables
-            return TypeCodeExpandBits(typeCodeB, ref a, ref b, options);
+            TypeCode resultTypeCode = TypeCodeExpandBits(typeCodeB, ref a, ref b, options);
+            if (typeCodeA == typeCodeB && typeCodeA == resultTypeCode)
+                return TypeCode.Empty; // nowhere else to expand
+            else
+                return resultTypeCode;
         }
     }
 
@@ -1040,17 +1122,29 @@ public static class MathHelper
                 break;
             case TypeCode.Int64:
             case TypeCode.UInt64:
-                a = ConvertToBigInteger(a);
-                b = ConvertToBigInteger(b);
-                return TypeCode.Object;
-            case TypeCode.Single:
-                result = TypeCode.Double;
+                if (options.UseBigNumbers)
+                {
+                    a = ConvertToBigInteger(a);
+                    b = ConvertToBigInteger(b);
+                    return TypeCode.Object;
+                }
+                else
+                    result = TypeCode.Int64;
                 break;
+            case TypeCode.Single:
+                        result = TypeCode.Double;
+                        break;
             case TypeCode.Double:
             case TypeCode.Decimal:
-                a = ConvertToBigDecimal(a);
-                b = ConvertToBigDecimal(b);
-                return TypeCode.Object;
+                if (options.UseBigNumbers)
+                {
+                    a = ConvertToBigDecimal(a);
+                    b = ConvertToBigDecimal(b);
+                    return TypeCode.Object;
+                }
+                else
+                    result = typeCode;
+                break;
             default:
                 return TypeCode.Empty;
         }
@@ -1677,7 +1771,7 @@ public static class MathHelper
     private static object ExecuteOperation(object a, object b, char operatorName, Func<object, object, object> func, MathHelperOptions options, TypeCode typeCode = TypeCode.Empty)
     {
         if (typeCode == TypeCode.Empty)
-            typeCode = ConvertToHighestPrecision(ref a, ref b, options);
+            typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
                                 $"Operator '{operatorName}' is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");

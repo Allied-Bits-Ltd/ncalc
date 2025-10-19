@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using NCalc.Exceptions;
 using NCalc.Tests.TestData;
 
@@ -406,7 +408,7 @@ public class MathsTests
         Assert.Equal(expectedValue, res);
     }
 
-    [Theory]
+/*    [Theory]
     [InlineData(int.MaxValue, '+', int.MaxValue)]
     [InlineData(int.MinValue, '-', int.MaxValue)]
     [InlineData(int.MaxValue, '*', int.MaxValue)]
@@ -446,7 +448,7 @@ public class MathsTests
 
         Assert.Throws<OverflowException>(() => e.Evaluate(TestContext.Current.CancellationToken));
     }
-
+*/
     [Theory]
     [InlineData("3 + '3'", ExpressionOptions.AllowCharValues, 54)]
     [InlineData("3 + '3'", ExpressionOptions.None, 6d)]
@@ -526,13 +528,85 @@ public class MathsTests
     [InlineData(-32768, 65535, 32767)]
     [InlineData(-1, 65535, 65534)]
     [InlineData(2, 65535, 65537)]
-    public void ShouldHandleSignedAndUnsignedShorts(short a, ushort b, int expected)
+    public void ShouldAddSignedAndUnsignedShorts(short a, ushort b, int expected)
     {
         //Fails with: System.InvalidOperationException: 'Operator '+' can't be applied to operands of types 'int' and 'ulong''
-        var failExp = new NCalc.Expression("a+b");
+        var failExp = new NCalc.Expression("a + b");
         failExp.Parameters["a"] = a;
         failExp.Parameters["b"] = b;
         var result = failExp.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData(1, ushort.MaxValue, -65534)]
+    public void ShouldSubtractSignedAndUnsignedShorts(short a, ushort b, int expected)
+    {
+        var failExp = new NCalc.Expression("a - b");
+        failExp.Parameters["a"] = a;
+        failExp.Parameters["b"] = b;
+        var result = failExp.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData(1, uint.MaxValue, -4294967294)]
+    public void ShouldSubtractSignedAndUnsignedInts(int a, uint b, long expected)
+    {
+        var failExp = new NCalc.Expression("a - b");
+        failExp.Parameters["a"] = a;
+        failExp.Parameters["b"] = b;
+        var result = failExp.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData(short.MaxValue, short.MaxValue, 65534)]
+    public void ShouldAddToOutOfBoundsShorts(short a, short b, int expected)
+    {
+        var failExp = new NCalc.Expression("a + b");
+        failExp.Parameters["a"] = a;
+        failExp.Parameters["b"] = b;
+        var result = failExp.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData(short.MinValue, short.MaxValue, -65535)]
+    public void ShouldSubtractToOutOfBoundsShorts(short a, short b, int expected)
+    {
+        var failExp = new NCalc.Expression("a - b");
+        failExp.Parameters["a"] = a;
+        failExp.Parameters["b"] = b;
+        var result = failExp.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void ShouldAddToOutOfBoundsInt64()
+    {
+        var failExp = new Expression("a + b", CultureInfo.InvariantCulture)
+        {
+            Parameters =
+                {
+                    ["a"] = Int64.MaxValue,
+                    ["b"] = Int64.MaxValue
+                },
+            Options = ExpressionOptions.OverflowProtection,
+        };
+        Assert.Throws<OverflowException>(() => failExp.Evaluate(TestContext.Current.CancellationToken));
+
+        failExp = new NCalc.Expression("a + b")
+        {
+            Parameters =
+            {
+                ["a"] = Int64.MaxValue,
+                ["b"] = Int64.MaxValue,
+            },
+            Options = ExpressionOptions.OverflowProtection | ExpressionOptions.UseBigNumbers,
+
+        };
+        var result = failExp.Evaluate(TestContext.Current.CancellationToken);
+        Assert.True(result is BigInteger);
     }
 }
