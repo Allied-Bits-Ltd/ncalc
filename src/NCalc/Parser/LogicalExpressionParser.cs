@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Numerics;
+
 using ExtendedNumerics;
+
 using NCalc.Domain;
 using NCalc.Exceptions;
 
@@ -302,29 +304,13 @@ public static class LogicalExpressionParser
         var decimalNumber = Terms.Number<decimal>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals, decimalSeparator, numGroupSeparator, decimalSeparator2)
             .Then<LogicalExpression>(static (ctx, val) =>
             {
-                bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
-                if (useDecimal)
-                    return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
-
-                return new ValueExpression((double)val).SetLocation(new ParlotExpressionLocation(ctx));
+                return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
             });
 
         var doubleNumber = Terms.Number<double>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals, decimalSeparator, numGroupSeparator, decimalSeparator2)
             .Then<LogicalExpression>(static (ctx, val) =>
             {
-                bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
-                if (useDecimal)
-                {
-                    if (val > MaxDecDouble)
-                        return new ValueExpression(double.PositiveInfinity).SetLocation(new ParlotExpressionLocation(ctx));
-
-                    if (val < MinDecDouble)
-                        return new ValueExpression(double.NegativeInfinity).SetLocation(new ParlotExpressionLocation(ctx));
-
-                    return new ValueExpression((decimal)val).SetLocation(new ParlotExpressionLocation(ctx));
-                }
-
-                return new ValueExpression(val);
+                return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
             });
 
         Parser<LogicalExpression>? bigDecimalNumber = null;
@@ -359,14 +345,14 @@ public static class LogicalExpressionParser
                 .When((_, val) => TryParseDecimal(val, acceptUnderscores) != null)
                 .Then<LogicalExpression>(static (ctx, val) =>
                 {
-                    bool useDecimal = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
+                    bool decimalDefault = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
 
                     BigDecimal? value = TryParseDecimal(val, ((LogicalExpressionParserContext)ctx).AcceptUnderscores);
 
                     if (value == null)
                         return new ValueExpression();  // never happens - the When condition ensures that val can be parsed
 
-                    if (useDecimal && (value >= decimal.MinValue && value <= decimal.MaxValue))
+                    if (decimalDefault && (value >= decimal.MinValue && value <= decimal.MaxValue))
                     {
                         decimal decValue = (decimal)value;
                         if (value == decValue)
@@ -380,7 +366,7 @@ public static class LogicalExpressionParser
                             return new ValueExpression(dValue).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
-                    if (!useDecimal && (value >= decimal.MinValue && value <= decimal.MaxValue))
+                    if (!decimalDefault && (value >= decimal.MinValue && value <= decimal.MaxValue))
                     {
                         decimal decValue = (decimal)value;
                         if (value == decValue)
@@ -391,7 +377,13 @@ public static class LogicalExpressionParser
                 });
         }
 
-        var decimalOrDoubleNumber = (bigDecimalNumber is not null) ? OneOf(bigDecimalNumber, decimalNumber, doubleNumber) : OneOf(decimalNumber, doubleNumber);
+        var decimalOrDoubleNumber = (bigDecimalNumber is not null)
+            ? (options.HasFlag(ExpressionOptions.DecimalAsDefault)
+              ? OneOf(bigDecimalNumber, decimalNumber, doubleNumber)
+              : OneOf(bigDecimalNumber, doubleNumber, decimalNumber))
+            : (options.HasFlag(ExpressionOptions.DecimalAsDefault)
+              ? OneOf(decimalNumber, doubleNumber)
+              : OneOf(doubleNumber, decimalNumber));
 
         // Add currency support
 
