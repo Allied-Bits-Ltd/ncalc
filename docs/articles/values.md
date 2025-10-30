@@ -168,3 +168,5 @@ The elements of the list may be separated with a comma (",") or a semicolon (";"
 ```
 ('Chers'; secretOperation(); 3.14)
 ```
+
+When [Advanced Options](advanced_value_formats.md) are used, the separator(s) that the parser should use to separate the values in the list is defined via the <xref:NCalc.AdvancedExpressionOptions.ArgumentSeparator> property, which suports comma, semicolon, colon, and space, as well as their combinations, as separators.

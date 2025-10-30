@@ -55,7 +55,13 @@
             CommaOrSemicolon,
             Comma,
             Semicolon,
-            Colon
+            Colon,
+            Space,
+            CommaOrSpace,
+            CommaOrSemicolonOrSpace,
+            SemicolonOrColon,
+            SemicolonOrSpace,
+            SemicolonOrColonOrSpace,
         }
 
         public enum SeparatorType
