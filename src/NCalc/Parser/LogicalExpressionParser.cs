@@ -488,6 +488,8 @@ public static class LogicalExpressionParser
         var colon = Terms.Char(':');
         var semicolon = Terms.Char(';');
 
+        var space = Literals.Char(' ');
+
         var dotChar = Terms.Char('.');
 
         var statementEnd = semicolon;
@@ -593,6 +595,12 @@ public static class LogicalExpressionParser
             AdvancedExpressionOptions.ArgumentSeparatorKind.Comma => comma,
             AdvancedExpressionOptions.ArgumentSeparatorKind.Semicolon => semicolon,
             AdvancedExpressionOptions.ArgumentSeparatorKind.Colon => colon,
+            AdvancedExpressionOptions.ArgumentSeparatorKind.Space => space,
+            AdvancedExpressionOptions.ArgumentSeparatorKind.CommaOrSpace => comma.Or(space),
+            AdvancedExpressionOptions.ArgumentSeparatorKind.CommaOrSemicolonOrSpace => OneOf(comma, semicolon, space),
+            AdvancedExpressionOptions.ArgumentSeparatorKind.SemicolonOrColon => semicolon.Or(colon),
+            AdvancedExpressionOptions.ArgumentSeparatorKind.SemicolonOrSpace => semicolon.Or(space),
+            AdvancedExpressionOptions.ArgumentSeparatorKind.SemicolonOrColonOrSpace => OneOf(colon, semicolon, space),
             _ => comma.Or(semicolon),
         };
 

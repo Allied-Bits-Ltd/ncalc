@@ -1,10 +1,13 @@
 #nullable enable
 
 using System.Numerics;
+
 using ExtendedNumerics;
+
 using NCalc.Domain;
 using NCalc.Parser;
 using NCalc.Tests.TestData;
+
 using Parlot.Fluent;
 
 namespace NCalc.Tests;
@@ -2118,6 +2121,18 @@ public class AdvFeatureTests
         var expression = new Expression(input, ExpressionOptions.NoCache);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.Colon;
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
+    [InlineData("Max(1 3)", 3)]
+    public void ShouldHandleSpaceAsSeparator(string input, object expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.Space;
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);

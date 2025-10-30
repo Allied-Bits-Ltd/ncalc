@@ -101,6 +101,35 @@ public class ParserTests
         Assert.Equal(arrayExpectedCount, ((LogicalExpressionList)logicalExpression).Count);
     }
 
+    [InlineData("(1 2 3 4 5)", 5)]
+    [InlineData("('Hello'  func())", 2)]
+    [Theory]
+    public void ShouldParseListsWithSpaceAsSeparator(string formula, int arrayExpectedCount)
+    {
+
+        AdvancedExpressionOptions advancedOptions = new();
+        advancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.Space;
+        var logicalExpression = LogicalExpressionFactory.Create(formula, advancedOptions: advancedOptions);
+
+        Assert.IsType<LogicalExpressionList>(logicalExpression);
+
+        Assert.Equal(arrayExpectedCount, ((LogicalExpressionList)logicalExpression).Count);
+    }
+
+    [InlineData("(1;2:3 4 5)", 5)]
+    [Theory]
+    public void ShouldParseListsWithDifferentSeparators(string formula, int arrayExpectedCount)
+    {
+
+        AdvancedExpressionOptions advancedOptions = new();
+        advancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.SemicolonOrColonOrSpace;
+        var logicalExpression = LogicalExpressionFactory.Create(formula, advancedOptions: advancedOptions);
+
+        Assert.IsType<LogicalExpressionList>(logicalExpression);
+
+        Assert.Equal(arrayExpectedCount, ((LogicalExpressionList)logicalExpression).Count);
+    }
+
     [InlineData("78b1941f4e7941c9bef656fad7326538")]
     [InlineData("b1548bd5-2556-4d2a-9f47-bb8d421026dd")]
     [InlineData("f44e449f-b02f-4f81-96d8-9292c5623b8b")]
