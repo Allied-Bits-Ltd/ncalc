@@ -1,3 +1,7 @@
+# 8.6.3 (Allied Bits)
+* Added spaces as an option for a separator of list elements. Also, added some coombinations of characters (e.g., ColonOrSpace) as options.
+* Slightly improved parsing of decimalsand doubles
+
 # 8.6.2 (Allied Bits)
 * Added protection against overflow by upscaling the parameters of basic math operations and repeating the operation in the case when an operation causes an overflow error.
 
