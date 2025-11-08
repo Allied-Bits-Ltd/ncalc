@@ -1770,11 +1770,12 @@ public static class MathHelper
 
     private static object ExecuteOperation(object a, object b, char operatorName, Func<object, object, object> func, MathHelperOptions options, TypeCode typeCode = TypeCode.Empty)
     {
+        object origA = a, origB = b;
         if (typeCode == TypeCode.Empty)
             typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
-                                $"Operator '{operatorName}' is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+                                $"Operator '{operatorName}' is not implemented for operands of types {origA.GetType().ToString()} and {origB.GetType().ToString()}");
 
         if (IsBoxedNumber(a) || typeCode is TypeCode.Char)
             return func(a, b);
