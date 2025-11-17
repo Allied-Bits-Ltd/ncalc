@@ -1,3 +1,6 @@
+# 8.6.4 (Allied Bits)
+* Added .NET 10 target.
+
 # 8.6.3 (Allied Bits)
 * Added spaces as an option for a separator of list elements. Also, added some coombinations of characters (e.g., ColonOrSpace) as options.
 * Slightly improved parsing of decimalsand doubles
