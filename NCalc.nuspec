@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
     <id>AlliedBits.NCalc</id>
-    <version>8.6.3</version>
+    <version>8.6.4</version>
     <authors>Sebastien Ros and contributors, Eugene Mayevski</authors>
     <copyright>Sebastien Ros and contributors, Eugene Mayevski</copyright>
     <license type="expression">MIT</license>
@@ -10,11 +10,11 @@
     <icon>NCalc.png</icon>
     <title>The mathematical expression evaluator for .NET</title>
     <tags>ncalc math expression evaluation</tags>
-    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="37953705332c4e3b822c3d0459781542ef128658" />
+    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="8769a7e39f1f1d9a38478f05d49d2cbf85879080" />
     <projectUrl>https://github.com/Allied-Bits-Ltd/ncalc</projectUrl>
     <readme>README.nuget.md</readme>
     <description>NCalc is a fast and lightweight expression evaluator library for .NET, designed for flexibility and high performance. It supports a wide range of mathematical and logical operations and flow control statements (loops and conditions). NCalc can parse any expression and evaluate the result,
-including static or dynamic parameters and custom functions. NCalc targets .NET 9, .NET 8, .NET Standard 2.0, and NET Framework 4.6.2 and later.
+including static or dynamic parameters and custom functions. NCalc targets .NET 10, .NET 9, .NET 8, .NET Standard 2.0, and NET Framework 4.6.2 and later.
 
 This package by Allied Bits offers a number of advanced features compared to the original NCalc project.
     </description>
@@ -48,6 +48,15 @@ This package by Allied Bits offers a number of advanced features compared to the
         <dependency id="AlliedBits.Parlot" version="1.4.2.1" exclude="Build,Analyzers" />
         <dependency id="System.Collections.Immutable" version="9.0.2" exclude="Build,Analyzers" />
       </group>
+      <group targetFramework="net10.0">
+        <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.4.132" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Bcl.AsyncInterfaces" version="9.0.2" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Console" version="9.0.2" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.TraceSource" version="9.0.2" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.ObjectPool" version="9.0.2" exclude="Build,Analyzers" />
+        <dependency id="AlliedBits.Parlot" version="1.4.2.1" exclude="Build,Analyzers" />
+        <dependency id="System.Collections.Immutable" version="9.0.2" exclude="Build,Analyzers" />
+      </group>
       <group targetFramework=".NETStandard2.0">
         <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.4.132" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Bcl.AsyncInterfaces" version="9.0.2" exclude="Build,Analyzers" />
@@ -67,5 +76,6 @@ This package by Allied Bits offers a number of advanced features compared to the
     <file src="src\NCalc\bin\Release\netstandard2.0\NCalc.dll" target="lib\netstandard2.0" />
     <file src="src\NCalc\bin\Release\net8.0\NCalc.dll" target="lib\net8.0" />
     <file src="src\NCalc\bin\Release\net9.0\NCalc.dll" target="lib\net9.0" />    
+    <file src="src\NCalc\bin\Release\net10.0\NCalc.dll" target="lib\net10.0" />    
   </files>
 </package>

@@ -776,7 +776,7 @@ public class LambdaTests
             var lambda = expression.ToLambda<bool>();
 
             var actual = lambda();
-            var expectedEval = (bool)expression.Evaluate();
+            var expectedEval = (bool?) expression.Evaluate(TestContext.Current.CancellationToken);
 
             Assert.Equal(exp, actual);
             Assert.Equal(expectedEval, actual);
@@ -798,7 +798,7 @@ public class LambdaTests
         var lambda = expression.ToLambda<bool>();
 
         var actual = lambda();
-        var expectedEval = (bool)expression.Evaluate();
+        var expectedEval = (bool?)expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, actual);
         Assert.Equal(expectedEval, actual);

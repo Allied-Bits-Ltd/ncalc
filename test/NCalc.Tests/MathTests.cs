@@ -1,6 +1,7 @@
 using System.Numerics;
 
 using NCalc.Exceptions;
+using NCalc.Helpers;
 using NCalc.Tests.TestData;
 
 using Assert = Xunit.Assert;
@@ -604,7 +605,6 @@ public class MathsTests
                 ["b"] = Int64.MaxValue,
             },
             Options = ExpressionOptions.OverflowProtection | ExpressionOptions.UseBigNumbers,
-
         };
         var result = failExp.Evaluate(TestContext.Current.CancellationToken);
         Assert.True(result is BigInteger);

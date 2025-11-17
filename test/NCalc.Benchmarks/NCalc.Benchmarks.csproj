@@ -1,7 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <OutputType>Exe</OutputType>
@@ -20,9 +21,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="Roslynator.Analyzers" Version="4.14.0" />
-    <PackageReference Update="Roslynator.CodeAnalysis.Analyzers" Version="4.14.0" />
-    <PackageReference Update="Roslynator.Formatting.Analyzers" Version="4.14.0" />
+    <PackageReference Update="Roslynator.Analyzers" Version="4.14.*" />
+    <PackageReference Update="Roslynator.CodeAnalysis.Analyzers" Version="4.14.*" />
+    <PackageReference Update="Roslynator.Formatting.Analyzers" Version="4.14.*" />
   </ItemGroup>
 
 </Project>
