@@ -65,6 +65,7 @@ For this, create an instance of <xref:NCalc.Parser.LogicalExpressionParser> and 
 
 The created objects can then be passed to the corresponding overload of the <xref:NCalc.Expression.Evaluate(Parlot.Fluent.Parser{NCalc.Domain.LogicalExpression},NCalc.Parser.LogicalExpressionParserContext)> or <xref:NCalc.AsyncExpression.EvaluateAsync(Parlot.Fluent.Parser{NCalc.Domain.LogicalExpression},NCalc.Parser.LogicalExpressionParserContext,System.Threading.CancellationToken)> method. 
 To change the expression, create a new instance of <xref:NCalc.Parser.LogicalExpressionParserContext>, whereas <xref:NCalc.Parser.LogicalExpressionParser> and the Expression or AsyncExpression object would remain the same.
+Hint: You can pass a cancellation token to the constructor of <xref:NCalc.Parser.LogicalExpressionParserContext> too. 
 
 Example: 
 
@@ -80,7 +81,3 @@ parserContext = new LogicalExpressionParserContext("2*3", ExpressionOptions.None
 // the parser is reused there
 result = expression.Evaluate(parser, parserContext, TestContext.Current.CancellationToken); // returns 6
 ```
-
-## Learn More
-For additional information on the technique used to create this library please read [this
-article](http://www.codeproject.com/KB/recipes/sota_expression_evaluator.aspx).

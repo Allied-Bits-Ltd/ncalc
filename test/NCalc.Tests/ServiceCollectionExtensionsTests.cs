@@ -132,7 +132,7 @@ public class ServiceCollectionExtensionsTests
         public LogicalExpression Create(string expression, CultureInfo cultureInfo, ExpressionOptions options = ExpressionOptions.None)
             => throw new NCalcException("Stub method intented for testing.");
 
-        public LogicalExpression Create(string expression, ExpressionContextBase? expressionContext, CultureInfo cultureInfo, ExpressionOptions options = ExpressionOptions.None, AdvancedExpressionOptions extendedOptions = null) => throw new NCalcException("Stub method intended for testing.");
+        public LogicalExpression Create(string expression, ExpressionContextBase? expressionContext, CultureInfo cultureInfo, ExpressionOptions options = ExpressionOptions.None, AdvancedExpressionOptions extendedOptions = null, CancellationToken cancellationToken = default) => throw new NCalcException("Stub method intended for testing.");
     }
 
     private class CustomVisitor(ExpressionContext context) : EvaluationVisitor(context)

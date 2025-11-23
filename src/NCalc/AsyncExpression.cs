@@ -131,7 +131,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
     public ValueTask<object?> EvaluateAsync(CancellationToken cancellationToken = default)
     {
-        LogicalExpression ??= GetLogicalExpression();
+        LogicalExpression ??= GetLogicalExpression(cancellationToken);
 
         return InternalEvaluateAsync(cancellationToken);
     }

@@ -152,7 +152,7 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         }
     }
 
-    protected LogicalExpression? GetLogicalExpression()
+    protected LogicalExpression? GetLogicalExpression(CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(ExpressionString))
         {
@@ -173,7 +173,7 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
 
         try
         {
-            logicalExpression = LogicalExpressionFactory.Create(ExpressionString!, Context, CultureInfo, Context.Options, Context.AdvancedOptions);
+            logicalExpression = LogicalExpressionFactory.Create(ExpressionString!, Context, CultureInfo, Context.Options, Context.AdvancedOptions, cancellationToken);
             if (isCacheEnabled)
                 LogicalExpressionCache.Set(ExpressionString!, logicalExpression);
         }

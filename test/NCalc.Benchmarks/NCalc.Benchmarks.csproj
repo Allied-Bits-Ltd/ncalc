@@ -13,7 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BenchmarkDotNet" Version="0.15.2" />
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.6" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,9 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="Roslynator.Analyzers" Version="4.14.*" />
-    <PackageReference Update="Roslynator.CodeAnalysis.Analyzers" Version="4.14.*" />
-    <PackageReference Update="Roslynator.Formatting.Analyzers" Version="4.14.*" />
+    <PackageReference Update="Nerdbank.GitVersioning" Version="3.9.50" />
+    <PackageReference Update="Roslynator.Analyzers" Version="4.14.1" />
+    <PackageReference Update="Roslynator.CodeAnalysis.Analyzers" Version="4.14.1" />
+    <PackageReference Update="Roslynator.Formatting.Analyzers" Version="4.14.1" />
   </ItemGroup>
 
 </Project>

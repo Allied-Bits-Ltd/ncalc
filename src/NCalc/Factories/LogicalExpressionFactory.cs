@@ -35,11 +35,11 @@ public sealed class LogicalExpressionFactory(ILogger<LogicalExpressionFactory> l
         }
     }
 
-    LogicalExpression ILogicalExpressionFactory.Create(string expression, ExpressionContextBase? expressionContext, CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? advancedOptions)
+    LogicalExpression ILogicalExpressionFactory.Create(string expression, ExpressionContextBase? expressionContext, CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? advancedOptions, CancellationToken cancellationToken)
     {
         try
         {
-            return Create(expression, expressionContext, cultureInfo, options, advancedOptions);
+            return Create(expression, expressionContext, cultureInfo, options, advancedOptions, cancellationToken);
         }
         catch (Exception exception)
         {
@@ -48,9 +48,9 @@ public sealed class LogicalExpressionFactory(ILogger<LogicalExpressionFactory> l
         }
     }
 
-    public static LogicalExpression Create(string expression, ExpressionContextBase? expressionContext = null, CultureInfo? cultureInfo = null, ExpressionOptions options = ExpressionOptions.None, AdvancedExpressionOptions? advancedOptions = null)
+    public static LogicalExpression Create(string expression, ExpressionContextBase? expressionContext = null, CultureInfo? cultureInfo = null, ExpressionOptions options = ExpressionOptions.None, AdvancedExpressionOptions? advancedOptions = null, CancellationToken cancellationToken = default)
     {
-        var parserContext = new LogicalExpressionParserContext(expression, options, cultureInfo);
+        var parserContext = new LogicalExpressionParserContext(expression, options, cultureInfo, cancellationToken);
         parserContext.AdvancedOptions = advancedOptions;
         LogicalExpression result = LogicalExpressionParser.Parse(parserContext);
 

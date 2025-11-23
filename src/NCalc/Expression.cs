@@ -141,7 +141,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
     public object? Evaluate(CancellationToken cancellationToken)
     {
-        LogicalExpression ??= GetLogicalExpression();
+        LogicalExpression ??= GetLogicalExpression(cancellationToken);
 
         return InternalEvaluate(cancellationToken);
     }

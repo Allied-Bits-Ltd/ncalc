@@ -1,3 +1,6 @@
+# 8.6.5 (Allied Bits)
+* Extended cancellation token support to the parsing stage - now, it is possible to specify and use a cancellation token not just while evaluating an expression but also when just parsing it.
+
 # 8.6.4 (Allied Bits)
 * Added .NET 10 target.
 

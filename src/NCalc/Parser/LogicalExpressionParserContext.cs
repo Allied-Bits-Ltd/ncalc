@@ -23,23 +23,52 @@ public sealed class LogicalExpressionParserContext : ParseContext
 
     public CultureInfo CultureInfo { get; }
 
-    public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo? cultureInfo) : base(new Scanner(text))
+    public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo? cultureInfo, CancellationToken cancellationToken)
+        : base(new Scanner(text), cancellationToken)
     {
         Options = options;
         CultureInfo = cultureInfo ?? CultureInfo.CurrentCulture;
         SetupSecondaryProperties();
     }
 
-    public LogicalExpressionParserContext(string text, ExpressionOptions options) : this(text, options, CultureInfo.CurrentCulture)
+    public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo? cultureInfo)
+        : this(text, options, cultureInfo, default(CancellationToken))
+    {
+        Options = options;
+        CultureInfo = cultureInfo ?? CultureInfo.CurrentCulture;
+        SetupSecondaryProperties();
+    }
+
+    public LogicalExpressionParserContext(string text, ExpressionOptions options, CancellationToken cancellationToken)
+        : this(text, options, CultureInfo.CurrentCulture, cancellationToken)
     {
     }
 
-    public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo cultureInfo, AdvancedExpressionOptions? advancedOptions) : this(text, options, cultureInfo)
+    public LogicalExpressionParserContext(string text, ExpressionOptions options)
+        : this(text, options, CultureInfo.CurrentCulture)
+    {
+    }
+
+    public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo cultureInfo, AdvancedExpressionOptions? advancedOptions, CancellationToken cancellationToken)
+        : this(text, options, cultureInfo, cancellationToken)
     {
         AdvancedOptions = advancedOptions;
     }
 
-    public LogicalExpressionParserContext(string text, ExpressionOptions options, AdvancedExpressionOptions? advancedOptions) : this(text, options, CultureInfo.CurrentCulture)
+    public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo cultureInfo, AdvancedExpressionOptions? advancedOptions)
+        : this(text, options, cultureInfo)
+    {
+        AdvancedOptions = advancedOptions;
+    }
+
+    public LogicalExpressionParserContext(string text, ExpressionOptions options, AdvancedExpressionOptions? advancedOptions, CancellationToken cancellationToken)
+        : this(text, options, CultureInfo.CurrentCulture, cancellationToken)
+    {
+        AdvancedOptions = advancedOptions;
+    }
+
+    public LogicalExpressionParserContext(string text, ExpressionOptions options, AdvancedExpressionOptions? advancedOptions)
+        : this(text, options, CultureInfo.CurrentCulture)
     {
         AdvancedOptions = advancedOptions;
     }

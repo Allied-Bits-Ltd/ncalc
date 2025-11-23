@@ -22,9 +22,9 @@ public partial class Expression
     private readonly struct Void;
     protected record struct LinqExpressionWithParameter(LinqExpression Expression, LinqParameterExpression? Parameter);
 
-    private LinqExpressionWithParameter ToLinqExpressionInternal<TContext, TResult>()
+    private LinqExpressionWithParameter ToLinqExpressionInternal<TContext, TResult>(CancellationToken cancellationToken)
     {
-        LogicalExpression ??= GetLogicalExpression();
+        LogicalExpression ??= GetLogicalExpression(cancellationToken);
 
         if (LogicalExpression is null)
             throw Error!;
@@ -50,19 +50,19 @@ public partial class Expression
         return new() { Expression = body, Parameter = parameter };
     }
 
-    protected virtual LinqExpression ToLinqExpression<TResult>()
+    protected virtual LinqExpression ToLinqExpression<TResult>(CancellationToken cancellationToken = default)
     {
-        return ToLinqExpressionInternal<Void, TResult>().Expression;
+        return ToLinqExpressionInternal<Void, TResult>(cancellationToken).Expression;
     }
 
-    protected virtual LinqExpressionWithParameter ToLinqExpression<TContext, TResult>()
+    protected virtual LinqExpressionWithParameter ToLinqExpression<TContext, TResult>(CancellationToken cancellationToken = default)
     {
-        return ToLinqExpressionInternal<TContext, TResult>();
+        return ToLinqExpressionInternal<TContext, TResult>(cancellationToken);
     }
 
-    public Func<TResult> ToLambda<TResult>()
+    public Func<TResult> ToLambda<TResult>(CancellationToken cancellationToken = default)
     {
-        var body = ToLinqExpression<TResult>();
+        var body = ToLinqExpression<TResult>(cancellationToken);
         var lambda = LinqExpression.Lambda<Func<TResult>>(body);
 
         if (UseSystemLinqCompiler)
@@ -71,9 +71,9 @@ public partial class Expression
         return lambda.CompileFast();
     }
 
-    public Func<TContext, TResult> ToLambda<TContext, TResult>()
+    public Func<TContext, TResult> ToLambda<TContext, TResult>(CancellationToken cancellationToken = default)
     {
-        var linqExp = ToLinqExpression<TContext, TResult>();
+        var linqExp = ToLinqExpression<TContext, TResult>(cancellationToken);
         if (linqExp.Parameter != null)
         {
             var lambda = LinqExpression.Lambda<Func<TContext, TResult>>(linqExp.Expression, linqExp.Parameter);
