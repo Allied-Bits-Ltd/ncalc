@@ -1,3 +1,6 @@
+# 8.6.5.1 (Allied Bits)
+* Updated the version in the reference to Parlot to 1.5.6
+
 # 8.6.5 (Allied Bits)
 * Extended cancellation token support to the parsing stage - now, it is possible to specify and use a cancellation token not just while evaluating an expression but also when just parsing it.
 

@@ -57,6 +57,10 @@ var expression = new NCalc.Expression("a = 1; while (a < 5) { a += 1; }", Expres
 
 ```
 
+#### Loop flow control
+
+You can use `break` and `continue` keywords in loops; they do the same job as in C/C++ and C#. 
+
 ### Returning of Value
 
 An expression always evaluates to some value. In complex expressions which include conditional statements and loops, it may be desired to return a value without evaluating the expression completely. For this, one can use a common `return` keyword followed by the value to return. 
@@ -135,6 +139,6 @@ Note that when C-style comments are enabled, the "//" operator used in Python fo
 
 ### Recursive and non-recursive evaluation
 
-By default, the evaluator works by recursively traversing the expression tree. Note that even linear expressions like "1+2+...+99+100" would be parsed into a tree with plenty of nodes (about 200 nodes ni the given example). This can cause a StackOverflow error.
+By default, the evaluator works by recursively traversing the expression tree. Note that even linear expressions like "1+2+...+99+100" would be parsed into a tree with plenty of nodes (about 200 nodes in the given example). This can cause a StackOverflow error.
 If you need to evaluate such long or deeply nested expressions, you can enable the non-recursive evaluator by setting the <xref:NCalc.ExpressionOptions.UseNonRecursiveEvaluator> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class.
 This non-recursive evaluator is slower than the recursive one, so it is disabled by default.

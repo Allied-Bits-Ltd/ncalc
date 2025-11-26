@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
     <id>AlliedBits.NCalc</id>
-    <version>8.6.5</version>
+    <version>8.6.5.1</version>
     <authors>Sebastien Ros and contributors, Eugene Mayevski</authors>
     <copyright>Sebastien Ros and contributors, Eugene Mayevski</copyright>
     <license type="expression">MIT</license>
@@ -10,7 +10,7 @@
     <icon>NCalc.png</icon>
     <title>The mathematical expression evaluator for .NET</title>
     <tags>ncalc math expression evaluation</tags>
-    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="7e1fc324408cfc11ff2dd4a14a4d02aff4e2f386" />
+    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="3336113764303166011b0bb854a3b6a1501838d6" />
     <projectUrl>https://github.com/Allied-Bits-Ltd/ncalc</projectUrl>
     <readme>README.nuget.md</readme>
     <description>This package by Allied Bits offers a number of advanced features compared to the original NCalc project.
@@ -20,7 +20,7 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
     </description>
     <dependencies>
       <group targetFramework=".NETFramework4.6.2">
-        <dependency id="AlliedBits.Parlot" version="1.5.3" exclude="Build,Analyzers" />
+        <dependency id="AlliedBits.Parlot" version="1.5.6" exclude="Build,Analyzers" />
         <dependency id="ExtendedNumerics.BigDecimal" version="3001.1.0.233" exclude="Build,Analyzers" />
         <dependency id="FastExpressionCompiler" version="5.3.0" exclude="Build,Analyzers" />        
         <dependency id="Microsoft.CSharp" version="4.7.0" exclude="Build,Analyzers" />
@@ -33,15 +33,15 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
         <dependency id="System.ValueTuple" version="4.6.1" exclude="Build,Analyzers" />
       </group>
       <group targetFramework="net8.0">
+        <dependency id="AlliedBits.Parlot" version="1.5.6" exclude="Build,Analyzers" />
         <dependency id="ExtendedNumerics.BigDecimal" version="3000.0.4.132" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Bcl.AsyncInterfaces" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.Logging.Console" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.Logging.TraceSource" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.ObjectPool" version="9.0.2" exclude="Build,Analyzers" />
-        <dependency id="AlliedBits.Parlot" version="1.5.3" exclude="Build,Analyzers" />
       </group>
       <group targetFramework="net9.0">
-        <dependency id="AlliedBits.Parlot" version="1.5.3" exclude="Build,Analyzers" />
+        <dependency id="AlliedBits.Parlot" version="1.5.6" exclude="Build,Analyzers" />
         <dependency id="ExtendedNumerics.BigDecimal" version="3001.1.0.233" exclude="Build,Analyzers" />
         <dependency id="FastExpressionCompiler" version="5.3.0" exclude="Build,Analyzers" />        
         <dependency id="Microsoft.Extensions.Logging.Console" version="10.0.0" exclude="Build,Analyzers" />
@@ -51,7 +51,7 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
         <dependency id="System.Collections.Immutable" version="10.0.0" exclude="Build,Analyzers" />
       </group>
       <group targetFramework="net10.0">
-        <dependency id="AlliedBits.Parlot" version="1.5.3" exclude="Build,Analyzers" />
+        <dependency id="AlliedBits.Parlot" version="1.5.6" exclude="Build,Analyzers" />
         <dependency id="ExtendedNumerics.BigDecimal" version="3001.1.0.233" exclude="Build,Analyzers" />
         <dependency id="FastExpressionCompiler" version="5.3.0" exclude="Build,Analyzers" />        
         <dependency id="Microsoft.Extensions.Logging.Console" version="10.0.0" exclude="Build,Analyzers" />
@@ -61,7 +61,7 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
         <dependency id="System.Collections.Immutable" version="10.0.0" exclude="Build,Analyzers" />
       </group>
       <group targetFramework=".NETStandard2.0">
-        <dependency id="AlliedBits.Parlot" version="1.5.3" exclude="Build,Analyzers" />
+        <dependency id="AlliedBits.Parlot" version="1.5.6" exclude="Build,Analyzers" />
         <dependency id="ExtendedNumerics.BigDecimal" version="3001.1.0.233" exclude="Build,Analyzers" />
         <dependency id="FastExpressionCompiler" version="5.3.0" exclude="Build,Analyzers" />        
         <dependency id="Microsoft.CSharp" version="4.7.0" exclude="Build,Analyzers" />

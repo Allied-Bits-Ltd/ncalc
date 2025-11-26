@@ -2365,6 +2365,60 @@ public class AdvFeatureTests
         result = expression.Evaluate(parser, parserContext, TestContext.Current.CancellationToken);
         Assert.Equal(6, result);
     }
+
+    [Theory]
+    [InlineData("iffy := 2", "iffy", 2, 2)]
+    [InlineData("break1 := 2", "break1", 2, 2)]
+    [InlineData("return_val := 2", "return_val", 2, 2)]
+    [InlineData("continue_ := 2 + 2", "continue_", 4, 4)]
+    [InlineData("while_1 := (2 + 2)", "while_1", 4, 4)]
+    public void ShouldHandleKeywordsAndVarNames(string input, string expectedVar, int expectedVarValue, int expectedExprValue)
+    {
+        bool eventFired = false;
+
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        expression.UpdateParameter += (name, args) =>
+        {
+            eventFired = true;
+            Assert.Equal(expectedVar, name);
+            int iValue;
+            Assert.NotNull(args.Value);
+
+            if (args.Value is double dValue)
+            {
+                iValue = (int)(long)dValue;
+            }
+            else
+            if (args.Value is long lValue)
+            {
+                iValue = (int)lValue;
+            }
+            else
+                iValue = (int)args.Value;
+
+            Assert.Equal(expectedVarValue, iValue);
+        };
+
+        long iResult;
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+
+        if (result is double dResult)
+        {
+            iResult = (long)dResult;
+        }
+        if (result is long lResult)
+        {
+            iResult = (int)lResult;
+        }
+        else
+            iResult = (int)result;
+
+        Assert.True(eventFired);
+
+        Assert.Equal(expectedExprValue, iResult);
+    }
 }
 
 [Trait("Category", "Advanced")]

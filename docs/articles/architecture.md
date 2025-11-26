@@ -12,7 +12,7 @@ B --> |Evaluation|2
 ## Parsing
 
 Parsing is the process of analyzing the input expression and converting it into a structured format that can be easily
-evaluated. We use [Parlot](https://github.com/sebastienros/parlot) to handle parsing, but you can use any parser you
+evaluated. We use [Parlot](https://github.com/Allied-Bits-ltd/parlot) to handle parsing, but you can use any parser you
 want if you implement the interface <xref:NCalc.Factories.ILogicalExpressionFactory>.
 For our example, "1+1", the parsing step converts the string into an abstract syntax tree (AST).
 This tree is made up of different types of expressions, such as binary expressions, value expressions our even
