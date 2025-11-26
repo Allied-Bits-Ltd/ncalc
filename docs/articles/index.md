@@ -2,10 +2,6 @@
 
 NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expression or a group of expressions and evaluate the result, including static or dynamic parameters and custom functions.
 
-## Project Description
-
-NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expression or a group of expressions and evaluate the result, including static or dynamic parameters and custom functions.
-
 ## Table of Contents
 - [Operators](operators.md): Available standard operators and structures.
 - [Values](values.md): Authorized values like types and functions.

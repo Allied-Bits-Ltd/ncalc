@@ -13,10 +13,10 @@
     <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="7e1fc324408cfc11ff2dd4a14a4d02aff4e2f386" />
     <projectUrl>https://github.com/Allied-Bits-Ltd/ncalc</projectUrl>
     <readme>README.nuget.md</readme>
-    <description>NCalc is a fast and lightweight expression evaluator library for .NET, designed for flexibility and high performance. It supports a wide range of mathematical and logical operations and flow control statements (loops and conditions). NCalc can parse any expression and evaluate the result,
-including static or dynamic parameters and custom functions. NCalc targets .NET 10, .NET 9, .NET 8, .NET Standard 2.0, and NET Framework 4.6.2 and later.
+    <description>This package by Allied Bits offers a number of advanced features compared to the original NCalc project.
 
-This package by Allied Bits offers a number of advanced features compared to the original NCalc project.
+NCalc is a fast and lightweight expression evaluator library for .NET, designed for flexibility and high performance. It supports a wide range of mathematical and logical operations and flow control statements (loops and conditions). NCalc can parse any expression and evaluate the result,
+including static or dynamic parameters and custom functions. NCalc targets .NET 10, .NET 9, .NET 8, .NET Standard 2.0, and NET Framework 4.6.2 and later.
     </description>
     <dependencies>
       <group targetFramework=".NETFramework4.6.2">

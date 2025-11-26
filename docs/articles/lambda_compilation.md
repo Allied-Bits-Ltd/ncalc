@@ -46,7 +46,7 @@ But if you face issues, you can switch back to built-in System.Linq.Expressions.
 
 ## Performance
 
-You should cache the result of <xref:NCalc.Expression.ToLambda``1>. The evaluation of compiled expressions is faster, but the compilation of them is rather slow.
+You should cache the result of <xref:NCalc.Expression.ToLambda``1(System.Threading.CancellationToken)>. The evaluation of compiled expressions is faster, but the compilation of them is rather slow.
 See [benchmarks](benchmarks.md) for more info.
 
 ## Limitations
