@@ -175,7 +175,7 @@ parser.
 
 Fast Compiler for C# Expression Trees. Developed by [Maksim Volkov](https://github.com/dadhi)
 
-### [PanoramicData.NCalcExtensions](https://github.com/panoramicdata/PanoramicData.NCalcExtensions)
+### [PanoramicData.NCalcExtensions](https://github.com/Allied-Bits-ltd/PanoramicData.NCalcExtensions)
 
 Extension functions for NCalc to handle many general functions,  
 including string functions, switch, if, in, typeOf, cast etc.  
