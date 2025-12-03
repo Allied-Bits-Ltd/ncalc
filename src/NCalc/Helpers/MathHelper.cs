@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using System.Reflection;
 
 using ExtendedNumerics;
 
@@ -11,20 +12,157 @@ namespace NCalc.Helpers;
 /// </summary>
 public static class MathHelper
 {
+    enum ArithmeticOperation
+    {
+        Add,
+        Subtract,
+        Multiply,
+        Divide,
+        Modulo,
+        AddPercent,
+        SubtractPercent,
+        MultiplyPercent,
+        DividePercent,
+    }
+
     // unchecked
-    private static readonly Func<dynamic, dynamic, object> AddFunc = (a, b) => a + b;
-    private static readonly Func<dynamic, dynamic, object> SubtractFunc = (a, b) => a - b;
-    private static readonly Func<dynamic, dynamic, object> MultiplyFunc = (a, b) => a * b;
-    private static readonly Func<dynamic, dynamic, object> DivideFunc = (a, b) => a / b;
 
-    private static readonly Func<dynamic, dynamic, object> AddPercentFunc = (a, b) => a * (100 + b) / 100; // a + (a * b/100);
-    private static readonly Func<dynamic, dynamic, object> SubtractPercentFunc = (a, b) => a * (100 - b) / 100; //a - (a * b / 100);
-    private static readonly Func<dynamic, dynamic, object> MultiplyPercentFunc = (a, b) => a * b / 100;
-    private static readonly Func<dynamic, dynamic, object> DividePercentFunc = (a, b) => a * 100 / b;
+    private static readonly Func<dynamic, dynamic, object> DynamicAddFunc = (a, b) => unchecked(a + b);
+    private static readonly Func<dynamic, dynamic, object> DynamicSubtractFunc = (a, b) => unchecked(a - b);
+    private static readonly Func<dynamic, dynamic, object> DynamicMultiplyFunc = (a, b) => unchecked(a * b);
+    private static readonly Func<dynamic, dynamic, object> DynamicDivideFunc = (a, b) => unchecked(a / b);
+    private static readonly Func<dynamic, dynamic, object> DynamicModuloFunc = (a, b) => unchecked(a % b);
 
-    private static readonly Func<dynamic, dynamic, object> ModuloFunc = (a, b) => a % b;
+    private static readonly Func<dynamic, dynamic, object> DynamicAddPercentFunc = (a, b) => unchecked(a * (100 + b) / 100); // a / (a * b/100);
+    private static readonly Func<dynamic, dynamic, object> DynamicSubtractPercentFunc = (a, b) => unchecked(a * (100 - b) / 100); //a - (a * b / 100);
+    private static readonly Func<dynamic, dynamic, object> DynamicMultiplyPercentFunc = (a, b) => unchecked(a * b / 100);
+    private static readonly Func<dynamic, dynamic, object> DynamicDividePercentFunc = (a, b) => unchecked(a * 100 / b);
 
-    // checked
+    private static object? AddFunc(object a, object b, MathHelperOptions options)
+    {
+        object? result = null;
+        if (!options.AvoidDynamicFunctions)
+        {
+            if (options.OverflowProtection)
+                result = AddFuncChecked(a, b);
+            else
+                result = DynamicAddFunc(a, b);
+        }
+        else
+        if (a is char ca && b is char cb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ca + cb);
+            else
+                result = unchecked(ca + cb);
+        }
+        else
+        if (a is byte ba && b is byte bb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ba + bb);
+            else
+                result = unchecked(ba + bb);
+        }
+        else
+        if (a is sbyte sa && b is sbyte sb)
+        {
+            if (options.OverflowProtection)
+                result = checked(sa + sb);
+            else
+                result = unchecked(sa + sb);
+        }
+        else
+        if (a is short sha && b is short shb)
+        {
+            if (options.OverflowProtection)
+                result = checked(sha + shb);
+            else
+                result = unchecked(sha + shb);
+        }
+        else
+        if (a is ushort usha && b is ushort ushb)
+        {
+            if (options.OverflowProtection)
+                result = checked(usha + ushb);
+            else
+                result = unchecked(usha + ushb);
+        }
+        else
+        if (a is int ia && b is int ib)
+        {
+            if (options.OverflowProtection)
+                result = checked(ia + ib);
+            else
+                result = unchecked(ia + ib);
+        }
+        else
+        if (a is uint uia && b is uint uib)
+        {
+            if (options.OverflowProtection)
+                result = checked(uia + uib);
+            else
+                result = unchecked(uia + uib);
+        }
+        else
+        if (a is long la && b is long lb)
+        {
+            if (options.OverflowProtection)
+                result = checked(la + lb);
+            else
+                result = unchecked(la + lb);
+        }
+        else
+        if (a is ulong ula && b is ulong ulb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ula + ulb);
+            else
+                result = unchecked(ula + ulb);
+        }
+        else
+        if (a is float fa && b is float fb)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(fa + fb);
+                CheckOverflow(result);
+            }
+            else
+                result = unchecked(fa + fb);
+        }
+        else
+        if (a is double da && b is double db)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(da + db);
+                CheckOverflow(result);
+            }
+            else
+                result = unchecked(da + db);
+        }
+        else
+        if (a is decimal dca && b is decimal dcb)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(dca + dcb);
+            }
+            else
+                result = unchecked(dca + dcb);
+        }
+        else
+        {
+            var method = FindOperator(a.GetType(), "op_Addition");
+            if (method is null)
+                throw new InvalidOperationException($"No overloaded addition function found for operands of type '{a.GetType()}'");
+            return method.Invoke(null, new[] { a, b });
+        }
+
+        return result;
+    }
+
     private static readonly Func<dynamic, dynamic, object> AddFuncChecked = (a, b) =>
     {
         var res = checked(a + b);
@@ -32,6 +170,28 @@ public static class MathHelper
 
         return res;
     };
+
+    private static object AddPercentFunc(object a, object b, MathHelperOptions options)
+    {
+        if (!options.AvoidDynamicFunctions)
+        {
+            return options.OverflowProtection ? AddPercentFuncChecked(a, b) : DynamicAddPercentFunc(a, b);
+        }
+
+        object? im1 = Add(100, b, false, options);
+        if (im1 is null)
+            throw new InvalidOperationException($"No addition was possible for a number and an '{b.GetType()}' object");
+
+        object? im2 = Multiply(a, im1, false, options);
+        if (im2 is null)
+            throw new InvalidOperationException($"No multiplication was possible for objects of types '{a.GetType()}' and '{im1.GetType()}'");
+
+        object? result = Divide(im2, 100, true, options);
+        if (result is null)
+            throw new InvalidOperationException($"No division was possible for an '{im2.GetType()}' object and a number");
+
+        return result;
+    }
 
     private static readonly Func<dynamic, dynamic, object> AddPercentFuncChecked = (a, b) =>
     {
@@ -41,6 +201,131 @@ public static class MathHelper
         return res;
     };
 
+    private static object? SubtractFunc(object a, object b, MathHelperOptions options)
+    {
+        object? result = null;
+        if (!options.AvoidDynamicFunctions)
+        {
+            if (options.OverflowProtection)
+                result = SubtractFuncChecked(a, b);
+            else
+                result = DynamicSubtractFunc(a, b);
+        }
+        else
+        if (a is char ca && b is char cb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ca - cb);
+            else
+                result = unchecked(ca - cb);
+        }
+        else
+        if (a is byte ba && b is byte bb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ba - bb);
+            else
+                result = unchecked(ba - bb);
+        }
+        else
+        if (a is sbyte sa && b is sbyte sb)
+        {
+            if (options.OverflowProtection)
+                result = checked(sa - sb);
+            else
+                result = unchecked(sa - sb);
+        }
+        else
+        if (a is short sha && b is short shb)
+        {
+            if (options.OverflowProtection)
+                result = checked(sha - shb);
+            else
+                result = unchecked(sha - shb);
+        }
+        else
+        if (a is ushort usha && b is ushort ushb)
+        {
+            if (options.OverflowProtection)
+                result = checked(usha - ushb);
+            else
+                result = unchecked(usha - ushb);
+        }
+        else
+        if (a is int ia && b is int ib)
+        {
+            if (options.OverflowProtection)
+                result = checked(ia - ib);
+            else
+                result = unchecked(ia - ib);
+        }
+        else
+        if (a is uint uia && b is uint uib)
+        {
+            if (options.OverflowProtection)
+                result = checked(uia - uib);
+            else
+                result = unchecked(uia - uib);
+        }
+        else
+        if (a is long la && b is long lb)
+        {
+            if (options.OverflowProtection)
+                result = checked(la - lb);
+            else
+                result = unchecked(la - lb);
+        }
+        else
+        if (a is ulong ula && b is ulong ulb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ula - ulb);
+            else
+                result = unchecked(ula - ulb);
+        }
+        else
+        if (a is float fa && b is float fb)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(fa - fb);
+                CheckOverflow(result);
+            }
+            else
+                result = unchecked(fa - fb);
+        }
+        else
+        if (a is double da && b is double db)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(da - db);
+                CheckOverflow(result);
+            }
+            else
+                result = unchecked(da - db);
+        }
+        else
+        if (a is decimal dca && b is decimal dcb)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(dca - dcb);
+            }
+            else
+                result = unchecked(dca - dcb);
+        }
+        else
+        {
+            var method = FindOperator(a.GetType(), "op_Subtraction");
+            if (method is null)
+                throw new InvalidOperationException($"No overloaded subtraction function found for operands of type '{a.GetType()}'");
+            return method.Invoke(null, new[] { a, b });
+        }
+
+        return result;
+    }
+
     private static readonly Func<dynamic, dynamic, object> SubtractFuncChecked = (a, b) =>
     {
         var res = checked(a - b);
@@ -49,13 +334,160 @@ public static class MathHelper
         return res;
     };
 
+    private static object SubtractPercentFunc(object a, object b, MathHelperOptions options)
+    {
+        if (!options.AvoidDynamicFunctions)
+        {
+            return options.OverflowProtection ? SubtractPercentFuncChecked(a, b) : DynamicSubtractPercentFunc(a, b);
+        }
+
+        object? im1 = Subtract(100, b, false, options);
+        if (im1 is null)
+            throw new InvalidOperationException($"No subtraction was possible for a number and an '{b.GetType()}' object");
+
+        object? im2 = Multiply(a, im1, false, options);
+        if (im2 is null)
+            throw new InvalidOperationException($"No multiplication was possible for objects of types '{a.GetType()}' and '{im1.GetType()}'");
+
+        object? result = Divide(im2, 100, true, options);
+        if (result is null)
+            throw new InvalidOperationException($"No division was possible for an '{im2.GetType()}' object and a number");
+
+        return result;
+    }
+
     private static readonly Func<dynamic, dynamic, object> SubtractPercentFuncChecked = (a, b) =>
     {
-        var res = checked(a * (100 - b) / 100); //checked(a + (a * b / 100));
+        var res = checked(a * (100 - b) / 100);
         CheckOverflow(res);
 
         return res;
     };
+
+    private static object? MultiplyFunc(object a, object b, MathHelperOptions options)
+    {
+        object? result = null;
+        if (!options.AvoidDynamicFunctions)
+        {
+            if (options.OverflowProtection)
+                result = MultiplyFuncChecked(a, b);
+            else
+                result = DynamicMultiplyFunc(a, b);
+        }
+        else
+        if (a is char ca && b is char cb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ca * cb);
+            else
+                result = unchecked(ca * cb);
+        }
+        else
+        if (a is byte ba && b is byte bb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ba * bb);
+            else
+                result = unchecked(ba * bb);
+        }
+        else
+        if (a is sbyte sa && b is sbyte sb)
+        {
+            if (options.OverflowProtection)
+                result = checked(sa * sb);
+            else
+                result = unchecked(sa * sb);
+        }
+        else
+        if (a is short sha && b is short shb)
+        {
+            if (options.OverflowProtection)
+                result = checked(sha * shb);
+            else
+                result = unchecked(sha * shb);
+        }
+        else
+        if (a is ushort usha && b is ushort ushb)
+        {
+            if (options.OverflowProtection)
+                result = checked(usha * ushb);
+            else
+                result = unchecked(usha * ushb);
+        }
+        else
+        if (a is int ia && b is int ib)
+        {
+            if (options.OverflowProtection)
+                result = checked(ia * ib);
+            else
+                result = unchecked(ia * ib);
+        }
+        else
+        if (a is uint uia && b is uint uib)
+        {
+            if (options.OverflowProtection)
+                result = checked(uia * uib);
+            else
+                result = unchecked(uia * uib);
+        }
+        else
+        if (a is long la && b is long lb)
+        {
+            if (options.OverflowProtection)
+                result = checked(la * lb);
+            else
+                result = unchecked(la * lb);
+        }
+        else
+        if (a is ulong ula && b is ulong ulb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ula * ulb);
+            else
+                result = unchecked(ula * ulb);
+        }
+        else
+        if (a is float fa && b is float fb)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(fa * fb);
+                CheckOverflow(result);
+            }
+            else
+                result = unchecked(fa * fb);
+        }
+        else
+        if (a is double da && b is double db)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(da * db);
+                CheckOverflow(result);
+            }
+            else
+                result = unchecked(da * db);
+        }
+        else
+        if (a is decimal dca && b is decimal dcb)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(dca * dcb);
+            }
+            else
+                result = unchecked(dca * dcb);
+        }
+        else
+        {
+            var method = FindOperator(a.GetType(), "op_Multiply");
+            if (method is null)
+                throw new InvalidOperationException($"No overloaded multiplication function found for operands of type '{a.GetType()}'");
+            return method.Invoke(null, new[] { a, b });
+        }
+
+        return result;
+    }
 
     private static readonly Func<dynamic, dynamic, object> MultiplyFuncChecked = (a, b) =>
     {
@@ -65,6 +497,24 @@ public static class MathHelper
         return res;
     };
 
+    private static object MultiplyPercentFunc(object a, object b, MathHelperOptions options)
+    {
+        if (!options.AvoidDynamicFunctions)
+        {
+            return options.OverflowProtection ? MultiplyPercentFuncChecked(a, b) : DynamicMultiplyPercentFunc(a, b);
+        }
+
+        object? im2 = Multiply(a, b, false, options);
+        if (im2 is null)
+            throw new InvalidOperationException($"No multiplication was possible for objects of types '{a.GetType()}' and '{b.GetType()}'");
+
+        object? result = Divide(im2, 100, true, options);
+        if (result is null)
+            throw new InvalidOperationException($"No division was possible for an '{im2.GetType()}' object and a number");
+
+        return result;
+    }
+
     private static readonly Func<dynamic, dynamic, object> MultiplyPercentFuncChecked = (a, b) =>
     {
         var res = checked(a * b / 100);
@@ -72,6 +522,131 @@ public static class MathHelper
 
         return res;
     };
+
+    private static object? DivideFunc(object a, object b, MathHelperOptions options)
+    {
+        object? result = null;
+        if (!options.AvoidDynamicFunctions)
+        {
+            if (options.OverflowProtection)
+                result = DivideFuncChecked(a, b);
+            else
+                result = DynamicDivideFunc(a, b);
+        }
+        else
+        if (a is char ca && b is char cb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ca / cb);
+            else
+                result = unchecked(ca / cb);
+        }
+        else
+        if (a is byte ba && b is byte bb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ba / bb);
+            else
+                result = unchecked(ba / bb);
+        }
+        else
+        if (a is sbyte sa && b is sbyte sb)
+        {
+            if (options.OverflowProtection)
+                result = checked(sa / sb);
+            else
+                result = unchecked(sa / sb);
+        }
+        else
+        if (a is short sha && b is short shb)
+        {
+            if (options.OverflowProtection)
+                result = checked(sha / shb);
+            else
+                result = unchecked(sha / shb);
+        }
+        else
+        if (a is ushort usha && b is ushort ushb)
+        {
+            if (options.OverflowProtection)
+                result = checked(usha / ushb);
+            else
+                result = unchecked(usha / ushb);
+        }
+        else
+        if (a is int ia && b is int ib)
+        {
+            if (options.OverflowProtection)
+                result = checked(ia / ib);
+            else
+                result = unchecked(ia / ib);
+        }
+        else
+        if (a is uint uia && b is uint uib)
+        {
+            if (options.OverflowProtection)
+                result = checked(uia / uib);
+            else
+                result = unchecked(uia / uib);
+        }
+        else
+        if (a is long la && b is long lb)
+        {
+            if (options.OverflowProtection)
+                result = checked(la / lb);
+            else
+                result = unchecked(la / lb);
+        }
+        else
+        if (a is ulong ula && b is ulong ulb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ula / ulb);
+            else
+                result = unchecked(ula / ulb);
+        }
+        else
+        if (a is float fa && b is float fb)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(fa / fb);
+                CheckOverflow(result);
+            }
+            else
+                result = unchecked(fa / fb);
+        }
+        else
+        if (a is double da && b is double db)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(da / db);
+                CheckOverflow(result);
+            }
+            else
+                result = unchecked(da / db);
+        }
+        else
+        if (a is decimal dca && b is decimal dcb)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(dca / dcb);
+            }
+            else
+                result = unchecked(dca / dcb);
+        }
+        else
+        {
+            var method = FindOperator(a.GetType(), "op_Division");
+            if (method is null)
+                throw new InvalidOperationException($"No overloaded division function found for operands of type '{a.GetType()}'");
+            return method.Invoke(null, new[] { a, b });
+        }
+
+        return result;
+    }
 
     private static readonly Func<dynamic, dynamic, object> DivideFuncChecked = (a, b) =>
     {
@@ -81,6 +656,24 @@ public static class MathHelper
         return res;
     };
 
+    private static object DividePercentFunc(object a, object b, MathHelperOptions options)
+    {
+        if (!options.AvoidDynamicFunctions)
+        {
+            return options.OverflowProtection ? DividePercentFuncChecked(a, b) : DynamicDividePercentFunc(a, b);
+        }
+
+        object? im2 = Multiply(a, 100, false, options);
+        if (im2 is null)
+            throw new InvalidOperationException($"No multiplication was possible for an '{a.GetType()}' object and a number");
+
+        object? result = Divide(im2, b, true, options);
+        if (result is null)
+            throw new InvalidOperationException($"No division was possible for objects of types '{im2.GetType()}' and '{b.GetType()}'");
+
+        return result;
+    }
+
     private static readonly Func<dynamic, dynamic, object> DividePercentFuncChecked = (a, b) =>
     {
         var res = checked(a * 100 / b);
@@ -89,10 +682,138 @@ public static class MathHelper
         return res;
     };
 
-    /*public static object? Add(object? a, object? b)
+    private static object? ModuloFunc(object a, object b, MathHelperOptions options)
     {
-        return Add(a, b, CultureInfo.CurrentCulture);
-    }*/
+        object? result = null;
+        if (!options.AvoidDynamicFunctions)
+        {
+            if (options.OverflowProtection)
+                result = ModuloFuncChecked(a, b);
+            else
+                result = DynamicModuloFunc(a, b);
+        }
+        else
+        if (a is char ca && b is char cb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ca % cb);
+            else
+                result = unchecked(ca % cb);
+        }
+        else
+        if (a is byte ba && b is byte bb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ba % bb);
+            else
+                result = unchecked(ba % bb);
+        }
+        else
+        if (a is sbyte sa && b is sbyte sb)
+        {
+            if (options.OverflowProtection)
+                result = checked(sa % sb);
+            else
+                result = unchecked(sa % sb);
+        }
+        else
+        if (a is short sha && b is short shb)
+        {
+            if (options.OverflowProtection)
+                result = checked(sha % shb);
+            else
+                result = unchecked(sha % shb);
+        }
+        else
+        if (a is ushort usha && b is ushort ushb)
+        {
+            if (options.OverflowProtection)
+                result = checked(usha % ushb);
+            else
+                result = unchecked(usha % ushb);
+        }
+        else
+        if (a is int ia && b is int ib)
+        {
+            if (options.OverflowProtection)
+                result = checked(ia % ib);
+            else
+                result = unchecked(ia % ib);
+        }
+        else
+        if (a is uint uia && b is uint uib)
+        {
+            if (options.OverflowProtection)
+                result = checked(uia % uib);
+            else
+                result = unchecked(uia % uib);
+        }
+        else
+        if (a is long la && b is long lb)
+        {
+            if (options.OverflowProtection)
+                result = checked(la % lb);
+            else
+                result = unchecked(la % lb);
+        }
+        else
+        if (a is ulong ula && b is ulong ulb)
+        {
+            if (options.OverflowProtection)
+                result = checked(ula % ulb);
+            else
+                result = unchecked(ula % ulb);
+        }
+        else
+        if (a is float fa && b is float fb)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(fa % fb);
+                CheckOverflow(result);
+            }
+            else
+                result = unchecked(fa % fb);
+        }
+        else
+        if (a is double da && b is double db)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(da % db);
+                CheckOverflow(result);
+            }
+            else
+                result = unchecked(da % db);
+        }
+        else
+        if (a is decimal dca && b is decimal dcb)
+        {
+            if (options.OverflowProtection)
+            {
+                result = checked(dca % dcb);
+            }
+            else
+                result = unchecked(dca % dcb);
+        }
+        else
+        {
+            var method = FindOperator(a.GetType(), "op_Modulus");
+            if (method is null)
+                throw new InvalidOperationException($"No overloaded modulus function found for operands of type '{a.GetType()}'");
+            return method.Invoke(null, new[] { a, b });
+        }
+
+        return result;
+    }
+
+    private static readonly Func<dynamic, dynamic, object> ModuloFuncChecked = (a, b) =>
+    {
+        var res = checked(a % b);
+        CheckOverflow(res);
+
+        return res;
+    };
 
     public static object? AddPercent(object? a, object? b)
     {
@@ -168,10 +889,10 @@ public static class MathHelper
             }
         }
 
-        var func = options.OverflowProtection ? AddFuncChecked : AddFunc;
+        //var func = options.OverflowProtection ? AddFuncChecked : AddFunc;
         try
         {
-            return ExecuteOperation(a, b, '+', func, options, typeCode);
+            return ExecuteOperation(a, b, '+', ArithmeticOperation.Add, options, typeCode);
         }
         catch (OverflowException)
         {
@@ -190,8 +911,8 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        var func = options.OverflowProtection ? AddPercentFuncChecked : AddPercentFunc;
-        return ExecuteOperation(a, b, '+', func, options);
+        //var func = options.OverflowProtection ? AddPercentFuncChecked : AddPercentFunc;
+        return ExecuteOperation(a, b, '+', ArithmeticOperation.AddPercent, options);
     }
 
    /* public static object? Subtract(object? a, object? b)
@@ -308,10 +1029,10 @@ public static class MathHelper
             }
         }
 
-        var func = options.OverflowProtection ? SubtractFuncChecked : SubtractFunc;
+        //var func = options.OverflowProtection ? SubtractFuncChecked : SubtractFunc;
         try
         {
-            return ExecuteOperation(a, b, '-', func, options, typeCode);
+            return ExecuteOperation(a, b, '-', ArithmeticOperation.Subtract, options, typeCode);
         }
         catch (OverflowException)
         {
@@ -330,14 +1051,9 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        var func = options.OverflowProtection ? SubtractPercentFuncChecked : SubtractPercentFunc;
-        return ExecuteOperation(a, b, '-', func, options);
+        //var func = options.OverflowProtection ? SubtractPercentFuncChecked : SubtractPercentFunc;
+        return ExecuteOperation(a, b, '-', ArithmeticOperation.SubtractPercent, options);
     }
-
-    /*public static object? Multiply(object? a, object? b)
-    {
-        return Multiply(a, b, CultureInfo.CurrentCulture);
-    }*/
 
     public static object? MultiplyPercent(object? a, object? b)
     {
@@ -412,10 +1128,11 @@ public static class MathHelper
                 return result;
             }
         }
-        var func = options.OverflowProtection ? MultiplyFuncChecked : MultiplyFunc;
+
+        //var func = options.OverflowProtection ? MultiplyFuncChecked : MultiplyFunc;
         try
         {
-            return ExecuteOperation(a, b, '*', func, options, typeCode);
+            return ExecuteOperation(a, b, '*', ArithmeticOperation.Multiply, options, typeCode);
         }
         catch (OverflowException)
         {
@@ -434,8 +1151,8 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        var func = options.OverflowProtection ? MultiplyPercentFuncChecked : MultiplyPercentFunc;
-        return ExecuteOperation(a, b, '*', func, options);
+        //var func = options.OverflowProtection ? MultiplyPercentFuncChecked : MultiplyPercentFunc;
+        return ExecuteOperation(a, b, '*', ArithmeticOperation.MultiplyPercent, options);
     }
 
    /* public static object? Divide(object? a, object? b)
@@ -551,7 +1268,7 @@ public static class MathHelper
 
                 if (a != null && b != null)
                 {
-                    object? modObj = ModuloFunc(a, b);
+                    object? modObj = Modulo(a, b, false, options);
                     if (modObj is decimal mod && mod == 0)
                         useInteger = true;
                 }
@@ -567,7 +1284,7 @@ public static class MathHelper
 
                 if (a != null && b != null)
                 {
-                    object? modObj = ModuloFunc(a, b);
+                    object? modObj = Modulo(a, b, false, options);
                     if (modObj is double mod && mod == 0)
                         useInteger = true;
                 }
@@ -577,13 +1294,13 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
+        //var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
 
         object? result = null;
 
         try
         {
-            result = ExecuteOperation(a, b, '/', func, options);
+            result = ExecuteOperation(a, b, '/', ArithmeticOperation.Divide, options);
         }
         catch (OverflowException)
         {
@@ -731,12 +1448,12 @@ public static class MathHelper
             b = ConvertToLong(b, options);
         }
 
-        var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
+        //var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
         object? result = null;
 
         try
         {
-            result = ExecuteOperation(a, b, '/', func, options);
+            result = ExecuteOperation(a, b, '/', ArithmeticOperation.Divide, options);
         }
         catch (OverflowException)
         {
@@ -787,8 +1504,8 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        var func = options.OverflowProtection ? DividePercentFuncChecked : DividePercentFunc;
-        return ExecuteOperation(a, b, '/', func, options);
+        //var func = options.OverflowProtection ? DividePercentFuncChecked : DividePercentFunc;
+        return ExecuteOperation(a, b, '/', ArithmeticOperation.DividePercent, options);
     }
 
     /*public static object? Modulo(object? a, object? b)
@@ -888,7 +1605,7 @@ public static class MathHelper
 
         try
         {
-            return ExecuteOperation(a, b, '%', ModuloFunc, options, typeCode);
+            return ExecuteOperation(a, b, '%', ArithmeticOperation.Modulo, options, typeCode);
         }
         catch (OverflowException)
         {
@@ -1768,20 +2485,66 @@ public static class MathHelper
         };
     }
 
-    private static object ExecuteOperation(object a, object b, char operatorName, Func<object, object, object> func, MathHelperOptions options, TypeCode typeCode = TypeCode.Empty)
+    private static object ExecuteOperation(object a, object b, char operatorName, ArithmeticOperation operation, MathHelperOptions options, TypeCode typeCode = TypeCode.Empty)
     {
         object origA = a, origB = b;
         if (typeCode == TypeCode.Empty)
             typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
-        if (typeCode == TypeCode.Empty)
-            throw new InvalidOperationException(
-                                $"Operator '{operatorName}' is not implemented for operands of types {origA.GetType().ToString()} and {origB.GetType().ToString()}");
 
-        if (IsBoxedNumber(a) || typeCode is TypeCode.Char)
-            return func(a, b);
+        /*
+        We permit math operations on any parameters and let the runtime blow up on unsupported types
+        if (typeCode == TypeCode.Empty)
+            throw new InvalidOperationException($"Operator '{operatorName}' is not implemented for operands of types {origA.GetType()} and {origB.GetType()}");
+
+        if (!IsBoxedNumber(a) && !(typeCode is TypeCode.Char))
+        {
+            throw new InvalidOperationException($"Operator '{operatorName}' is not implemented for operands of type '{typeCode.ToString()}'");
+        }
         else
-            throw new InvalidOperationException(
-                                $"Operator '{operatorName}' is not implemented for operands of type '{typeCode.ToString()}'");
+        */
+        try
+        {
+            object? result = null;
+            switch (operation)
+            {
+                case ArithmeticOperation.Add:
+                    result = AddFunc(a, b, options);
+                    break;
+                case ArithmeticOperation.Subtract:
+                    result = SubtractFunc(a, b, options);
+                    break;
+                case ArithmeticOperation.Multiply:
+                    result = MultiplyFunc(a, b, options);
+                    break;
+                case ArithmeticOperation.Divide:
+                    result = DivideFunc(a, b, options);
+                    break;
+                case ArithmeticOperation.Modulo:
+                    result = ModuloFunc(a, b, options);
+                    break;
+                case ArithmeticOperation.AddPercent:
+                    result = AddPercentFunc(a, b, options);
+                    break;
+
+                case ArithmeticOperation.SubtractPercent:
+                    result = SubtractPercentFunc(a, b, options);
+                    break;
+                case ArithmeticOperation.MultiplyPercent:
+                    result = MultiplyPercentFunc(a, b, options);
+                    break;
+                case ArithmeticOperation.DividePercent:
+                    result = DividePercentFunc(a, b, options);
+                    break;
+            }
+            if (result is null)
+                throw new InvalidOperationException($"Operation '{operatorName}' is not implemented for operands of type '{typeCode.ToString()}'");
+
+            return result;
+        }
+        catch(Exception ex) when (ex is not OverflowException)
+        {
+            throw new InvalidOperationException($"Operator '{operatorName}' is not implemented for operands of types {origA.GetType()} and {origB.GetType()}", ex);
+        }
     }
 
     private static void CheckOverflow(dynamic value)
@@ -2335,5 +3098,20 @@ public static class MathHelper
             return (ulong)value;
         else
             return value;
+    }
+
+    private static MethodInfo? FindOperator(Type opType, string opName)
+    {
+        const BindingFlags flags =
+            BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy;
+
+        return opType
+            .GetMethods(flags)
+            .FirstOrDefault(m =>
+                m.Name == opName &&
+                m.GetParameters().Length == 2 &&
+                m.GetParameters()[0].ParameterType.IsAssignableFrom(opType) &&
+                m.GetParameters()[1].ParameterType.IsAssignableFrom(opType)
+            );
     }
 }

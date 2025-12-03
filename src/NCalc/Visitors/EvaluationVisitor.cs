@@ -1036,7 +1036,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         if (!context.Options.HasFlag(ExpressionOptions.CompareNullValues))
         {
             if ((a is null || b is null) && !(a is null && b is null))
-                return false;
+                return comparisonType switch
+                {
+                    ComparisonType.Equal => false, // true if null == null
+                    ComparisonType.NotEqual => true,
+                    _ => false
+                };
         }
 
         return EvaluationHelper.Compare(a, b, comparisonType, context);

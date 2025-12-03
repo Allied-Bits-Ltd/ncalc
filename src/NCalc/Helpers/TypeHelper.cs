@@ -148,8 +148,8 @@ public static class TypeHelper
                 outcome = -1;
                 return false;
             }
-            else
-                throw;
+
+            throw;
         }
     }
 }

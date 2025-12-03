@@ -231,7 +231,12 @@ public static class EvaluationHelper
                     result = 1;
             }
             else
-                return a == b; // true if null == null
+                return comparisonType switch
+                {
+                    ComparisonType.Equal => a == b, // true if null == null
+                    ComparisonType.NotEqual => a != b,
+                    _ => false
+                };
         }
         else
         if (a is BigDecimal || b is BigDecimal)

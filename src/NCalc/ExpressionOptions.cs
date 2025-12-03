@@ -187,4 +187,9 @@ public enum ExpressionOptions : long
     /// Specifies that if incompatible types are compared, the comparison evaluates to false instead of failing with an exception
     /// </summary>
     CompareIncompatibleTypes = ((long)1) << 35,
+
+    /// <summary>
+    /// Specifies that Dynamic functions should not be used (required for AOT).
+    /// </summary>
+    AvoidDynamicFunctions = ((long)1) << 36,
 }
