@@ -26,16 +26,16 @@ public static class MathHelper
 
     // unchecked
 #if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> DynamicAddFunc = (a, b) => unchecked(a + b);
-    private static readonly Func<dynamic, dynamic, object> DynamicSubtractFunc = (a, b) => unchecked(a - b);
-    private static readonly Func<dynamic, dynamic, object> DynamicMultiplyFunc = (a, b) => unchecked(a * b);
-    private static readonly Func<dynamic, dynamic, object> DynamicDivideFunc = (a, b) => unchecked(a / b);
-    private static readonly Func<dynamic, dynamic, object> DynamicModuloFunc = (a, b) => unchecked(a % b);
+    private static object DynamicAddFunc(dynamic a, dynamic b) => unchecked(a + b);
+    private static object DynamicSubtractFunc(dynamic a, dynamic b) => unchecked(a - b);
+    private static object DynamicMultiplyFunc(dynamic a, dynamic b) => unchecked(a * b);
+    private static object DynamicDivideFunc(dynamic a, dynamic b) => unchecked(a / b);
+    private static object DynamicModuloFunc(dynamic a, dynamic b) => unchecked(a % b);
 
-    private static readonly Func<dynamic, dynamic, object> DynamicAddPercentFunc = (a, b) => unchecked(a * (100 + b) / 100); // a / (a * b/100);
-    private static readonly Func<dynamic, dynamic, object> DynamicSubtractPercentFunc = (a, b) => unchecked(a * (100 - b) / 100); //a - (a * b / 100);
-    private static readonly Func<dynamic, dynamic, object> DynamicMultiplyPercentFunc = (a, b) => unchecked(a * b / 100);
-    private static readonly Func<dynamic, dynamic, object> DynamicDividePercentFunc = (a, b) => unchecked(a * 100 / b);
+    private static object DynamicAddPercentFunc(dynamic a, dynamic b) => unchecked(a * (100 + b) / 100); // a / (a * b/100);
+    private static object DynamicSubtractPercentFunc(dynamic a, dynamic b) => unchecked(a * (100 - b) / 100); //a - (a * b / 100);
+    private static object DynamicMultiplyPercentFunc(dynamic a, dynamic b) => unchecked(a * b / 100);
+    private static object DynamicDividePercentFunc(dynamic a, dynamic b) => unchecked(a * 100 / b);
 #endif
 
 #if AOT_COMPILATION

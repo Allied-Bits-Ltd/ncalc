@@ -6,6 +6,8 @@ Using it, you can write complex functions and improve performance of expression 
 
 Special thanks to the [NCalc2 fork](https://github.com/sklose/NCalc2) for the original implementation.
 
+Lambda compilation is not available in the AOT version as these two features are mutually exclusive.
+
 ## Functionality
 
 **Simple Expressions**

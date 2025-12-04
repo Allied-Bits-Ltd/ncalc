@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
     <id>AlliedBits.NCalc</id>
-    <version>8.6.5.2</version>
+    <version>8.7.0</version>
     <authors>Sebastien Ros and contributors, Eugene Mayevski</authors>
     <copyright>Sebastien Ros and contributors, Eugene Mayevski</copyright>
     <license type="expression">MIT</license>
@@ -10,7 +10,7 @@
     <icon>NCalc.png</icon>
     <title>The mathematical expression evaluator for .NET</title>
     <tags>ncalc math expression evaluation</tags>
-    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="3336113764303166011b0bb854a3b6a1501838d6" />
+    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="e97471d37ca4c490abf39dead1b435f60bce49e5" />
     <projectUrl>https://github.com/Allied-Bits-Ltd/ncalc</projectUrl>
     <readme>README.nuget.md</readme>
     <description>This package by Allied Bits offers a number of advanced features compared to the original NCalc project.
@@ -82,5 +82,7 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
     <file src="src\NCalc\bin\Release\net8.0\NCalc.dll" target="lib\net8.0" />
     <file src="src\NCalc\bin\Release\net9.0\NCalc.dll" target="lib\net9.0" />    
     <file src="src\NCalc\bin\Release\net10.0\NCalc.dll" target="lib\net10.0" />    
+    <file src="src\NCalc.AOT\bin\Release\net9.0\NCalc.AOT.dll" target="lib\net9.0" />    
+    <file src="src\NCalc.AOT\bin\Release\net10.0\NCalc.AOT.dll" target="lib\net10.0" />    
   </files>
 </package>

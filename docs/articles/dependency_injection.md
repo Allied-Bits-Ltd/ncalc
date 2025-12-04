@@ -1,5 +1,7 @@
 ﻿# Dependency Injection
 
+Dependency Injection is not available in the AOT version.
+
 ## Introduction to Dependency Injection (DI)
 
 Dependency Injection (DI) is a design pattern used to implement Inversion of Control (IoC) between classes and their
@@ -11,7 +13,7 @@ refer to the [Microsoft documentation](https://docs.microsoft.com/en-us/dotnet/c
 
 In Allied Bits NCalc, dependency injection support is included in the same package and assembly as the regular ones.
 If you are using ASP.NET Core, there is no need to install a DI container.
-If you are in a Console App or older framework, you will need to set up a DI container. 
+If you are have a Console App or an older framework, you will need to set up a DI container. 
 [Microsoft.Extensions.DependencyInjection](https://www.nuget.org/packages/Microsoft.Extensions.DependencyInjection)
 is an example of a DI container.
 
