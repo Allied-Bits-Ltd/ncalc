@@ -92,6 +92,82 @@ public static class EvaluationHelper
     }
 
     /// <summary>
+    /// Multiplies the first value and the second one, with support for timespans
+    /// </summary>
+    /// <param name="leftValue">The left operand.</param>
+    /// <param name="rightValue">The right operand.</param>
+    /// <param name="context">The evaluation context.</param>
+    /// <returns>The result of the multiplication.</returns>
+    public static object? Multiply(object? leftValue, object? rightValue, ExpressionContextBase context)
+    {
+        if (context.Options.HasFlag(ExpressionOptions.SupportTimeOperations))
+        {
+            if (MathHelper.IsBoxedNumberOrBigNumber(leftValue) && (rightValue is TimeSpan rts))
+            {
+                var ticks = MathHelper.Multiply(leftValue, (object) rts.Ticks, true, context);
+                if (ticks is int it)
+                    return new TimeSpan(it);
+                else
+                if (ticks is long lt)
+                    return new TimeSpan(lt);
+                else
+                if (ticks is float ft)
+                    return new TimeSpan((long)Math.Round(ft));
+                else
+                if (ticks is double dt)
+                    return new TimeSpan((long)Math.Round(dt));
+            }
+            else
+            if ((leftValue is TimeSpan lts) && MathHelper.IsBoxedNumberOrBigNumber(rightValue))
+            {
+                var ticks = MathHelper.Multiply((object)lts.Ticks, rightValue, true, context);
+                if (ticks is int it)
+                    return new TimeSpan(it);
+                else
+                if (ticks is long lt)
+                    return new TimeSpan(lt);
+                else
+                if (ticks is float ft)
+                    return new TimeSpan((long)Math.Round(ft));
+                else
+                if (ticks is double dt)
+                    return new TimeSpan((long)Math.Round(dt));
+            }
+        }
+        return MathHelper.Multiply(leftValue, rightValue, true, context);
+    }
+
+    /// <summary>
+    /// Divides the first value by the second one, with support for timespans as left values.
+    /// </summary>
+    /// <param name="leftValue">The left operand.</param>
+    /// <param name="rightValue">The right operand.</param>
+    /// <param name="context">The evaluation context.</param>
+    /// <returns>The result of the division.</returns>
+    public static object? Divide(object? leftValue, object? rightValue, ExpressionContextBase context)
+    {
+        if (context.Options.HasFlag(ExpressionOptions.SupportTimeOperations))
+        {
+            if ((leftValue is TimeSpan lts) && MathHelper.IsBoxedNumberOrBigNumber(rightValue))
+            {
+                var ticks = MathHelper.Divide((object)lts.Ticks, rightValue, true, context);
+                if (ticks is int it)
+                    return new TimeSpan(it);
+                else
+                if (ticks is long lt)
+                    return new TimeSpan(lt);
+                else
+                if (ticks is float ft)
+                    return new TimeSpan((long)Math.Round(ft));
+                else
+                if (ticks is double dt)
+                    return new TimeSpan((long)Math.Round(dt));
+            }
+        }
+        return MathHelper.Divide(leftValue, rightValue, true, context);
+    }
+
+    /// <summary>
     /// Determines if the left value is contained within the right value, which must be either an enumerable or a string.
     /// </summary>
     /// <param name="rightValue">The right operand.</param>

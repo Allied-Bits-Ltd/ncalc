@@ -1,3 +1,9 @@
+# 8.7.0 (Allied Bits)
+* Added AOT (ahead-of-time compilation) support via a separate assembly.
+* Added an option to disable the use of dynamic functions for arithmetic in the regular assembly.
+* NCalc now can multiply and divide a TimeSpan by a number as well as multiply a number by a Timespan (the result is a TimeSpan). 
+* Removed an [artificial] limitation when arithmetic operations could be performed only on numbers, chars, strings, and dates and times (where applicable). Now, it is up to a caller to verify whether a type can be a part of the arithmetic operation - NCalc will throw InvalidOperationException, if it cannot be (this part of the behavior does not differ from previous versions).
+
 # 8.6.5.1 (Allied Bits)
 * Updated the version in the reference to Parlot to 1.5.6
 

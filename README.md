@@ -42,8 +42,9 @@ This version of NCalc contains a number of advanced features compared to the ori
 * Optional non-recursive evaluator for large and complex expressions.
 * The possibility to reuse a pre-created parser or parsers when parsing multiple expressions.
 * New flags in ExpressionOptions to skip date and GUID parsers in order to speed up parsing.
-* Minor improvements in the asyncrhonous code (CancellationToken and ConfigureAwait(false) are present in all calls).
+* Minor improvements in the asynchronous code (CancellationToken and ConfigureAwait(false) are present in all calls).
 * The main projects have been combined into one project.
+* The AOT-compatible version of the library.
 
 This version borrows some updates of the main NCalc project, which resides [here on github](https://github.com/ncalc/ncalc).
 
@@ -150,11 +151,6 @@ expression.Parameters = new Dictionary<string, object> {
 var result = expression.Evaluate();
 ```
 
-**Caching**
-
-NCalc automatically caches parsing of strings using a [`ConcurrentDictionary`](https://learn.microsoft.com/pt-br/dotnet/api/system.collections.concurrent.concurrentdictionary-2).
-You can also use our [Memory Cache plugin](https://ncalc.github.io/ncalc/articles/plugins/memory_cache.html).
-
 **Lambda Expressions**
 
 ```cs
@@ -168,20 +164,9 @@ Debug.Assert(function()); //3
 ### [Parlot](https://github.com/sebastienros/parlot) (Main project)
 ### [AlliedBits.Parlot](https://github.com/Allied-Bits-Ltd/parlot) (the fork with some improvements required for Allied Bits enhancements of NCalc)
 
-Fast and lightweight parser creation tools by [Sébastien Ros](https://github.com/sebastienros) that NCalc uses at its
+Fast and lightweight parser creation tools by [Sébastien Ros](https://github.com/sebastienros) that NCalc uses for its
 parser.
 
 ### [FastExpressionCompiler](https://github.com/dadhi/FastExpressionCompiler)
 
 Fast Compiler for C# Expression Trees. Developed by [Maksim Volkov](https://github.com/dadhi)
-
-### [PanoramicData.NCalcExtensions](https://github.com/panoramicdata/PanoramicData.NCalcExtensions)
-
-Extension functions for NCalc to handle many general functions,  
-including string functions, switch, if, in, typeOf, cast etc.  
-Developed by David, Dan and all at [Panoramic Data](https://github.com/panoramicdata).
-
-### [Jint](https://github.com/sebastienros/jint)
-
-JavaScript Interpreter for .NET by [Sébastien Ros](https://github.com/sebastienros), the original author of NCalc library.  
-Runs on any modern .NET platform as it supports .NET Standard 2.0 and .NET 4.6.1 targets (and up).

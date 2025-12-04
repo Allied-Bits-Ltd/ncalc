@@ -2,7 +2,7 @@
 
 A value is a terminal token representing a concrete element. This can be:
 
-- An <xref:System.Int32> or <xref:System.Int64>
+- Any built-in .NET numeric type
 - A <xref:System.Numerics.BigInteger> or <xref:ExtendedNumerics.BigDecimal>
 - Any floating point number, like <xref:System.Double>
 - A <xref:NCalc.Domain.Percent>
@@ -111,7 +111,7 @@ Any characters between single or double quotes are evaluated as <xref:System.Str
 greeting("Chers")
 ```
 You can escape special characters using a backslash("\\"). The parser will decode \\', \\", \\\\,\0, \a, \b, \f, \n, \r, \t, \v and convert them into the corresponding character. 
-The parser will also decode unicode in hex notation escaped as \\u{abcd}, where {abcd} is exactly four (4) hex characters and as \\x{abcd}, where {abcd} is one to four characters.
+The parser will also decode unicode in hex notation escaped as \\u{abcd}, where {abcd} is exactly four (4) hex characters and as \\x{abcd}, where {abcd} is one to four characters.
 
 Additionally, the parser will recognize raw strings, i.e., the strings with no escaping in them. Such strings may be enclosed in double quotes with the @ (at) before the opening double quote (@"raw string here") or in back quotes '\`' (\`raw string here\`). 
 Of course, a raw string still may not contain a closing character ( " and \` respectively) in it. 
@@ -153,7 +153,7 @@ Please read the [functions page](functions.md) for details.
 
 ## Parameters (variables)
 
-A parameter (variable) is a name that can be optionally contained inside brackets or double quotes.
+A parameter (variable) is a name that can be optionally contained inside square brackets.
 
 ```
 2 + x, 2 + [x]

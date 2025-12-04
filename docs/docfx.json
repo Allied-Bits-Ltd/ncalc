@@ -9,6 +9,7 @@
           "src": "../src",
           "exclude": [
             "**/test/**",
+            "**/NCalc.AOT/**",
             "**/NCalc.Play/**",
             "**/NCalc.Benchmarks/**"
           ]

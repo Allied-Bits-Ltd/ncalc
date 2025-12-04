@@ -1,18 +1,15 @@
 # Contributing to NCalc
 
-Your contribution to NCalc is more than welcome! Here are some suggestions on how you can help us!
+Your contribution to NCalc is more than welcome! Here are some suggestions on how you can help the project!
+
+## Bug Reports
+Please use the [Issues](https://github.com/Allied-Bits-Ltd/ncalc/issues) section of the GitHub site to report issues. For questions and suggestions, you are welcome to read the next section. When reporting an issue, please try to write and provide us with a small test case which we can include into the test set and run in order to reproduce and analyze the reported issue.
 
 ## Discussions
-You can create, whenever you think necessary, a issue to solve your doubts or suggest improvements! We will respond as soon as possible!
-
-## Documentation
-You can create articles describing NCalc features and how to use them. We use DocFX to render markdown documents.
-
-## Improvements
-Open an issue, develop your improvement and open a Pull Request explaining it! Tell us what you do, and wait for our return! 
+You are welcome to create a discussion in the [Discussions](https://github.com/Allied-Bits-Ltd/ncalc/discussions) section, and we will reply as soon as possible. 
 
 ## Tests
-Write unit tests for our features that are not covered by tests yet. We use XUnit as a testing library.
+Adding more unit tests helps a lot, and we are open to this kind of contributions. XUnit is used for a testing framework.
 
-## Fixes
-Found any bugs? Open an issue for us to analyze or develop your fix, it will be greatly appreciated as we use NCalc on several production systems.
+## New features, Changes and Improvements 
+Please post a question in the [Discussions](https://github.com/Allied-Bits-Ltd/ncalc/discussions) section so that we can discuss your idea and decide on the course of action.

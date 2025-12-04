@@ -269,7 +269,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     }
                 }
 
-                return UpdateParameter(expression.LeftExpression, MathHelper.Multiply(leftValue, rightValue, true, context), cancellationToken);
+                return UpdateParameter(expression.LeftExpression, EvaluationHelper.Multiply(leftValue, rightValue, context), cancellationToken);
             }
 
             case BinaryExpressionType.DivAssignment:
@@ -279,7 +279,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(right.Value, out rightValue))
                     return UpdateParameter(expression.LeftExpression, null, cancellationToken);
 
-                bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
+                bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal || leftValue is TimeSpan;
 
                 if (handlePercent)
                 {
@@ -324,7 +324,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
 
                 {
-                    object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                    object? result = EvaluationHelper.Divide(leftValue, rightValue, context);
                     if (result is null)
                         return null;
                     return UpdateParameter(expression.LeftExpression, result, cancellationToken);
@@ -341,8 +341,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (leftValue is BigInteger || rightValue is BigInteger)
                     return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken);
                 return UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) &
-                    Convert.ToUInt64(rightValue, context.CultureInfo)
-, cancellationToken);
+                    Convert.ToUInt64(rightValue, context.CultureInfo), cancellationToken);
 
             case BinaryExpressionType.OrAssignment:
                 if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -404,7 +403,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!TryGetValueOrNull(right.Value, out rightValue))
                     return null;
 
-                bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
+                bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal || leftValue is TimeSpan;
 
                 if (handlePercent)
                 {
@@ -445,7 +444,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 if (!noConvertToDouble)
                     leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
 
-                return MathHelper.Divide(leftValue, rightValue, true, context);
+                return EvaluationHelper.Divide(leftValue, rightValue, context);
             }
 
             case BinaryExpressionType.IntDivB:
@@ -587,7 +586,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     }
                 }
 
-                return MathHelper.Multiply(leftValue, rightValue, true, context);
+                return EvaluationHelper.Multiply(leftValue, rightValue, context);
             }
 
             case BinaryExpressionType.BitwiseAnd:

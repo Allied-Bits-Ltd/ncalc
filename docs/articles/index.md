@@ -18,6 +18,11 @@ NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expres
 - [Architecture](architecture.md): Check this article to learn how NCalc works.
 - [Benchmarks](benchmarks.md): Check some numbers about the speed of some NCalc components.
 
+## NCalc versions
+
+Allied Bits NCalc comes in two versions - regular and AOT-compatible. The second can be used in AOT-enabled applications.
+Both versions are included in the same package, and the AOT-compatible assembly is named "NCalc.AOT".
+
 ## Functionalities
 
 ### Expressions and statements 
