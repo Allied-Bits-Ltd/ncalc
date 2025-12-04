@@ -338,6 +338,7 @@ public class MathsTests
         Assert.Equal(minValue, expr.Evaluate(TestContext.Current.CancellationToken));
     }
 
+#if !AOT_COMPILATION
     [Theory]
     [InlineData("(X1 = 1)/2", 0.5)]
     [InlineData("(X1 = 1)*2", 2)]
@@ -359,6 +360,7 @@ public class MathsTests
 
         Assert.Equal(Convert.ToDouble(expectedValue), lambda());
     }
+#endif
 
     [Fact]
     public void Should_Evaluate_Floor_Of_Double_Max_Value()

@@ -9,7 +9,11 @@ public readonly struct MathHelperOptions(CultureInfo cultureInfo, ExpressionOpti
     public bool AvoidDynamicFunctions
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if AOT_COMPILATION
+        get => true;
+#else
         get => options.HasFlag(ExpressionOptions.AvoidDynamicFunctions);
+#endif
     }
 
     public bool AllowBooleanCalculation

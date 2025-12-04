@@ -1,0 +1,156 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+        <Nullable>enable</Nullable>
+        <PackageId>AlliedBits.NCalc</PackageId>
+        <AssemblyName>NCalc.AOT</AssemblyName>
+        <Description>Assembly with the core logic of NCalc (AOT-compatible variant).</Description>
+        <SignAssembly>true</SignAssembly>
+        <AssemblyOriginatorKeyFile>../../NCalc.snk</AssemblyOriginatorKeyFile>
+        <RootNamespace>NCalc</RootNamespace>
+        <IsAotCompatible>true</IsAotCompatible>
+    </PropertyGroup>
+    <PropertyGroup>
+        <DefineConstants>$(DefineConstants);AOT_COMPILATION</DefineConstants>
+    </PropertyGroup>
+    <ItemGroup>
+      <Compile Include="..\NCalc\AdvancedExpressionOptions.cs" Link="AdvancedExpressionOptions.cs" />
+      <Compile Include="..\NCalc\AsyncExpression.cs" Link="AsyncExpression.cs" />
+      <Compile Include="..\NCalc\AsyncExpressionContext.cs" Link="AsyncExpressionContext.cs" />
+      <Compile Include="..\NCalc\AsyncExpressionFunction.cs" Link="AsyncExpressionFunction.cs" />
+      <Compile Include="..\NCalc\AsyncExpressionFunctionData.cs" Link="AsyncExpressionFunctionData.cs" />
+      <Compile Include="..\NCalc\AsyncExpressionParameter.cs" Link="AsyncExpressionParameter.cs" />
+      <Compile Include="..\NCalc\AsyncExpressionParameterData.cs" Link="AsyncExpressionParameterData.cs" />
+      <Compile Include="..\NCalc\Cache\ILogicalExpressionCache.cs" Link="Cache\ILogicalExpressionCache.cs" />
+      <Compile Include="..\NCalc\Cache\LogicalExpressionCache.cs" Link="Cache\LogicalExpressionCache.cs" />
+      <Compile Include="..\NCalc\Domain\BinaryExpression.cs" Link="Domain\BinaryExpression.cs" />
+      <Compile Include="..\NCalc\Domain\BinaryExpressionType.cs" Link="Domain\BinaryExpressionType.cs" />
+      <Compile Include="..\NCalc\Domain\ExpressionGroup.cs" Link="Domain\ExpressionGroup.cs" />
+      <Compile Include="..\NCalc\Domain\FunctionCall.cs" Link="Domain\FunctionCall.cs" />
+      <Compile Include="..\NCalc\Domain\FunctionExpression.cs" Link="Domain\FunctionExpression.cs" />
+      <Compile Include="..\NCalc\Domain\Identifier.cs" Link="Domain\Identifier.cs" />
+      <Compile Include="..\NCalc\Domain\LogicalExpression.cs" Link="Domain\LogicalExpression.cs" />
+      <Compile Include="..\NCalc\Domain\LogicalExpressionList.cs" Link="Domain\LogicalExpressionList.cs" />
+      <Compile Include="..\NCalc\Domain\Percent.cs" Link="Domain\Percent.cs" />
+      <Compile Include="..\NCalc\Domain\StatementSequence.cs" Link="Domain\StatementSequence.cs" />
+      <Compile Include="..\NCalc\Domain\TernaryExpression.cs" Link="Domain\TernaryExpression.cs" />
+      <Compile Include="..\NCalc\Domain\UnaryExpression.cs" Link="Domain\UnaryExpression.cs" />
+      <Compile Include="..\NCalc\Domain\UnaryExpressionType.cs" Link="Domain\UnaryExpressionType.cs" />
+      <Compile Include="..\NCalc\Domain\ValueExpression.cs" Link="Domain\ValueExpression.cs" />
+      <Compile Include="..\NCalc\Domain\ValueType.cs" Link="Domain\ValueType.cs" />
+      <Compile Include="..\NCalc\Exceptions\NCalcEvaluationException.cs" Link="Exceptions\NCalcEvaluationException.cs" />
+      <Compile Include="..\NCalc\Exceptions\NCalcException.cs" Link="Exceptions\NCalcException.cs" />
+      <Compile Include="..\NCalc\Exceptions\NCalcFlowControl.cs" Link="Exceptions\NCalcFlowControl.cs" />
+      <Compile Include="..\NCalc\Exceptions\NCalcFunctionNotFoundException.cs" Link="Exceptions\NCalcFunctionNotFoundException.cs" />
+      <Compile Include="..\NCalc\Exceptions\NCalcParameterIndexException.cs" Link="Exceptions\NCalcParameterIndexException.cs" />
+      <Compile Include="..\NCalc\Exceptions\NCalcParameterNotDefinedException.cs" Link="Exceptions\NCalcParameterNotDefinedException.cs" />
+      <Compile Include="..\NCalc\Exceptions\NCalcParserException.cs" Link="Exceptions\NCalcParserException.cs" />
+      <Compile Include="..\NCalc\Expression.cs" Link="Expression.cs" />
+      <Compile Include="..\NCalc\ExpressionBase.cs" Link="ExpressionBase.cs" />
+      <Compile Include="..\NCalc\ExpressionContext.cs" Link="ExpressionContext.cs" />
+      <Compile Include="..\NCalc\ExpressionContextBase.cs" Link="ExpressionContextBase.cs" />
+      <Compile Include="..\NCalc\ExpressionFunction.cs" Link="ExpressionFunction.cs" />
+      <Compile Include="..\NCalc\ExpressionFunctionData.cs" Link="ExpressionFunctionData.cs" />
+      <Compile Include="..\NCalc\ExpressionOptions.cs" Link="ExpressionOptions.cs" />
+      <Compile Include="..\NCalc\ExpressionParameter.cs" Link="ExpressionParameter.cs" />
+      <Compile Include="..\NCalc\ExpressionParameterData.cs" Link="ExpressionParameterData.cs" />
+      <Compile Include="..\NCalc\Factories\AsyncEvaluationVisitorFactory.cs" Link="Factories\AsyncEvaluationVisitorFactory.cs" />
+      <Compile Include="..\NCalc\Factories\AsyncExpressionFactory.cs" Link="Factories\AsyncExpressionFactory.cs" />
+      <Compile Include="..\NCalc\Factories\EvaluationVisitorFactory.cs" Link="Factories\EvaluationVisitorFactory.cs" />
+      <Compile Include="..\NCalc\Factories\ExpressionFactory.cs" Link="Factories\ExpressionFactory.cs" />
+      <Compile Include="..\NCalc\Factories\IAsyncEvaluationVisitorFactory.cs" Link="Factories\IAsyncEvaluationVisitorFactory.cs" />
+      <Compile Include="..\NCalc\Factories\IAsyncExpressionFactory.cs" Link="Factories\IAsyncExpressionFactory.cs" />
+      <Compile Include="..\NCalc\Factories\IEvaluationVisitorFactory.cs" Link="Factories\IEvaluationVisitorFactory.cs" />
+      <Compile Include="..\NCalc\Factories\IExpressionFactory.cs" Link="Factories\IExpressionFactory.cs" />
+      <Compile Include="..\NCalc\Factories\ILogicalExpressionFactory.cs" Link="Factories\ILogicalExpressionFactory.cs" />
+      <Compile Include="..\NCalc\Factories\LogicalExpressionFactory.cs" Link="Factories\LogicalExpressionFactory.cs" />
+      <Compile Include="..\NCalc\Handlers\AsyncEvaluateFunctionHandler.cs" Link="Handlers\AsyncEvaluateFunctionHandler.cs" />
+      <Compile Include="..\NCalc\Handlers\AsyncEvaluateParameterHandler.cs" Link="Handlers\AsyncEvaluateParameterHandler.cs" />
+      <Compile Include="..\NCalc\Handlers\AsyncFunctionArgs.cs" Link="Handlers\AsyncFunctionArgs.cs" />
+      <Compile Include="..\NCalc\Handlers\AsyncMatchStringHandler.cs" Link="Handlers\AsyncMatchStringHandler.cs" />
+      <Compile Include="..\NCalc\Handlers\AsyncUpdateParameterHandler.cs" Link="Handlers\AsyncUpdateParameterHandler.cs" />
+      <Compile Include="..\NCalc\Handlers\EvaluateFunctionHandler.cs" Link="Handlers\EvaluateFunctionHandler.cs" />
+      <Compile Include="..\NCalc\Handlers\EvaluateParameterHandler.cs" Link="Handlers\EvaluateParameterHandler.cs" />
+      <Compile Include="..\NCalc\Handlers\FunctionArgs.cs" Link="Handlers\FunctionArgs.cs" />
+      <Compile Include="..\NCalc\Handlers\MatchStringArgs.cs" Link="Handlers\MatchStringArgs.cs" />
+      <Compile Include="..\NCalc\Handlers\MatchStringHandler.cs" Link="Handlers\MatchStringHandler.cs" />
+      <Compile Include="..\NCalc\Handlers\ParameterArgs.cs" Link="Handlers\ParameterArgs.cs" />
+      <Compile Include="..\NCalc\Handlers\UpdateParameterArgs.cs" Link="Handlers\UpdateParameterArgs.cs" />
+      <Compile Include="..\NCalc\Handlers\UpdateParameterHandler.cs" Link="Handlers\UpdateParameterHandler.cs" />
+      <Compile Include="..\NCalc\Helpers\AsyncBuiltInFunctionHelper.cs" Link="Helpers\AsyncBuiltInFunctionHelper.cs" />
+      <Compile Include="..\NCalc\Helpers\BuiltInFunctionHelper.cs" Link="Helpers\BuiltInFunctionHelper.cs" />
+      <Compile Include="..\NCalc\Helpers\ComparisonOptions.cs" Link="Helpers\ComparisonOptions.cs" />
+      <Compile Include="..\NCalc\Helpers\ComparisonType.cs" Link="Helpers\ComparisonType.cs" />
+      <Compile Include="..\NCalc\Helpers\EvaluationHelper.cs" Link="Helpers\EvaluationHelper.cs" />
+      <Compile Include="..\NCalc\Helpers\FlatHelpers.cs" Link="Helpers\FlatHelpers.cs" />
+      <Compile Include="..\NCalc\Helpers\MathFunctionHelper.cs" Link="Helpers\MathFunctionHelper.cs" />
+      <Compile Include="..\NCalc\Helpers\MathHelper.cs" Link="Helpers\MathHelper.cs" />
+      <Compile Include="..\NCalc\Helpers\MathHelperOptions.cs" Link="Helpers\MathHelperOptions.cs" />
+      <Compile Include="..\NCalc\Helpers\MathMethodInfo.cs" Link="Helpers\MathMethodInfo.cs" />
+      <Compile Include="..\NCalc\Helpers\ParametersHelper.cs" Link="Helpers\ParametersHelper.cs" />
+      <Compile Include="..\NCalc\Helpers\StringCoercionComparer.cs" Link="Helpers\StringCoercionComparer.cs" />
+      <Compile Include="..\NCalc\Helpers\TypeHelper.cs" Link="Helpers\TypeHelper.cs" />
+      <Compile Include="..\NCalc\Logging\DefaultLoggerFactory.cs" Link="Logging\DefaultLoggerFactory.cs" />
+      <Compile Include="..\NCalc\Logging\LogMessages.cs" Link="Logging\LogMessages.cs" />
+      <Compile Include="..\NCalc\Parser\BigIntegerParser.cs" Link="Parser\BigIntegerParser.cs" />
+      <Compile Include="..\NCalc\Parser\ExpressionLocation.cs" Link="Parser\ExpressionLocation.cs" />
+      <Compile Include="..\NCalc\Parser\LogicalExpressionParser.cs" Link="Parser\LogicalExpressionParser.cs" />
+      <Compile Include="..\NCalc\Parser\LogicalExpressionParserContext.cs" Link="Parser\LogicalExpressionParserContext.cs" />
+      <Compile Include="..\NCalc\Parser\ParlotExpressionLocation.cs" Link="Parser\ParlotExpressionLocation.cs" />
+      <Compile Include="..\NCalc\Visitors\AsyncEvaluationVisitor.cs" Link="Visitors\AsyncEvaluationVisitor.cs" />
+      <Compile Include="..\NCalc\Visitors\AsyncEvaluationVisitor.NoRecurse.cs" Link="Visitors\AsyncEvaluationVisitor.NoRecurse.cs" />
+      <Compile Include="..\NCalc\Visitors\EvaluationVisitor.cs" Link="Visitors\EvaluationVisitor.cs" />
+      <Compile Include="..\NCalc\Visitors\EvaluationVisitor.NoRecurse.cs" Link="Visitors\EvaluationVisitor.NoRecurse.cs" />
+      <Compile Include="..\NCalc\Visitors\FunctionCallExtractionVisitor.cs" Link="Visitors\FunctionCallExtractionVisitor.cs" />
+      <Compile Include="..\NCalc\Visitors\ILogicalExpressionNoRecurseVisitor.cs" Link="Visitors\ILogicalExpressionNoRecurseVisitor.cs" />
+      <Compile Include="..\NCalc\Visitors\ILogicalExpressionVisitor.cs" Link="Visitors\ILogicalExpressionVisitor.cs" />
+      <Compile Include="..\NCalc\Visitors\ParameterExtractionVisitor.cs" Link="Visitors\ParameterExtractionVisitor.cs" />
+      <Compile Include="..\NCalc\Visitors\SerializationContext.cs" Link="Visitors\SerializationContext.cs" />
+      <Compile Include="..\NCalc\Visitors\SerializationVisitor.cs" Link="Visitors\SerializationVisitor.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="../../NCalc.png">
+            <Pack>True</Pack>
+            <PackagePath>/</PackagePath>
+        </None>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AlliedBits.Parlot" Version="1.5.6" />
+        <PackageReference Include="ExtendedNumerics.BigDecimal" Version="3001.*" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="System.Collections.Immutable" Version="10.*" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Logging.TraceSource" Version="10.0.0" />
+    </ItemGroup>
+    <ItemGroup>
+      <PackageReference Update="Nerdbank.GitVersioning" Version="3.9.50" />
+      <PackageReference Update="Roslynator.Analyzers" Version="4.14.1" />
+      <PackageReference Update="Roslynator.CodeAnalysis.Analyzers" Version="4.14.1" />
+      <PackageReference Update="Roslynator.Formatting.Analyzers" Version="4.14.1" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'net462'">
+        <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+        <PackageReference Include="System.ValueTuple" Version="4.6.1" />
+        <PackageReference Include="NETStandard.Library" Version="2.0.3" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+        <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Domain\" />
+      <Folder Include="Helpers\" />
+      <Folder Include="Cache\" />
+      <Folder Include="Exceptions\" />
+      <Folder Include="Factories\" />
+      <Folder Include="Handlers\" />
+      <Folder Include="Logging\" />
+      <Folder Include="Visitors\" />
+      <Folder Include="Parser\" />
+    </ItemGroup>
+</Project>

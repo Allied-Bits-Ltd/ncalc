@@ -1,9 +1,8 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 using System.Reflection;
 
 using ExtendedNumerics;
-
-using Parlot.Fluent;
 
 namespace NCalc.Helpers;
 
@@ -26,7 +25,7 @@ public static class MathHelper
     }
 
     // unchecked
-
+#if !AOT_COMPILATION
     private static readonly Func<dynamic, dynamic, object> DynamicAddFunc = (a, b) => unchecked(a + b);
     private static readonly Func<dynamic, dynamic, object> DynamicSubtractFunc = (a, b) => unchecked(a - b);
     private static readonly Func<dynamic, dynamic, object> DynamicMultiplyFunc = (a, b) => unchecked(a * b);
@@ -37,10 +36,19 @@ public static class MathHelper
     private static readonly Func<dynamic, dynamic, object> DynamicSubtractPercentFunc = (a, b) => unchecked(a * (100 - b) / 100); //a - (a * b / 100);
     private static readonly Func<dynamic, dynamic, object> DynamicMultiplyPercentFunc = (a, b) => unchecked(a * b / 100);
     private static readonly Func<dynamic, dynamic, object> DynamicDividePercentFunc = (a, b) => unchecked(a * 100 / b);
+#endif
+
+#if AOT_COMPILATION
+    public static T AddGeneric<T>(T left, T right) where T : IAdditionOperators<T, T, T>
+    {
+        return left + right;
+    }
+#endif
 
     private static object? AddFunc(object a, object b, MathHelperOptions options)
     {
         object? result = null;
+#if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
             if (options.OverflowProtection)
@@ -49,6 +57,7 @@ public static class MathHelper
                 result = DynamicAddFunc(a, b);
         }
         else
+#endif
         if (a is char ca && b is char cb)
         {
             if (options.OverflowProtection)
@@ -154,15 +163,20 @@ public static class MathHelper
         }
         else
         {
+#if !AOT_COMPILATION
             var method = FindOperator(a.GetType(), "op_Addition");
             if (method is null)
                 throw new InvalidOperationException($"No overloaded addition function found for operands of type '{a.GetType()}'");
             return method.Invoke(null, new[] { a, b });
+#else
+            throw new InvalidOperationException($"No overloaded addition function found for operands of type '{a.GetType()}'");
+#endif
         }
 
         return result;
     }
 
+#if !AOT_COMPILATION
     private static readonly Func<dynamic, dynamic, object> AddFuncChecked = (a, b) =>
     {
         var res = checked(a + b);
@@ -170,14 +184,16 @@ public static class MathHelper
 
         return res;
     };
+#endif
 
     private static object AddPercentFunc(object a, object b, MathHelperOptions options)
     {
+#if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
             return options.OverflowProtection ? AddPercentFuncChecked(a, b) : DynamicAddPercentFunc(a, b);
         }
-
+#endif
         object? im1 = Add(100, b, false, options);
         if (im1 is null)
             throw new InvalidOperationException($"No addition was possible for a number and an '{b.GetType()}' object");
@@ -193,6 +209,7 @@ public static class MathHelper
         return result;
     }
 
+#if !AOT_COMPILATION
     private static readonly Func<dynamic, dynamic, object> AddPercentFuncChecked = (a, b) =>
     {
         var res = checked(a * (100 + b) / 100); //checked(a + (a * b / 100));
@@ -200,10 +217,12 @@ public static class MathHelper
 
         return res;
     };
+#endif
 
     private static object? SubtractFunc(object a, object b, MathHelperOptions options)
     {
         object? result = null;
+#if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
             if (options.OverflowProtection)
@@ -212,6 +231,7 @@ public static class MathHelper
                 result = DynamicSubtractFunc(a, b);
         }
         else
+#endif
         if (a is char ca && b is char cb)
         {
             if (options.OverflowProtection)
@@ -317,15 +337,20 @@ public static class MathHelper
         }
         else
         {
+#if !AOT_COMPILATION
             var method = FindOperator(a.GetType(), "op_Subtraction");
             if (method is null)
                 throw new InvalidOperationException($"No overloaded subtraction function found for operands of type '{a.GetType()}'");
             return method.Invoke(null, new[] { a, b });
+#else
+            throw new InvalidOperationException($"No overloaded subtraction function found for operands of type '{a.GetType()}'");
+#endif
         }
 
-        return result;
+            return result;
     }
 
+#if !AOT_COMPILATION
     private static readonly Func<dynamic, dynamic, object> SubtractFuncChecked = (a, b) =>
     {
         var res = checked(a - b);
@@ -333,14 +358,16 @@ public static class MathHelper
 
         return res;
     };
+#endif
 
     private static object SubtractPercentFunc(object a, object b, MathHelperOptions options)
     {
+#if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
             return options.OverflowProtection ? SubtractPercentFuncChecked(a, b) : DynamicSubtractPercentFunc(a, b);
         }
-
+#endif
         object? im1 = Subtract(100, b, false, options);
         if (im1 is null)
             throw new InvalidOperationException($"No subtraction was possible for a number and an '{b.GetType()}' object");
@@ -356,6 +383,7 @@ public static class MathHelper
         return result;
     }
 
+#if !AOT_COMPILATION
     private static readonly Func<dynamic, dynamic, object> SubtractPercentFuncChecked = (a, b) =>
     {
         var res = checked(a * (100 - b) / 100);
@@ -363,10 +391,11 @@ public static class MathHelper
 
         return res;
     };
-
+#endif
     private static object? MultiplyFunc(object a, object b, MathHelperOptions options)
     {
         object? result = null;
+#if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
             if (options.OverflowProtection)
@@ -375,6 +404,7 @@ public static class MathHelper
                 result = DynamicMultiplyFunc(a, b);
         }
         else
+#endif
         if (a is char ca && b is char cb)
         {
             if (options.OverflowProtection)
@@ -480,15 +510,20 @@ public static class MathHelper
         }
         else
         {
+#if !AOT_COMPILATION
             var method = FindOperator(a.GetType(), "op_Multiply");
             if (method is null)
                 throw new InvalidOperationException($"No overloaded multiplication function found for operands of type '{a.GetType()}'");
             return method.Invoke(null, new[] { a, b });
+#else
+            throw new InvalidOperationException($"No overloaded multiplication function found for operands of type '{a.GetType()}'");
+#endif
         }
 
         return result;
     }
 
+#if !AOT_COMPILATION
     private static readonly Func<dynamic, dynamic, object> MultiplyFuncChecked = (a, b) =>
     {
         var res = checked(a * b);
@@ -496,14 +531,15 @@ public static class MathHelper
 
         return res;
     };
-
+#endif
     private static object MultiplyPercentFunc(object a, object b, MathHelperOptions options)
     {
+#if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
             return options.OverflowProtection ? MultiplyPercentFuncChecked(a, b) : DynamicMultiplyPercentFunc(a, b);
         }
-
+#endif
         object? im2 = Multiply(a, b, false, options);
         if (im2 is null)
             throw new InvalidOperationException($"No multiplication was possible for objects of types '{a.GetType()}' and '{b.GetType()}'");
@@ -515,6 +551,7 @@ public static class MathHelper
         return result;
     }
 
+#if !AOT_COMPILATION
     private static readonly Func<dynamic, dynamic, object> MultiplyPercentFuncChecked = (a, b) =>
     {
         var res = checked(a * b / 100);
@@ -522,10 +559,12 @@ public static class MathHelper
 
         return res;
     };
+#endif
 
     private static object? DivideFunc(object a, object b, MathHelperOptions options)
     {
         object? result = null;
+#if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
             if (options.OverflowProtection)
@@ -534,6 +573,7 @@ public static class MathHelper
                 result = DynamicDivideFunc(a, b);
         }
         else
+#endif
         if (a is char ca && b is char cb)
         {
             if (options.OverflowProtection)
@@ -639,15 +679,20 @@ public static class MathHelper
         }
         else
         {
+#if !AOT_COMPILATION
             var method = FindOperator(a.GetType(), "op_Division");
             if (method is null)
                 throw new InvalidOperationException($"No overloaded division function found for operands of type '{a.GetType()}'");
             return method.Invoke(null, new[] { a, b });
+#else
+            throw new InvalidOperationException($"No overloaded division function found for operands of type '{a.GetType()}'");
+#endif
         }
 
         return result;
     }
 
+#if !AOT_COMPILATION
     private static readonly Func<dynamic, dynamic, object> DivideFuncChecked = (a, b) =>
     {
         var res = checked(a / b);
@@ -655,14 +700,15 @@ public static class MathHelper
 
         return res;
     };
-
+#endif
     private static object DividePercentFunc(object a, object b, MathHelperOptions options)
     {
+#if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
             return options.OverflowProtection ? DividePercentFuncChecked(a, b) : DynamicDividePercentFunc(a, b);
         }
-
+#endif
         object? im2 = Multiply(a, 100, false, options);
         if (im2 is null)
             throw new InvalidOperationException($"No multiplication was possible for an '{a.GetType()}' object and a number");
@@ -674,6 +720,7 @@ public static class MathHelper
         return result;
     }
 
+#if !AOT_COMPILATION
     private static readonly Func<dynamic, dynamic, object> DividePercentFuncChecked = (a, b) =>
     {
         var res = checked(a * 100 / b);
@@ -681,10 +728,12 @@ public static class MathHelper
 
         return res;
     };
+#endif
 
     private static object? ModuloFunc(object a, object b, MathHelperOptions options)
     {
         object? result = null;
+#if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
             if (options.OverflowProtection)
@@ -693,6 +742,7 @@ public static class MathHelper
                 result = DynamicModuloFunc(a, b);
         }
         else
+#endif
         if (a is char ca && b is char cb)
         {
             if (options.OverflowProtection)
@@ -798,15 +848,20 @@ public static class MathHelper
         }
         else
         {
+#if !AOT_COMPILATION
             var method = FindOperator(a.GetType(), "op_Modulus");
             if (method is null)
                 throw new InvalidOperationException($"No overloaded modulus function found for operands of type '{a.GetType()}'");
             return method.Invoke(null, new[] { a, b });
+#else
+            throw new InvalidOperationException($"No overloaded modulus function found for operands of type '{a.GetType()}'");
+#endif
         }
 
         return result;
     }
 
+#if !AOT_COMPILATION
     private static readonly Func<dynamic, dynamic, object> ModuloFuncChecked = (a, b) =>
     {
         var res = checked(a % b);
@@ -814,6 +869,7 @@ public static class MathHelper
 
         return res;
     };
+#endif
 
     public static object? AddPercent(object? a, object? b)
     {
@@ -3100,7 +3156,10 @@ public static class MathHelper
             return value;
     }
 
-    private static MethodInfo? FindOperator(Type opType, string opName)
+#if !AOT_COMPILATION
+    private static MethodInfo? FindOperator(
+        Type opType,
+        string opName)
     {
         const BindingFlags flags =
             BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy;
@@ -3114,4 +3173,5 @@ public static class MathHelper
                 m.GetParameters()[1].ParameterType.IsAssignableFrom(opType)
             );
     }
+#endif
 }

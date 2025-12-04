@@ -959,6 +959,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedValue, result?.ToString());
     }
 
+#if !AOT_COMPILATION
     [Theory]
     [InlineData("20*5%", 1)]
     [InlineData("20/5%", 400)]
@@ -1033,6 +1034,7 @@ public class AdvFeatureTests
         else
             Assert.Fail($"Unknown result type '{result.Value?.GetType()}'");
     }
+#endif
 
     [Theory]
     [InlineData("#2025/06/05# + #08:00:00#", new int[] { 2025, 6, 5, 8, 0, 0 })]
@@ -1051,6 +1053,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedDate, result);
     }
 
+    #if !AOT_COMPILATION
     [Theory]
     [InlineData("#2025/06/05# + #08:00:00#", new int[] { 2025, 6, 5, 8, 0, 0 })]
     [InlineData("#08:00:00# + #2025/06/05#", new int[] { 2025, 6, 5, 8, 0, 0 })]
@@ -1069,13 +1072,14 @@ public class AdvFeatureTests
 
         Assert.Equal(expectedDate, result);
     }
+#endif
 
     [Theory]
     [InlineData("#8:00:00# + #08:00:00#", new int[] { 16, 0, 0 })]
     [InlineData("#11:00:00# - #3:00:00#", new int[] { 8, 0, 0 })]
     public void ShouldAddSubtractTimes(string input, int[] expectedValue)
     {
-        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.SupportTimeOperations);
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.SupportTimeOperations | ExpressionOptions.AvoidDynamicFunctions);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
         expression.AdvancedOptions.TimeSeparator = ":";
@@ -1087,6 +1091,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedTime, result);
     }
 
+    #if !AOT_COMPILATION
     [Theory]
     [InlineData("#8:00:00# + #08:00:00#", new int[] { 16, 0, 0 })]
     [InlineData("#11:00:00# - #3:00:00#", new int[] { 8, 0, 0 })]
@@ -1104,6 +1109,7 @@ public class AdvFeatureTests
 
         Assert.Equal(expectedTime, result);
     }
+#endif
 
     [Theory]
     [InlineData("#2025/06/05# - #2025/06/02#", new int[] { 72, 0, 0 })]
@@ -1121,6 +1127,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedTime, result);
     }
 
+    #if !AOT_COMPILATION
     [Theory]
     [InlineData("#2025/06/05# - #2025/06/02#", new int[] { 72, 0, 0 })]
     public void ShouldAddSubtractDatesLambda(string input, int[] expectedValue)
@@ -1137,6 +1144,7 @@ public class AdvFeatureTests
 
         Assert.Equal(expectedTime, result);
     }
+#endif
 
     [Theory]
     [InlineData("#1day3hrs356ms#", new int[] { 1, 3, 0, 0, 356 })]
@@ -1237,6 +1245,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedTime, result);
     }
 
+    #if !AOT_COMPILATION
     [Theory]
     [InlineData("#1day3hrs356ms#", new int[] { 1, 3, 0, 0, 356 })]
     [InlineData("#1y2wks21day#", new int[] { 400, 0, 0, 0, 0 })]
@@ -1305,7 +1314,7 @@ public class AdvFeatureTests
 
         Assert.Equal(expectedTime, result);
     }
-
+#endif
     [Theory]
     [InlineData("500.50", 0, 500.50)]
     [InlineData("500.50", 1, 500.50)]
@@ -1427,6 +1436,7 @@ public class AdvFeatureTests
             Assert.Equal(expectedValue, result);
     }
 
+    #if !AOT_COMPILATION
     [Theory]
     [InlineData("5!", 120)]
     [InlineData("5!!", 15)]
@@ -1459,6 +1469,7 @@ public class AdvFeatureTests
         else
             Assert.Equal(expectedValue, result);
     }
+#endif
 
     [Fact]
     public void SerializeFactorialExpressionsTest()
@@ -1502,6 +1513,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedValue, result);
     }
 
+    #if !AOT_COMPILATION
     [Theory]
     [InlineData("\u221A4", 2)]
     [InlineData("\u221A(2+2)", 2)]
@@ -1517,6 +1529,7 @@ public class AdvFeatureTests
         var result = sut();
         Assert.Equal(expectedValue, result);
     }
+#endif
 
     [Theory]
     [InlineData("a := 2", "a", 2, 2)]
@@ -1720,6 +1733,7 @@ public class AdvFeatureTests
         }
     }
 
+    #if !AOT_COMPILATION
     [Theory]
     [InlineData("a := 2", 2, 2)]
     [InlineData("a := 2 + 2", 4, 4)]
@@ -1745,6 +1759,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedExprValue, result);
         Assert.Equal(expectedVarValue, context.a);
     }
+#endif
 
     [Theory]
     [InlineData("2 + 2; 3 + 3", 6)]
@@ -1765,6 +1780,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedValue, result);
     }
 
+    #if !AOT_COMPILATION
     [Theory]
     [InlineData("2 + 2; 3 + 3", 6)]
     [InlineData("(2 + 2); 3 + 3", 6)]
@@ -1778,6 +1794,7 @@ public class AdvFeatureTests
         var result = sut();
         Assert.Equal(expectedValue, result);
     }
+#endif
 
     [Theory]
     [InlineData("2 * 2 ",  4)]
@@ -1999,6 +2016,8 @@ public class AdvFeatureTests
             Assert.Equal(expectedExprValue, expression.Parameters["a"]!);
     }
 
+    #if !AOT_COMPILATION
+
     [Theory]
     [ClassData(typeof(StatementSequenceWithAssignment2TestData))]
     public void ShouldHandleStatementSequenceWithAssignment2Lambda(string input, int expectedExprValue)
@@ -2041,6 +2060,7 @@ public class AdvFeatureTests
         Assert.Equal((double)expectedExprValue, context.a);
     }
 
+
     [Theory]
     [InlineData("a := 4; a /= 2", 2)]
     public void ShouldHandleStatementSequenceWithAssignment3Lambda(string input, int expectedExprValue)
@@ -2082,6 +2102,7 @@ public class AdvFeatureTests
             Assert.Equal(expectedExprValue, expression.Parameters["a"]!);*/
         Assert.Equal(expectedExprValue, context.a);
     }
+#endif
 
     [Theory]
     [ClassData(typeof(EvaluationTestData))]
@@ -2160,6 +2181,7 @@ public class AdvFeatureTests
         }
     }
 
+    #if !AOT_COMPILATION
     [Theory]
     [InlineData("LENgth('xyz')", 3)]
     public void ShouldHandleFunctionsInLowercaseLambda(string input, object expectedValue)
@@ -2173,6 +2195,7 @@ public class AdvFeatureTests
 
         Assert.Equal(expectedValue, result);
     }
+#endif
 
     [Theory]
     [InlineData("A := if (true, 2, 4); a + Max(2; 4) + A", 2, 8)]
@@ -2194,6 +2217,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedExprValue, result);
     }
 
+    #if !AOT_COMPILATION
     [Theory]
     [InlineData("A := if (true, 2, 4); a + Max(2; 4) + A", 2, 8)]
     public void ShouldHandleAssignmentInLowercaseLambda(string input, int expectedVarValue, int expectedExprValue)
@@ -2217,6 +2241,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedExprValue, result);
         Assert.Equal(expectedVarValue, context.a);
     }
+#endif
 
     [Theory]
     [InlineData("8.5 \\ 2.5", (long) 4)]

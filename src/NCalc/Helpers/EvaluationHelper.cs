@@ -52,7 +52,7 @@ public static class EvaluationHelper
 
         try
         {
-            return MathHelper.Add(leftValue, rightValue, true, context);
+                return MathHelper.Add(leftValue, rightValue, true, context);
         }
         catch (FormatException) when (leftValue is string && rightValue is string)
         {
