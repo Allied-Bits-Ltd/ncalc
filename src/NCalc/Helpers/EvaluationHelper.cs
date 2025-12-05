@@ -108,8 +108,14 @@ public static class EvaluationHelper
                 if (ticks is int it)
                     return new TimeSpan(it);
                 else
+                if (ticks is uint uit)
+                    return new TimeSpan(uit);
+                else
                 if (ticks is long lt)
                     return new TimeSpan(lt);
+                else
+                if (ticks is ulong ult)
+                    return new TimeSpan((long) ult);
                 else
                 if (ticks is float ft)
                     return new TimeSpan((long)Math.Round(ft));
@@ -124,8 +130,14 @@ public static class EvaluationHelper
                 if (ticks is int it)
                     return new TimeSpan(it);
                 else
+                if (ticks is uint uit)
+                    return new TimeSpan(uit);
+                else
                 if (ticks is long lt)
                     return new TimeSpan(lt);
+                else
+                if (ticks is ulong ult)
+                    return new TimeSpan((long) ult);
                 else
                 if (ticks is float ft)
                     return new TimeSpan((long)Math.Round(ft));
@@ -451,6 +463,7 @@ public static class EvaluationHelper
     /// <param name="value">The string to be compared against the pattern.</param>
     /// <param name="pattern">The pattern to match. If a default Regex-based matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
     /// <param name="context">The context containing options for the comparison.</param>
+    /// <param name="cancellationToken">An optional cancellation token.</param>
     /// <returns>
     /// <c>true</c> if the <paramref name="value"/> matches the <paramref name="pattern"/>; otherwise, <c>false</c>.
     /// </returns>
@@ -552,6 +565,7 @@ public static class EvaluationHelper
     /// <param name="value">The string to be compared against the pattern.</param>
     /// <param name="pattern">The pattern to match. If a default Regex-based matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
     /// <param name="context">The context containing options for the comparison.</param>
+    /// <param name="cancellationToken">An optional cancellation token.</param>
     /// <returns>
     /// <c>true</c> if the <paramref name="value"/> matches the <paramref name="pattern"/>; otherwise, <c>false</c>.
     /// </returns>
@@ -566,7 +580,7 @@ public static class EvaluationHelper
                 throw new NCalcEvaluationException("A pattern in LIKE and NOTLIKE operations must be a string");
 
             if (value is not string && value is not char)
-                throw new NCalcEvaluationException("A value in LIKE and NO TLIKE operations must be a char or a string");
+                throw new NCalcEvaluationException("A value in LIKE and NOTLIKE operations must be a char or a string");
         }
 
         string? lValue = value.ToString();
