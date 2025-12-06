@@ -1,0 +1,18 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Choose>
+    <When Condition="'$(UseAotMode)' == 'true'">
+      <ItemGroup>
+        <Reference Include="NCalc">
+          <HintPath>$(MSBuildThisFileDirectory)..\..\assemblies\net9.0\NCalc.AOT.dll</HintPath>
+        </Reference>
+      </ItemGroup>
+    </When>
+    <Otherwise>
+      <ItemGroup>
+        <Reference Include="NCalc">
+          <HintPath>$(MSBuildThisFileDirectory)..\..\assemblies\net9.0\NCalc.dll</HintPath>
+        </Reference>
+      </ItemGroup>
+    </Otherwise>
+  </Choose>
+</Project>

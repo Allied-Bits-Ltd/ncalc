@@ -1,3 +1,6 @@
+# 8.7.0.1 (Allied Bits)
+* Fixed the nuget package, in which the AOT assembly conflicted with the regular one.
+
 # 8.7.0 (Allied Bits)
 * Added AOT (ahead-of-time compilation) support via a separate assembly.
 * Added an option to disable the use of dynamic functions for arithmetic in the regular assembly.
