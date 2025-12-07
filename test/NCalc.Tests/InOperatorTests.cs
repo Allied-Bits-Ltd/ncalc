@@ -8,7 +8,7 @@ public class InOperatorTests
     {
         var context = new ExpressionContext();
         context.StaticParameters["PageState"] = "Insert";
-        Assert.Equal(true, new Expression("{PageState} in ('Insert','Update')", context).Evaluate());
+        Assert.Equal(true, new Expression("{PageState} in ('Insert','Update')", context).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -17,7 +17,7 @@ public class InOperatorTests
         var context = new ExpressionContext();
         context.StaticParameters["PageState"] = "Insert";
 
-        Assert.Equal(true, new Expression("{PageState} in 'Insert a quote, you must.'", context).Evaluate());
+        Assert.Equal(true, new Expression("{PageState} in 'Insert a quote, you must.'", context).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -25,7 +25,7 @@ public class InOperatorTests
     {
         var context = new ExpressionContext();
         context.StaticParameters["PageState"] = "Import";
-        Assert.Equal(true, new Expression("{PageState} not in  ('Insert','Update')", context).Evaluate());
+        Assert.Equal(true, new Expression("{PageState} not in  ('Insert','Update')", context).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public class InOperatorTests
     {
         ExpressionContext context = ExpressionOptions.CaseInsensitiveStringComparer;
         context.StaticParameters["PageState"] = "Insert";
-        Assert.Equal(true, new Expression("{PageState} in ('INSERT','UPDATE')", context).Evaluate());
+        Assert.Equal(true, new Expression("{PageState} in ('INSERT','UPDATE')", context).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public class InOperatorTests
         Assert.Equal(true, new Expression("{tap_int_status} in (5)")
         {
             Parameters = { { "tap_int_status", 5 } }
-        }.Evaluate());
+        }.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -51,6 +51,6 @@ public class InOperatorTests
         Assert.Equal(false, new Expression("{PageState} in 4")
         {
             Parameters = { { "PageState", "Insert" } }
-        }.Evaluate());
+        }.Evaluate(TestContext.Current.CancellationToken));
     }
 }

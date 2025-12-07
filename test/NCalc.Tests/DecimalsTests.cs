@@ -95,19 +95,19 @@ public class DecimalsTests
 /*    [Fact]
     public void ShouldHandleTrailingDecimalPoint()
     {
-        Assert.Equal(3.0, new Expression("1. + 2.").Evaluate());
+        Assert.Equal(3.0, new Expression("1. + 2.").Evaluate(TestContext.Current.CancellationToken));
     }
 */
     [Fact]
     public void ShouldNotLoosePrecision()
     {
-        Assert.Equal(0.5, new Expression("3/6").Evaluate());
+        Assert.Equal(0.5, new Expression("3/6").Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public void ShouldNotRoundDecimalValues()
     {
-        Assert.Equal(false, new Expression("0 <= -0.6").Evaluate());
+        Assert.Equal(false, new Expression("0 <= -0.6").Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -117,27 +117,27 @@ public class DecimalsTests
         Assert.Equal(9.61m, e.Evaluate(TestContext.Current.CancellationToken));
 
         var e2 = new Expression("Pow(3.1, 2)", ExpressionOptions.DecimalAsDefault);
-        Assert.Equal(9.61m, e2.Evaluate());
+        Assert.Equal(9.61m, e2.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public void ShouldResolveHexadecimal()
     {
-        Assert.Equal(0x2f, new Expression("0x17 + 0x18").Evaluate());
+        Assert.Equal(0x2f, new Expression("0x17 + 0x18").Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public void ShouldResolveOctal()
     {
-        Assert.Equal(29, new Expression("0o16 + 0o17").Evaluate());
+        Assert.Equal(29, new Expression("0o16 + 0o17").Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public void ShouldResolveBinary()
     {
-        Assert.Equal(255, new Expression("0b00001111 + 0b11110000").Evaluate());
-        Assert.Equal(0UL, new Expression("0b00001111 & 0b11110000").Evaluate());
-        Assert.Equal(255UL, new Expression("0b00001111 | 0b11110000").Evaluate());
+        Assert.Equal(255, new Expression("0b00001111 + 0b11110000").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(0UL, new Expression("0b00001111 & 0b11110000").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(255UL, new Expression("0b00001111 | 0b11110000").Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Theory]

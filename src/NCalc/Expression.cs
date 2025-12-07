@@ -153,7 +153,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
     public object? Evaluate(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext)
     {
-        return Evaluate(parser, parserContext, default);
+        return Evaluate(parser, parserContext, parserContext.CancellationToken);
     }
 
     /// <summary>

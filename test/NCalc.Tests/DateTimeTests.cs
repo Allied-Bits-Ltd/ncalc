@@ -43,7 +43,7 @@ public class DateTimeTests
             case 'y': exprStr = $"#2022{dateSeparator}12{dateSeparator}31 08{timeSeparator}00{timeSeparator}00#"; break;
         }
         Assert.False(string.IsNullOrEmpty(exprStr));
-        Assert.Equal(new DateTime(2022, 12, 31, 8, 0, 0), new Expression(exprStr).Evaluate());
+        Assert.Equal(new DateTime(2022, 12, 31, 8, 0, 0), new Expression(exprStr).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public class DateTimeTests
         }
         Assert.False(string.IsNullOrEmpty(exprStr));
 
-        Assert.Throws<NCalcParserException>(() => new Expression(exprStr).Evaluate());
+        Assert.Throws<NCalcParserException>(() => new Expression(exprStr).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]

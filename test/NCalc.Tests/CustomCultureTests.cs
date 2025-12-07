@@ -30,7 +30,7 @@ public class CustomCultureTests
                     {"A","2.0"},
                     {"B","0.5"}
                 }
-            }.Evaluate());
+            }.Evaluate(TestContext.Current.CancellationToken));
 
             //Correctly evaluate with decimal comma and parameter with comma
             Assert.Equal(expectedValue, new Expression(formula, cultureComma)
@@ -40,7 +40,7 @@ public class CustomCultureTests
                     {"A","2,0"},
                     {"B","0,5"}
                 }
-            }.Evaluate());
+            }.Evaluate(TestContext.Current.CancellationToken));
 
             //combining decimal dot and comma fails
             Assert.Throws<FormatException>(() => new Expression(formula, cultureComma)
@@ -50,7 +50,7 @@ public class CustomCultureTests
                     {"A","2,0"},
                     {"B","0.5"}
                 }
-            }.Evaluate());
+            }.Evaluate(TestContext.Current.CancellationToken));
 
             //combining decimal dot and comma fails
             Assert.Throws<FormatException>(() => new Expression(formula, cultureDot)
@@ -60,7 +60,7 @@ public class CustomCultureTests
                     {"A","2,0"},
                     {"B","0.5"}
                 }
-            }.Evaluate());
+            }.Evaluate(TestContext.Current.CancellationToken));
         }
     }
 

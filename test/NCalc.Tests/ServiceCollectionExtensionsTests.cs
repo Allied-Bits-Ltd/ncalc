@@ -85,7 +85,7 @@ public class ServiceCollectionExtensionsTests
         var expFactory = serviceProvider.GetRequiredService<IExpressionFactory>();
 
         var exp = expFactory.Create("42");
-        Assert.Equal("The answer", exp.Evaluate());
+        Assert.Equal("The answer", exp.Evaluate(TestContext.Current.CancellationToken));
         Assert.IsType<CustomEvaluationVisitorFactory>(customVisitorFactory);
     }
 
@@ -111,9 +111,9 @@ public class ServiceCollectionExtensionsTests
 
     private class CustomExpressionFactory : IExpressionFactory
     {
-        public Expression Create(string expression, ExpressionContext expressionContext = null) => throw new NCalcException("Stub method intented for testing.");
+        public Expression Create(string expression, ExpressionContext? expressionContext = null) => throw new NCalcException("Stub method intented for testing.");
 
-        public Expression Create(LogicalExpression logicalExpression, ExpressionContext expressionContext = null) => throw new NCalcException("Stub method intented for testing.");
+        public Expression Create(LogicalExpression logicalExpression, ExpressionContext? expressionContext = null) => throw new NCalcException("Stub method intented for testing.");
     }
 
     private class CustomCache : ILogicalExpressionCache
@@ -132,7 +132,7 @@ public class ServiceCollectionExtensionsTests
         public LogicalExpression Create(string expression, CultureInfo cultureInfo, ExpressionOptions options = ExpressionOptions.None)
             => throw new NCalcException("Stub method intented for testing.");
 
-        public LogicalExpression Create(string expression, ExpressionContextBase? expressionContext, CultureInfo cultureInfo, ExpressionOptions options = ExpressionOptions.None, AdvancedExpressionOptions extendedOptions = null, CancellationToken cancellationToken = default) => throw new NCalcException("Stub method intended for testing.");
+        public LogicalExpression Create(string expression, ExpressionContextBase? expressionContext, CultureInfo cultureInfo, ExpressionOptions options = ExpressionOptions.None, AdvancedExpressionOptions? extendedOptions = null, CancellationToken cancellationToken = default) => throw new NCalcException("Stub method intended for testing.");
     }
 
     private class CustomVisitor(ExpressionContext context) : EvaluationVisitor(context)
@@ -166,7 +166,7 @@ public class ServiceCollectionExtensionsTests
 
     private class CustomAsyncVisitor(AsyncExpressionContext context) : AsyncEvaluationVisitor(context)
     {
-        public override ValueTask<object> Visit(ValueExpression expression, CancellationToken cancellationToken = default)
+        public override ValueTask<object?> Visit(ValueExpression expression, CancellationToken cancellationToken = default)
         {
             if (expression.Value is 42)
                 return new("The answer");
@@ -174,7 +174,7 @@ public class ServiceCollectionExtensionsTests
             return base.Visit(expression, cancellationToken);
         }
 
-        public override ValueTask<object> Visit(ValueExpression expression, ExpressionTask<ValueTask<object>> task, CancellationToken cancellationToken = default)
+        public override ValueTask<object?> Visit(ValueExpression expression, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
         {
             if (expression.Value is 42)
             {

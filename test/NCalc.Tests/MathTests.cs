@@ -356,7 +356,7 @@ public class MathsTests
 
         Assert.Equal(expectedValue, expression.Evaluate(TestContext.Current.CancellationToken));
 
-        var lambda = expression.ToLambda<double>();
+        var lambda = expression.ToLambda<double>(TestContext.Current.CancellationToken);
 
         Assert.Equal(Convert.ToDouble(expectedValue), lambda());
     }

@@ -123,7 +123,7 @@ public class ParserTests
 
         AdvancedExpressionOptions advancedOptions = new();
         advancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.SemicolonOrColonOrSpace;
-        var logicalExpression = LogicalExpressionFactory.Create(formula, advancedOptions: advancedOptions);
+        var logicalExpression = LogicalExpressionFactory.Create(formula, advancedOptions: advancedOptions, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.IsType<LogicalExpressionList>(logicalExpression);
 
@@ -148,7 +148,7 @@ public class ParserTests
 
         Assert.IsType<ValueExpression>(logicalExpression);
 
-        Assert.IsType<Guid>(new Expression(logicalExpression).Evaluate());
+        Assert.IsType<Guid>(new Expression(logicalExpression).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public class ParserTests
     [Fact]
     public void OperatorPriorityIssue337()
     {
-        Assert.True((bool)new Expression("true or true and false").Evaluate()!);
+        Assert.True((bool)new Expression("true or true and false").Evaluate(TestContext.Current.CancellationToken)!);
     }
 
     [Fact]

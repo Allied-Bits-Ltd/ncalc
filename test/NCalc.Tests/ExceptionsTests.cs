@@ -13,7 +13,7 @@ public class ExceptionsTests
     //[InlineData("ifs([divider] > 0, [divider] / [divided], [divider < 0], [divider] + [divided])")]
     public void Ifs_With_Improper_Arguments_Should_Throw_Exceptions(string expression)
     {
-        Assert.Throws<NCalcEvaluationException>(() => new Expression(expression).Evaluate());
+        Assert.Throws<NCalcEvaluationException>(() => new Expression(expression).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -33,7 +33,7 @@ public class ExceptionsTests
     [InlineData("42 . 3")]
     public void Should_Throw_Parse_Exception(string expression)
     {
-        Assert.Throws<NCalcParserException>(() => new Expression(expression).Evaluate());
+        Assert.Throws<NCalcParserException>(() => new Expression(expression).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -142,7 +142,7 @@ public class ExceptionsTests
     [Fact]
     public void ShouldThrowExceptionWhenNullOrEmpty()
     {
-        Assert.Throws<NCalcException>(() => new Expression("").Evaluate());
-        Assert.Throws<NCalcException>(() => new Expression((string)null).Evaluate());
+        Assert.Throws<NCalcException>(() => new Expression("").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Throws<NCalcException>(() => new Expression((string)null).Evaluate(TestContext.Current.CancellationToken));
     }
 }

@@ -1,6 +1,6 @@
 ﻿namespace NCalc.Tests.TestData;
 
-public class NullCheckTestData : TheoryData<string, object>
+public class NullCheckTestData : TheoryData<string, object?>
 {
     public NullCheckTestData()
     {

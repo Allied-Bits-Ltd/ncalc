@@ -15,7 +15,7 @@ public class EventHandlersTests
         e.EvaluateFunction += delegate (string name, FunctionArgs args)
         {
             if (name == "SecretOperation")
-                args.Result = (int)args.Parameters[0].Evaluate() + (int)args.Parameters[1].Evaluate();
+                args.Result = (int)args.Parameters[0].Evaluate(TestContext.Current.CancellationToken) + (int)args.Parameters[1].Evaluate(TestContext.Current.CancellationToken);
         };
 
         Assert.Equal(9, e.Evaluate(TestContext.Current.CancellationToken));
@@ -31,7 +31,7 @@ public class EventHandlersTests
         e.EvaluateFunction += delegate (string name, FunctionArgs args)
         {
             if (name == "SecretOperation")
-                args.Result = (int)args.Parameters[0].Evaluate() + (int)args.Parameters[1].Evaluate();
+                args.Result = (int)args.Parameters[0].Evaluate(TestContext.Current.CancellationToken) + (int)args.Parameters[1].Evaluate(TestContext.Current.CancellationToken);
         };
 
         Assert.Equal(10, e.Evaluate(TestContext.Current.CancellationToken));
@@ -125,10 +125,10 @@ public class EventHandlersTests
                     arg.Result = 1;
                     break;
                 case "func2":
-                    arg.Result = 2 * Convert.ToDouble(arg.Parameters[0].Evaluate());
+                    arg.Result = 2 * Convert.ToDouble(arg.Parameters[0].Evaluate(TestContext.Current.CancellationToken));
                     break;
                 case "func3":
-                    arg.Result = 3 * Convert.ToDouble(arg.Parameters[0].Evaluate());
+                    arg.Result = 3 * Convert.ToDouble(arg.Parameters[0].Evaluate(TestContext.Current.CancellationToken));
                     break;
             }
         };
@@ -223,7 +223,7 @@ public class EventHandlersTests
                     }
                 }
 
-                args.Result = (int)args.Parameters[0].Evaluate() + (int)args.Parameters[1].Evaluate();
+                args.Result = (int)args.Parameters[0].Evaluate(TestContext.Current.CancellationToken) + (int)args.Parameters[1].Evaluate(TestContext.Current.CancellationToken);
             }
         };
 
@@ -245,8 +245,8 @@ public class EventHandlersTests
             var id = name;
             if (name == "Repeat")
             {
-                var t = (int)args.Parameters[1].Evaluate() - 1;
-                var r = (bool)args.Parameters[0].Evaluate();
+                var t = (int)args.Parameters[1].Evaluate(TestContext.Current.CancellationToken) - 1;
+                var r = (bool)args.Parameters[0].Evaluate(TestContext.Current.CancellationToken);
                 if (r && id != null)
                 {
                     if (!times.ContainsKey(id))

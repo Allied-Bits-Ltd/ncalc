@@ -11,7 +11,7 @@ public class ParametersAndFunctions
     {
         var e = new Expression("SecretOperation(3, 6)");
 
-        e.Functions["SecretOperation"] = (args) => (int)args[0].Evaluate() + (int)args[1].Evaluate();
+        e.Functions["SecretOperation"] = (args) => (int)args[0].Evaluate(TestContext.Current.CancellationToken) + (int)args[1].Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(9, e.Evaluate(TestContext.Current.CancellationToken));
     }
 
@@ -22,7 +22,7 @@ public class ParametersAndFunctions
         e.Parameters["e"] = 3;
         e.Parameters["f"] = 1;
 
-        e.Functions["SecretOperation"] = (args) => (int)args[0].Evaluate() + (int)args[1].Evaluate();
+        e.Functions["SecretOperation"] = (args) => (int)args[0].Evaluate(TestContext.Current.CancellationToken) + (int)args[1].Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(10, e.Evaluate(TestContext.Current.CancellationToken));
     }
@@ -50,7 +50,7 @@ public class ParametersAndFunctions
                 }
             }
 
-            return (int)args[0].Evaluate() + (int)args[1].Evaluate();
+            return (int)args[0].Evaluate(TestContext.Current.CancellationToken) + (int)args[1].Evaluate(TestContext.Current.CancellationToken);
         };
 
         Assert.Equal(12, e.Evaluate(TestContext.Current.CancellationToken));
@@ -69,8 +69,8 @@ public class ParametersAndFunctions
         var times = new Dictionary<string, int>();
         e.Functions[id] = (args) =>
         {
-            var t = (int)args[1].Evaluate() - 1;
-            var r = (bool)args[0].Evaluate();
+            var t = (int)args[1].Evaluate(TestContext.Current.CancellationToken) - 1;
+            var r = (bool)args[0].Evaluate(TestContext.Current.CancellationToken);
             if (r)
             {
                 if (!times.ContainsKey(id))
@@ -164,8 +164,8 @@ public class ParametersAndFunctions
         var e = new Expression("if(true, func1(x) + func2(func3(y)), 0)");
 
         e.Functions["func1"] = (_) => 1;
-        e.Functions["func2"] = (arg) => 2 * Convert.ToDouble(arg[0].Evaluate());
-        e.Functions["func3"] = (arg) => 3 * Convert.ToDouble(arg[0].Evaluate());
+        e.Functions["func2"] = (arg) => 2 * Convert.ToDouble(arg[0].Evaluate(TestContext.Current.CancellationToken));
+        e.Functions["func3"] = (arg) => 3 * Convert.ToDouble(arg[0].Evaluate(TestContext.Current.CancellationToken));
 
         e.DynamicParameters["x"] = _ => 1;
         e.DynamicParameters["y"] = _ => 2;
@@ -210,7 +210,7 @@ public class ParametersAndFunctions
     {
         var expression = new Expression("name == 'Beatriz'")
         {
-            Parameters = new Dictionary<string, object>(StringComparer.InvariantCultureIgnoreCase)
+            Parameters = new Dictionary<string, object?>(StringComparer.InvariantCultureIgnoreCase)
             {
                 { "Name", "Beatriz" }
             }

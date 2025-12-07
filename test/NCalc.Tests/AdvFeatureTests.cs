@@ -798,7 +798,6 @@ public class AdvFeatureTests
             expression.AdvancedOptions.Flags |= AdvExpressionOptions.AcceptUnderscoresInNumbers;
             var result = expression.Evaluate(TestContext.Current.CancellationToken);
             Assert.Equal(expectedValue, result);
-
     }
 
     [Theory]
@@ -973,7 +972,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.CalculatePercent;
 
-        var sut = expression.ToLambda<int>();
+        var sut = expression.ToLambda<int>(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, sut());
     }
 
@@ -985,7 +984,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.CalculatePercent;
 
-        var sut = expression.ToLambda<double>();
+        var sut = expression.ToLambda<double>(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, sut());
     }
 
@@ -1003,7 +1002,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.CalculatePercent;
 
-        var sut = expression.ToLambda<Percent>();
+        var sut = expression.ToLambda<Percent>(TestContext.Current.CancellationToken);
         var result = sut();
         if (result.Value is double dValue)
             Assert.Equal(expectedValue, dValue);
@@ -1024,7 +1023,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.CalculatePercent;
 
-        var sut = expression.ToLambda<Percent>();
+        var sut = expression.ToLambda<Percent>(TestContext.Current.CancellationToken);
         var result = sut();
         if (result.Value is double dValue)
             Assert.Equal(expectedValue, dValue);
@@ -1065,7 +1064,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
         expression.AdvancedOptions.DateSeparator = "/";
         expression.AdvancedOptions.DateOrder = AdvancedExpressionOptions.DateOrderKind.YMD;
-        var sut = expression.ToLambda<DateTime>();
+        var sut = expression.ToLambda<DateTime>(TestContext.Current.CancellationToken);
         var result = sut();
 
         DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4], expectedValue[5]);
@@ -1102,7 +1101,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
         expression.AdvancedOptions.TimeSeparator = ":";
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
-        var sut = expression.ToLambda<TimeSpan>();
+        var sut = expression.ToLambda<TimeSpan>(TestContext.Current.CancellationToken);
         var result = sut();
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
@@ -1127,7 +1126,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedTime, result);
     }
 
-    #if !AOT_COMPILATION
+#if !AOT_COMPILATION
     [Theory]
     [InlineData("#2025/06/05# - #2025/06/02#", new int[] { 72, 0, 0 })]
     public void ShouldAddSubtractDatesLambda(string input, int[] expectedValue)
@@ -1137,7 +1136,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
         expression.AdvancedOptions.DateSeparator = "/";
         expression.AdvancedOptions.DateOrder = AdvancedExpressionOptions.DateOrderKind.YMD;
-        var sut = expression.ToLambda<TimeSpan>();
+        var sut = expression.ToLambda<TimeSpan>(TestContext.Current.CancellationToken);
         var result = sut();
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2]);
@@ -1245,7 +1244,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedTime, result);
     }
 
-    #if !AOT_COMPILATION
+#if !AOT_COMPILATION
     [Theory]
     [InlineData("#1day3hrs356ms#", new int[] { 1, 3, 0, 0, 356 })]
     [InlineData("#1y2wks21day#", new int[] { 400, 0, 0, 0, 0 })]
@@ -1261,7 +1260,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
         expression.AdvancedOptions.TimeSeparator = ":";
         expression.AdvancedOptions.HoursFormat = AdvancedExpressionOptions.HoursFormatKind.Always24Hour;
-        var sut = expression.ToLambda<TimeSpan>();
+        var sut = expression.ToLambda<TimeSpan>(TestContext.Current.CancellationToken);
         var result = sut();
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4]);
@@ -1307,7 +1306,7 @@ public class AdvFeatureTests
         expression.AdvancedOptions.PeriodSecondIndicators.Add("s");
         expression.AdvancedOptions.PeriodMSecIndicators.Add("ms");
 
-        var sut = expression.ToLambda<TimeSpan>();
+        var sut = expression.ToLambda<TimeSpan>(TestContext.Current.CancellationToken);
         var result = sut();
 
         TimeSpan expectedTime = new TimeSpan(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4]);
@@ -1436,7 +1435,7 @@ public class AdvFeatureTests
             Assert.Equal(expectedValue, result);
     }
 
-    #if !AOT_COMPILATION
+#if !AOT_COMPILATION
     [Theory]
     [InlineData("5!", 120)]
     [InlineData("5!!", 15)]
@@ -1445,7 +1444,7 @@ public class AdvFeatureTests
     public void ShouldCalculateSmallFactorialsLambda(string input, long expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
-        var sut = expression.ToLambda<long>();
+        var sut = expression.ToLambda<long>(TestContext.Current.CancellationToken);
         var result = sut();
         Assert.Equal(expectedValue, result);
     }
@@ -1750,7 +1749,7 @@ public class AdvFeatureTests
             Assert.Equal(expectedVarValue, args.Value);
         };
 
-        Func<AssignmentLambdaTestsContext, object> function = expression.ToLambda<AssignmentLambdaTestsContext, object>();
+        Func<AssignmentLambdaTestsContext, object> function = expression.ToLambda<AssignmentLambdaTestsContext, object>(TestContext.Current.CancellationToken);
 
         var context = new AssignmentLambdaTestsContext { };
         var result = function(context);
@@ -1780,7 +1779,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedValue, result);
     }
 
-    #if !AOT_COMPILATION
+#if !AOT_COMPILATION
     [Theory]
     [InlineData("2 + 2; 3 + 3", 6)]
     [InlineData("(2 + 2); 3 + 3", 6)]
@@ -1790,7 +1789,7 @@ public class AdvFeatureTests
     public void ShouldHandleStatementSequenceLambda(string input, int expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
-        var sut = expression.ToLambda<long>();
+        var sut = expression.ToLambda<long>(TestContext.Current.CancellationToken);
         var result = sut();
         Assert.Equal(expectedValue, result);
     }
@@ -2016,7 +2015,7 @@ public class AdvFeatureTests
             Assert.Equal(expectedExprValue, expression.Parameters["a"]!);
     }
 
-    #if !AOT_COMPILATION
+#if !AOT_COMPILATION
 
     [Theory]
     [ClassData(typeof(StatementSequenceWithAssignment2TestData))]
@@ -2027,7 +2026,7 @@ public class AdvFeatureTests
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
         expression.UpdateParameter += (name, args) => eventFired = true;
 
-        Func<AssignmentLambdaTestsContext, object> function = expression.ToLambda<AssignmentLambdaTestsContext, object>();
+        Func<AssignmentLambdaTestsContext, object> function = expression.ToLambda<AssignmentLambdaTestsContext, object>(TestContext.Current.CancellationToken);
 
         var context = new AssignmentLambdaTestsContext { };
         var result = function(context);
@@ -2060,7 +2059,6 @@ public class AdvFeatureTests
         Assert.Equal((double)expectedExprValue, context.a);
     }
 
-
     [Theory]
     [InlineData("a := 4; a /= 2", 2)]
     public void ShouldHandleStatementSequenceWithAssignment3Lambda(string input, int expectedExprValue)
@@ -2070,7 +2068,7 @@ public class AdvFeatureTests
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
         expression.UpdateParameter += (name, args) => eventFired = true;
 
-        Func<AssignmentLambdaTestsWithDoubleContext, object> function = expression.ToLambda<AssignmentLambdaTestsWithDoubleContext, object>();
+        Func<AssignmentLambdaTestsWithDoubleContext, object> function = expression.ToLambda<AssignmentLambdaTestsWithDoubleContext, object>(TestContext.Current.CancellationToken);
 
         var context = new AssignmentLambdaTestsWithDoubleContext { };
         var result = function(context);
@@ -2118,7 +2116,7 @@ public class AdvFeatureTests
     public void ShouldHandleFunctionsInLowercase(string input, object expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.LowerCaseIdentifierLookup);
-        expression.Functions.Add("length", (x) => x[0].Evaluate()?.ToString()?.Length ?? 0);
+        expression.Functions.Add("length", (x) => x[0].Evaluate(TestContext.Current.CancellationToken)?.ToString()?.Length ?? 0);
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
     }
@@ -2181,14 +2179,14 @@ public class AdvFeatureTests
         }
     }
 
-    #if !AOT_COMPILATION
+#if !AOT_COMPILATION
     [Theory]
     [InlineData("LENgth('xyz')", 3)]
     public void ShouldHandleFunctionsInLowercaseLambda(string input, object expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.LowerCaseIdentifierLookup);
 
-        Func<InLowercaseLambdaTestsContext, int> function = expression.ToLambda<InLowercaseLambdaTestsContext, int>();
+        Func<InLowercaseLambdaTestsContext, int> function = expression.ToLambda<InLowercaseLambdaTestsContext, int>(TestContext.Current.CancellationToken);
 
         var context = new InLowercaseLambdaTestsContext {  };
         var result = function(context);
@@ -2217,7 +2215,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedExprValue, result);
     }
 
-    #if !AOT_COMPILATION
+#if !AOT_COMPILATION
     [Theory]
     [InlineData("A := if (true, 2, 4); a + Max(2; 4) + A", 2, 8)]
     public void ShouldHandleAssignmentInLowercaseLambda(string input, int expectedVarValue, int expectedExprValue)
@@ -2232,7 +2230,7 @@ public class AdvFeatureTests
             Assert.Equal(expectedVarValue, args.Value);
         };
 
-        Func<InLowercaseLambdaTestsContext, int> function = expression.ToLambda<InLowercaseLambdaTestsContext, int>();
+        Func<InLowercaseLambdaTestsContext, int> function = expression.ToLambda<InLowercaseLambdaTestsContext, int>(TestContext.Current.CancellationToken);
 
         var context = new InLowercaseLambdaTestsContext { };
         var result = function(context);
@@ -2963,7 +2961,6 @@ public class AsyncAdvFeatureTests
 
         Assert.Equal(expectedValue, iResult);
     }
-
 
     [Fact]
     public async Task ShouldUsePrecreatedParserAsync()
