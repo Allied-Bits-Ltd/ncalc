@@ -16,10 +16,10 @@ public static class BuiltInFunctionHelper
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("PercentOf() takes exactly 2 arguments", location);
             object? arg1 = arguments[0].Evaluate();
-            if (arg1 == null)
+            if (arg1 is null)
                 return null;
             object? arg2 = arguments[1].Evaluate();
-            if (arg2 == null)
+            if (arg2 is null)
                 return null;
             object? result = MathHelper.Divide(MathHelper.Multiply(100, arg1, false, context), arg2, true, context);
             if (result != null)
@@ -32,10 +32,10 @@ public static class BuiltInFunctionHelper
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("PercentDiff() takes exactly 2 arguments", location);
             object? arg1 = arguments[0].Evaluate();
-            if (arg1 == null)
+            if (arg1 is null)
                 return null;
             object? arg2 = arguments[1].Evaluate();
-            if (arg2 == null)
+            if (arg2 is null)
                 return null;
             object? result = MathHelper.Divide(MathHelper.Multiply(MathHelper.Subtract(arg2, arg1, false, context), 100, false, context), arg1, true, context);
             if (result != null)
@@ -208,7 +208,9 @@ public static class BuiltInFunctionHelper
                 return result;
             }
             else
+            {
                 return new object?[size];
+            }
         }
         if ((functionName.Equals("MakeStr", comparison)) || (functionName.Equals("MakeString", comparison)))
         {
@@ -238,18 +240,26 @@ public static class BuiltInFunctionHelper
             }
             else
             if (!((value is Percent)) || (value is IList))
+            {
                 valueStr = value.ToString();
+            }
             else
+            {
                 throw new NCalcEvaluationException("The string element in `value` in a call to MakeStr() must be a character, a character code (an integer number), or a string", location);
+            }
 
             if (valueStr is null)
                 throw new NCalcEvaluationException("The string element in `value` is evaluated to null in a call to MakeStr()", location);
 
             if (size == 1)
+            {
                 return valueStr;
+            }
             else
             if (size == 2)
+            {
                 return valueStr + valueStr;
+            }
             else
             {
                 StringBuilder sb = new(size * valueStr.Length);

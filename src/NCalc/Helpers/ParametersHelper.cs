@@ -29,7 +29,7 @@ public static class ParametersHelper
 
             var localSize = list.Count;
 
-            if (size == null)
+            if (size is null)
             {
                 size = localSize;
             }

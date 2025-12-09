@@ -74,7 +74,7 @@ fn sum3(a,b,c) { a + b + c }; sum3(1;2;3) // will return 6
 fn sum3(a, b = 0, c = 3) => a + b + c; sum3(1;2) // will return 6 too
 ```
 
-After an expression is parsed, user-defined functions are available in the <xref:NCalc.ExpressionBase`1.UserFunctions> dictionary. A <xref:NCalc.Domain.Function> object includes a description if it was included in the expression in the form of a comment immediately before the function declaration. 
+After an expression is parsed (e.g. with a call to the <xref:NCalc.ExpressionBase.HasErrors> method), user-defined functions are available in the <xref:NCalc.ExpressionBase`1.UserFunctions> dictionary. A <xref:NCalc.Domain.Function> object includes a description if it was included in the expression in the form of a comment immediately before the function declaration. 
 
 To return a value from a function, one can use a common `return` keyword followed by the value to return.
 

@@ -26,7 +26,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             return false;
         }
         else
+        {
             return task.ChildStates[index].ValueSet;
+        }
     }
 
     private bool ExpressionsEvaluated(ExpressionTask<ValueTask<object?>> task, LogicalExpression expression1, LogicalExpression expression2)
@@ -42,7 +44,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         }
         else
         if (task.ChildStates[0].ValueSet && task.ChildStates[1].ValueSet)
+        {
             return true;
+        }
 
         return false;
     }
@@ -142,7 +146,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     }
                     else
                     if (rightPercent)
+                    {
                         return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, MathHelper.AddPercent(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false));
+                    }
                     else
                     if (leftPercent)
                     {
@@ -186,7 +192,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     }
                     else
                     if (rightPercent)
+                    {
                         return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, MathHelper.SubtractPercent(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false));
+                    }
                     else
                     if (leftPercent)
                     {
@@ -527,7 +535,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     }
                     else
                     if (rightPercent)
+                    {
                         return SetTaskValue(task, MathHelper.SubtractPercent(leftValue, rightValue, context));
+                    }
                     else
                     if (leftPercent)
                     {
@@ -581,7 +591,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     }
                     else
                     if (rightPercent)
+                    {
                         return SetTaskValue(task, MathHelper.AddPercent(leftValue, rightValue, context));
+                    }
                     else
                     if (leftPercent)
                     {

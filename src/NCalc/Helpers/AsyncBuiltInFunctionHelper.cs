@@ -16,10 +16,10 @@ public static class AsyncBuiltInFunctionHelper
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("PercentOf() takes exactly 2 arguments", location);
             object? arg1 = await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false);
-            if (arg1 == null)
+            if (arg1 is null)
                 return null;
             object? arg2 = await arguments[1].EvaluateAsync(cancellationToken).ConfigureAwait(false);
-            if (arg2 == null)
+            if (arg2 is null)
                 return null;
             object? result = MathHelper.Divide(MathHelper.Multiply(100, arg1, false, context), arg2, true, context);
             if (result != null)
@@ -32,10 +32,10 @@ public static class AsyncBuiltInFunctionHelper
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("PercentDiff() takes exactly 2 arguments", location);
             object? arg1 = await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false);
-            if (arg1 == null)
+            if (arg1 is null)
                 return null;
             object? arg2 = await arguments[1].EvaluateAsync(cancellationToken).ConfigureAwait(false);
-            if (arg2 == null)
+            if (arg2 is null)
                 return null;
             object? result = MathHelper.Divide(MathHelper.Multiply(MathHelper.Subtract(arg2, arg1, false, context), 100, false, context), arg1, true, context);
             if (result != null)

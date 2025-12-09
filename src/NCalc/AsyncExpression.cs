@@ -109,8 +109,10 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
 
     public AsyncExpression(LogicalExpression logicalExpression, AsyncExpressionContext? context = null) : this(context)
     {
-        LogicalExpression = logicalExpression ?? throw new
-            ArgumentException("Expression can't be null", nameof(logicalExpression));
+        if (logicalExpression is null)
+            throw new ArgumentNullException(nameof(logicalExpression));
+
+        LogicalExpression = logicalExpression;
     }
 
     // ReSharper disable once RedundantOverload.Global
@@ -183,7 +185,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         if (LogicalExpression is null)
             return null;
 
-        if (size == null)
+        if (size is null)
         {
             if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
                 return await evaluationVisitor.EvaluateNoRecurseAsync(LogicalExpression, cancellationToken).ConfigureAwait(false);

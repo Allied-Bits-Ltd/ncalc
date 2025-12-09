@@ -138,7 +138,9 @@ public static class MathHelper
                 CheckOverflow(result);
             }
             else
+            {
                 result = unchecked(fa + fb);
+            }
         }
         else
         if (a is double da && b is double db)
@@ -149,7 +151,9 @@ public static class MathHelper
                 CheckOverflow(result);
             }
             else
+            {
                 result = unchecked(da + db);
+            }
         }
         else
         if (a is decimal dca && b is decimal dcb)
@@ -159,7 +163,9 @@ public static class MathHelper
                 result = checked(dca + dcb);
             }
             else
+            {
                 result = unchecked(dca + dcb);
+            }
         }
         else
         {
@@ -312,7 +318,9 @@ public static class MathHelper
                 CheckOverflow(result);
             }
             else
+            {
                 result = unchecked(fa - fb);
+            }
         }
         else
         if (a is double da && b is double db)
@@ -323,7 +331,9 @@ public static class MathHelper
                 CheckOverflow(result);
             }
             else
+            {
                 result = unchecked(da - db);
+            }
         }
         else
         if (a is decimal dca && b is decimal dcb)
@@ -333,7 +343,9 @@ public static class MathHelper
                 result = checked(dca - dcb);
             }
             else
+            {
                 result = unchecked(dca - dcb);
+            }
         }
         else
         {
@@ -485,7 +497,9 @@ public static class MathHelper
                 CheckOverflow(result);
             }
             else
+            {
                 result = unchecked(fa * fb);
+            }
         }
         else
         if (a is double da && b is double db)
@@ -496,7 +510,9 @@ public static class MathHelper
                 CheckOverflow(result);
             }
             else
+            {
                 result = unchecked(da * db);
+            }
         }
         else
         if (a is decimal dca && b is decimal dcb)
@@ -506,7 +522,9 @@ public static class MathHelper
                 result = checked(dca * dcb);
             }
             else
+            {
                 result = unchecked(dca * dcb);
+            }
         }
         else
         {
@@ -654,7 +672,9 @@ public static class MathHelper
                 CheckOverflow(result);
             }
             else
+            {
                 result = unchecked(fa / fb);
+            }
         }
         else
         if (a is double da && b is double db)
@@ -665,7 +685,9 @@ public static class MathHelper
                 CheckOverflow(result);
             }
             else
+            {
                 result = unchecked(da / db);
+            }
         }
         else
         if (a is decimal dca && b is decimal dcb)
@@ -675,7 +697,9 @@ public static class MathHelper
                 result = checked(dca / dcb);
             }
             else
+            {
                 result = unchecked(dca / dcb);
+            }
         }
         else
         {
@@ -823,7 +847,9 @@ public static class MathHelper
                 CheckOverflow(result);
             }
             else
+            {
                 result = unchecked(fa % fb);
+            }
         }
         else
         if (a is double da && b is double db)
@@ -834,7 +860,9 @@ public static class MathHelper
                 CheckOverflow(result);
             }
             else
+            {
                 result = unchecked(da % db);
+            }
         }
         else
         if (a is decimal dca && b is decimal dcb)
@@ -844,7 +872,9 @@ public static class MathHelper
                 result = checked(dca % dcb);
             }
             else
+            {
                 result = unchecked(dca % dcb);
+            }
         }
         else
         {
@@ -1038,7 +1068,7 @@ public static class MathHelper
             }
 
             // If there was no BigDecimal calculation performed, proceed with the operation
-            if (result == null)
+            if (result is null)
             {
                 if (a is BigInteger biA)
                 {
@@ -1296,16 +1326,24 @@ public static class MathHelper
                     }
                     else
                     if (options.DecimalAsDefault && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
+                    {
                         return (decimal)bdResult;
+                    }
                     else
                     if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
+                    {
                         return (float)bdResult;
+                    }
                     else
                     if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
+                    {
                         return (double)bdResult;
+                    }
                     else
                     if (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
+                    {
                         return (decimal)bdResult;
+                    }
                 }
 
                 return bdResult;
@@ -1365,7 +1403,7 @@ public static class MathHelper
                 throw;
             result = Divide(a, b, reduceTypes, options);
         }
-        if (result == null || !useInteger)
+        if (result is null || !useInteger)
             return result;
 
         if (reduceTypes)
@@ -1519,7 +1557,7 @@ public static class MathHelper
             result = Divide(a, b, reduceTypes, options);
         }
 
-        if (result == null || IsBoxedIntegerNumber(result))
+        if (result is null || IsBoxedIntegerNumber(result))
             return result;
 
         if (reduceTypes)
@@ -1902,7 +1940,10 @@ public static class MathHelper
                     return TypeCode.Object;
                 }
                 else
+                {
                     result = TypeCode.Int64;
+                }
+
                 break;
             case TypeCode.Single:
                         result = TypeCode.Double;
@@ -1916,7 +1957,10 @@ public static class MathHelper
                     return TypeCode.Object;
                 }
                 else
+                {
                     result = typeCode;
+                }
+
                 break;
             default:
                 return TypeCode.Empty;
@@ -2275,7 +2319,9 @@ public static class MathHelper
                 return result;
         }
         else
+        {
             return (long)result;
+        }
     }
 
     public static long Factorial(long a, long b, MathHelperOptions options)
@@ -2465,7 +2511,9 @@ public static class MathHelper
     public static object Truncate(object? a, MathHelperOptions options)
     {
         if (a != null && (IsBoxedIntegerNumber(a) || a is BigInteger))
+        {
             return a;
+        }
         else
         if (a is BigDecimal bdA)
         {
@@ -2975,7 +3023,9 @@ public static class MathHelper
 
         var t = obj.GetType();
         if (t == typeof(BigInteger))
+        {
             return true;
+        }
         else
         if (t == typeof(BigDecimal))
         {
@@ -3022,7 +3072,7 @@ public static class MathHelper
 
     public static bool IsBoxedNumberZero(object? number)
     {
-        if (number == null)
+        if (number is null)
             throw new ArgumentNullException(nameof(number));
 
         switch (number)
@@ -3046,7 +3096,7 @@ public static class MathHelper
     }
     public static bool IsBoxedNumberOne(object? number)
     {
-        if (number == null)
+        if (number is null)
             throw new ArgumentNullException(nameof(number));
 
         switch (number)
@@ -3072,10 +3122,14 @@ public static class MathHelper
     public static object? ReduceNumericType(object value, bool forceInteger = false, MathHelperOptions options = default)
     {
         if (value is BigDecimal bdValue)
+        {
             return MathHelper.ReduceToSaneNumber(bdValue, false, options);
+        }
         else
         if (value is BigInteger biValue)
+        {
             return MathHelper.ReduceToSaneNumber(biValue, options);
+        }
         else
         if (MathHelper.IsBoxedIntegerNumber(value))
         {
@@ -3101,9 +3155,13 @@ public static class MathHelper
         }
         else
         if (options.DecimalAsDefault == true)
+        {
             return MathHelper.ConvertToDecimal(value, options);
+        }
         else
+        {
             return MathHelper.ConvertToDouble(value, options);
+        }
     }
 
     public static object? ReduceToSaneNumber(BigDecimal value, bool forceInteger = false, MathHelperOptions? options = default)
@@ -3121,17 +3179,26 @@ public static class MathHelper
             return biResult;
         }
         else
-        if ((options?.DecimalAsDefault  == true) && (value >= decimal.MinValue && value <= decimal.MaxValue))
+        if ((options?.DecimalAsDefault == true) && (value >= decimal.MinValue && value <= decimal.MaxValue))
+        {
             return (decimal)value;
+        }
         else
-            if (value >= float.MinValue && value <= float.MaxValue)
+        if (value >= float.MinValue && value <= float.MaxValue)
+        {
             return (float)value;
+        }
         else
-            if (value >= double.MinValue && value <= double.MaxValue)
+        if (value >= double.MinValue && value <= double.MaxValue)
+        {
             return (double)value;
+        }
         else
-            if (value >= decimal.MinValue && value <= decimal.MaxValue)
+        if (value >= decimal.MinValue && value <= decimal.MaxValue)
+        {
             return (decimal)value;
+        }
+
         return value;
     }
 
@@ -3150,6 +3217,7 @@ public static class MathHelper
     {
         if (value is null)
             return null;
+
         if (value >= ulong.MinValue && value <= ulong.MaxValue)
             return (ulong)value;
         else

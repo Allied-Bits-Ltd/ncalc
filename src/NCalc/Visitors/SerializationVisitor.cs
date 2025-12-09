@@ -11,7 +11,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 {
     private readonly NumberFormatInfo _numberFormatInfo = new()
     {
-        NumberDecimalSeparator = (context.AdvancedOptions == null) ? "." : context.AdvancedOptions.GetDecimalSeparatorChar().ToString()
+        NumberDecimalSeparator = (context.AdvancedOptions is null) ? "." : context.AdvancedOptions.GetDecimalSeparatorChar().ToString()
     };
 
     public string Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
@@ -25,7 +25,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, false, false));
             resultBuilder.Append(") ");
             if (expression.MiddleExpression is ExpressionGroup)
+            {
                 resultBuilder.Append(EncapsulateNoValue(expression.MiddleExpression, false));
+            }
             else
             {
                 resultBuilder.Append("{ ");
@@ -37,7 +39,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             {
                 resultBuilder.Append(" else ");
                 if (expression.RightExpression is ExpressionGroup)
+                {
                     resultBuilder.Append(EncapsulateNoValue(expression.RightExpression, false));
+                }
                 else
                 {
                     resultBuilder.Append("{ ");
@@ -359,7 +363,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             }
             else
                 if (seq.EndsWithSeparator)
+            {
                 resultBuilder.Append(';');
+            }
         }
         return resultBuilder.ToString();
     }
@@ -394,7 +400,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         }
         else
         if (appendSpace)
+        {
             resultBuilder.Append(' ');
+        }
 
         return resultBuilder.ToString();
     }

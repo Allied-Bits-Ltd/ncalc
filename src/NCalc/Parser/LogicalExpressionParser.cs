@@ -349,7 +349,7 @@ public static class LogicalExpressionParser
 
                     BigDecimal? value = TryParseDecimal(val, ((LogicalExpressionParserContext)ctx).AcceptUnderscores);
 
-                    if (value == null)
+                    if (value is null)
                         return new ValueExpression();  // never happens - the When condition ensures that val can be parsed
 
                     if (decimalDefault && (value >= decimal.MinValue && value <= decimal.MaxValue))
@@ -722,6 +722,7 @@ public static class LogicalExpressionParser
                 ncalcDateMasks[1] = string.Join(builtInDateSep, "d", "M", "yy");
             }
             else
+            {
                 switch (datePattern[0])
                 {
                     case 'd':
@@ -741,6 +742,7 @@ public static class LogicalExpressionParser
                         ncalcDateMasks[1] = string.Join(builtInDateSep, "d", "M", "yy");
                         break;
                 }
+            }
 
             // Define some masks for date-time values with both long and short time
             ncalcDateTimeMasks[0] = string.Join(" ", ncalcDateMasks[0], string.Join(builtInTimeSep, "H", "m", "s"));
@@ -756,7 +758,9 @@ public static class LogicalExpressionParser
             {
                 customDateSep = extOptions.GetDateSeparator();
                 if (customDateSep != builtInDateSep && !extOptions.Flags.HasFlag(AdvExpressionOptions.SkipBuiltInDateSeparator))
+                {
                     useSecondDate = true; // we use the second date separator when both custom separator and the default slash are enabled
+                }
                 else
                 if (customDateSep == builtInDateSep)
                 {
@@ -826,7 +830,7 @@ public static class LogicalExpressionParser
             Sequence<TextSpan, TextSpan> shortTimeDefinition;
             Sequence<string, TextSpan, TextSpan, TextSpan> shortTimeSpanDefinition;
 
-            bool use12HourTime = (extOptions == null) ? dateTimeFormat.ShortTimePattern.Contains("t") : extOptions.Use12HourTime();
+            bool use12HourTime = (extOptions is null) ? dateTimeFormat.ShortTimePattern.Contains("t") : extOptions.Use12HourTime();
 
             Parser<string>? amTimeIndicator = use12HourTime ? Terms.Text(dateTimeFormat.AMDesignator, true) : null;
             Parser<string>? pmTimeIndicator = use12HourTime ? Terms.Text(dateTimeFormat.PMDesignator, true) : null;
@@ -873,7 +877,9 @@ public static class LogicalExpressionParser
             {
                 customTimeSep = extOptions.TimeSeparator;
                 if (customTimeSep != builtInTimeSep && !extOptions.Flags.HasFlag(AdvExpressionOptions.SkipBuiltInTimeSeparator))
+                {
                     useSecondTime = true; // we use the second time separator when both custom separator and the default one are enabled and are different
+                }
                 else
                 if (customTimeSep == builtInTimeSep)
                 {
@@ -1442,7 +1448,9 @@ public static class LogicalExpressionParser
                             msecValue = elemValue;
                         }
                         else
+                        {
                             throw new FormatException(string.Format(errUnrecognizedPeriodIndicator, entry.Item2));
+                        }
                     }
 
                     if (string.IsNullOrEmpty(prefix) && string.IsNullOrEmpty(suffix))
@@ -1504,7 +1512,9 @@ public static class LogicalExpressionParser
                             pastTime = false;
                         }
                         else
+                        {
                             throw new FormatException(string.Format(errUnrecognizedTimeRelationIndicator, prefix));
+                        }
 
                         if (addTime)
                         {
@@ -1679,7 +1689,9 @@ public static class LogicalExpressionParser
                                 : x.Item2.Item5)).SetLocation(new ParlotExpressionLocation(ctx));
                 }
                 else
+                {
                     throw new NCalcParserException("Ranged index could not be parsed", ctx.Scanner.Cursor.Position);
+                }
             });
 
         // factorial => primary ("!")* ;
@@ -1716,7 +1728,9 @@ public static class LogicalExpressionParser
             factorialOrPercent = OneOf(numberPercent, numberPercent2);
         }
         else
+        {
             factorialOrPercent = factorial;
+        }
 
         // Either a factorial, primary, or exponential
         // exponential => factorial ( "**" factorial )* ;
@@ -1832,7 +1846,7 @@ public static class LogicalExpressionParser
         // ternary => logical("?" logical ":" logical) ?
         var ternary = logical.And(ZeroOrOne(questionMark.SkipAnd(logical).AndSkip(colon).And(logical)))
             .Then(static (ctx, x) =>
-                x.Item2.Item1 == null
+                x.Item2.Item1 is null
                     ? x.Item1
                     : new TernaryExpression(x.Item1, x.Item2.Item1, x.Item2.Item2).SetLocation(new ParlotExpressionLocation(ctx)))
             .Or(logical);
@@ -1981,7 +1995,9 @@ public static class LogicalExpressionParser
                     LogicalExpression result = null!;
                     ExpressionLocation loc = new ParlotExpressionLocation(ctx);
                     if (x.Item2.Count == 0)
+                    {
                         result = x.Item1;
+                    }
                     else
                     {
                         seq = new(x.Item3.Count > 0);
@@ -2039,7 +2055,7 @@ public static class LogicalExpressionParser
 
         if (val.Item4.Length != 0)
         {
-            if (val.Item5 == null)
+            if (val.Item5 is null)
                 return null;
             sb.Append('E');
             sb.Append(val.Item5.ToString()); // fractional part

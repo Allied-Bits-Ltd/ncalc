@@ -373,7 +373,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     private ExtendedMethodInfo? FindMethod(string methodName, LinqExpression[] methodArgs)
     {
-        if (_context == null)
+        if (_context is null)
             return null;
 
         var contextType = _context.Type;
@@ -429,7 +429,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             var fpValue = LinqExpression.Convert(originalExpression, originalExpression.Type);
             // Math.Floor(value)
             MethodInfo? floorMethod = typeof(Math).GetMethod("Floor", new[] { originalExpression.Type });
-            if (floorMethod == null)
+            if (floorMethod is null)
             {
                 return originalExpression;
             }
@@ -469,7 +469,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         if (intExpr.Type == typeof(string))
         {
             MethodInfo? methodInfo = typeof(BigInteger).GetMethod("Parse", [typeof(string)]);
-            if (methodInfo == null)
+            if (methodInfo is null)
                 throw new InvalidOperationException($"Could not find a BigInteger Parse method that takes a parameter of type '{intExpr.Type}'");
             var newExpr = LinqExpression.Call(methodInfo, intExpr);
 
@@ -494,7 +494,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             if (intExpr.Type == typeof(float))
                 constructor = typeof(BigInteger).GetConstructor(new[] { typeof(float) });
 
-            if (constructor == null)
+            if (constructor is null)
                 throw new InvalidOperationException($"Could not find a BigInteger constructor that takes a parameter of type '{intExpr.Type}'");
             var newExpr = LinqExpression.New(constructor!, intExpr);
 
@@ -569,7 +569,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
             // If required, update parameters
             LinqExpression maybeUpdateParameters;
-            if (_context == null)
+            if (_context is null)
                 maybeUpdateParameters = LinqExpression.Empty();
             else
             {
@@ -598,8 +598,8 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     private LinqExpression BooleanXOr(LinqExpression left, LinqExpression right)
     {
-        if (left == null) throw new ArgumentNullException(nameof(left));
-        if (right == null) throw new ArgumentNullException(nameof(right));
+        if (left is null) throw new ArgumentNullException(nameof(left));
+        if (right is null) throw new ArgumentNullException(nameof(right));
 
         // Convert each to boolean: true if not default(T), false if default(T)
         LinqExpression leftIsDefault = LinqExpression.Equal(left, LinqExpression.Default(left.Type));
@@ -858,7 +858,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
     private LinqExpression WrapWithPercent(LinqExpression valueExpression)
     {
         ConstructorInfo? constructor = typeof(Percent).GetConstructor(new[] { typeof(object), typeof(Type) });
-        if (constructor == null)
+        if (constructor is null)
             throw new InvalidOperationException($"Could not find a Percent constructor that takes a parameter of type '{valueExpression.Type.Name}'");
 
         LinqExpression constructorArgument = LinqExpression.Convert(valueExpression, typeof(object));
@@ -890,7 +890,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 new[] { typeof(object), typeof(Type) }
             );
 
-            if (changeTypeMethod == null)
+            if (changeTypeMethod is null)
                 throw new InvalidOperationException("Could not find the 'Convert.ChangeType' method.");
 
             // Expression to access the 'Value' property from the 'Percent' object
@@ -1136,7 +1136,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
         private LinqExpression InOperator(LinqExpression left, LinqExpression arr)
     {
-        if (arr == null) return LinqExpression.Constant(false);
+        if (arr is null) return LinqExpression.Constant(false);
 
         if (!typeof(IEnumerable).IsAssignableFrom(arr.Type))
             return LinqExpression.Constant(false);

@@ -203,7 +203,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         if (LogicalExpression is null)
             return null;
 
-        if (size == null)
+        if (size is null)
         {
             if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
                 return evaluationVisitor.EvaluateNoRecurse(LogicalExpression);

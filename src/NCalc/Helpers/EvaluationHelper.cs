@@ -242,15 +242,15 @@ public static class EvaluationHelper
     private static bool Contains(object? leftValue, IEnumerable rightValue, ExpressionContextBase context)
     {
         // Null rightValue means nothing to iterate
-        if (rightValue == null)
+        if (rightValue is null)
             return false;
 
         // Null leftValue means check if collection contains any null
-        if (leftValue == null)
+        if (leftValue is null)
         {
             foreach (var item in rightValue)
             {
-                if (item == null)
+                if (item is null)
                     return true;
             }
             return false;
@@ -263,7 +263,7 @@ public static class EvaluationHelper
 
         foreach (var item in rightValue)
         {
-            if (item == null)
+            if (item is null)
                 continue;
             var rightType = item.GetType();
             // If the element type matches, Equals is fast and precise
@@ -274,7 +274,9 @@ public static class EvaluationHelper
             }
             else
             if (Compare(leftValue, item, ComparisonType.Equal, options))
+            {
                 return true;
+            }
         }
 
         return false;
@@ -306,25 +308,27 @@ public static class EvaluationHelper
                 return comparisonType == ComparisonType.NotEqual;
         }
 
-        if (a == null || b == null)
+        if (a is null || b is null)
         {
             if (options.CompareNullValues)
             {
-                if (a == null && b == null)
+                if (a is null && b is null)
                     result = 0;
                 else
-                if (a == null)
+                if (a is null)
                     result = -1;
                 else
                     result = 1;
             }
             else
+            {
                 return comparisonType switch
                 {
-                    ComparisonType.Equal => a == b, // true if null == null
+                    ComparisonType.Equal => a == b, // true if null is null
                     ComparisonType.NotEqual => a != b,
                     _ => false
                 };
+            }
         }
         else
         if (a is BigDecimal || b is BigDecimal)
@@ -337,7 +341,9 @@ public static class EvaluationHelper
                     result = bdA.CompareTo(MathHelper.ConvertToBigDecimal(b));
             }
             else
+            {
                 result = ((BigDecimal)b).CompareTo(MathHelper.ConvertToBigDecimal(a));
+            }
         }
         else
         if (a is BigInteger || b is BigInteger)

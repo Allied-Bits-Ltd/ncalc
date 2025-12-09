@@ -311,7 +311,9 @@
                 }
             }
             else
+            {
                 DateOrder = DateOrderKind.DMY;
+            }
 
             if (_cultureInfo is not null)
                 _dateSeparator = _cultureInfo.DateTimeFormat.DateSeparator;
@@ -543,7 +545,9 @@
                     }
                 }
                 else
+                {
                     return CombineDateTimeFormat();
+                }
             }
             return null;
         }
@@ -590,7 +594,7 @@
                 }
             }
 
-            if (result == null)
+            if (result is null)
                 return result;
 
             DateTimeFormatInfo timeInfo = ((TimeSeparatorType == SeparatorType.FromCulture) && _cultureInfo is not null) ? _cultureInfo.DateTimeFormat : CultureInfo.CurrentCulture.DateTimeFormat;

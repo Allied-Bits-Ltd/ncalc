@@ -152,7 +152,7 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         }
     }
 
-    protected LogicalExpression? GetLogicalExpression(CancellationToken cancellationToken)
+    public LogicalExpression? GetLogicalExpression(CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(ExpressionString))
         {
@@ -185,7 +185,7 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         return logicalExpression;
     }
 
-    protected LogicalExpression? GetLogicalExpression(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext)
+    public LogicalExpression? GetLogicalExpression(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext)
     {
         if (string.IsNullOrEmpty(parserContext.Scanner.Buffer))
         {

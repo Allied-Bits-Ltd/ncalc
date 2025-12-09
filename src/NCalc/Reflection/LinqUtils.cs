@@ -83,7 +83,7 @@ public static class LinqUtils
 
     private static bool TryCastImplicitly(Type from, Type to, ref LinqExpression? argument)
     {
-        if (argument == null)
+        if (argument is null)
             return false;
 
         var convertingFromPrimitiveType = TypeHelper.ImplicitPrimitiveConversionTable.TryGetValue(from, out var possibleConversions);

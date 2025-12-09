@@ -44,7 +44,7 @@ namespace NCalc.Domain
 
         public override string ToString()
         {
-            if (Value == null)
+            if (Value is null)
                 return "null";
             return Value + "%";
         }

@@ -104,7 +104,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         context.StaticParameters[context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName] = strParam;
                     }
                     else
+                    {
                         throw new NCalcParameterIndexException(identifierName, $"When updating a string in '{identifierName}' via the index, the value must be a character or a one-character string", binExpr.RightExpression.Location);
+                    }
                 }
                 else
                 {
@@ -121,7 +123,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 }
             }
             else
+            {
                 throw new NCalcEvaluationException("The expression should evaluate to an identifier", binExpr.Location);
+            }
         }
         else
         if (leftExpression is Identifier identifier)
@@ -186,7 +190,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     }
                     else
                     if (right.Value is Percent)
+                    {
                         return UpdateParameter(expression.LeftExpression, MathHelper.AddPercent(leftValue, rightValue, context), cancellationToken);
+                    }
                     else
                     if (left.Value is Percent)
                     {
@@ -220,7 +226,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     }
                     else
                     if (right.Value is Percent)
+                    {
                         return UpdateParameter(expression.LeftExpression, MathHelper.SubtractPercent(leftValue, rightValue, context), cancellationToken);
+                    }
                     else
                     if (left.Value is Percent)
                     {
@@ -497,7 +505,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     }
                     else
                     if (right.Value is Percent)
+                    {
                         return MathHelper.SubtractPercent(leftValue, rightValue, context);
+                    }
                     else
                     if (left.Value is Percent)
                     {
@@ -540,7 +550,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     }
                     else
                     if (right.Value is Percent)
+                    {
                         return MathHelper.AddPercent(leftValue, rightValue, context);
+                    }
                     else
                     if (left.Value is Percent)
                     {
@@ -945,7 +957,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             }
         }
 
-        if (result == null)
+        if (result is null)
         {
             if (context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var parameter))
             {
@@ -980,7 +992,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             }
         }
 
-        if (result == null)
+        if (result is null)
         {
             if (context.DynamicParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var dynamicParameter))
             {
@@ -1037,7 +1049,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             if ((a is null || b is null) && !(a is null && b is null))
                 return comparisonType switch
                 {
-                    ComparisonType.Equal => false, // true if null == null
+                    ComparisonType.Equal => false, // true if null is null
                     ComparisonType.NotEqual => true,
                     _ => false
                 };

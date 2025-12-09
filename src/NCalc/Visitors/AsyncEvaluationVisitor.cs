@@ -108,7 +108,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         context.StaticParameters[context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName] = strParam;
                     }
                     else
+                    {
                         throw new NCalcParameterIndexException(identifierName, $"When updating a string in '{identifierName}' via the index, the value must be a character or a one-character string", binExpr.RightExpression.Location);
+                    }
                 }
                 else
                 {
@@ -125,7 +127,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 }
             }
             else
+            {
                 throw new NCalcEvaluationException("The expression should evaluate to an identifier", binExpr.Location);
+            }
         }
         else
         if (leftExpression is Identifier identifier)
@@ -193,7 +197,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     }
                     else
                     if (rval is Percent)
+                    {
                         return await UpdateParameterAsync(expression.LeftExpression, MathHelper.AddPercent(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false);
+                    }
                     else
                     if (lval is Percent)
                     {
@@ -230,7 +236,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     }
                     else
                     if (rval is Percent)
+                    {
                         return await UpdateParameterAsync(expression.LeftExpression, MathHelper.SubtractPercent(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false);
+                    }
                     else
                     if (lval is Percent)
                     {
@@ -520,7 +528,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     }
                     else
                     if (rval is Percent)
+                    {
                         return MathHelper.SubtractPercent(leftValue, rightValue, context);
+                    }
                     else
                     if (lval is Percent)
                     {
@@ -565,7 +575,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     }
                     else
                     if (rval is Percent)
+                    {
                         return MathHelper.AddPercent(leftValue, rightValue, context);
+                    }
                     else
                     if (lval is Percent)
                     {
@@ -904,7 +916,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     public virtual async ValueTask<object?> Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
         object? result = await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false);
-        if (result == null)
+        if (result is null)
             return result;
         return new Percent(result);
     }
@@ -1072,7 +1084,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
         if (!context.Options.HasFlag(ExpressionOptions.CompareNullValues))
         {
-            if ((a == null || b == null) && !(a == null && b == null))
+            if ((a is null || b is null) && !(a is null && b is null))
                 return false;
         }
         return EvaluationHelper.Compare(a, b, comparisonType, context);

@@ -6,7 +6,7 @@ internal sealed class StringCoercionComparer : EqualityComparer<object?>
 
     public override bool Equals(object? x, object? y)
     {
-        if (x == null || y == null)
+        if (x is null || y is null)
             return false;
 
         return x switch
