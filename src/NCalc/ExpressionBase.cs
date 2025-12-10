@@ -111,22 +111,24 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
     }
 
     /// <summary>
-    /// Returns a list with all parameter names from the expression.
+    /// Retrieves the names of parameters (variables) referenced in the expression.
     /// </summary>
-    public List<string> GetParameterNames()
+    /// <returns>The list of variable names.</returns>
+    public List<string> GetParameterNames(CancellationToken cancellationToken = default)
     {
         var parameterExtractionVisitor = new ParameterExtractionVisitor();
-        LogicalExpression ??= LogicalExpressionFactory.Create(ExpressionString!, Context, CultureInfo, Context.Options, Context.AdvancedOptions);
+        LogicalExpression ??= LogicalExpressionFactory.Create(ExpressionString!, Context, CultureInfo, Context.Options, Context.AdvancedOptions, cancellationToken);
         return LogicalExpression.Accept(parameterExtractionVisitor);
     }
 
     /// <summary>
-    /// Returns a list with all function names from the expression.
+    /// Retrieves the names of functions referenced in the expression.
     /// </summary>
-    public List<string> GetFunctionNames()
+    /// <returns>The list of function names.</returns>
+    public List<string> GetFunctionNames(CancellationToken cancellationToken = default)
     {
         var functionExtractionVisitor = new FunctionCallExtractionVisitor();
-        LogicalExpression ??= LogicalExpressionFactory.Create(ExpressionString!, Context, CultureInfo, Context.Options, Context.AdvancedOptions);
+        LogicalExpression ??= LogicalExpressionFactory.Create(ExpressionString!, Context, CultureInfo, Context.Options, Context.AdvancedOptions, cancellationToken);
         return LogicalExpression.Accept(functionExtractionVisitor);
     }
 
@@ -134,32 +136,42 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
     /// Create the LogicalExpression in order to check syntax errors.
     /// If errors are detected, the Error property contains the exception.
     /// </summary>
-    /// <returns>True if the expression syntax is correct, otherwise False.</returns>
+    /// <returns><see langword="false"/> if the expression syntax is correct and <see langword="true"/> otherwise.</returns>
     [MemberNotNullWhen(true, nameof(Error))]
-    public bool HasErrors()
+    public bool HasErrors(CancellationToken cancellationToken = default)
     {
+        Error = null;
+        if (!(ExpressionString?.Length > 0))
+        {
+            if (Options.HasFlag(ExpressionOptions.AllowNullOrEmptyExpressions))
+            {
+                LogicalExpression = ExpressionString is null ? null : new ValueExpression(string.Empty);
+                return false;
+            }
+
+            Error = new NCalcException($"{nameof(ExpressionString)} cannot be null or empty.");
+            return true;
+        }
+
         try
         {
-            LogicalExpression = LogicalExpressionFactory.Create(ExpressionString!, Context, CultureInfo, Context.Options, Context.AdvancedOptions);
-
-            // In case HasErrors() is called multiple times for the same expression
-            return LogicalExpression != null && Error != null;
+            LogicalExpression = LogicalExpressionFactory.Create(ExpressionString, Context, CultureInfo, Context.Options, Context.AdvancedOptions, cancellationToken);
         }
         catch (Exception exception)
         {
             Error = exception;
             return true;
         }
+
+        return false;
     }
 
-    public LogicalExpression? GetLogicalExpression(CancellationToken cancellationToken)
+    public LogicalExpression? GetLogicalExpression(CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrEmpty(ExpressionString))
+        if (!(ExpressionString?.Length > 0))
         {
             if (Options.HasFlag(ExpressionOptions.AllowNullOrEmptyExpressions))
-            {
-                return ExpressionString?.Length == 0 ? new ValueExpression(string.Empty) : null;
-            }
+                return ExpressionString is null ? null : new ValueExpression(string.Empty);
 
             throw new NCalcException($"{nameof(ExpressionString)} cannot be null or empty.");
         }
@@ -168,12 +180,12 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
 
         LogicalExpression? logicalExpression = null;
 
-        if (isCacheEnabled && LogicalExpressionCache.TryGetValue(ExpressionString!, out logicalExpression))
+        if (isCacheEnabled && LogicalExpressionCache.TryGetValue(ExpressionString, out logicalExpression))
             return logicalExpression!;
 
         try
         {
-            logicalExpression = LogicalExpressionFactory.Create(ExpressionString!, Context, CultureInfo, Context.Options, Context.AdvancedOptions, cancellationToken);
+            logicalExpression = LogicalExpressionFactory.Create(ExpressionString, Context, CultureInfo, Context.Options, Context.AdvancedOptions, cancellationToken);
             if (isCacheEnabled)
                 LogicalExpressionCache.Set(ExpressionString!, logicalExpression);
         }
@@ -191,10 +203,10 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         {
             if (Options.HasFlag(ExpressionOptions.AllowNullOrEmptyExpressions))
             {
-                return ExpressionString?.Length == 0 ? new ValueExpression(string.Empty) : null;
+                return parserContext.Scanner.Buffer is null ? null : new ValueExpression(string.Empty);
             }
 
-            throw new NCalcException($"{nameof(ExpressionString)} cannot be null or empty.");
+            throw new NCalcException($"The expression in {nameof(parser)} cannot be null or empty.");
         }
 
         try
