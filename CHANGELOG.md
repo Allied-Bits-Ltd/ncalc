@@ -1,3 +1,6 @@
+# 8.7.1 (Allied Bits)
+* Added parsing of ISO 8601 date and date-time values (those used in XML).
+
 # 8.7.0.1 (Allied Bits)
 * Fixed the nuget package, in which the AOT assembly conflicted with the regular one.
 
