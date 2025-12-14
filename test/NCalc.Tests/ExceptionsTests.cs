@@ -42,12 +42,12 @@ public class ExceptionsTests
         //Yes, I know at v3 the test was a + b * ( , but it's impossible to define an empty expression.
         var e = new Expression("a + b * ( 1 + 1");
         Assert.Null(e.Error);
-        Assert.True(e.HasErrors());
+        Assert.True(e.HasErrors(TestContext.Current.CancellationToken));
         Assert.NotNull(e.Error);
 
         e = new Expression("* b ");
         Assert.Null(e.Error);
-        Assert.True(e.HasErrors());
+        Assert.True(e.HasErrors(TestContext.Current.CancellationToken));
         Assert.NotNull(e.Error);
     }
 
@@ -72,18 +72,18 @@ public class ExceptionsTests
     [Fact]
     public void Should_Throw_Exception_On_Lexer_Errors_Issue_6()
     {
-        Assert.Throws<NCalcParserException>(() => LogicalExpressionFactory.Create("#t -chers"));
+        Assert.Throws<NCalcParserException>(() => LogicalExpressionFactory.Create("#t -chers", cancellationToken: TestContext.Current.CancellationToken));
 
         var dateSeparator = CultureInfo.CurrentCulture.DateTimeFormat.DateSeparator;
         string dateStr = $"#13{dateSeparator}13{dateSeparator}2222#";
-        var invalidDateException = Assert.Throws<FormatException>(() => LogicalExpressionFactory.Create(dateStr));
+        var invalidDateException = Assert.Throws<FormatException>(() => LogicalExpressionFactory.Create(dateStr, cancellationToken: TestContext.Current.CancellationToken));
         Assert.IsType<FormatException>(invalidDateException);
 
         //At v4, DateTime is better handled, and this should no longer cause errors.
         // https://github.com/ncalc/ncalc-async/issues/6
         try
         {
-            LogicalExpressionFactory.Create("Format(\"{0:(###) ###-####}\", \"9999999999\")");
+            LogicalExpressionFactory.Create("Format(\"{0:(###) ###-####}\", \"9999999999\")", cancellationToken: TestContext.Current.CancellationToken);
         }
         catch
         {
@@ -102,7 +102,7 @@ public class ExceptionsTests
         }
         catch (NCalcParserException ex)
         {
-            Assert.Equal("Invalid token in expression at position (1:3)", ex.InnerException.Message);
+            Assert.Equal("Invalid token in expression at position (1:3)", ex.InnerException?.Message);
         }
     }
 

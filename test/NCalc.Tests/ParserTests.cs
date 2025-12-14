@@ -53,7 +53,7 @@ public class ParserTests
     {
         const string formula = "[{Diagnostic}.Data]";
 
-        var logicalExpression = LogicalExpressionFactory.Create(formula);
+        var logicalExpression = LogicalExpressionFactory.Create(formula, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.IsType<Identifier>(logicalExpression);
 
@@ -65,7 +65,7 @@ public class ParserTests
     {
         const string formula = "'c'";
 
-        var logicalExpression = LogicalExpressionFactory.Create(formula, null, null, ExpressionOptions.AllowCharValues);
+        var logicalExpression = LogicalExpressionFactory.Create(formula, null, null, ExpressionOptions.AllowCharValues, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.IsType<ValueExpression>(logicalExpression);
 
@@ -79,7 +79,7 @@ public class ParserTests
     [Theory]
     public void ShouldHandleBinaryExpression(string formula, int expectedResult)
     {
-        var logicalExpression = LogicalExpressionFactory.Create(formula);
+        var logicalExpression = LogicalExpressionFactory.Create(formula, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.IsType<BinaryExpression>(logicalExpression);
 
@@ -94,7 +94,7 @@ public class ParserTests
     [Theory]
     public void ShouldParseLists(string formula, int arrayExpectedCount)
     {
-        var logicalExpression = LogicalExpressionFactory.Create(formula);
+        var logicalExpression = LogicalExpressionFactory.Create(formula, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.IsType<LogicalExpressionList>(logicalExpression);
 
@@ -106,10 +106,9 @@ public class ParserTests
     [Theory]
     public void ShouldParseListsWithSpaceAsSeparator(string formula, int arrayExpectedCount)
     {
-
         AdvancedExpressionOptions advancedOptions = new();
         advancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.Space;
-        var logicalExpression = LogicalExpressionFactory.Create(formula, advancedOptions: advancedOptions);
+        var logicalExpression = LogicalExpressionFactory.Create(formula, advancedOptions: advancedOptions, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.IsType<LogicalExpressionList>(logicalExpression);
 
@@ -120,7 +119,6 @@ public class ParserTests
     [Theory]
     public void ShouldParseListsWithDifferentSeparators(string formula, int arrayExpectedCount)
     {
-
         AdvancedExpressionOptions advancedOptions = new();
         advancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.SemicolonOrColonOrSpace;
         var logicalExpression = LogicalExpressionFactory.Create(formula, advancedOptions: advancedOptions, cancellationToken: TestContext.Current.CancellationToken);
@@ -144,7 +142,7 @@ public class ParserTests
     [Theory]
     public void ShouldParseGuids(string formula)
     {
-        var logicalExpression = LogicalExpressionFactory.Create(formula);
+        var logicalExpression = LogicalExpressionFactory.Create(formula, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.IsType<ValueExpression>(logicalExpression);
 
@@ -154,7 +152,7 @@ public class ParserTests
     [Fact]
     public void ShouldParseGuidInsideFunction()
     {
-        var logicalExpression = LogicalExpressionFactory.Create("getUser(78b1941f4e7941c9bef656fad7326538)");
+        var logicalExpression = LogicalExpressionFactory.Create("getUser(78b1941f4e7941c9bef656fad7326538)", cancellationToken: TestContext.Current.CancellationToken);
 
         if (logicalExpression is FunctionCall function)
         {

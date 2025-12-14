@@ -16,7 +16,7 @@ public class ExtractionTests
         expression.DynamicParameters["PageState"] = _ => "List";
         expression.Functions["customfunction"] = _ => true;
 
-        var parameters = expression.GetParameterNames();
+        var parameters = expression.GetParameterNames(TestContext.Current.CancellationToken);
         Assert.Contains("a", parameters);
         Assert.Contains("PageState", parameters);
         Assert.Equal(2, parameters.Count);
@@ -28,7 +28,7 @@ public class ExtractionTests
         var expression =
             new Expression("if(x=0,x,y)",
                 ExpressionOptions.CaseInsensitiveStringComparer);
-        var parameters = expression.GetParameterNames();
+        var parameters = expression.GetParameterNames(TestContext.Current.CancellationToken);
 
         Assert.Equal(2, parameters.Count);
     }
@@ -37,7 +37,7 @@ public class ExtractionTests
     public void ShouldGetParametersWithUnary()
     {
         var expression = new Expression("-0.68");
-        var p = expression.GetParameterNames();
+        var p = expression.GetParameterNames(TestContext.Current.CancellationToken);
         Assert.Empty(p);
     }
 
@@ -48,7 +48,7 @@ public class ExtractionTests
     public void ShouldGetParameters(string formula, int expectedCount)
     {
         var expression = new Expression(formula);
-        var p = expression.GetParameterNames();
+        var p = expression.GetParameterNames(TestContext.Current.CancellationToken);
         Assert.Equal(expectedCount, p.Count);
     }
 
@@ -59,7 +59,7 @@ public class ExtractionTests
     public void ShouldGetFunctions(string formula, int expectedCount)
     {
         var expression = new Expression(formula);
-        var functions = expression.GetFunctionNames();
+        var functions = expression.GetFunctionNames(TestContext.Current.CancellationToken);
         Assert.Equal(expectedCount, functions.Count);
     }
 
@@ -67,7 +67,7 @@ public class ExtractionTests
     public void ShouldGetParametersInsideFunctionsIssue305()
     {
         var expression = new Expression("if([Value] >= 50, 'background-color: #80ffcc;', null)", ExpressionOptions.AllowNullParameter);
-        var parameters = expression.GetParameterNames();
+        var parameters = expression.GetParameterNames(TestContext.Current.CancellationToken);
         Assert.Equal(2, parameters.Count);
     }
 
@@ -75,7 +75,7 @@ public class ExtractionTests
     public void ShouldGetFunctionsInsideFunctionsIssue305()
     {
         var expression = new Expression("if(getValue() >= 50, 'background-color: #80ffcc;', null)", ExpressionOptions.AllowNullParameter);
-        var functions = expression.GetFunctionNames();
+        var functions = expression.GetFunctionNames(TestContext.Current.CancellationToken);
         Assert.Equal(2, functions.Count);
     }
 
@@ -83,7 +83,7 @@ public class ExtractionTests
     public void ShouldGetNestedFunctionsIssue334()
     {
         var expression = new Expression("[a] + GetTimeValue(if([c] > [d]; test([e] > 0; [g]; [h]); [f]); 1; 'sec')");
-        var functions = expression.GetFunctionNames();
+        var functions = expression.GetFunctionNames(TestContext.Current.CancellationToken);
         Assert.Contains("GetTimeValue", functions);
         Assert.Contains("if", functions);
         Assert.Contains("test", functions);

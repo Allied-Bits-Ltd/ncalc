@@ -203,7 +203,7 @@ public class EvaluationTests
 
     [Theory]
     [ClassData(typeof(NullCheckTestData))]
-    public void ShouldAllowOperatorsWithNulls(string expression, object expected)
+    public void ShouldAllowOperatorsWithNulls(string expression, object? expected)
     {
         var e = new Expression(expression, ExpressionOptions.AllowNullParameter);
         var result = e.Evaluate(TestContext.Current.CancellationToken);

@@ -141,7 +141,7 @@ public class AsyncTests
 
     [Theory]
     [ClassData(typeof(NullCheckTestData))]
-    public async Task ShouldAllowOperatorsWithNulls(string expression, object expected)
+    public async Task ShouldAllowOperatorsWithNulls(string expression, object? expected)
     {
         var e = new AsyncExpression(expression, ExpressionOptions.AllowNullParameter);
         Assert.Equal(expected, await e.EvaluateAsync(TestContext.Current.CancellationToken));
@@ -151,7 +151,7 @@ public class AsyncTests
     [ClassData(typeof(WaterLevelCheckTestData))]
     public async Task SerializeAndDeserializeShouldWork(string expression, bool expected, double inputValue)
     {
-        var compiled = LogicalExpressionFactory.Create(expression);
+        var compiled = LogicalExpressionFactory.Create(expression, cancellationToken: TestContext.Current.CancellationToken);
         var serialized = JsonConvert.SerializeObject(compiled, new JsonSerializerSettings
         {
             TypeNameHandling = TypeNameHandling.All // We need this to allow serializing abstract classes
@@ -170,7 +170,7 @@ public class AsyncTests
             }
         };
 
-        object evaluated;
+        object? evaluated;
         try
         {
             evaluated = await exp.EvaluateAsync(TestContext.Current.CancellationToken);
@@ -191,7 +191,7 @@ public class AsyncTests
     public void HasErrorsIssue239(string expressionString, bool hasError)
     {
         var expression = new AsyncExpression(expressionString);
-        Assert.Equal(hasError, expression.HasErrors());
+        Assert.Equal(hasError, expression.HasErrors(TestContext.Current.CancellationToken));
     }
 
     [Fact]

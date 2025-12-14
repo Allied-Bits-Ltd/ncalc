@@ -52,7 +52,7 @@ public class MultiThreadTests
 
             var exp = n1 + " + " + n2;
             var e = new Expression(exp);
-            Assert.True(e.Evaluate(TestContext.Current.CancellationToken).Equals(n1 + n2));
+            Assert.True((n1+n2).Equals(e.Evaluate(TestContext.Current.CancellationToken)/*.Equals(n1 + n2)*/));
         }
         catch (Exception e)
         {

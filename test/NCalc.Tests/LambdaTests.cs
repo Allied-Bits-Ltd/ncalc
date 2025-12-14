@@ -312,7 +312,7 @@ public class LambdaTests
         expr.Parameters["a"] = a;
         expr.Parameters["b"] = b;
 
-        var f = expr.ToLambda<float>(); // Here it throws System.ArgumentNullException. Parameter name: expression
+        var f = expr.ToLambda<float>(TestContext.Current.CancellationToken); // Here it throws System.ArgumentNullException. Parameter name: expression
         Assert.Equal(-14, f());
     }
 
@@ -618,17 +618,17 @@ public class LambdaTests
 
         // Not overriden function
         var expressionAbs = new Expression("Abs(x)");
-        var lambdaAbs = expressionAbs.ToLambda<ContextWithOverridenMethods, double>();
+        var lambdaAbs = expressionAbs.ToLambda<ContextWithOverridenMethods, double>(TestContext.Current.CancellationToken);
 
         // Overriden functions
         var expressionCos = new Expression("Cos(x)");
-        var lambdaCos = expressionCos.ToLambda<ContextWithOverridenMethods, double>();
+        var lambdaCos = expressionCos.ToLambda<ContextWithOverridenMethods, double>(TestContext.Current.CancellationToken);
 
         var expressionLog1 = new Expression("Log(x)");
-        var lambdaLog1 = expressionLog1.ToLambda<ContextWithOverridenMethods, double>();
+        var lambdaLog1 = expressionLog1.ToLambda<ContextWithOverridenMethods, double>(TestContext.Current.CancellationToken);
 
         var expressionLog2 = new Expression("Log(x, y)");
-        var lambdaLog2 = expressionLog2.ToLambda<ContextWithOverridenMethods, double>();
+        var lambdaLog2 = expressionLog2.ToLambda<ContextWithOverridenMethods, double>(TestContext.Current.CancellationToken);
 
         // Act
         var actualAbs = lambdaAbs(context);

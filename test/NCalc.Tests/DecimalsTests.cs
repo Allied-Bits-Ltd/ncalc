@@ -149,7 +149,7 @@ public class DecimalsTests
     {
         var expression = new Expression(expr, ExpressionOptions.DecimalAsDefault);
         var res = expression.Evaluate(TestContext.Current.CancellationToken);
-        Assert.Equal(typeof(int), res.GetType());
+        Assert.Equal(typeof(int), res?.GetType());
     }
 
     /*[Fact]

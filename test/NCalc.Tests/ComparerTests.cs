@@ -18,7 +18,7 @@ public class ComparerTests
     [InlineData(null, 2, false)]
     [InlineData(2, 2L, true)]
     [InlineData("Hello", "World", false)]
-    public void Compare_Using_Most_Precise_Type_Issue_102(object a, object b, bool expectedResult)
+    public void Compare_Using_Most_Precise_Type_Issue_102(object? a, object b, bool expectedResult)
     {
         var issueExp = new Expression("a == b")
         {

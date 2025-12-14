@@ -259,7 +259,7 @@ public class EventHandlersTests
                     }
                 }
 
-                args.Result = r && times[id] == 0;
+                args.Result = r && id is not null && times[id] == 0;
             }
         };
         e.Parameters["value"] = 9;
