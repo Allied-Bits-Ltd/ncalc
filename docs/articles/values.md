@@ -81,9 +81,18 @@ By default, NCalc uses current Culture to evaluate DateTime values. When [Advanc
 
 Additionally, it is possible to define dates relative to current moment in a humane form (e.g. #today#, #3 weeks ago# or #in 5 days#) as described in the [Advanced Value Formats and Operations](advanced_value_formats.md) topic.
 
+Also, ISO 8601 / XML date and date-time values are supported:
+
+```
+#2001-01-01Z# // date
+#2001-01-01T14:56:49# // datetime
+#2001-01-01T14:56:49Z# // datetime
+#2001-01-01T14:56:49.325Z# // datetime
+```
+
 ## Time
 
-Includes Hours, minutes, and seconds. 
+Includes hours, minutes, and seconds. 
 The value must be enclosed between sharps.
 ```
 #20:42:00#
