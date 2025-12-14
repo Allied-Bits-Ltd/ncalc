@@ -223,6 +223,7 @@ public class AdvFeatureTests
     }
 
     [Theory]
+    [InlineData("#01/01/2000#", new int[] { 2000, 1, 1 })]
     [InlineData("#1/6/2025#", new int[] { 2025, 6, 1 })]
     [InlineData("#1/06/2025#", new int[] { 2025, 6, 1 })]
     [InlineData("#1/12/2025#", new int[] { 2025, 12, 1 })]
@@ -779,6 +780,34 @@ public class AdvFeatureTests
         string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
 
         DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4], expectedValue[5]);
+
+        Assert.Equal(expectedDate, result);
+    }
+
+    [Theory]
+    [InlineData("#2025-12-14Z#", new int[] { 2025, 12, 14 })]
+    public void ShouldParseDateXML(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2]);
+
+        Assert.Equal(expectedDate, result);
+    }
+
+    [Theory]
+    [InlineData("#2025-12-14T18:05:12Z#", new int[] { 2025, 12, 14, 18, 05, 12, 0 })]
+    [InlineData("#2025-12-14T18:05:12.345#", new int[] { 2025, 12, 14, 18, 05, 12, 345 })]
+    [InlineData("#2025-12-14T18:05:12.345Z#", new int[] { 2025, 12, 14, 18, 05, 12, 345 })]
+    public void ShouldParseDateTimeXML(string input, int[] expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache);
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        DateTime expectedDate = new DateTime(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4], expectedValue[5], expectedValue[6]);
 
         Assert.Equal(expectedDate, result);
     }
@@ -1458,7 +1487,7 @@ public class AdvFeatureTests
     public void ShouldCalculateOperationsWithFactorialsLambda(string input, long expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
-        var sut = expression.ToLambda<long>();
+        var sut = expression.ToLambda<long>(TestContext.Current.CancellationToken);
         var result = sut();
         if (result.GetType() == typeof(System.Double))
         {
@@ -1512,7 +1541,7 @@ public class AdvFeatureTests
         Assert.Equal(expectedValue, result);
     }
 
-    #if !AOT_COMPILATION
+#if !AOT_COMPILATION
     [Theory]
     [InlineData("\u221A4", 2)]
     [InlineData("\u221A(2+2)", 2)]
@@ -1524,7 +1553,7 @@ public class AdvFeatureTests
     public void ShouldCalculateRootsLambda(string input, double expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseUnicodeCharsForOperations);
-        var sut = expression.ToLambda<long>();
+        var sut = expression.ToLambda<long>(TestContext.Current.CancellationToken);
         var result = sut();
         Assert.Equal(expectedValue, result);
     }
@@ -2294,7 +2323,7 @@ public class AdvFeatureTests
     public void ShouldSerializeWhileLoop(string input)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseLoops  | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
-        Assert.False(expression.HasErrors());
+        Assert.False(expression.HasErrors(TestContext.Current.CancellationToken));
         string? actual = expression.LogicalExpression?.ToString();
         Assert.NotNull(actual);
         Assert.Equal(input, actual);
@@ -2308,7 +2337,7 @@ public class AdvFeatureTests
     public void ShouldSerializeIfStatement(string input)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseIfStatement | ExpressionOptions.UseLoops  | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
-        if (expression.HasErrors())
+        if (expression.HasErrors(TestContext.Current.CancellationToken))
             Assert.Fail(expression.Error?.Message ?? "Undefined error in the expression");
 
         string? actual = expression.LogicalExpression?.ToString();
@@ -2321,7 +2350,7 @@ public class AdvFeatureTests
     public void ShouldSerializeIndexedParametersExpression(string input, int ignorable)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
-        if (expression.HasErrors())
+        if (expression.HasErrors(TestContext.Current.CancellationToken))
             Assert.Fail(expression.Error?.Message ?? "Undefined error in the expression");
 
         string? actual = expression.LogicalExpression?.ToString();
@@ -2335,7 +2364,7 @@ public class AdvFeatureTests
     public void ShouldSerializeRangeIndexedParametersExpression(string input, string ignorable)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
-        Assert.False(expression.HasErrors());
+        Assert.False(expression.HasErrors(TestContext.Current.CancellationToken));
         string? actual = expression.LogicalExpression?.ToString();
         Assert.NotNull(actual);
         Assert.Equal(input, actual);
@@ -2353,7 +2382,7 @@ public class AdvFeatureTests
     public void ShouldParseStringsRight(string input, string expected)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
-        Assert.False(expression.HasErrors());
+        Assert.False(expression.HasErrors(TestContext.Current.CancellationToken));
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expected, result?.ToString());
     }
@@ -2368,7 +2397,7 @@ public class AdvFeatureTests
     public void ShouldSerializeString(string input)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache );
-        if (expression.HasErrors())
+        if (expression.HasErrors(TestContext.Current.CancellationToken))
             Assert.Fail(expression.Error?.Message ?? "Undefined error in the expression");
 
         string? actual = expression.LogicalExpression?.ToString();

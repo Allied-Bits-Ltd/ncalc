@@ -267,18 +267,54 @@ public class ParametersAndFunctions
     [Theory]
     [ClassData(typeof(UserFunctionTestData))]
 
-    public void ShouldHandleUserFunction(string input, object expected)
+    public void ShouldHandleUserFunction(string input, object? expected)
     {
-        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
+        var expression = new Expression(input, ExpressionOptions.NoCache |
+            ExpressionOptions.IgnoreCaseAtBuiltInFunctions |
+            ExpressionOptions.AllowCharValues |
+            ExpressionOptions.NoStringTypeCoercion |
+            ExpressionOptions.LowerCaseIdentifierLookup |
+            ExpressionOptions.SupportTimeOperations |
+            ExpressionOptions.UseUnicodeCharsForOperations |
+            ExpressionOptions.UseAssignments |
+            ExpressionOptions.UseStatementSequences |
+            ExpressionOptions.ReduceDivResultToInteger |
+            ExpressionOptions.UseBigNumbers |
+            ExpressionOptions.SupportCStyleComments |
+            ExpressionOptions.UseIfStatement |
+            ExpressionOptions.UseLoops);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.BuiltIn;
+
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expected, result);
     }
 
     [Theory]
     [ClassData(typeof(UserFunctionTestData))]
-    public async Task ShouldHandleUserFunctionAsync(string input, object expected)
+    public async Task ShouldHandleUserFunctionAsync(string input, object? expected)
     {
-        var result = await new AsyncExpression(input, ExpressionOptions.UseStatementSequences).EvaluateAsync(TestContext.Current.CancellationToken);
+        AsyncExpression expression = new AsyncExpression(input,
+            ExpressionOptions.NoCache |
+            ExpressionOptions.IgnoreCaseAtBuiltInFunctions |
+            ExpressionOptions.AllowCharValues |
+            ExpressionOptions.NoStringTypeCoercion |
+            ExpressionOptions.LowerCaseIdentifierLookup |
+            ExpressionOptions.SupportTimeOperations |
+            ExpressionOptions.UseUnicodeCharsForOperations |
+            ExpressionOptions.UseAssignments |
+            ExpressionOptions.UseStatementSequences |
+            ExpressionOptions.ReduceDivResultToInteger |
+            ExpressionOptions.UseBigNumbers |
+            ExpressionOptions.SupportCStyleComments |
+            ExpressionOptions.UseIfStatement |
+            ExpressionOptions.UseLoops);
+
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.DateSeparatorType = AdvancedExpressionOptions.SeparatorType.BuiltIn;
+
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
+
         Assert.Equal(expected, result);
     }
 }

@@ -491,6 +491,8 @@ public static class LogicalExpressionParser
         var space = Literals.Char(' ');
 
         var dotChar = Terms.Char('.');
+        var hyphen = Terms.Text("-");
+        var hyphenChar = Terms.Char('-');
 
         var statementEnd = semicolon;
 
@@ -698,8 +700,10 @@ public static class LogicalExpressionParser
             DateTimeFormatInfo dateTimeFormat = extOptions?.GetFormat(typeof(DateTimeFormatInfo)) as DateTimeFormatInfo ?? cultureInfo?.DateTimeFormat ?? CultureInfo.CurrentCulture.DateTimeFormat;
 
             Sequence<TextSpan, TextSpan, TextSpan> dateDefinition;
+            Sequence<TextSpan, TextSpan, TextSpan> dateDefinitionIso;
 
             Parser<LogicalExpression> date;
+            Parser<LogicalExpression> dateIso;
 
             // The following block prepares the masks for the approach to parsing used by ncalc by default -
             // parsing of "x/y/z" in dates with the current culture info (which will likely not work in some locales).
@@ -823,8 +827,27 @@ public static class LogicalExpressionParser
                 throw new FormatException("Invalid DateTime format.");
             });
 
+            dateDefinitionIso = charIsNumber
+                    .AndSkip(hyphenChar)
+                    .And(charIsNumber)
+                    .AndSkip(hyphenChar)
+                    .And(charIsNumber);
+
+            // dateIso => number-number-number[Z]
+            dateIso = dateDefinitionIso.AndSkip(Terms.Char('Z')).Then<LogicalExpression>((ctx, date) =>
+            {
+                if (DateTime.TryParseExact($"{date.Item1}-{date.Item2}-{date.Item3}", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
+                {
+                    return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
+                }
+
+                throw new FormatException("Invalid DateTime format.");
+            });
+
             Sequence<TextSpan, TextSpan, TextSpan, string>? time12Definition = null;
             Sequence<TextSpan, TextSpan, TextSpan> timeDefinition;
+            Sequence<TextSpan, TextSpan, TextSpan, TextSpan> timeDefinitionIso;
+            //Sequence<TextSpan, TextSpan, TextSpan, TextSpan> timeDefinitionIsoWithMSec;
             Sequence<string, TextSpan, TextSpan, TextSpan, TextSpan> timeSpanDefinition;
             Sequence<TextSpan, TextSpan, string>? shortTime12Definition = null;
             Sequence<TextSpan, TextSpan> shortTimeDefinition;
@@ -1000,6 +1023,12 @@ public static class LogicalExpressionParser
                     .AndSkip(secondTimeSep)
                     .And(charIsNumber);
             }
+
+            timeDefinitionIso = charIsNumber
+                    .AndSkip(colon)
+                    .And(charIsNumber)
+                    .AndSkip(colon)
+                    .And(charIsNumber).And(ZeroOrOne(dotChar.SkipAnd(charIsNumber)));
 
             Parser<LogicalExpression>? time12 = null;
             Parser<LogicalExpression>? shortTime12 = null;
@@ -1197,6 +1226,69 @@ public static class LogicalExpressionParser
                     }
 
                     throw new FormatException("Invalid DateTime format.");
+                });
+
+            // dateAndTimeIso => number-number-number'T'number:number:number[.number]Z
+            var dateAndTimeIso = dateDefinitionIso.AndSkip(Terms.Char('T')).And(timeDefinitionIso).AndSkip(ZeroOrOne(Terms.Char('Z'))).Then<LogicalExpression>((ctx, dateTime) =>
+                {
+                    int year = -1;
+                    int month = -1;
+                    int day = -1;
+                    int hour = -1;
+                    int minute = -1;
+                    int second = -1;
+                    int msec = 0;
+                    int mcsec = 0;
+
+                    int.TryParse(dateTime.Item1.ToString(), out year);
+                    int.TryParse(dateTime.Item2.ToString(), out month);
+                    int.TryParse(dateTime.Item3.ToString(), out day);
+                    int.TryParse(dateTime.Item4.Item1.ToString(), out hour);
+                    int.TryParse(dateTime.Item4.Item2.ToString(), out minute);
+                    int.TryParse(dateTime.Item4.Item3.ToString(), out second);
+
+                    if (dateTime.Item4.Item4.Length > 0)
+                    {
+                        int.TryParse(dateTime.Item4.Item4.ToString(), out msec);
+
+                        switch (dateTime.Item4.Item4.Length)
+                        {
+                            case 1:
+                                msec = msec * 100;
+                                break;
+                            case 2:
+                                msec = msec * 10;
+                                break;
+                            case 3:
+                                break;
+                            case 4:
+                                msec = msec / 10;
+                                mcsec = (msec % 10) * 100;
+                                break;
+                            case 5:
+                                msec = msec / 100;
+                                mcsec = (msec % 100) * 10;
+                                break;
+                            case 6:
+                                msec = msec / 1000;
+                                mcsec = (msec % 1000);
+                                break;
+                        }
+                    }
+
+                    try
+                    {
+#if NET8_0_OR_GREATER
+                        DateTime result = new DateTime(year, month, day, hour, minute, second, msec, mcsec, DateTimeKind.Utc);
+#else
+                        DateTime result = new DateTime(year, month, day, hour, minute, second, msec, DateTimeKind.Utc);
+#endif
+                        return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
+                    }
+                    catch
+                    {
+                        throw new FormatException("Invalid DateTime format.");
+                    }
                 });
 
             var dateAndShortTime = dateDefinition.AndSkip(Literals.WhiteSpace()).And(shortTimeDefinition).Then<LogicalExpression>((ctx, dateTime) =>
@@ -1551,8 +1643,8 @@ public static class LogicalExpressionParser
                 });
             }
             List<Parser<LogicalExpression>> timeParts = use12HourTime
-                ? [dateAndTime12!, dateAndShortTime12!, dateAndTime, dateAndShortTime, date, time12!, shortTime12!, time, shortTime]
-                : [dateAndTime, dateAndShortTime, date, time, shortTime];
+                ? [dateAndTimeIso, dateAndTime12!, dateAndShortTime12!, dateAndTime, dateAndShortTime, dateIso, date, time12!, shortTime12!, time, shortTime]
+                : [dateAndTimeIso, dateAndTime, dateAndShortTime, dateIso, date, time, shortTime];
 
             if (humaneTimeSpan != null)
                 timeParts.Add(humaneTimeSpan);
