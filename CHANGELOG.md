@@ -1,3 +1,6 @@
+# 8.7.1.1 (Allied Bits)
+* Fixed the chaos with assembly versions.
+
 # 8.7.1 (Allied Bits)
 * Added parsing of ISO 8601 date and date-time values (those used in XML).
 

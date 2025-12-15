@@ -7,14 +7,11 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <Version>8.7.1</Version>
+    <Version>8.7.1.1</Version>
+    <FileVersion>8.7.1.1</FileVersion>
+    <AssemblyVersion>8.7.1.1</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Nerdbank.GitVersioning">
-      <Version>3.7.115</Version>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-
     <PackageReference Include="Roslynator.Analyzers" Version="4.14.1" PrivateAssets="all"/>
     <PackageReference Include="Roslynator.CodeAnalysis.Analyzers" Version="4.14.1" PrivateAssets="all"/>
     <PackageReference Include="Roslynator.Formatting.Analyzers" Version="4.14.1" PrivateAssets="all"/>
