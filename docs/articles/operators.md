@@ -193,10 +193,10 @@ Additive operators perform addition and subtraction.
 ```
 
 When time operations are enabled using the <xref:NCalc.ExpressionOptions.SupportTimeOperations> flag in <xref:NCalc.ExpressionOptions>, it is possible to perform the following additional operations: 
-* add a time period value (TimeSpan) to a date (DateTime) or another time period (TimeSpan) value. 
-* add ticks (100ns per tick) to a date (DateTime) or time period (TimeSpan) value.
-* subtract a time value (TimeSpan) from a date (DateTime) or another time period (TimeSpan) value. 
-* subtract a date value (DateTime) from another date (DateTime) value. 
+* add a time period value (TimeSpan) to a date (DateTime) or another time period (TimeSpan) value;
+* add ticks (100ns per tick) to a date (DateTime) or time period (TimeSpan) value;
+* subtract a time value (TimeSpan) from a date (DateTime) or another time period (TimeSpan) value;
+* subtract a date value (DateTime) from another date (DateTime) value;
 * subtract ticks (100ns per tick) from a date (DateTime) or time period (TimeSpan) value.
 
 When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignments> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
