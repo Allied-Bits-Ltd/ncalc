@@ -76,7 +76,7 @@ public class DecimalsTests
     {
         // https://github.com/ncalc/ncalc/issues/16
 
-        var e = new Expression("x / 1.0");
+        var e = new Expression("x / 1.0", ExpressionOptions.DecimalAsDefault);
         e.Parameters["x"] = 1m;
 
         Assert.Equal(1m, e.Evaluate(TestContext.Current.CancellationToken));
@@ -85,11 +85,13 @@ public class DecimalsTests
     [Fact]
     public void Should_Divide_Decimal_By_Single()
     {
-        var e = new Expression("x / y");
+        var e = new Expression("x / y", ExpressionOptions.DecimalAsDefault);
         e.Parameters["x"] = 1m;
         e.Parameters["y"] = 1f;
 
-        Assert.Equal(1m, e.Evaluate(TestContext.Current.CancellationToken));
+        object result = e.Evaluate(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1m, result);
     }
 
 /*    [Fact]

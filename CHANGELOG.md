@@ -1,3 +1,9 @@
+# 8.7.2 (Allied Bits)
+
+* Added support for addition and subtraction of ticks to/from a DateTime or a TimeSpan.
+* Addressed the possible integer overflow during multiplication.
+* Improved and fixed some border cases in math and comparison operations.
+
 # 8.7.1.1 (Allied Bits)
 * Fixed the chaos with assembly versions.
 

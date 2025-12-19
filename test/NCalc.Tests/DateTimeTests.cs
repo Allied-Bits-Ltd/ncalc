@@ -118,4 +118,70 @@ public class DateTimeTests
             CultureInfo.CurrentCulture = oldCulture;
         }
     }
+
+    [Fact]
+    public void ShouldAddTicksToDateTime()
+    {
+        var expr = new Expression("#2026-01-01T00:00:00Z# + 86400 * 10000000", ExpressionOptions.SupportTimeOperations | ExpressionOptions.UseBigNumbers);
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
+
+        var dt = new DateTime(2026, 01, 02, 0, 0, 0);
+
+        Assert.Equal(dt, res);
+    }
+
+    [Fact]
+    public void ShouldSubtractTicksFromDateTime()
+    {
+        var expr = new Expression("#2026-01-02T00:00:00Z# - 86400 * 10000000", ExpressionOptions.SupportTimeOperations | ExpressionOptions.UseBigNumbers);
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
+
+        var dt = new DateTime(2026, 01, 01, 0, 0, 0);
+
+        Assert.Equal(dt, res);
+    }
+
+    [Fact]
+    public void ShouldAddTicksToTimeSpan()
+    {
+        var expr = new Expression("#2026-01-02T00:00:00Z# - #2026-01-01T00:00:00Z# + 86400 * 10000000", ExpressionOptions.SupportTimeOperations | ExpressionOptions.UseBigNumbers);
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
+
+        var dt = new TimeSpan(2, 0, 0, 0);
+
+        Assert.Equal(dt, res);
+    }
+
+    [Fact]
+    public void ShouldSubtractTicksFromTimeSpan()
+    {
+        var expr = new Expression("#2026-01-03T00:00:00Z# - #2026-01-01T00:00:00Z# - 86400 * 10000000", ExpressionOptions.SupportTimeOperations | ExpressionOptions.UseBigNumbers);
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
+
+        var dt = new TimeSpan(1, 0, 0, 0);
+
+        Assert.Equal(dt, res);
+    }
+
+    [Fact]
+    public void ShouldMultiplyTimeSpan()
+    {
+        var expr = new Expression("(#2026-01-02T00:00:00Z# - #2026-01-01T00:00:00Z#) * 2", ExpressionOptions.SupportTimeOperations | ExpressionOptions.UseBigNumbers);
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
+
+        var dt = new TimeSpan(2, 0, 0, 0);
+
+        Assert.Equal(dt, res);
+    }
+
+    [Fact]
+    public void ShouldDivideTimeSpan()
+    {
+        var expr = new Expression("(#2026-01-03T00:00:00Z# - #2026-01-01T00:00:00Z#) / 2", ExpressionOptions.SupportTimeOperations | ExpressionOptions.UseBigNumbers);
+        var res = expr.Evaluate(TestContext.Current.CancellationToken);
+
+        var dt = new TimeSpan(1, 0, 0, 0);
+
+        Assert.Equal(dt, res);
+    }
 }

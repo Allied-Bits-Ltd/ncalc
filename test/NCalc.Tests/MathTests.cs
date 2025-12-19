@@ -290,6 +290,8 @@ public class MathsTests
     [Fact]
     public void ShouldNotConvertRealTypes()
     {
+        object? result;
+
         var e = new Expression("x/2");
         e.Parameters["x"] = 2F;
         Assert.IsType<float>(e.Evaluate(TestContext.Current.CancellationToken));
@@ -305,7 +307,9 @@ public class MathsTests
         e = new Expression("a / b * 100");
         e.Parameters["a"] = 20M;
         e.Parameters["b"] = 20M;
-        Assert.Equal(100M, e.Evaluate(TestContext.Current.CancellationToken));
+
+        result = e.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(100M, result);
     }
 
     [Theory]

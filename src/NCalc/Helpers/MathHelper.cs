@@ -914,7 +914,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -978,7 +978,11 @@ public static class MathHelper
         //var func = options.OverflowProtection ? AddFuncChecked : AddFunc;
         try
         {
-            return ExecuteOperation(a, b, '+', ArithmeticOperation.Add, options, typeCode);
+            object result = ExecuteOperation(a, b, '+', ArithmeticOperation.Add, options, typeCode);
+            if (reduceTypes && typesWereExpanded)
+                return ReduceNumericType(result, options);
+            else
+                return result;
         }
         catch (OverflowException)
         {
@@ -1019,7 +1023,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -1118,7 +1122,11 @@ public static class MathHelper
         //var func = options.OverflowProtection ? SubtractFuncChecked : SubtractFunc;
         try
         {
-            return ExecuteOperation(a, b, '-', ArithmeticOperation.Subtract, options, typeCode);
+            object result = ExecuteOperation(a, b, '-', ArithmeticOperation.Subtract, options, typeCode);
+            if (reduceTypes && typesWereExpanded)
+                return ReduceNumericType(result, options);
+            else
+                return result;
         }
         catch (OverflowException)
         {
@@ -1154,7 +1162,15 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
+
+        if (!options.OverflowProtection)
+        {
+            // For multiplication, we must up the number of bits to avoid a possible overflow.
+            // We can't just call ConvertToHighestPrecision(...,...,true,...) because ConvertToHighestPrecision will do unexpected things.
+            typeCode = TypeCodeExpandBits(typeCode, ref a, ref b, options);
+            typesWereExpanded = true;
+        }
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -1218,7 +1234,11 @@ public static class MathHelper
         //var func = options.OverflowProtection ? MultiplyFuncChecked : MultiplyFunc;
         try
         {
-            return ExecuteOperation(a, b, '*', ArithmeticOperation.Multiply, options, typeCode);
+            object result = ExecuteOperation(a, b, '*', ArithmeticOperation.Multiply, options, typeCode);
+            if (reduceTypes && typesWereExpanded)
+                return ReduceNumericType(result, options);
+            else
+                return result;
         }
         catch (OverflowException)
         {
@@ -1404,7 +1424,12 @@ public static class MathHelper
             result = Divide(a, b, reduceTypes, options);
         }
         if (result is null || !useInteger)
-            return result;
+        {
+            /*if (reduceTypes && result is not null)
+                return ReduceNumericType(result, false, options);
+            else
+                */return result;
+        }
 
         if (reduceTypes)
         {
@@ -1558,7 +1583,12 @@ public static class MathHelper
         }
 
         if (result is null || IsBoxedIntegerNumber(result))
-            return result;
+        {
+            if (reduceTypes && result is not null)
+                return ReduceNumericType(result, options);
+            else
+                return result;
+        }
 
         if (reduceTypes)
         {
@@ -1615,7 +1645,7 @@ public static class MathHelper
         a = ConvertIfNeeded(a, options);
         b = ConvertIfNeeded(b, options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
+        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -1699,7 +1729,11 @@ public static class MathHelper
 
         try
         {
-            return ExecuteOperation(a, b, '%', ArithmeticOperation.Modulo, options, typeCode);
+            object result = ExecuteOperation(a, b, '%', ArithmeticOperation.Modulo, options, typeCode);
+            if (reduceTypes && typesWereExpanded)
+                return ReduceNumericType(result, options);
+            else
+                return result;
         }
         catch (OverflowException)
         {
@@ -1822,8 +1856,23 @@ public static class MathHelper
         };
     }
 
-    private static TypeCode ConvertToHighestPrecision(ref object a, ref object b, bool forceExpandBits, MathHelperOptions options)
+    /// <summary>
+    /// The method attempts to raise the number of bits in <paramref name="a"/> and <paramref name="b"/>, update the arguments to have a new type, and return the type code of the resulting type.
+    /// </summary>
+    /// <param name="a">The first argument to expand.</param>
+    /// <param name="b">The second argument to expand.</param>
+    /// <param name="forceExpandBits">Specifies that the arguments should be expanded even when they are of the same type. This parameter is used only when handling an overflow exception, where it is known that the original type does not work.</param>
+    /// <param name="options">Calculation options.</param>
+    /// <returns>The type of the converted variables or <seealso cref="TypeCode.Empty"/> if arguments are not numbers or if there is nowhere more to expand the arguments (e.g., when the original type is <see langword="double"/> and big numbers are disabled). The latter case is used to indicate that attempts to expand the arguments should be stopped.</returns>
+    public static TypeCode ConvertToHighestPrecision(ref object a, ref object b, bool forceExpandBits, MathHelperOptions options)
     {
+        return ConvertToHighestPrecision(ref a, ref b, forceExpandBits, options, out _);
+    }
+
+    public static TypeCode ConvertToHighestPrecision(ref object a, ref object b, bool forceExpandBits, MathHelperOptions options, out bool typesWereExpanded)
+    {
+        typesWereExpanded = false;
+
         if (options.AllowCharValues)
         {
             if (a is char)
@@ -1881,10 +1930,12 @@ public static class MathHelper
             try
             {
                 b = Convert.ChangeType(b, typeCodeA, options.CultureInfo);
+                typesWereExpanded = true;
                 return typeCodeA;
             }
             catch (OverflowException)
             {
+                typesWereExpanded = true;
                 // the code below is used to upgrade both variables
                 return TypeCodeExpandBits(typeCodeA, ref a, ref b, options);
             }
@@ -1895,10 +1946,12 @@ public static class MathHelper
             try
             {
                 a = Convert.ChangeType(a, typeCodeB, options.CultureInfo);
+                typesWereExpanded = true;
                 return typeCodeB;
             }
             catch (OverflowException)
             {
+                typesWereExpanded = true;
                 // the code below is used to upgrade both variables
                 return TypeCodeExpandBits(typeCodeB, ref a, ref b, options);
             }
@@ -1910,7 +1963,10 @@ public static class MathHelper
             if (typeCodeA == typeCodeB && typeCodeA == resultTypeCode)
                 return TypeCode.Empty; // nowhere else to expand
             else
+            {
+                typesWereExpanded = true;
                 return resultTypeCode;
+            }
         }
     }
 
@@ -1962,6 +2018,8 @@ public static class MathHelper
                 }
 
                 break;
+            case TypeCode.Object:
+                return options.UseBigNumbers ? TypeCode.Object : TypeCode.Empty;
             default:
                 return TypeCode.Empty;
         }
@@ -3004,6 +3062,28 @@ public static class MathHelper
         return a >> intB;
     }
 
+    public static long? GetBoxedIntegerNumberAsLong(object? obj)
+    {
+        if (obj is null)
+            return null;
+
+        switch (obj)
+        {
+            case byte b: return (long)b;
+            case sbyte sb: return (long)sb;
+            case short s: return (long)s;
+            case ushort us: return (long)us;
+            case int i: return (long)i;
+            case uint ui: return (long)ui;
+            case long l: return l;
+            case ulong ul: if (ul < Int64.MaxValue) return (long)ul; else return null;
+            case BigInteger bi: return (long)bi;
+            case BigDecimal bd: if (bd.GetFractionalPart().IsZero()) return (long)(bd.GetWholePart()); else return null;
+            default:
+                throw new ArgumentException("Provided object is not a supported numeric type.");
+        }
+    }
+
     public static bool IsBoxedIntegerNumber(object? obj)
     {
         if (obj is null)
@@ -3119,7 +3199,7 @@ public static class MathHelper
         }
     }
 
-    public static object? ReduceNumericType(object value, bool forceInteger = false, MathHelperOptions options = default)
+    public static object? ReduceNumericType(object value, MathHelperOptions options = default)
     {
         if (value is BigDecimal bdValue)
         {
@@ -3136,7 +3216,7 @@ public static class MathHelper
             if (value is ulong ulValue)
             {
                 if (ulValue <= int.MaxValue)
-                    return (int)value;
+                    return (int)(uint)ulValue;
                 else
                 if (ulValue <= uint.MaxValue)
                     return (uint)ulValue;
@@ -3149,11 +3229,13 @@ public static class MathHelper
                     return (int)candidate;
                 else
                 if (candidate >= uint.MinValue && candidate <= uint.MaxValue)
-                    return (uint)candidate;
+                    return (uint)(ulong)candidate;
                 return candidate;
             }
         }
         else
+            return value;
+        /*
         if (options.DecimalAsDefault == true)
         {
             return MathHelper.ConvertToDecimal(value, options);
@@ -3161,7 +3243,7 @@ public static class MathHelper
         else
         {
             return MathHelper.ConvertToDouble(value, options);
-        }
+        }*/
     }
 
     public static object? ReduceToSaneNumber(BigDecimal value, bool forceInteger = false, MathHelperOptions? options = default)

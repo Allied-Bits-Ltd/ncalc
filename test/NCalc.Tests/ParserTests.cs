@@ -85,7 +85,9 @@ public class ParserTests
 
         var expression = new Expression(logicalExpression);
 
-        Assert.Equal(expectedResult, expression.Evaluate(TestContext.Current.CancellationToken));
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedResult, result);
     }
 
     [InlineData("(1,2,3,4,5)", 5)]

@@ -1,5 +1,8 @@
 ﻿using System.Collections.Frozen;
+using System.Numerics;
 using System.Runtime.CompilerServices;
+
+using ExtendedNumerics;
 
 namespace NCalc.Helpers;
 
@@ -127,23 +130,80 @@ public static class TypeHelper
         };
     }
 
-    public static bool CompareUsingMostPreciseType(object? a, object? b, ComparisonOptions options, out int outcome)
+    public static bool CompareUsingMostPreciseType(object? a, object? b, ExpressionContextBase context, out int outcome)
     {
-        var mpt = GetMostPreciseType(a?.GetType(), b?.GetType());
-
+        ComparisonOptions cmpOptions = context;
         try
         {
-            var aValue = a != null ? Convert.ChangeType(a, mpt, options.CultureInfo) : null;
-            var bValue = b != null ? Convert.ChangeType(b, mpt, options.CultureInfo) : null;
+            object? aValue;
+            object? bValue;
 
-            var comparer = GetStringComparer(options);
+            if (MathHelper.IsBoxedIntegerNumberOrBigNumber(a) && MathHelper.IsBoxedIntegerNumberOrBigNumber(b))
+            {
+                object aVal = a!;
+                object bVal = b!;
+                TypeCode typeCode = MathHelper.ConvertToHighestPrecision(ref aVal, ref bVal, false, context);
+                if (typeCode == TypeCode.Empty)
+                {
+                    outcome = -1;
+                    return false;
+                }
+
+                if (typeCode == TypeCode.Object)
+                {
+                    outcome = 0;
+
+                    if (aVal is BigDecimal || bVal is BigDecimal)
+                    {
+                        if (aVal is BigDecimal bdA)
+                        {
+                            if (bVal is BigDecimal bdB)
+                                outcome = bdA.CompareTo(bdB);
+                            else
+                                outcome = bdA.CompareTo(MathHelper.ConvertToBigDecimal(bVal));
+                        }
+                        else
+                        {
+                            outcome = ((BigDecimal)bVal).CompareTo(MathHelper.ConvertToBigDecimal(aVal));
+                        }
+                    }
+                    else
+                    if (aVal is BigInteger || bVal is BigInteger)
+                    {
+                        if (aVal is BigInteger biA)
+                        {
+                            if (bVal is BigInteger biB)
+                                outcome = biA.CompareTo(biB);
+                            else
+                                outcome = biA.CompareTo(MathHelper.ConvertToBigInteger(bVal));
+                        }
+                        else
+                        {
+                            outcome = ((BigInteger)bVal).CompareTo(MathHelper.ConvertToBigInteger(aVal));
+                        }
+                    }
+                    return true;
+                }
+
+                aValue = aVal;
+                bValue = bVal;
+            }
+            else
+            {
+                Type mpt = GetMostPreciseType(a?.GetType(), b?.GetType());
+
+                aValue = a != null ? Convert.ChangeType(a, mpt, cmpOptions.CultureInfo) : null;
+                bValue = b != null ? Convert.ChangeType(b, mpt, cmpOptions.CultureInfo) : null;
+            }
+
+            var comparer = GetStringComparer(cmpOptions);
 
             outcome = comparer.Compare(aValue, bValue);
             return true;
         }
         catch (Exception)
         {
-            if (options.CompareIncompatibleTypes)
+            if (cmpOptions.CompareIncompatibleTypes)
             {
                 outcome = -1;
                 return false;

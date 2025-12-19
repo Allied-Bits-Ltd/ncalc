@@ -34,9 +34,23 @@ public static class EvaluationHelper
         else
         if (context.Options.HasFlag(ExpressionOptions.SupportTimeOperations))
         {
+            if ((leftValue is DateTime) && (MathHelper.IsBoxedIntegerNumberOrBigNumber(rightValue)))
+            {
+                long? newTicks = MathHelper.GetBoxedIntegerNumberAsLong(MathHelper.Add(((DateTime)leftValue).Ticks, rightValue, true, context));
+                if (newTicks.HasValue)
+                    return new DateTime(newTicks.Value, ((DateTime)leftValue).Kind);
+            }
+            else
             if ((leftValue is DateTime) && (rightValue is TimeSpan))
             {
                 return ((DateTime)leftValue).Add((TimeSpan)rightValue);
+            }
+            else
+            if ((leftValue is TimeSpan) && (MathHelper.IsBoxedIntegerNumberOrBigNumber(rightValue)))
+            {
+                long? newTicks = MathHelper.GetBoxedIntegerNumberAsLong(MathHelper.Add(((TimeSpan)leftValue).Ticks, rightValue, true, context));
+                if (newTicks.HasValue)
+                    return new TimeSpan(newTicks.Value);
             }
             else
             if ((leftValue is TimeSpan) && (rightValue is TimeSpan))
@@ -52,7 +66,7 @@ public static class EvaluationHelper
 
         try
         {
-                return MathHelper.Add(leftValue, rightValue, true, context);
+            return MathHelper.Add(leftValue, rightValue, true, context);
         }
         catch (FormatException) when (leftValue is string && rightValue is string)
         {
@@ -73,6 +87,20 @@ public static class EvaluationHelper
     {
         if (context.Options.HasFlag(ExpressionOptions.SupportTimeOperations))
         {
+            if ((leftValue is DateTime) && (MathHelper.IsBoxedIntegerNumberOrBigNumber(rightValue)))
+            {
+                long? newTicks = MathHelper.GetBoxedIntegerNumberAsLong(MathHelper.Subtract(((DateTime)leftValue).Ticks, rightValue, true, context));
+                if (newTicks.HasValue)
+                    return new DateTime(newTicks.Value, ((DateTime)leftValue).Kind);
+            }
+            else
+            if ((leftValue is TimeSpan) && (MathHelper.IsBoxedIntegerNumberOrBigNumber(rightValue)))
+            {
+                long? newTicks = MathHelper.GetBoxedIntegerNumberAsLong(MathHelper.Subtract(((TimeSpan)leftValue).Ticks, rightValue, true, context));
+                if (newTicks.HasValue)
+                    return new TimeSpan(newTicks.Value);
+            }
+            else
             if (leftValue is DateTime && (rightValue is DateTime))
             {
                 return ((DateTime)leftValue).Subtract((DateTime)rightValue);
@@ -102,31 +130,18 @@ public static class EvaluationHelper
     {
         if (context.Options.HasFlag(ExpressionOptions.SupportTimeOperations))
         {
+            object? ticks = null;
             if (MathHelper.IsBoxedNumberOrBigNumber(leftValue) && (rightValue is TimeSpan rts))
             {
-                var ticks = MathHelper.Multiply(leftValue, (object) rts.Ticks, true, context);
-                if (ticks is int it)
-                    return new TimeSpan(it);
-                else
-                if (ticks is uint uit)
-                    return new TimeSpan(uit);
-                else
-                if (ticks is long lt)
-                    return new TimeSpan(lt);
-                else
-                if (ticks is ulong ult)
-                    return new TimeSpan((long) ult);
-                else
-                if (ticks is float ft)
-                    return new TimeSpan((long)Math.Round(ft));
-                else
-                if (ticks is double dt)
-                    return new TimeSpan((long)Math.Round(dt));
+                ticks = MathHelper.Multiply(leftValue, (object) rts.Ticks, true, context);
             }
             else
             if ((leftValue is TimeSpan lts) && MathHelper.IsBoxedNumberOrBigNumber(rightValue))
             {
-                var ticks = MathHelper.Multiply((object)lts.Ticks, rightValue, true, context);
+                ticks = MathHelper.Multiply((object)lts.Ticks, rightValue, true, context);
+            }
+            if (ticks is not null)
+            {
                 if (ticks is int it)
                     return new TimeSpan(it);
                 else
@@ -137,7 +152,7 @@ public static class EvaluationHelper
                     return new TimeSpan(lt);
                 else
                 if (ticks is ulong ult)
-                    return new TimeSpan((long) ult);
+                    return new TimeSpan((long)ult);
                 else
                 if (ticks is float ft)
                     return new TimeSpan((long)Math.Round(ft));
@@ -163,17 +178,20 @@ public static class EvaluationHelper
             if ((leftValue is TimeSpan lts) && MathHelper.IsBoxedNumberOrBigNumber(rightValue))
             {
                 var ticks = MathHelper.Divide((object)lts.Ticks, rightValue, true, context);
-                if (ticks is int it)
-                    return new TimeSpan(it);
-                else
-                if (ticks is long lt)
-                    return new TimeSpan(lt);
-                else
-                if (ticks is float ft)
-                    return new TimeSpan((long)Math.Round(ft));
-                else
-                if (ticks is double dt)
-                    return new TimeSpan((long)Math.Round(dt));
+                if (ticks is not null)
+                {
+                    if (ticks is int it)
+                        return new TimeSpan(it);
+                    else
+                    if (ticks is long lt)
+                        return new TimeSpan(lt);
+                    else
+                    if (ticks is float ft)
+                        return new TimeSpan((long)Math.Round(ft));
+                    else
+                    if (ticks is double dt)
+                        return new TimeSpan((long)Math.Round(dt));
+                }
             }
         }
         return MathHelper.Divide(leftValue, rightValue, true, context);
@@ -259,7 +277,7 @@ public static class EvaluationHelper
         // Cache the runtime type of leftValue once
         var leftType = leftValue.GetType();
 
-        ComparisonOptions options = context;
+        //ComparisonOptions options = context;
 
         foreach (var item in rightValue)
         {
@@ -273,7 +291,7 @@ public static class EvaluationHelper
                     return true;
             }
             else
-            if (Compare(leftValue, item, ComparisonType.Equal, options))
+            if (Compare(leftValue, item, ComparisonType.Equal, context))
             {
                 return true;
             }
@@ -282,7 +300,7 @@ public static class EvaluationHelper
         return false;
     }
 
-    public static bool Compare(object? a, object? b, ComparisonType comparisonType, ComparisonOptions options)
+    public static bool Compare(object? a, object? b, ComparisonType comparisonType, ExpressionContextBase context)
     {
         int result;
         if (a is double dA)
@@ -291,7 +309,7 @@ public static class EvaluationHelper
                 return comparisonType == ComparisonType.NotEqual;
         }
         else
-                if (a is float fA)
+        if (a is float fA)
         {
             if (float.IsNaN(fA))
                 return comparisonType == ComparisonType.NotEqual;
@@ -310,7 +328,7 @@ public static class EvaluationHelper
 
         if (a is null || b is null)
         {
-            if (options.CompareNullValues)
+            if (context.Options.HasFlag(ExpressionOptions.CompareNullValues))
             {
                 if (a is null && b is null)
                     result = 0;
@@ -362,7 +380,7 @@ public static class EvaluationHelper
         }
         else
         {
-            if (!TypeHelper.CompareUsingMostPreciseType(a, b, options, out result))
+            if (!TypeHelper.CompareUsingMostPreciseType(a, b, context, out result))
             {
                 // false is returned when incompatible types are compared
                 return comparisonType switch

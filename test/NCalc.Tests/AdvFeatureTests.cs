@@ -1451,11 +1451,13 @@ public class AdvFeatureTests
     [InlineData("(2+1)!", 6)]
     [InlineData("(2+1) +2!", 5)]
     [InlineData("2**3!", 64)]
-    public void ShouldCalculateOperationsWithFactorials(string input, long expectedValue)
+    public void ShouldCalculateOperationsWithFactorials(string input, int expectedValue)
     {
-        var expression = new Expression(input, ExpressionOptions.NoCache);
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseBigNumbers);
+
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
-        if (result?.GetType() == typeof(System.Double))
+
+        if (result is double)
         {
             double dResult = (double)result;
             Assert.Equal(expectedValue, (long)dResult);
@@ -1484,18 +1486,13 @@ public class AdvFeatureTests
     [InlineData("(2+1)!", 6)]
     [InlineData("(2+1) +2!", 5)]
     [InlineData("2**3!", 64)]
-    public void ShouldCalculateOperationsWithFactorialsLambda(string input, long expectedValue)
+    public void ShouldCalculateOperationsWithFactorialsLambda(string input, int expectedValue)
     {
-        var expression = new Expression(input, ExpressionOptions.NoCache);
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseBigNumbers);
         var sut = expression.ToLambda<long>(TestContext.Current.CancellationToken);
         var result = sut();
-        if (result.GetType() == typeof(System.Double))
-        {
-            double dResult = (double)result;
-            Assert.Equal(expectedValue, (long)dResult);
-        }
-        else
-            Assert.Equal(expectedValue, result);
+
+        Assert.Equal(expectedValue, result);
     }
 #endif
 
@@ -2614,9 +2611,9 @@ public class AsyncAdvFeatureTests
     [InlineData("(2+1)!", 6)]
     [InlineData("(2+1) +2!", 5)]
     [InlineData("2**3!", 64)]
-    public async Task ShouldCalculateOperationsWithFactorialsAsync(string input, long expectedValue)
+    public async Task ShouldCalculateOperationsWithFactorialsAsync(string input, int expectedValue)
     {
-        var expression = new AsyncExpression(input, ExpressionOptions.NoCache);
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseBigNumbers);
 
         var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 

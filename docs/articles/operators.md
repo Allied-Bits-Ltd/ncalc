@@ -156,7 +156,17 @@ Multiplicative operators perform multiplication, division, and modulus operation
 
 If floating-point values are passed to the modulus operation, they are truncated before the operation.
 
-When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
+
+**Example:**
+```csharp
+1 * 2 % 3
+```
+
+When time operations are enabled using the <xref:NCalc.ExpressionOptions.SupportTimeOperations> flag in <xref:NCalc.ExpressionOptions>, it is possible to perform the following additional operations: 
+* multiply a time period value (TimeSpan) by a number and obtain a time period as a result;
+* divide a time period value (TimeSpan) by a number and obtain a time period as a result.
+
+When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operators are also supported:
 * `×` (U+00D7) : Multiplication
 * `∙` (U+2219): Multiplication
 * `:` : Division
@@ -167,11 +177,6 @@ When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignme
 * `/=` : Division with assignment of the result to the left operand
 
 When Unicode characters are enabled, they can also be used for multiplication with assignment and division with assignment.
-
-**Example:**
-```csharp
-1 * 2 % 3
-```
 
 The non-AOT version of NCalc can perform multiplication, division, and modulus operations on any types which have these operations defined (overloaded). This includes non-numeric types.  The AOT version can handle only numbers (including BigInteger and BigDecimal) and multiplication and division of TimeSpan values by numbers.
 
@@ -187,13 +192,18 @@ Additive operators perform addition and subtraction.
 1 + 2 - 3
 ```
 
-When [Advanced Value Formats and Operations](advanced_value_formats.md) are used and time operations are enabled, it is possible to add a time value (Timespan) to a date or another time value. Also, it is possible to subtract a time value from another time value or a time value from a date or a date from a date.
+When time operations are enabled using the <xref:NCalc.ExpressionOptions.SupportTimeOperations> flag in <xref:NCalc.ExpressionOptions>, it is possible to perform the following additional operations: 
+* add a time period value (TimeSpan) to a date (DateTime) or another time period (TimeSpan) value. 
+* add ticks (100ns per tick) to a date (DateTime) or time period (TimeSpan) value.
+* subtract a time value (TimeSpan) from a date (DateTime) or another time period (TimeSpan) value. 
+* subtract a date value (DateTime) from another date (DateTime) value. 
+* subtract ticks (100ns per tick) from a date (DateTime) or time period (TimeSpan) value.
 
 When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignments> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
 * `+=` : Addition with assignment of the result to the left operand
 * `-=` : Subtraction with assignment of the result to the left operand
 
-The non-AOT version of NCalc can perform addition and subtraction operations on any types which have these operations defined (overloaded). This includes non-numeric types. The AOT version can handle numbers (including BigInteger and BigDecimal), dates and times (where the operations make sense), char variables and addition of strings.
+The non-AOT version of NCalc can perform addition and subtraction operations on any types which have these operations defined (overloaded). This includes non-numeric types. The AOT version can handle numbers (including BigInteger and BigDecimal), dates and times (where the operations make sense), char variables, as well as add (concatenate)  strings.
 
 ## Relational
 
