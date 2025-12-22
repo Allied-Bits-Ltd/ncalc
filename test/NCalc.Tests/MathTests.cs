@@ -615,4 +615,20 @@ public class MathsTests
         var result = failExp.Evaluate(TestContext.Current.CancellationToken);
         Assert.True(result is BigInteger);
     }
+
+    [Fact]
+    public void ShouldConcatStrings()
+    {
+        var expression = new NCalc.Expression("`a` + `b`", ExpressionOptions.NoStringTypeCoercion);
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal("ab", result);
+
+        expression = new NCalc.Expression("`a` + `b`");
+        result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal("ab", result);
+
+        expression = new NCalc.Expression("`1` + `2`");
+        result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(3.0d, result);
+    }
 }

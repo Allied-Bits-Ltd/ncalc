@@ -4,6 +4,8 @@ using System.Reflection;
 
 using ExtendedNumerics;
 
+using NCalc.Exceptions;
+
 namespace NCalc.Helpers;
 
 /// <summary>
@@ -911,8 +913,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "+", options);
+        b = ConvertIfNeeded(b, "+", options);
 
         TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
 
@@ -998,8 +1000,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "+", options);
+        b = ConvertIfNeeded(b, "+", options);
 
         //var func = options.OverflowProtection ? AddPercentFuncChecked : AddPercentFunc;
         return ExecuteOperation(a, b, '+', ArithmeticOperation.AddPercent, options);
@@ -1020,8 +1022,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "-", options);
+        b = ConvertIfNeeded(b, "-", options);
 
         TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
 
@@ -1142,8 +1144,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "-", options);
+        b = ConvertIfNeeded(b, "-", options);
 
         //var func = options.OverflowProtection ? SubtractPercentFuncChecked : SubtractPercentFunc;
         return ExecuteOperation(a, b, '-', ArithmeticOperation.SubtractPercent, options);
@@ -1159,8 +1161,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "*", options);
+        b = ConvertIfNeeded(b, "*", options);
 
         TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
 
@@ -1254,8 +1256,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "*", options);
+        b = ConvertIfNeeded(b, "*", options);
 
         //var func = options.OverflowProtection ? MultiplyPercentFuncChecked : MultiplyPercentFunc;
         return ExecuteOperation(a, b, '*', ArithmeticOperation.MultiplyPercent, options);
@@ -1271,8 +1273,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "/", options);
+        b = ConvertIfNeeded(b, "/", options);
 
         bool useInteger = false;
 
@@ -1467,8 +1469,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "/", options);
+        b = ConvertIfNeeded(b, "/", options);
 
         TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
@@ -1625,8 +1627,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "/", options);
+        b = ConvertIfNeeded(b, "/", options);
 
         //var func = options.OverflowProtection ? DividePercentFuncChecked : DividePercentFunc;
         return ExecuteOperation(a, b, '/', ArithmeticOperation.DividePercent, options);
@@ -1642,8 +1644,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "%", options);
+        b = ConvertIfNeeded(b, "%", options);
 
         TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
 
@@ -1761,8 +1763,8 @@ public static class MathHelper
             return a;
         }
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "Max", options);
+        b = ConvertIfNeeded(b, "Max", options);
 
         TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
@@ -1817,8 +1819,8 @@ public static class MathHelper
             return a;
         }
 
-        a = ConvertIfNeeded(a, options);
-        b = ConvertIfNeeded(b, options);
+        a = ConvertIfNeeded(a, "Min", options);
+        b = ConvertIfNeeded(b, "Min", options);
 
         TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
@@ -2584,17 +2586,38 @@ public static class MathHelper
         return Math.Truncate(ConvertToDouble(a, options));
     }
 
-    private static object ConvertIfNeeded(object value, MathHelperOptions options)
+    private static object ConvertIfNeeded(object value, string operationName, MathHelperOptions options)
     {
-        return value switch
+        try
         {
-            char ch when options is { DecimalAsDefault: true, AllowCharValues: false } => decimal.Parse(ch.ToString(), options.CultureInfo),
-            string s when options is { DecimalAsDefault: true } => decimal.Parse(s, options.CultureInfo),
-            char ch when options is { AllowCharValues: false } => double.Parse(ch.ToString(), options.CultureInfo),
-            string s => double.Parse(s, options.CultureInfo),
-            bool boolean when options.AllowBooleanCalculation => boolean ? 1 : 0,
-            _ => value
-        };
+            return value switch
+            {
+                char ch when options is { DecimalAsDefault: true, AllowCharValues: false } => decimal.Parse(ch.ToString(), options.CultureInfo),
+                string s when options is { DecimalAsDefault: true } => decimal.Parse(s, options.CultureInfo),
+                char ch when options is { AllowCharValues: false } => double.Parse(ch.ToString(), options.CultureInfo),
+                string s => double.Parse(s, options.CultureInfo),
+                bool boolean when options.AllowBooleanCalculation => boolean ? 1 : 0,
+                _ => value
+            };
+        }
+        catch (FormatException)
+        {
+            if (value is string s)
+            {
+                string valueStr = s;
+                Type targetType = options.DecimalAsDefault ? typeof(decimal) : typeof(double);
+                throw new NCalcConversionException($"Conversion of a string value '{valueStr}' to type '{targetType.Name}' in the '{operationName}' operation failed as a string could not be parsed.", valueStr, typeof(string), targetType);
+            }
+
+            if (value is char c)
+            {
+                string valueStr = c.ToString();
+                Type targetType = options.DecimalAsDefault ? typeof(decimal) : typeof(double);
+                throw new NCalcConversionException($"Conversion of a string value '{valueStr}' to type '{targetType.Name}' in the '{operationName}' operation failed as a string could not be parsed.", valueStr, typeof(char), targetType);
+            }
+
+            throw;
+        }
     }
 
     public static double ConvertToDouble(object? value, MathHelperOptions options)

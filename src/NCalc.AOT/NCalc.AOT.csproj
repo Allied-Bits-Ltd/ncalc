@@ -38,6 +38,7 @@
       <Compile Include="..\NCalc\Domain\UnaryExpressionType.cs" Link="Domain\UnaryExpressionType.cs" />
       <Compile Include="..\NCalc\Domain\ValueExpression.cs" Link="Domain\ValueExpression.cs" />
       <Compile Include="..\NCalc\Domain\ValueType.cs" Link="Domain\ValueType.cs" />
+      <Compile Include="..\NCalc\Exceptions\NCalcConversionException.cs" Link="Exceptions\NCalcConversionException.cs" />
       <Compile Include="..\NCalc\Exceptions\NCalcEvaluationException.cs" Link="Exceptions\NCalcEvaluationException.cs" />
       <Compile Include="..\NCalc\Exceptions\NCalcException.cs" Link="Exceptions\NCalcException.cs" />
       <Compile Include="..\NCalc\Exceptions\NCalcFlowControl.cs" Link="Exceptions\NCalcFlowControl.cs" />

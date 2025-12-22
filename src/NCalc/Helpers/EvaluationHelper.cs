@@ -68,7 +68,7 @@ public static class EvaluationHelper
         {
             return MathHelper.Add(leftValue, rightValue, true, context);
         }
-        catch (FormatException) when (leftValue is string && rightValue is string)
+        catch (NCalcConversionException) when (leftValue is string && rightValue is string)
         {
             return string.Concat(
                 Convert.ToString(leftValue, context.CultureInfo),

@@ -1,3 +1,7 @@
+# 8.7.2.1 (Allied Bits)
+
+* Improved reporting of a parsing error when occurs if a non-numeric string (i.e., the one that cannot be parsed into a number) is passed to an arithmetic operation function or to Min/Max method. Now, NCalcConversionException is thrown instead of FormatException.
+
 # 8.7.2 (Allied Bits)
 
 * Added support for addition and subtraction of ticks to/from a DateTime or a TimeSpan.
