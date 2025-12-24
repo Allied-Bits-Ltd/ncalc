@@ -4,17 +4,15 @@ namespace NCalc.Exceptions;
 
 public class NCalcEvaluationException : NCalcException
 {
-    protected ExpressionLocation _location;
-
-    public ExpressionLocation Location => _location;
+    public ExpressionLocation Location { get; internal set;  }
 
     public NCalcEvaluationException(string message) : base(message)
     {
-        _location = ExpressionLocation.Empty;
+        Location = ExpressionLocation.Empty;
     }
 
     public NCalcEvaluationException(string message, ExpressionLocation location) : base(message)
     {
-        _location = location;
+        Location = location;
     }
 }

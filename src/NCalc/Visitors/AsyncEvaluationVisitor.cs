@@ -163,744 +163,753 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         object? leftValue = null;
         object? rightValue = null;
 
-        switch (expression.Type)
+        try
         {
-            case BinaryExpressionType.Assignment:
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
-
-                return await UpdateParameterAsync(expression.LeftExpression, rightValue, cancellationToken).ConfigureAwait(false);
-
-            case BinaryExpressionType.PlusAssignment:
+            switch (expression.Type)
             {
-                var lval = await left.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(lval, out leftValue))
-                    return null;
-                var rval = await right.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(rval, out rightValue))
-                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
+                case BinaryExpressionType.Assignment:
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
 
-                if (handlePercent)
+                    return await UpdateParameterAsync(expression.LeftExpression, rightValue, cancellationToken).ConfigureAwait(false);
+
+                case BinaryExpressionType.PlusAssignment:
                 {
-                    if (lval is Percent lValPercent)
-                        leftValue = lValPercent.Value;
-
-                    if (rval is Percent rValPercent)
-                        rightValue = rValPercent.Value;
-
-                    if (lval is Percent && rval is Percent)
-                    {
-                        object? result = MathHelper.Add(leftValue, rightValue, true, context);
-                        if (result is null)
-                            return null;
-                        return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    if (rval is Percent)
-                    {
-                        return await UpdateParameterAsync(expression.LeftExpression, MathHelper.AddPercent(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    if (lval is Percent)
-                    {
-                        throw new NCalcEvaluationException("The left side of a += operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
-                    }
-                }
-
-                return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Plus(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false);
-            }
-
-            case BinaryExpressionType.MinusAssignment:
-            {
-                var lval = await left.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(lval, out leftValue))
-                    return null;
-                var rval = await right.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(rval, out rightValue))
-                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
-
-                if (handlePercent)
-                {
-                    if (lval is Percent lValPercent)
-                        leftValue = lValPercent.Value;
-
-                    if (rval is Percent rValPercent)
-                        rightValue = rValPercent.Value;
-
-                    if (lval is Percent && rval is Percent)
-                    {
-                        object? result = MathHelper.Subtract(leftValue, rightValue, true, context);
-                        if (result is null)
-                            return null;
-                        return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    if (rval is Percent)
-                    {
-                        return await UpdateParameterAsync(expression.LeftExpression, MathHelper.SubtractPercent(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    if (lval is Percent)
-                    {
-                        throw new NCalcEvaluationException("The left side of a -= operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
-                    }
-                }
-
-                return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Minus(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false);
-            }
-
-            case BinaryExpressionType.MultiplyAssignment:
-            {
-                var lval = await left.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(lval, out leftValue))
-                    return null;
-                var rval = await right.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(rval, out rightValue))
-                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
-
-                if (handlePercent)
-                {
-                    if (lval is Percent lValPerc && rval is Percent rValPerc)
-                    {
-                        object? result = MathHelper.MultiplyPercent(lValPerc.Value, rValPerc.Value, context);
-                        if (result is null)
-                            return null;
-                        return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    if (lval is Percent lValPercent)
-                    {
-                        leftValue = lValPercent.Value;
-                        object? result = MathHelper.Multiply(leftValue, rightValue, true, context);
-                        if (result is null)
-                            return null;
-
-                        return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    if (rval is Percent rValPercent)
-                    {
-                        rightValue = rValPercent.Value;
-
-                        object? result = MathHelper.MultiplyPercent(leftValue, rightValue, context);
-                        if (result is null)
-                            return null;
-
-                        return await UpdateParameterAsync(expression.LeftExpression, result, cancellationToken).ConfigureAwait(false);
-                    }
-                }
-
-                return await UpdateParameterAsync(expression.LeftExpression, MathHelper.Multiply(leftValue, rightValue, true, context), cancellationToken).ConfigureAwait(false);
-            }
-
-            case BinaryExpressionType.DivAssignment:
-            {
-                var lval = await left.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(lval, out leftValue))
-                    return null;
-                var rval = await right.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(rval, out rightValue))
-                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
-
-                bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
-
-                if (handlePercent)
-                {
-                    if (lval is Percent lValPerc && rval is Percent rValPerc)
-                    {
-                        leftValue = lValPerc.Value;
-                        if (!noConvertToDouble)
-                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
-
-                        object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
-                        if (result is null)
-                            return null;
-                        return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
-                    }
-                    if (lval is Percent lValPercent)
-                    {
-                        leftValue = lValPercent.Value;
-                        if (!noConvertToDouble)
-                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
-                        object? result = MathHelper.Divide(leftValue, rightValue, true, context);
-                        if (result is null)
-                            return null;
-
-                        return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    if (rval is Percent rValPercent)
-                    {
-                        rightValue = rValPercent.Value;
-                        if (!noConvertToDouble)
-                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
-
-                        object? result = MathHelper.DividePercent(leftValue, rightValue, context);
-                        if (result is null)
-                            return null;
-
-                        return await UpdateParameterAsync(expression.LeftExpression, result, cancellationToken).ConfigureAwait(false);
-                    }
-                }
-
-                if (!noConvertToDouble)
-                    leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
-
-                {
-                    object? result = MathHelper.Divide(leftValue, rightValue, true, context);
-                    if (result is null)
+                    var lval = await left.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(lval, out leftValue))
                         return null;
-                    return await UpdateParameterAsync(expression.LeftExpression, result, cancellationToken).ConfigureAwait(false);
-                }
-            }
+                    var rval = await right.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(rval, out rightValue))
+                        return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
 
-            case BinaryExpressionType.AndAssignment:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
-
-                if (leftValue is BigInteger || rightValue is BigInteger)
-                    return await UpdateParameterAsync(expression.LeftExpression,
-                        MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
-                return await UpdateParameterAsync(expression.LeftExpression,
-                    Convert.ToUInt64(leftValue, context.CultureInfo) &
-                    Convert.ToUInt64(rightValue, context.CultureInfo)
-                    , cancellationToken).ConfigureAwait(false);
-            }
-            case BinaryExpressionType.OrAssignment:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
-
-                if (leftValue is BigInteger || rightValue is BigInteger)
-                    return await UpdateParameterAsync(expression.LeftExpression,
-                        MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
-                return await UpdateParameterAsync(expression.LeftExpression,
-                    Convert.ToUInt64(leftValue, context.CultureInfo) |
-                    Convert.ToUInt64(rightValue, context.CultureInfo)
-                    , cancellationToken).ConfigureAwait(false);
-            }
-            case BinaryExpressionType.XOrAssignment:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
-
-                if (leftValue is BigInteger || rightValue is BigInteger)
-                    return await UpdateParameterAsync(expression.LeftExpression,
-                        MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
-
-                return await UpdateParameterAsync(expression.LeftExpression,
-                    Convert.ToUInt64(leftValue, context.CultureInfo) ^
-                    Convert.ToUInt64(rightValue, context.CultureInfo)
-                    , cancellationToken).ConfigureAwait(false);
-            }
-            case BinaryExpressionType.And:
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!Convert.ToBoolean(leftValue, context.CultureInfo))
-                    return false;
-
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-                return Convert.ToBoolean(rightValue, context.CultureInfo);
-
-            case BinaryExpressionType.Or:
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (Convert.ToBoolean(leftValue, context.CultureInfo))
-                    return true;
-
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-                return Convert.ToBoolean(rightValue, context.CultureInfo);
-
-            case BinaryExpressionType.XOr:
-                return Convert.ToBoolean(await left.Value.ConfigureAwait(false), context.CultureInfo) ^
-                        Convert.ToBoolean(await right.Value.ConfigureAwait(false), context.CultureInfo);
-
-            case BinaryExpressionType.Div:
-            {
-                var lval = await left.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(lval, out leftValue))
-                    return null;
-                var rval = await right.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(rval, out rightValue))
-                    return null;
-
-                bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
-
-                if (handlePercent)
-                {
-                    if (lval is Percent lValPerc && rval is Percent rValPerc)
+                    if (handlePercent)
                     {
-                        leftValue = lValPerc.Value;
-                        if (!noConvertToDouble)
-                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                        if (lval is Percent lValPercent)
+                            leftValue = lValPercent.Value;
 
-                        object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
-                        if (result is null)
-                            return null;
-                        return new Percent(result);
-                    }
-                    if (lval is Percent lValPercent)
-                    {
-                        leftValue = lValPercent.Value;
-                        if (!noConvertToDouble)
-                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
-                        object? result = MathHelper.Divide(leftValue, rightValue, true, context);
-                        if (result is null)
-                            return null;
+                        if (rval is Percent rValPercent)
+                            rightValue = rValPercent.Value;
 
-                        return new Percent(result);
-                    }
-                    else
-                    if (rval is Percent rValPercent)
-                    {
-                        rightValue = rValPercent.Value;
-                        if (!noConvertToDouble)
-                            leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
-
-                        return MathHelper.DividePercent(leftValue, rightValue, context);
-                    }
-                }
-
-                if (!noConvertToDouble)
-                    leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
-
-                return MathHelper.Divide(leftValue, rightValue, true, context);
-            }
-            case BinaryExpressionType.IntDivB:
-            case BinaryExpressionType.IntDivP:
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-
-                return MathHelper.IntegerDivide(leftValue, rightValue, (expression.Type == BinaryExpressionType.IntDivB), true, context);
-
-            case BinaryExpressionType.Equal:
-                return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.Equal);
-
-            case BinaryExpressionType.Greater:
-                return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.Greater);
-
-            case BinaryExpressionType.GreaterOrEqual:
-                return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.GreaterOrEqual);
-
-            case BinaryExpressionType.Less:
-                return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.Less);
-
-            case BinaryExpressionType.LessOrEqual:
-                return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.LessOrEqual);
-
-            case BinaryExpressionType.NotEqual:
-                return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.NotEqual);
-
-            case BinaryExpressionType.Minus:
-            {
-                var lval = await left.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(lval, out leftValue))
-                    return null;
-                var rval = await right.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(rval, out rightValue))
-                    return null;
-
-                if (handlePercent)
-                {
-                    if (lval is Percent lValPercent)
-                        leftValue = lValPercent.Value;
-
-                    if (rval is Percent rValPercent)
-                        rightValue = rValPercent.Value;
-
-                    if (lval is Percent && rval is Percent)
-                    {
-                        object? result = MathHelper.Subtract(leftValue, rightValue, true, context);
-                        if (result is null)
-                            return null;
-                        return new Percent(result);
-                    }
-                    else
-                    if (rval is Percent)
-                    {
-                        return MathHelper.SubtractPercent(leftValue, rightValue, context);
-                    }
-                    else
-                    if (lval is Percent)
-                    {
-                        throw new NCalcEvaluationException("The left side of a subtraction operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
-                    }
-                }
-
-                return EvaluationHelper.Minus(leftValue, rightValue, context);
-            }
-
-            case BinaryExpressionType.Modulo:
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-
-                return MathHelper.Modulo(leftValue, rightValue, true, context);
-
-            case BinaryExpressionType.Plus:
-            {
-                var lval = await left.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(lval, out leftValue))
-                    return null;
-                var rval = await right.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(rval, out rightValue))
-                    return null;
-
-                if (handlePercent)
-                {
-                    if (lval is Percent lValPercent)
-                        leftValue = lValPercent.Value;
-
-                    if (rval is Percent rValPercent)
-                        rightValue = rValPercent.Value;
-
-                    if (lval is Percent && rval is Percent)
-                    {
-                        object? result = MathHelper.Add(leftValue, rightValue, true, context);
-                        if (result is null)
-                            return null;
-                        return new Percent(result);
-                    }
-                    else
-                    if (rval is Percent)
-                    {
-                        return MathHelper.AddPercent(leftValue, rightValue, context);
-                    }
-                    else
-                    if (lval is Percent)
-                    {
-                        throw new NCalcEvaluationException("The left side of an addition operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
-                    }
-                }
-
-                return EvaluationHelper.Plus(leftValue, rightValue, context);
-            }
-
-            case BinaryExpressionType.Times:
-            {
-                var lval = await left.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(lval, out leftValue))
-                    return null;
-                var rval = await right.Value.ConfigureAwait(false);
-                if (!TryGetValueOrNull(rval, out rightValue))
-                    return null;
-
-                if (handlePercent)
-                {
-                    if (lval is Percent lValPerc && rval is Percent rValPerc)
-                    {
-                        object? result = MathHelper.MultiplyPercent(lValPerc.Value, rValPerc.Value, context);
-                        if (result is null)
-                            return null;
-                        return new Percent(result);
-                    }
-                    else
-                    if (lval is Percent lValPercent)
-                    {
-                        leftValue = lValPercent.Value;
-                        object? result = MathHelper.Multiply(leftValue, rightValue, true, context);
-                        if (result is null)
-                            return null;
-
-                        return new Percent(result);
-                    }
-                    else
-                    if (rval is Percent rValPercent)
-                    {
-                        rightValue = rValPercent.Value;
-
-                        return MathHelper.MultiplyPercent(leftValue, rightValue, context);
-                    }
-                }
-
-                return MathHelper.Multiply(leftValue, rightValue, true, context);
-            }
-
-            case BinaryExpressionType.BitwiseAnd:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-
-                if (leftValue is BigInteger || rightValue is BigInteger)
-                    return MathHelper.BitwiseAnd(leftValue, rightValue);
-                return Convert.ToUInt64(leftValue, context.CultureInfo) &
-                    Convert.ToUInt64(rightValue, context.CultureInfo);
-            }
-            case BinaryExpressionType.BitwiseOr:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-
-                if (leftValue is BigInteger || rightValue is BigInteger)
-                    return MathHelper.BitwiseOr(leftValue, rightValue);
-                return Convert.ToUInt64(leftValue, context.CultureInfo) |
-                        Convert.ToUInt64(rightValue, context.CultureInfo);
-            }
-            case BinaryExpressionType.BitwiseXOr:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-
-                if (leftValue is BigInteger || rightValue is BigInteger)
-                    return MathHelper.BitwiseXOr(leftValue, rightValue);
-                return Convert.ToUInt64(leftValue, context.CultureInfo) ^
-                        Convert.ToUInt64(rightValue, context.CultureInfo);
-            }
-            case BinaryExpressionType.LeftShift:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-                if (leftValue is BigInteger)
-                    return MathHelper.LeftShift((BigInteger)leftValue, rightValue, context);
-                return Convert.ToUInt64(leftValue, context.CultureInfo) <<
-                        Convert.ToInt32(rightValue, context.CultureInfo);
-            }
-            case BinaryExpressionType.RightShift:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-                if (leftValue is BigInteger)
-                    return MathHelper.RightShift((BigInteger)leftValue, rightValue, context);
-                return Convert.ToUInt64(leftValue, context.CultureInfo) >>
-                        Convert.ToInt32(rightValue, context.CultureInfo);
-            }
-            case BinaryExpressionType.Exponentiation:
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-                return MathHelper.Pow(leftValue, rightValue, true, context);
-
-            case BinaryExpressionType.Factorial:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-
-                return MathHelper.Factorial(leftValue!, rightValue!, context);
-            }
-            case BinaryExpressionType.In:
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-
-                return EvaluationHelper.In(leftValue, rightValue, context);
-
-            case BinaryExpressionType.NotIn:
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-
-                return !EvaluationHelper.In(leftValue, rightValue, context);
-
-            case BinaryExpressionType.Like:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-
-                return await EvaluationHelper.LikeAsync(leftValue!, rightValue!, context, cancellationToken).ConfigureAwait(false);
-            }
-
-            case BinaryExpressionType.NotLike:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    return null;
-                if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                    return null;
-
-                return !(await EvaluationHelper.LikeAsync(leftValue!, rightValue!, context, cancellationToken).ConfigureAwait(false));
-            }
-
-            case BinaryExpressionType.RangeIndex:
-                leftValue = await left.Value.ConfigureAwait(false);
-                rightValue = await right.Value.ConfigureAwait(false);
-
-                if (leftValue is not null && leftValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(leftValue))
-                    throw new NCalcParameterIndexException("The lower boundary, unless omitted, should evaluate to zero or an integer number", expression.LeftExpression.Location);
-                if (rightValue is not null && rightValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
-                    throw new NCalcParameterIndexException("The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
-
-                int? leftInt = (leftValue is null) ? null : (leftValue is NCalc.Domain.Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, context);
-                int? rightInt = (rightValue is null) ? null : (rightValue is NCalc.Domain.Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, context);
-
-                if (leftInt.HasValue && leftInt < 0)
-                    throw new NCalcParameterIndexException("The lower boundary should be zero or a positive number", expression.LeftExpression.Location);
-
-                if (rightInt.HasValue && rightInt < 0)
-                    throw new NCalcParameterIndexException("The upper boundary should be zero or a positive number", expression.RightExpression.Location);
-
-                return new RangeValue
-                {
-                    LowerBound = leftInt is null ? null : (leftValue is NCalc.Domain.Index leftIdx2) ? leftIdx2 : new NCalc.Domain.Index(leftInt.Value),
-                    UpperBound = rightInt is null ? null : (rightValue is NCalc.Domain.Index rightIdx2) ? rightIdx2 : new NCalc.Domain.Index(rightInt.Value),
-                };
-
-            case BinaryExpressionType.IndexAccess:
-            {
-                if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
-                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list or a string", expression.LeftExpression.Location);
-
-                IList? identList = null;
-                string? identString = null;
-
-                if (leftValue is IList)
-                    identList = (IList)leftValue;
-                else
-                if (leftValue is string)
-                    identString = (string)leftValue;
-                else
-                    throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list or a string", expression.LeftExpression.Location);
-
-                object? result = null;
-
-                if (expression.RightExpression is BinaryExpression binExpr && binExpr.Type == BinaryExpressionType.RangeIndex)
-                {
-                    RangeValue? range = (RangeValue?)await binExpr.Accept(this, cancellationToken).ConfigureAwait(false);
-                    if (range is null)
-                        return null;
-
-                    int lowerBound;
-                    int upperBound;
-
-                    if (identList is not null)
-                    {
-                        lowerBound = (range.LowerBound?.IsFromEnd == true) ? (identList.Count - range.LowerBound.Value.Value) : (range.LowerBound?.Value ?? 0);
-                        upperBound = (range.UpperBound?.IsFromEnd == true) ? (identList.Count - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identList.Count);
-
-                        if (lowerBound > upperBound)
-                            throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
-
-                        if (lowerBound >= identList.Count || upperBound > identList.Count)
-                            throw new NCalcParameterIndexException($"The index range [{lowerBound}..{upperBound}] goes out out of the list bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
-
-                        if (upperBound == lowerBound)
-                            return Array.Empty<object?>();
-
-                        object?[] resultArr = new object?[upperBound - lowerBound];
-                        for (int i = 0; i < resultArr.Length; i++)
+                        if (lval is Percent && rval is Percent)
                         {
-                            result = resultArr[lowerBound + i];
+                            object? result = MathHelper.Add(leftValue, rightValue, true, context);
+                            if (result is null)
+                                return null;
+                            return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        if (rval is Percent)
+                        {
+                            return await UpdateParameterAsync(expression.LeftExpression, MathHelper.AddPercent(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        if (lval is Percent)
+                        {
+                            throw new NCalcEvaluationException("The left side of a += operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
+                        }
+                    }
+
+                    return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Plus(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false);
+                }
+
+                case BinaryExpressionType.MinusAssignment:
+                {
+                    var lval = await left.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(lval, out leftValue))
+                        return null;
+                    var rval = await right.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(rval, out rightValue))
+                        return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
+
+                    if (handlePercent)
+                    {
+                        if (lval is Percent lValPercent)
+                            leftValue = lValPercent.Value;
+
+                        if (rval is Percent rValPercent)
+                            rightValue = rValPercent.Value;
+
+                        if (lval is Percent && rval is Percent)
+                        {
+                            object? result = MathHelper.Subtract(leftValue, rightValue, true, context);
+                            if (result is null)
+                                return null;
+                            return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        if (rval is Percent)
+                        {
+                            return await UpdateParameterAsync(expression.LeftExpression, MathHelper.SubtractPercent(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        if (lval is Percent)
+                        {
+                            throw new NCalcEvaluationException("The left side of a -= operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
+                        }
+                    }
+
+                    return await UpdateParameterAsync(expression.LeftExpression, EvaluationHelper.Minus(leftValue, rightValue, context), cancellationToken).ConfigureAwait(false);
+                }
+
+                case BinaryExpressionType.MultiplyAssignment:
+                {
+                    var lval = await left.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(lval, out leftValue))
+                        return null;
+                    var rval = await right.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(rval, out rightValue))
+                        return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
+
+                    if (handlePercent)
+                    {
+                        if (lval is Percent lValPerc && rval is Percent rValPerc)
+                        {
+                            object? result = MathHelper.MultiplyPercent(lValPerc.Value, rValPerc.Value, context);
+                            if (result is null)
+                                return null;
+                            return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        if (lval is Percent lValPercent)
+                        {
+                            leftValue = lValPercent.Value;
+                            object? result = MathHelper.Multiply(leftValue, rightValue, true, context);
+                            if (result is null)
+                                return null;
+
+                            return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        if (rval is Percent rValPercent)
+                        {
+                            rightValue = rValPercent.Value;
+
+                            object? result = MathHelper.MultiplyPercent(leftValue, rightValue, context);
+                            if (result is null)
+                                return null;
+
+                            return await UpdateParameterAsync(expression.LeftExpression, result, cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+
+                    return await UpdateParameterAsync(expression.LeftExpression, MathHelper.Multiply(leftValue, rightValue, true, context), cancellationToken).ConfigureAwait(false);
+                }
+
+                case BinaryExpressionType.DivAssignment:
+                {
+                    var lval = await left.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(lval, out leftValue))
+                        return null;
+                    var rval = await right.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(rval, out rightValue))
+                        return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
+
+                    bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
+
+                    if (handlePercent)
+                    {
+                        if (lval is Percent lValPerc && rval is Percent rValPerc)
+                        {
+                            leftValue = lValPerc.Value;
+                            if (!noConvertToDouble)
+                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                            object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
+                            if (result is null)
+                                return null;
+                            return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
+                        }
+                        if (lval is Percent lValPercent)
+                        {
+                            leftValue = lValPercent.Value;
+                            if (!noConvertToDouble)
+                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                            object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                            if (result is null)
+                                return null;
+
+                            return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        if (rval is Percent rValPercent)
+                        {
+                            rightValue = rValPercent.Value;
+                            if (!noConvertToDouble)
+                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                            object? result = MathHelper.DividePercent(leftValue, rightValue, context);
+                            if (result is null)
+                                return null;
+
+                            return await UpdateParameterAsync(expression.LeftExpression, result, cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+
+                    if (!noConvertToDouble)
+                        leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                    {
+                        object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                        if (result is null)
+                            return null;
+                        return await UpdateParameterAsync(expression.LeftExpression, result, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+
+                case BinaryExpressionType.AndAssignment:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
+
+                    if (leftValue is BigInteger || rightValue is BigInteger)
+                        return await UpdateParameterAsync(expression.LeftExpression,
+                            MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
+                    return await UpdateParameterAsync(expression.LeftExpression,
+                        Convert.ToUInt64(leftValue, context.CultureInfo) &
+                        Convert.ToUInt64(rightValue, context.CultureInfo)
+                        , cancellationToken).ConfigureAwait(false);
+                }
+                case BinaryExpressionType.OrAssignment:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
+
+                    if (leftValue is BigInteger || rightValue is BigInteger)
+                        return await UpdateParameterAsync(expression.LeftExpression,
+                            MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
+                    return await UpdateParameterAsync(expression.LeftExpression,
+                        Convert.ToUInt64(leftValue, context.CultureInfo) |
+                        Convert.ToUInt64(rightValue, context.CultureInfo)
+                        , cancellationToken).ConfigureAwait(false);
+                }
+                case BinaryExpressionType.XOrAssignment:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
+
+                    if (leftValue is BigInteger || rightValue is BigInteger)
+                        return await UpdateParameterAsync(expression.LeftExpression,
+                            MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
+
+                    return await UpdateParameterAsync(expression.LeftExpression,
+                        Convert.ToUInt64(leftValue, context.CultureInfo) ^
+                        Convert.ToUInt64(rightValue, context.CultureInfo)
+                        , cancellationToken).ConfigureAwait(false);
+                }
+                case BinaryExpressionType.And:
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!Convert.ToBoolean(leftValue, context.CultureInfo))
+                        return false;
+
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+                    return Convert.ToBoolean(rightValue, context.CultureInfo);
+
+                case BinaryExpressionType.Or:
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (Convert.ToBoolean(leftValue, context.CultureInfo))
+                        return true;
+
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+                    return Convert.ToBoolean(rightValue, context.CultureInfo);
+
+                case BinaryExpressionType.XOr:
+                    return Convert.ToBoolean(await left.Value.ConfigureAwait(false), context.CultureInfo) ^
+                            Convert.ToBoolean(await right.Value.ConfigureAwait(false), context.CultureInfo);
+
+                case BinaryExpressionType.Div:
+                {
+                    var lval = await left.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(lval, out leftValue))
+                        return null;
+                    var rval = await right.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(rval, out rightValue))
+                        return null;
+
+                    bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
+
+                    if (handlePercent)
+                    {
+                        if (lval is Percent lValPerc && rval is Percent rValPerc)
+                        {
+                            leftValue = lValPerc.Value;
+                            if (!noConvertToDouble)
+                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                            object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
+                            if (result is null)
+                                return null;
+                            return new Percent(result);
+                        }
+                        if (lval is Percent lValPercent)
+                        {
+                            leftValue = lValPercent.Value;
+                            if (!noConvertToDouble)
+                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                            object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                            if (result is null)
+                                return null;
+
+                            return new Percent(result);
+                        }
+                        else
+                        if (rval is Percent rValPercent)
+                        {
+                            rightValue = rValPercent.Value;
+                            if (!noConvertToDouble)
+                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                            return MathHelper.DividePercent(leftValue, rightValue, context);
+                        }
+                    }
+
+                    if (!noConvertToDouble)
+                        leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+
+                    return MathHelper.Divide(leftValue, rightValue, true, context);
+                }
+                case BinaryExpressionType.IntDivB:
+                case BinaryExpressionType.IntDivP:
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+
+                    return MathHelper.IntegerDivide(leftValue, rightValue, (expression.Type == BinaryExpressionType.IntDivB), true, context);
+
+                case BinaryExpressionType.Equal:
+                    return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.Equal);
+
+                case BinaryExpressionType.Greater:
+                    return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.Greater);
+
+                case BinaryExpressionType.GreaterOrEqual:
+                    return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.GreaterOrEqual);
+
+                case BinaryExpressionType.Less:
+                    return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.Less);
+
+                case BinaryExpressionType.LessOrEqual:
+                    return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.LessOrEqual);
+
+                case BinaryExpressionType.NotEqual:
+                    return Compare(await left.Value.ConfigureAwait(false), await right.Value.ConfigureAwait(false), ComparisonType.NotEqual);
+
+                case BinaryExpressionType.Minus:
+                {
+                    var lval = await left.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(lval, out leftValue))
+                        return null;
+                    var rval = await right.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(rval, out rightValue))
+                        return null;
+
+                    if (handlePercent)
+                    {
+                        if (lval is Percent lValPercent)
+                            leftValue = lValPercent.Value;
+
+                        if (rval is Percent rValPercent)
+                            rightValue = rValPercent.Value;
+
+                        if (lval is Percent && rval is Percent)
+                        {
+                            object? result = MathHelper.Subtract(leftValue, rightValue, true, context);
+                            if (result is null)
+                                return null;
+                            return new Percent(result);
+                        }
+                        else
+                        if (rval is Percent)
+                        {
+                            return MathHelper.SubtractPercent(leftValue, rightValue, context);
+                        }
+                        else
+                        if (lval is Percent)
+                        {
+                            throw new NCalcEvaluationException("The left side of a subtraction operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
+                        }
+                    }
+
+                    return EvaluationHelper.Minus(leftValue, rightValue, context);
+                }
+
+                case BinaryExpressionType.Modulo:
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+
+                    return MathHelper.Modulo(leftValue, rightValue, true, context);
+
+                case BinaryExpressionType.Plus:
+                {
+                    var lval = await left.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(lval, out leftValue))
+                        return null;
+                    var rval = await right.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(rval, out rightValue))
+                        return null;
+
+                    if (handlePercent)
+                    {
+                        if (lval is Percent lValPercent)
+                            leftValue = lValPercent.Value;
+
+                        if (rval is Percent rValPercent)
+                            rightValue = rValPercent.Value;
+
+                        if (lval is Percent && rval is Percent)
+                        {
+                            object? result = MathHelper.Add(leftValue, rightValue, true, context);
+                            if (result is null)
+                                return null;
+                            return new Percent(result);
+                        }
+                        else
+                        if (rval is Percent)
+                        {
+                            return MathHelper.AddPercent(leftValue, rightValue, context);
+                        }
+                        else
+                        if (lval is Percent)
+                        {
+                            throw new NCalcEvaluationException("The left side of an addition operation cannot be a percent unless the right side is a percent as well", expression.LeftExpression.Location);
+                        }
+                    }
+
+                    return EvaluationHelper.Plus(leftValue, rightValue, context);
+                }
+
+                case BinaryExpressionType.Times:
+                {
+                    var lval = await left.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(lval, out leftValue))
+                        return null;
+                    var rval = await right.Value.ConfigureAwait(false);
+                    if (!TryGetValueOrNull(rval, out rightValue))
+                        return null;
+
+                    if (handlePercent)
+                    {
+                        if (lval is Percent lValPerc && rval is Percent rValPerc)
+                        {
+                            object? result = MathHelper.MultiplyPercent(lValPerc.Value, rValPerc.Value, context);
+                            if (result is null)
+                                return null;
+                            return new Percent(result);
+                        }
+                        else
+                        if (lval is Percent lValPercent)
+                        {
+                            leftValue = lValPercent.Value;
+                            object? result = MathHelper.Multiply(leftValue, rightValue, true, context);
+                            if (result is null)
+                                return null;
+
+                            return new Percent(result);
+                        }
+                        else
+                        if (rval is Percent rValPercent)
+                        {
+                            rightValue = rValPercent.Value;
+
+                            return MathHelper.MultiplyPercent(leftValue, rightValue, context);
+                        }
+                    }
+
+                    return MathHelper.Multiply(leftValue, rightValue, true, context);
+                }
+
+                case BinaryExpressionType.BitwiseAnd:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+
+                    if (leftValue is BigInteger || rightValue is BigInteger)
+                        return MathHelper.BitwiseAnd(leftValue, rightValue);
+                    return Convert.ToUInt64(leftValue, context.CultureInfo) &
+                        Convert.ToUInt64(rightValue, context.CultureInfo);
+                }
+                case BinaryExpressionType.BitwiseOr:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+
+                    if (leftValue is BigInteger || rightValue is BigInteger)
+                        return MathHelper.BitwiseOr(leftValue, rightValue);
+                    return Convert.ToUInt64(leftValue, context.CultureInfo) |
+                            Convert.ToUInt64(rightValue, context.CultureInfo);
+                }
+                case BinaryExpressionType.BitwiseXOr:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+
+                    if (leftValue is BigInteger || rightValue is BigInteger)
+                        return MathHelper.BitwiseXOr(leftValue, rightValue);
+                    return Convert.ToUInt64(leftValue, context.CultureInfo) ^
+                            Convert.ToUInt64(rightValue, context.CultureInfo);
+                }
+                case BinaryExpressionType.LeftShift:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+                    if (leftValue is BigInteger)
+                        return MathHelper.LeftShift((BigInteger)leftValue, rightValue, context);
+                    return Convert.ToUInt64(leftValue, context.CultureInfo) <<
+                            Convert.ToInt32(rightValue, context.CultureInfo);
+                }
+                case BinaryExpressionType.RightShift:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+                    if (leftValue is BigInteger)
+                        return MathHelper.RightShift((BigInteger)leftValue, rightValue, context);
+                    return Convert.ToUInt64(leftValue, context.CultureInfo) >>
+                            Convert.ToInt32(rightValue, context.CultureInfo);
+                }
+                case BinaryExpressionType.Exponentiation:
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+                    return MathHelper.Pow(leftValue, rightValue, true, context);
+
+                case BinaryExpressionType.Factorial:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+
+                    return MathHelper.Factorial(leftValue!, rightValue!, context);
+                }
+                case BinaryExpressionType.In:
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+
+                    return EvaluationHelper.In(leftValue, rightValue, context);
+
+                case BinaryExpressionType.NotIn:
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+
+                    return !EvaluationHelper.In(leftValue, rightValue, context);
+
+                case BinaryExpressionType.Like:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+
+                    return await EvaluationHelper.LikeAsync(leftValue!, rightValue!, context, cancellationToken).ConfigureAwait(false);
+                }
+
+                case BinaryExpressionType.NotLike:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+
+                    return !(await EvaluationHelper.LikeAsync(leftValue!, rightValue!, context, cancellationToken).ConfigureAwait(false));
+                }
+
+                case BinaryExpressionType.RangeIndex:
+                    leftValue = await left.Value.ConfigureAwait(false);
+                    rightValue = await right.Value.ConfigureAwait(false);
+
+                    if (leftValue is not null && leftValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(leftValue))
+                        throw new NCalcParameterIndexException("The lower boundary, unless omitted, should evaluate to zero or an integer number", expression.LeftExpression.Location);
+                    if (rightValue is not null && rightValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
+                        throw new NCalcParameterIndexException("The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
+
+                    int? leftInt = (leftValue is null) ? null : (leftValue is NCalc.Domain.Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, context);
+                    int? rightInt = (rightValue is null) ? null : (rightValue is NCalc.Domain.Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, context);
+
+                    if (leftInt.HasValue && leftInt < 0)
+                        throw new NCalcParameterIndexException("The lower boundary should be zero or a positive number", expression.LeftExpression.Location);
+
+                    if (rightInt.HasValue && rightInt < 0)
+                        throw new NCalcParameterIndexException("The upper boundary should be zero or a positive number", expression.RightExpression.Location);
+
+                    return new RangeValue
+                    {
+                        LowerBound = leftInt is null ? null : (leftValue is NCalc.Domain.Index leftIdx2) ? leftIdx2 : new NCalc.Domain.Index(leftInt.Value),
+                        UpperBound = rightInt is null ? null : (rightValue is NCalc.Domain.Index rightIdx2) ? rightIdx2 : new NCalc.Domain.Index(rightInt.Value),
+                    };
+
+                case BinaryExpressionType.IndexAccess:
+                {
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list or a string", expression.LeftExpression.Location);
+
+                    IList? identList = null;
+                    string? identString = null;
+
+                    if (leftValue is IList)
+                        identList = (IList)leftValue;
+                    else
+                    if (leftValue is string)
+                        identString = (string)leftValue;
+                    else
+                        throw new NCalcParameterIndexException("An expression, if used with an index, must denote a list or a string", expression.LeftExpression.Location);
+
+                    object? result = null;
+
+                    if (expression.RightExpression is BinaryExpression binExpr && binExpr.Type == BinaryExpressionType.RangeIndex)
+                    {
+                        RangeValue? range = (RangeValue?)await binExpr.Accept(this, cancellationToken).ConfigureAwait(false);
+                        if (range is null)
+                            return null;
+
+                        int lowerBound;
+                        int upperBound;
+
+                        if (identList is not null)
+                        {
+                            lowerBound = (range.LowerBound?.IsFromEnd == true) ? (identList.Count - range.LowerBound.Value.Value) : (range.LowerBound?.Value ?? 0);
+                            upperBound = (range.UpperBound?.IsFromEnd == true) ? (identList.Count - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identList.Count);
+
+                            if (lowerBound > upperBound)
+                                throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
+
+                            if (lowerBound >= identList.Count || upperBound > identList.Count)
+                                throw new NCalcParameterIndexException($"The index range [{lowerBound}..{upperBound}] goes out out of the list bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
+
+                            if (upperBound == lowerBound)
+                                return Array.Empty<object?>();
+
+                            object?[] resultArr = new object?[upperBound - lowerBound];
+                            for (int i = 0; i < resultArr.Length; i++)
+                            {
+                                result = resultArr[lowerBound + i];
+
+                                if (result is LogicalExpression expr)
+                                    result = await expr.Accept(this, cancellationToken).ConfigureAwait(false);
+
+                                resultArr[i] = result;
+                            }
+                            result = resultArr;
+                        }
+                        else
+                        if (identString is not null)
+                        {
+                            lowerBound = (range.LowerBound?.IsFromEnd == true) ? (identString.Length - range.LowerBound.Value.Value) : (range.LowerBound?.Value ?? 0);
+                            upperBound = (range.UpperBound?.IsFromEnd == true) ? (identString.Length - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identString.Length);
+
+                            if (lowerBound > upperBound)
+                                throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
+
+                            if (lowerBound >= identString.Length || upperBound > identString.Length)
+                                throw new NCalcParameterIndexException($"The range [{lowerBound}..{upperBound}] is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
+
+                            if (upperBound == lowerBound)
+                                return string.Empty;
+
+                            result = identString[lowerBound..upperBound];
+                        }
+
+                        return result;
+                    }
+                    else
+                    {
+                        if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                            throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
+
+                        int index;
+                        try
+                        {
+                            index = MathHelper.ConvertToInt(rightValue, context);
+                        }
+                        catch
+                        {
+                            throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
+                        }
+
+                        if (identList is not null)
+                        {
+                            if (index < 0 || index >= identList.Count)
+                                throw new NCalcParameterIndexException($"The index is out of bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
+                            result = identList[index];
 
                             if (result is LogicalExpression expr)
                                 result = await expr.Accept(this, cancellationToken).ConfigureAwait(false);
-
-                            resultArr[i] = result;
                         }
-                        result = resultArr;
+                        else
+                        if (identString is not null)
+                        {
+                            if (index < 0 || index >= identString.Length)
+                                throw new NCalcParameterIndexException($"The index is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
+                            result = identString[index];
+                        }
                     }
-                    else
-                    if (identString is not null)
-                    {
-                        lowerBound = (range.LowerBound?.IsFromEnd == true) ? (identString.Length - range.LowerBound.Value.Value) : (range.LowerBound?.Value ?? 0);
-                        upperBound = (range.UpperBound?.IsFromEnd == true) ? (identString.Length - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identString.Length);
-
-                        if (lowerBound > upperBound)
-                            throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
-
-                        if (lowerBound >= identString.Length || upperBound > identString.Length)
-                            throw new NCalcParameterIndexException($"The range [{lowerBound}..{upperBound}] is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
-
-                        if (upperBound == lowerBound)
-                            return string.Empty;
-
-                        result = identString[lowerBound..upperBound];
-                    }
-
                     return result;
                 }
-                else
+
+                case BinaryExpressionType.WhileLoop:
                 {
-                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
-                        throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
+                    object? result = null;
 
-                    int index;
-                    try
+                    int ctr = 0;
+
+                    while (ctr < AsyncExpression.MaxLoopIterations)
                     {
-                        index = MathHelper.ConvertToInt(rightValue, context);
-                    }
-                    catch
-                    {
-                        throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
-                    }
+                        ctr++;
 
-                    if (identList is not null)
-                    {
-                        if (index < 0 || index >= identList.Count)
-                            throw new NCalcParameterIndexException($"The index is out of bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
-                        result = identList[index];
-
-                        if (result is LogicalExpression expr)
-                            result = await expr.Accept(this, cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    if (identString is not null)
-                    {
-                        if (index < 0 || index >= identString.Length)
-                            throw new NCalcParameterIndexException($"The index is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
-                        result = identString[index];
-                    }
-                }
-                return result;
-            }
-
-            case BinaryExpressionType.WhileLoop:
-            {
-                object? result = null;
-
-                int ctr = 0;
-
-                while (ctr < AsyncExpression.MaxLoopIterations)
-                {
-                    ctr++;
-
-                    if (!TryGetValueOrNull(await EvaluateAsync(expression.LeftExpression, cancellationToken).ConfigureAwait(false), out leftValue))
-                        break;
-
-                    if (!Convert.ToBoolean(leftValue, context.CultureInfo))
-                        break;
-
-                    try
-                    {
-                        TryGetValueOrNull(await EvaluateAsync(expression.RightExpression, cancellationToken).ConfigureAwait(false), out result);
-                    }
-                    catch (NCalcFlowControl fc)
-                    {
-                        if (fc.Type == NCalcFlowControl.FlowControlType.Break)
+                        if (!TryGetValueOrNull(await EvaluateAsync(expression.LeftExpression, cancellationToken).ConfigureAwait(false), out leftValue))
                             break;
-                        else
-                        if (fc.Type == NCalcFlowControl.FlowControlType.Continue)
-                            continue;
+
+                        if (!Convert.ToBoolean(leftValue, context.CultureInfo))
+                            break;
+
+                        try
+                        {
+                            TryGetValueOrNull(await EvaluateAsync(expression.RightExpression, cancellationToken).ConfigureAwait(false), out result);
+                        }
+                        catch (NCalcFlowControl fc)
+                        {
+                            if (fc.Type == NCalcFlowControl.FlowControlType.Break)
+                                break;
+                            else
+                            if (fc.Type == NCalcFlowControl.FlowControlType.Continue)
+                                continue;
+                        }
                     }
+                    return result;
                 }
-                return result;
             }
+        }
+        catch (NCalcEvaluationException ex)
+        {
+            if (ex.Location == Parser.ExpressionLocation.Empty)
+                ex.Location = expression.Location;
+            throw;
         }
         return null;
     }
