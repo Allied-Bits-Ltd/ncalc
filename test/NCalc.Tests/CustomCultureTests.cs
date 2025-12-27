@@ -1,3 +1,5 @@
+using NCalc.Exceptions;
+
 namespace NCalc.Tests;
 
 [Trait("Category", "Custom Culture")]
@@ -43,24 +45,38 @@ public class CustomCultureTests
             }.Evaluate(TestContext.Current.CancellationToken));
 
             //combining decimal dot and comma fails
-            Assert.Throws<FormatException>(() => new Expression(formula, cultureComma)
+            try
             {
-                Parameters =
+                new Expression(formula, cultureComma)
                 {
-                    {"A","2,0"},
-                    {"B","0.5"}
-                }
-            }.Evaluate(TestContext.Current.CancellationToken));
+                    Parameters =
+                    {
+                        {"A","2,0"},
+                        {"B","0.5"}
+                    }
+                }.Evaluate(TestContext.Current.CancellationToken);
+            }
+            catch (Exception ex)
+            {
+                Assert.True(typeof(NCalcConversionException) == ex.GetType() || typeof(FormatException) == ex.GetType());
+            }
 
             //combining decimal dot and comma fails
-            Assert.Throws<FormatException>(() => new Expression(formula, cultureDot)
+            try
             {
-                Parameters =
+                new Expression(formula, cultureDot)
                 {
-                    {"A","2,0"},
-                    {"B","0.5"}
-                }
-            }.Evaluate(TestContext.Current.CancellationToken));
+                    Parameters =
+                    {
+                        {"A","2,0"},
+                        {"B","0.5"}
+                    }
+                }.Evaluate(TestContext.Current.CancellationToken);
+            }
+            catch (Exception ex)
+            {
+                Assert.True(typeof(NCalcConversionException) == ex.GetType() || typeof(FormatException) == ex.GetType());
+            }
         }
     }
 

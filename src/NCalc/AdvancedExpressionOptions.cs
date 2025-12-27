@@ -333,7 +333,7 @@
             _currencyNumberGroupSeparator = CultureInfo.CurrentCulture.NumberFormat.CurrencyGroupSeparator;
         }
 
-        internal string GetDateSeparator()
+        public string GetDateSeparator()
         {
             switch (DateSeparatorType)
             {
@@ -348,7 +348,7 @@
             }
         }
 
-        internal string GetTimeSeparator()
+        public string GetTimeSeparator()
         {
             switch (TimeSeparatorType)
             {
@@ -363,105 +363,88 @@
             }
         }
 
-        internal char GetDecimalSeparatorChar()
+        public string GetDecimalSeparator()
         {
-            string? separatorString = "";
-            switch (DecimalSeparatorType)
+            return DecimalSeparatorType switch
             {
-                case SeparatorType.BuiltIn:
-                    separatorString = Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator.ToString();
-                    break;
-                case SeparatorType.FromCulture:
-                    separatorString = ((_cultureInfo is not null) ? _cultureInfo : CultureInfo.CurrentCulture).NumberFormat.NumberDecimalSeparator;
-                    break;
-                case SeparatorType.Custom:
-                    separatorString = _decimalSeparator;
-                    break;
-            }
+                SeparatorType.BuiltIn => Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator.ToString(),
+                SeparatorType.FromCulture => ((_cultureInfo is not null) ? _cultureInfo : CultureInfo.CurrentCulture).NumberFormat.NumberDecimalSeparator,
+                SeparatorType.Custom => _decimalSeparator,
+                _ => Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator.ToString(),
+            };
+        }
+
+        public char GetDecimalSeparatorChar()
+        {
+            string separatorString = GetDecimalSeparator();
             if (string.IsNullOrEmpty(separatorString))
                 return '\0';
             else
                 return separatorString[0];
         }
 
-        internal char GetSecondaryDecimalSeparatorChar()
+        public string GetSecondaryDecimalSeparator() => _secondaryDecimalSeparator;
+
+        public char GetSecondaryDecimalSeparatorChar()
         {
-            string? separatorString = "";
-            separatorString = _secondaryDecimalSeparator;
-            if (string.IsNullOrEmpty(separatorString))
-                return '\0';
-            else
-                return separatorString[0];
+            string? separatorString = _secondaryDecimalSeparator;
+            return string.IsNullOrEmpty(separatorString) ? '\0' : separatorString[0];
         }
 
-        internal char GetCurrencyDecimalSeparatorChar()
+        public string GetCurrencyDecimalSeparator()
         {
-            string? separatorString = "";
-            switch (CurrencyDecimalSeparatorType)
+            return CurrencyDecimalSeparatorType switch
             {
-                case SeparatorType.BuiltIn:
-                    separatorString = Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator.ToString();
-                    break;
-                case SeparatorType.FromCulture:
-                    separatorString = ((_cultureInfo is not null) ? _cultureInfo : CultureInfo.CurrentCulture).NumberFormat.CurrencyDecimalSeparator;
-                    break;
-                case SeparatorType.Custom:
-                    separatorString = _currencyDecimalSeparator;
-                    break;
-            }
-            if (string.IsNullOrEmpty(separatorString))
-                return '\0';
-            else
-                return separatorString[0];
+                SeparatorType.BuiltIn => Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator.ToString(),
+                SeparatorType.FromCulture => ((_cultureInfo is not null) ? _cultureInfo : CultureInfo.CurrentCulture).NumberFormat.CurrencyDecimalSeparator,
+                SeparatorType.Custom => _currencyDecimalSeparator,
+                _ => Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator.ToString(),
+            };
         }
 
-        internal char GetNumberGroupSeparatorChar()
+        public char GetCurrencyDecimalSeparatorChar()
         {
-            string? separatorString = "";
-            switch (NumberGroupSeparatorType)
-            {
-                case GroupSeparatorType.Skip:
-                    return '\0';
-                case GroupSeparatorType.BuiltIn:
-                    separatorString = Parlot.Fluent.NumberLiterals.DefaultGroupSeparator.ToString();
-                    break;
-                case GroupSeparatorType.FromCulture:
-                    separatorString = ((_cultureInfo is not null) ? _cultureInfo : CultureInfo.CurrentCulture).NumberFormat.NumberGroupSeparator;
-                    break;
-                case GroupSeparatorType.Custom:
-                    separatorString = _numberGroupSeparator;
-                    break;
-            }
-            if (string.IsNullOrEmpty(separatorString))
-                return '\0';
-            else
-                return separatorString[0];
+            string separatorString = GetCurrencyDecimalSeparator();
+            return string.IsNullOrEmpty(separatorString) ? '\0' : separatorString[0];
         }
 
-        internal char GetCurrencyNumberGroupSeparatorChar()
+        public string GetNumberGroupSeparator()
         {
-            string? separatorString = "";
-            switch (CurrencyNumberGroupSeparatorType)
+            return NumberGroupSeparatorType switch
             {
-                case GroupSeparatorType.Skip:
-                    return '\0';
-                case GroupSeparatorType.BuiltIn:
-                    separatorString = Parlot.Fluent.NumberLiterals.DefaultGroupSeparator.ToString();
-                    break;
-                case GroupSeparatorType.FromCulture:
-                    separatorString = ((_cultureInfo is not null) ? _cultureInfo : CultureInfo.CurrentCulture).NumberFormat.CurrencyGroupSeparator;
-                    break;
-                case GroupSeparatorType.Custom:
-                    separatorString = _currencyNumberGroupSeparator;
-                    break;
-            }
-            if (string.IsNullOrEmpty(separatorString))
-                return '\0';
-            else
-                return separatorString[0];
+                GroupSeparatorType.Skip => string.Empty,
+                GroupSeparatorType.BuiltIn => Parlot.Fluent.NumberLiterals.DefaultGroupSeparator.ToString(),
+                GroupSeparatorType.FromCulture => ((_cultureInfo is not null) ? _cultureInfo : CultureInfo.CurrentCulture).NumberFormat.NumberGroupSeparator,
+                GroupSeparatorType.Custom => _numberGroupSeparator,
+                _ => string.Empty,
+            };
         }
 
-        internal void GetCurrencySymbols(out string currencySymbol, out string currencySymbol2, out string currencySymbol3)
+        public char GetNumberGroupSeparatorChar()
+        {
+            string separatorString = GetNumberGroupSeparator();
+            return string.IsNullOrEmpty(separatorString) ? '\0' : separatorString[0];
+        }
+
+        public string GetCurrencyNumberGroupSeparator()
+        {
+            return CurrencyNumberGroupSeparatorType switch
+            {
+                GroupSeparatorType.Skip => string.Empty,
+                GroupSeparatorType.BuiltIn => Parlot.Fluent.NumberLiterals.DefaultGroupSeparator.ToString(),
+                GroupSeparatorType.FromCulture => ((_cultureInfo is not null) ? _cultureInfo : CultureInfo.CurrentCulture).NumberFormat.CurrencyGroupSeparator,
+                GroupSeparatorType.Custom => _currencyNumberGroupSeparator,
+                _ => string.Empty,
+            };
+        }
+
+        public char GetCurrencyNumberGroupSeparatorChar()
+        {
+            string separatorString = GetCurrencyNumberGroupSeparator();
+            return string.IsNullOrEmpty(separatorString) ? '\0' : separatorString[0];
+        }
+
+        public void GetCurrencySymbols(out string currencySymbol, out string currencySymbol2, out string currencySymbol3)
         {
             currencySymbol = string.Empty;
             currencySymbol2 = string.Empty;
@@ -502,7 +485,7 @@
             }
         }
 
-        internal bool Use12HourTime()
+        public bool Use12HourTime()
         {
             switch (HoursFormat)
             {
@@ -519,7 +502,7 @@
             }
         }
 
-        internal IFormatProvider GetDateFormatProvider()
+        public IFormatProvider GetDateFormatProvider()
         {
             return this;
         }
@@ -549,6 +532,24 @@
                     return CombineDateTimeFormat();
                 }
             }
+            else
+            if (formatType == typeof(NumberFormatInfo))
+            {
+                NumberFormatInfo? formatInfo = CultureInfo.CurrentCulture.NumberFormat.Clone() as NumberFormatInfo ?? new NumberFormatInfo();
+                formatInfo.NumberDecimalSeparator = GetDecimalSeparator();
+                formatInfo.NumberGroupSeparator = GetNumberGroupSeparator();
+                formatInfo.CurrencyDecimalSeparator = GetCurrencyDecimalSeparator();
+                formatInfo.CurrencyGroupSeparator = GetCurrencyNumberGroupSeparator();
+                formatInfo.PercentDecimalSeparator = formatInfo.NumberDecimalSeparator;
+                formatInfo.PercentGroupSeparator = formatInfo.NumberGroupSeparator;
+
+                GetCurrencySymbols(out string currencySymbol, out string currencySymbol2, out string currencySymbol3);
+
+                formatInfo.CurrencySymbol = currencySymbol;
+
+                return formatInfo;
+            }
+
             return null;
         }
 

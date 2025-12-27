@@ -1,6 +1,10 @@
+# 8.7.2.2 (Allied Bits)
+
+* In AdvancedExpressionOptions, made some methods public so that they can be used by users of the package.
+
 # 8.7.2.1 (Allied Bits)
 
-* Improved reporting of a parsing error when occurs if a non-numeric string (i.e., the one that cannot be parsed into a number) is passed to an arithmetic operation function or to Min/Max method. Now, NCalcConversionException is thrown instead of FormatException.
+* Improved reporting of a parsing error which occurs if a non-numeric string (i.e., the one that cannot be parsed into a number) is passed to an arithmetic operation function or to Min/Max method. Now, NCalcConversionException is thrown instead of FormatException.
 
 # 8.7.2 (Allied Bits)
 
