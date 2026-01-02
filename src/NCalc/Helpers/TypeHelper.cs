@@ -133,6 +133,12 @@ public static class TypeHelper
     public static bool CompareUsingMostPreciseType(object? a, object? b, ExpressionContextBase context, out int outcome)
     {
         ComparisonOptions cmpOptions = context;
+        MathHelperOptions mhOptions = context;
+        return CompareUsingMostPreciseType(a, b, cmpOptions, mhOptions, out outcome);
+    }
+
+    public static bool CompareUsingMostPreciseType(object? a, object? b, ComparisonOptions comparisonOptions, MathHelperOptions mathHelperOptions, out int outcome)
+    {
         try
         {
             object? aValue;
@@ -142,7 +148,7 @@ public static class TypeHelper
             {
                 object aVal = a!;
                 object bVal = b!;
-                TypeCode typeCode = MathHelper.ConvertToHighestPrecision(ref aVal, ref bVal, false, context);
+                TypeCode typeCode = MathHelper.ConvertToHighestPrecision(ref aVal, ref bVal, false, mathHelperOptions);
                 if (typeCode == TypeCode.Empty)
                 {
                     outcome = -1;
@@ -192,18 +198,18 @@ public static class TypeHelper
             {
                 Type mpt = GetMostPreciseType(a?.GetType(), b?.GetType());
 
-                aValue = a != null ? Convert.ChangeType(a, mpt, cmpOptions.CultureInfo) : null;
-                bValue = b != null ? Convert.ChangeType(b, mpt, cmpOptions.CultureInfo) : null;
+                aValue = a != null ? Convert.ChangeType(a, mpt, comparisonOptions.CultureInfo) : null;
+                bValue = b != null ? Convert.ChangeType(b, mpt, comparisonOptions.CultureInfo) : null;
             }
 
-            var comparer = GetStringComparer(cmpOptions);
+            var comparer = GetStringComparer(comparisonOptions);
 
             outcome = comparer.Compare(aValue, bValue);
             return true;
         }
         catch (Exception)
         {
-            if (cmpOptions.CompareIncompatibleTypes)
+            if (comparisonOptions.CompareIncompatibleTypes)
             {
                 outcome = -1;
                 return false;

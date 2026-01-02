@@ -302,6 +302,13 @@ public static class EvaluationHelper
 
     public static bool Compare(object? a, object? b, ComparisonType comparisonType, ExpressionContextBase context)
     {
+        ComparisonOptions cmpOptions = context;
+        MathHelperOptions mhOptions = context;
+        return Compare(a, b, comparisonType, cmpOptions, mhOptions);
+    }
+
+    public static bool Compare(object? a, object? b, ComparisonType comparisonType, ComparisonOptions comparisonOptions, MathHelperOptions mathHelperOptions)
+    {
         int result;
         if (a is double dA)
         {
@@ -328,7 +335,7 @@ public static class EvaluationHelper
 
         if (a is null || b is null)
         {
-            if (context.Options.HasFlag(ExpressionOptions.CompareNullValues))
+            if (comparisonOptions.CompareNullValues)
             {
                 if (a is null && b is null)
                     result = 0;
@@ -380,7 +387,7 @@ public static class EvaluationHelper
         }
         else
         {
-            if (!TypeHelper.CompareUsingMostPreciseType(a, b, context, out result))
+            if (!TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result))
             {
                 // false is returned when incompatible types are compared
                 return comparisonType switch
