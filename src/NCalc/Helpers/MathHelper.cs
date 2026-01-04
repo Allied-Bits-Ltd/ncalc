@@ -3222,10 +3222,60 @@ public static class MathHelper
                t == typeof(float) || t == typeof(double) || t == typeof(decimal);
     }
 
-    public static bool IsBoxedNumberZero(object? number)
+    public static bool? IsBoxedPositiveNumber(object? number)
     {
         if (number is null)
-            throw new ArgumentNullException(nameof(number));
+            return null; //throw new ArgumentNullException(nameof(number));
+
+        switch (number)
+        {
+            case byte b: return b > 0;
+            case sbyte sb: return sb > 0;
+            case short s: return s > 0;
+            case ushort us: return us > 0;
+            case int i: return i > 0;
+            case uint ui: return ui > 0;
+            case long l: return l > 0;
+            case ulong ul: return ul > 0;
+            case float f: return f > 0f;
+            case double d: return d > 0.0;
+            case decimal dec: return dec > 0m;
+            case BigInteger bi: return bi > 0;
+            case BigDecimal bd: return bd > 0;
+            default:
+                return null; //throw new ArgumentException("Provided object is not a supported numeric type.");
+        }
+    }
+
+    public static bool? IsBoxedNegativeNumber(object? number)
+    {
+        if (number is null)
+            return null; //throw new ArgumentNullException(nameof(number));
+
+        switch (number)
+        {
+            case byte b: return false;
+            case sbyte sb: return sb < 0;
+            case short s: return s < 0;
+            case ushort us: return false;
+            case int i: return i < 0;
+            case uint ui: return false;
+            case long l: return l < 0;
+            case ulong ul: return false;
+            case float f: return f < 0f;
+            case double d: return d < 0.0;
+            case decimal dec: return dec < 0m;
+            case BigInteger bi: return bi < 0;
+            case BigDecimal bd: return bd < 0;
+            default:
+                return null; //throw new ArgumentException("Provided object is not a supported numeric type.");
+        }
+    }
+
+    public static bool? IsBoxedNumberZero(object? number)
+    {
+        if (number is null)
+            return null; // throw new ArgumentNullException(nameof(number));
 
         switch (number)
         {
@@ -3243,13 +3293,14 @@ public static class MathHelper
             case BigInteger bi: return bi.IsZero;
             case BigDecimal bd: return bd.IsZero();
             default:
-                throw new ArgumentException("Provided object is not a supported numeric type.");
+                return null; //throw new ArgumentException("Provided object is not a supported numeric type.");
         }
     }
-    public static bool IsBoxedNumberOne(object? number)
+
+    public static bool? IsBoxedNumberOne(object? number)
     {
         if (number is null)
-            throw new ArgumentNullException(nameof(number));
+            return null; // throw new ArgumentNullException(nameof(number));
 
         switch (number)
         {
@@ -3267,7 +3318,7 @@ public static class MathHelper
             case BigInteger bi: return bi.IsOne;
             case BigDecimal bd: return (double) bd == 1;
             default:
-                throw new ArgumentException("Provided object is not a supported numeric type.");
+                return null; // throw new ArgumentException("Provided object is not a supported numeric type.");
         }
     }
 
@@ -3277,12 +3328,12 @@ public static class MathHelper
         {
             return MathHelper.ReduceToSaneNumber(bdValue, false, options);
         }
-        else
+
         if (value is BigInteger biValue)
         {
             return MathHelper.ReduceToSaneNumber(biValue, options);
         }
-        else
+
         if (MathHelper.IsBoxedIntegerNumber(value))
         {
             if (value is ulong ulValue)
@@ -3305,8 +3356,8 @@ public static class MathHelper
                 return candidate;
             }
         }
-        else
-            return value;
+
+        return value;
         /*
         if (options.DecimalAsDefault == true)
         {
@@ -3332,22 +3383,22 @@ public static class MathHelper
 
             return biResult;
         }
-        else
+
         if ((options?.DecimalAsDefault == true) && (value >= decimal.MinValue && value <= decimal.MaxValue))
         {
             return (decimal)value;
         }
-        else
+
         if (value >= float.MinValue && value <= float.MaxValue)
         {
             return (float)value;
         }
-        else
+
         if (value >= double.MinValue && value <= double.MaxValue)
         {
             return (double)value;
         }
-        else
+
         if (value >= decimal.MinValue && value <= decimal.MaxValue)
         {
             return (decimal)value;
@@ -3360,7 +3411,7 @@ public static class MathHelper
     {
         if (value >= long.MinValue && value <= long.MaxValue)
             return (long)value;
-        else
+
         if (value >= ulong.MinValue && value <= ulong.MaxValue)
             return (ulong)value;
 
@@ -3374,8 +3425,8 @@ public static class MathHelper
 
         if (value >= ulong.MinValue && value <= ulong.MaxValue)
             return (ulong)value;
-        else
-            return value;
+
+        return value;
     }
 
 #if !AOT_COMPILATION

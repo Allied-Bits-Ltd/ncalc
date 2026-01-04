@@ -1,6 +1,9 @@
-# 8.7.2.4 (Allied Bits)
+# 8.7.3 (Allied Bits)
 
 * Humane dates parser now recognizes 'yesterday' and 'tomorrow' (and of course their localized values) in addition to 'now' and 'today'.
+* Added the MathHelper.IsBoxedPositiveNumber() and MathHelper.IsBoxedNegativeNumber() methods.
+* Added an overloaded EvaluationHelper.Compare() method that returns int.
+* Added the BoxedNumberComparer class used for comparing boxed numbers.
 
 # 8.7.2.3 (Allied Bits)
 

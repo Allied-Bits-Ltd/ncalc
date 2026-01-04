@@ -300,6 +300,90 @@ public static class EvaluationHelper
         return false;
     }
 
+    public static int Compare(object? a, object? b, ComparisonOptions comparisonOptions, MathHelperOptions mathHelperOptions)
+    {
+        int result;
+
+        // Handle possible NaN
+        if (a is double dA)
+        {
+            if (Double.IsNaN(dA))
+                return -1;
+        }
+        else
+        if (a is float fA)
+        {
+            if (float.IsNaN(fA))
+                return -1;
+        }
+        if (b is double dB)
+        {
+            if (Double.IsNaN(dB))
+                return 1;
+        }
+        else
+        if (b is float fB)
+        {
+            if (float.IsNaN(fB))
+                return 1;
+        }
+
+        // Handle null
+        if (a is null || b is null)
+        {
+            if (a is null && b is null)
+                return 0;
+            else
+            if (a is null)
+                return -1;
+            else
+                return 1;
+        }
+
+        // Handle bug numbers
+        if (a is BigDecimal || b is BigDecimal)
+        {
+            if (a is BigDecimal bdA)
+            {
+                if (b is BigDecimal bdB)
+                    result = bdA.CompareTo(bdB);
+                else
+                    result = bdA.CompareTo(MathHelper.ConvertToBigDecimal(b));
+            }
+            else
+            {
+                result = ((BigDecimal)b).CompareTo(MathHelper.ConvertToBigDecimal(a));
+            }
+
+            return result;
+        }
+        else
+        if (a is BigInteger || b is BigInteger)
+        {
+            if (a is BigInteger biA)
+            {
+                if (b is BigInteger biB)
+                    result = biA.CompareTo(biB);
+                else
+                    result = biA.CompareTo(MathHelper.ConvertToBigInteger(b));
+            }
+            else
+            {
+                result = ((BigInteger)b).CompareTo(MathHelper.ConvertToBigInteger(a));
+            }
+
+            return result;
+        }
+
+        // Handle everything else
+        if (!TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result))
+        {
+            throw new NCalcEvaluationException($"Comparison of incomparable type was attempted. The types of the operands are {a.GetType().Name} and {b.GetType().Name}.");
+        }
+
+        return result;
+    }
+
     public static bool Compare(object? a, object? b, ComparisonType comparisonType, ExpressionContextBase context)
     {
         ComparisonOptions cmpOptions = context;
