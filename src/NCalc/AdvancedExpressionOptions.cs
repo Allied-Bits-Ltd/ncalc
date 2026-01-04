@@ -123,6 +123,8 @@
 
         readonly List<string> _periodNowIndicators = ["now"];
         readonly List<string> _periodTodayIndicators = ["today"];
+        readonly List<string> _periodYesterdayIndicators = ["yesterday"];
+        readonly List<string> _periodTomorrowIndicators = ["tomorrow"];
         readonly List<string> _periodPastIndicators = ["ago", "before", "earlier"];
         readonly List<string> _periodFutureIndicators = ["after", "in", "later"];
 
@@ -142,7 +144,9 @@
         public List<string> PeriodMSecIndicators => _periodMSecIndicators;
 
         public List<string> PeriodNowIndicators => _periodNowIndicators;
+        public List<string> PeriodYesterdayIndicators => _periodYesterdayIndicators;
         public List<string> PeriodTodayIndicators => _periodTodayIndicators;
+        public List<string> PeriodTomorrowIndicators => _periodTomorrowIndicators;
         public List<string> PeriodPastIndicators => _periodPastIndicators;
         public List<string> PeriodFutureIndicators => _periodFutureIndicators;
 

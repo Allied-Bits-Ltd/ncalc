@@ -1607,6 +1607,18 @@ public static class LogicalExpressionParser
                             dt = dt.Date;
                         }
                         else
+                        if (prefix != null && extOptions.PeriodYesterdayIndicators.Contains(prefix))
+                        {
+                            addTime = false;
+                            dt = dt.Date.AddDays(-1);
+                        }
+                        else
+                        if (prefix != null && extOptions.PeriodTomorrowIndicators.Contains(prefix))
+                        {
+                            addTime = false;
+                            dt = dt.Date.AddDays(1);
+                        }
+                        else
                         if ((prefix != null && extOptions.PeriodPastIndicators.Contains(prefix)) || (suffix != null && extOptions.PeriodPastIndicators.Contains(suffix)))
                         {
                             addTime = true;

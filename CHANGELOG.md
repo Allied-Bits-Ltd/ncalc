@@ -1,3 +1,12 @@
+# 8.7.2.4 (Allied Bits)
+
+* Humane dates parser now recognizes 'yesterday' and 'tomorrow' (and of course their localized values) in addition to 'now' and 'today'.
+
+# 8.7.2.3 (Allied Bits)
+
+* Made EvaluationHelper.Compare() more usable from outside of the package.
+* Added the MathHelper.GetBoxedNumberAsDouble() and MathHelper.GetBoxedNumberAsDecimal() methods.
+
 # 8.7.2.2 (Allied Bits)
 
 * In AdvancedExpressionOptions, made some methods public so that they can be used by users of the package.

@@ -4,10 +4,13 @@ public readonly struct ComparisonOptions(CultureInfo cultureInfo, ExpressionOpti
 {
     public CultureInfo CultureInfo { get; } = cultureInfo;
 
+    public ExpressionOptions AllOptions => options;
+
     public bool IsCaseInsensitive { get; } = options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer);
 
     public bool IsOrdinal { get; } = options.HasFlag(ExpressionOptions.OrdinalStringComparer);
 
     public bool CompareNullValues { get; } = options.HasFlag(ExpressionOptions.CompareNullValues);
+
     public bool CompareIncompatibleTypes { get; } = options.HasFlag(ExpressionOptions.CompareIncompatibleTypes);
 }

@@ -6,6 +6,8 @@ public readonly struct MathHelperOptions(CultureInfo cultureInfo, ExpressionOpti
 {
     public CultureInfo CultureInfo { get; } = cultureInfo;
 
+    public ExpressionOptions AllOptions => options;
+
     public bool AvoidDynamicFunctions
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

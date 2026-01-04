@@ -3107,6 +3107,55 @@ public static class MathHelper
         }
     }
 
+    public static double? GetBoxedNumberAsDouble(object? obj)
+    {
+        if (obj is null)
+            return null;
+
+        switch (obj)
+        {
+            case byte b: return (double)b;
+            case sbyte sb: return (double)sb;
+            case short s: return (double)s;
+            case ushort us: return (double)us;
+            case int i: return (double)i;
+            case uint ui: return (double)ui;
+            case long l: return (double)l;
+            case ulong ul: return (double)ul;
+            case float fl: return (double)fl;
+            case double db: return db;
+            case decimal dd: return (double)dd;
+            case BigInteger bi: return (double)(long)bi;
+            case BigDecimal bd: return (double)bd;
+            default:
+                throw new ArgumentException("Provided object is not a supported numeric type.");
+        }
+    }
+    public static decimal? GetBoxedNumberAsDecimal(object? obj)
+    {
+        if (obj is null)
+            return null;
+
+        switch (obj)
+        {
+            case byte b: return (decimal)b;
+            case sbyte sb: return (decimal)sb;
+            case short s: return (decimal)s;
+            case ushort us: return (decimal)us;
+            case int i: return (decimal)i;
+            case uint ui: return (decimal)ui;
+            case long l: return (decimal)l;
+            case ulong ul: return (decimal)ul;
+            case float fl: return (decimal)fl;
+            case double db: return (decimal)db;
+            case decimal dd: return dd;
+            case BigInteger bi: return (decimal)(long)bi;
+            case BigDecimal bd: return (decimal)bd;
+            default:
+                throw new ArgumentException("Provided object is not a supported numeric type.");
+        }
+    }
+
     public static bool IsBoxedIntegerNumber(object? obj)
     {
         if (obj is null)
