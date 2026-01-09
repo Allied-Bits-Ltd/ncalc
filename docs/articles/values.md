@@ -172,7 +172,7 @@ Please read the [parameters page](parameters.md) for details.
 
 ## Lists
 
-Lists are collections of expressions enclosed in parentheses. They are the equivalent of `List<LogicalExpression>` at CLR.
+Lists are collections of expressions enclosed in parentheses. They are the equivalent of `List<LogicalExpression>` in .NET.
 The elements of the list may be separated with a comma (",") or a semicolon (";"). A semicolon is recommended to avoid the possible conflict with a decimal separator or a number group separator.
 ```
 ('Chers'; secretOperation(); 3.14)
