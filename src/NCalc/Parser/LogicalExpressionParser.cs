@@ -108,6 +108,8 @@ public static class LogicalExpressionParser
         string acceptableHexChars = acceptUnderscores ? "0123456789abcdefABCDEF_" : "0123456789abcdefABCDEF";
 
         // Comments
+        var docComment = Terms.Text("///").SkipAnd(AnyCharBefore(new PatternLiteral((x => x == '\n'), 1, 0), canBeEmpty: true, consumeDelimiter: true));
+
         var pythonLineComment = Terms.Text("#").SkipAnd(AnyCharBefore(new PatternLiteral((x => x == '\n'), 1, 0), canBeEmpty: true, consumeDelimiter: true));
         var cLineComment = Terms.Text("//").SkipAnd(AnyCharBefore(new PatternLiteral((x => x == '\n'), 1, 0), canBeEmpty: true, consumeDelimiter: true));
         var blockComment = Terms.Text("/*").SkipAnd(AnyCharBefore(Terms.Text("*/"), canBeEmpty: true, failOnEof: true, consumeDelimiter: true)
@@ -170,7 +172,9 @@ public static class LogicalExpressionParser
                     return new ValueExpression((object)result).SetLocation(new ParlotExpressionLocation(ctx));
                 }
                 else
+                {
                     throw new ArgumentException($"{x.ToString()} is not a valid hex number");
+                }
             });
 
         string acceptableOctalChars = acceptUnderscores ? "01234567_" : "01234567";
@@ -279,11 +283,11 @@ public static class LogicalExpressionParser
 
         hexOctBinNumber = OneOf(hexNumber!, octalNumber!, binaryNumber!);
 
-        char decimalSeparator = (extOptions != null) ? extOptions.GetDecimalSeparatorChar() : Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator; // this method will return the default separator, if needed
+        char decimalSeparator = (extOptions is not null) ? extOptions.GetDecimalSeparatorChar() : Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator; // this method will return the default separator, if needed
         char decimalSeparator2 = (extOptions?.GetSecondaryDecimalSeparatorChar()) ?? '\0';
-        char numGroupSeparator = (extOptions != null) ? extOptions.GetNumberGroupSeparatorChar() : Parlot.Fluent.NumberLiterals.DefaultGroupSeparator; // this method will return the default separator, if needed
+        char numGroupSeparator = (extOptions is not null) ? extOptions.GetNumberGroupSeparatorChar() : Parlot.Fluent.NumberLiterals.DefaultGroupSeparator; // this method will return the default separator, if needed
 
-        NumberOptions useNumberGroupSeparatorFlag = ((extOptions != null) && (numGroupSeparator != '\0')) ? NumberOptions.AllowGroupSeparators : NumberOptions.None;
+        NumberOptions useNumberGroupSeparatorFlag = ((extOptions is not null) && (numGroupSeparator != '\0')) ? NumberOptions.AllowGroupSeparators : NumberOptions.None;
         NumberOptions useUnderscoreFlag = acceptUnderscores ? NumberOptions.AllowUnderscore : NumberOptions.None;
 
         Parser<string>[] floatNumExclusions =
@@ -357,7 +361,7 @@ public static class LogicalExpressionParser
                 .And(bigUIntNumberD)
                 .And(ZeroOrOne(Terms.AnyOf("Ee".AsSpan())))
                 .And(ZeroOrOne(bigIntNumberD))
-                .When((_, val) => TryParseDecimal(val, acceptUnderscores) != null)
+                .When((_, val) => TryParseDecimal(val, acceptUnderscores) is not null)
                 .Then<LogicalExpression>(static (ctx, val) =>
                 {
                     bool decimalDefault = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.DecimalAsDefault);
@@ -773,7 +777,7 @@ public static class LogicalExpressionParser
             bool onlyCustomDateTranslation = false;
             string customDateSep = builtInDateSep;
 
-            if (extOptions != null)
+            if (extOptions is not null)
             {
                 customDateSep = extOptions.GetDateSeparator();
                 if (customDateSep != builtInDateSep && !extOptions.Flags.HasFlag(AdvExpressionOptions.SkipBuiltInDateSeparator))
@@ -911,7 +915,7 @@ public static class LogicalExpressionParser
             bool onlyCustomTimeTranslation = false;
             string customTimeSep = builtInTimeSep;
 
-            if (extOptions != null)
+            if (extOptions is not null)
             {
                 customTimeSep = extOptions.TimeSeparator;
                 if (customTimeSep != builtInTimeSep && !extOptions.Flags.HasFlag(AdvExpressionOptions.SkipBuiltInTimeSeparator))
@@ -1596,36 +1600,36 @@ public static class LogicalExpressionParser
                         prefix = prefix?.ToLowerInvariant();
                         suffix = suffix?.ToLowerInvariant();
 
-                        if (prefix != null && extOptions.PeriodNowIndicators.Contains(prefix))
+                        if (prefix is not null && extOptions.PeriodNowIndicators.Contains(prefix))
                         {
                             addTime = false;  // ... and use dt as is
                         }
                         else
-                        if (prefix != null && extOptions.PeriodTodayIndicators.Contains(prefix))
+                        if (prefix is not null && extOptions.PeriodTodayIndicators.Contains(prefix))
                         {
                             addTime = false;
                             dt = dt.Date;
                         }
                         else
-                        if (prefix != null && extOptions.PeriodYesterdayIndicators.Contains(prefix))
+                        if (prefix is not null && extOptions.PeriodYesterdayIndicators.Contains(prefix))
                         {
                             addTime = false;
                             dt = dt.Date.AddDays(-1);
                         }
                         else
-                        if (prefix != null && extOptions.PeriodTomorrowIndicators.Contains(prefix))
+                        if (prefix is not null && extOptions.PeriodTomorrowIndicators.Contains(prefix))
                         {
                             addTime = false;
                             dt = dt.Date.AddDays(1);
                         }
                         else
-                        if ((prefix != null && extOptions.PeriodPastIndicators.Contains(prefix)) || (suffix != null && extOptions.PeriodPastIndicators.Contains(suffix)))
+                        if ((prefix is not null && extOptions.PeriodPastIndicators.Contains(prefix)) || (suffix is not null && extOptions.PeriodPastIndicators.Contains(suffix)))
                         {
                             addTime = true;
                             pastTime = true;
                         }
                         else
-                        if ((prefix != null && extOptions.PeriodFutureIndicators.Contains(prefix)) || (suffix != null && extOptions.PeriodFutureIndicators.Contains(suffix)))
+                        if ((prefix is not null && extOptions.PeriodFutureIndicators.Contains(prefix)) || (suffix is not null && extOptions.PeriodFutureIndicators.Contains(suffix)))
                         {
                             addTime = true;
                             pastTime = false;
@@ -1673,7 +1677,7 @@ public static class LogicalExpressionParser
                 ? [dateAndTimeIso, dateAndTime12!, dateAndShortTime12!, dateAndTime, dateAndShortTime, dateIso, date, time12!, shortTime12!, time, shortTime]
                 : [dateAndTimeIso, dateAndTime, dateAndShortTime, dateIso, date, time, shortTime];
 
-            if (humaneTimeSpan != null)
+            if (humaneTimeSpan is not null)
                 timeParts.Add(humaneTimeSpan);
 
             // datetime => '#' dateAndTime | date | shortTime | time  '#';
@@ -1726,19 +1730,19 @@ public static class LogicalExpressionParser
 
         List<Parser<LogicalExpression>> enabledParsers = [];
 
-        if (guid != null)
+        if (guid is not null)
             enabledParsers.Add(guid);
         enabledParsers.Add(hexOctBinNumber);
-        if (currency != null)
+        if (currency is not null)
             enabledParsers.Add(currency);
         enabledParsers.Add(intNumber);
         enabledParsers.Add(longNumber);
-        if (bigIntNumber != null)
+        if (bigIntNumber is not null)
             enabledParsers.Add(bigIntNumber);
         enabledParsers.Add(decimalOrDoubleNumber);
         enabledParsers.Add(booleanTrue);
         enabledParsers.Add(booleanFalse);
-        if (dateTime != null) // dateTime will be initialized unless options.HasFlag(ExpressionOptions.DontParseDates)
+        if (dateTime is not null) // dateTime will be initialized unless options.HasFlag(ExpressionOptions.DontParseDates)
             enabledParsers.Add(dateTime);
         enabledParsers.Add(stringValue);
         enabledParsers.Add(functionOrResultRef);
@@ -1748,7 +1752,7 @@ public static class LogicalExpressionParser
         enabledParsers.Add(list);
         enabledParsers.Add(bracedExpressionOrStatementSequence);
 
-        var primary = ((options.HasFlag(ExpressionOptions.SupportCStyleComments) || options.HasFlag(ExpressionOptions.SupportPythonComments)) ? ZeroOrMany(comment).SkipAnd(OneOf(enabledParsers.ToArray())).AndSkip(ZeroOrMany(comment)) : OneOf(enabledParsers.ToArray()));
+        var primary = OneOf(enabledParsers.ToArray());
 
         var indexedAccess = primary.And(ZeroOrOne(rangedIndex))
             .Then((ctx, x) =>
@@ -1885,13 +1889,13 @@ public static class LogicalExpressionParser
             (bitwiseNot, static (ctx, value) => new UnaryExpression(UnaryExpressionType.BitwiseNot, value).SetLocation(new ParlotExpressionLocation(ctx))),
             (returnParser, static (ctx, value) => new UnaryExpression(UnaryExpressionType.Return, value).SetLocation(new ParlotExpressionLocation(ctx))),
         ];
-        if (root2 != null)
+        if (root2 is not null)
             unaryOps.Add((root2, static (ctx, value) => new UnaryExpression(UnaryExpressionType.SqRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
 #if NET8_0_OR_GREATER
-        if (root3 != null)
+        if (root3 is not null)
             unaryOps.Add((root3, static (ctx, value) => new UnaryExpression(UnaryExpressionType.CbRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
 #endif
-        if (root4 != null)
+        if (root4 is not null)
             unaryOps.Add((root4, static (ctx, value) => new UnaryExpression(UnaryExpressionType.FourthRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
         var unary = exponential.Unary(unaryOps.ToArray());
 
@@ -2004,24 +2008,24 @@ public static class LogicalExpressionParser
         }
 
         enabledParsers.Clear();
-        if (guid != null)
+        if (guid is not null)
             enabledParsers.Add(guid);
         enabledParsers.Add(hexOctBinNumber);
-        if (currency != null)
+        if (currency is not null)
             enabledParsers.Add(currency);
         enabledParsers.Add(intNumber);
         enabledParsers.Add(longNumber);
-        if (bigIntNumber != null)
+        if (bigIntNumber is not null)
             enabledParsers.Add(bigIntNumber);
         enabledParsers.Add(decimalOrDoubleNumber);
         enabledParsers.Add(booleanTrue);
         enabledParsers.Add(booleanFalse);
         enabledParsers.Add(theNull);
-        if (dateTime != null) // dateTime will be initialized unless options.HasFlag(ExpressionOptions.DontParseDates)
+        if (dateTime is not null) // dateTime will be initialized unless options.HasFlag(ExpressionOptions.DontParseDates)
             enabledParsers.Add(dateTime);
         enabledParsers.Add(stringValue);
 
-        var paramName = letterIdentifier.And(ZeroOrOne(Terms.Char('=').SkipAnd(OneOf(enabledParsers.ToArray())))).Then<FunctionParameter>(static x => new FunctionParameter(x.Item1.ToString()!, x.Item2 != null, x.Item2));
+        var paramName = letterIdentifier.And(ZeroOrOne(Terms.Char('=').SkipAnd(OneOf(enabledParsers.ToArray())))).Then<FunctionParameter>(static x => new FunctionParameter(x.Item1.ToString()!, x.Item2 is not null, x.Item2));
 
         var populatedParamList =
             Between(openParen, Separated(comma.Or(semicolon), paramName),
@@ -2034,35 +2038,33 @@ public static class LogicalExpressionParser
         Parser<LogicalExpression> funcBodyExpression = Terms.Text("=>").SkipAnd(expression)
             .Then<LogicalExpression>(static (ctx, x) => x.SetLocation(new ParlotExpressionLocation(ctx)));
 
-        Parser<LogicalExpression> functionDecl = ZeroOrOne(comment).AndSkip(Terms.Text("fn")).And(letterIdentifier).And(paramList).And(OneOf(bracedExpressionOrStatementSequence, funcBodyExpression))
-             .Then<LogicalExpression>(static (ctx, x) =>
-             {
-                 Function function = new(x.Item2.ToString()!, x.Item4)
-                 {
-                     Description = x.Item1.ToString()
-                 };
-                 bool optionalFound = false;
-                 int mandatoryParams = 0;
-                 StringComparison paramNameCompareRule = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-                 foreach (var param in x.Item3)
-                 {
-                     if (param.IsOptional)
-                         optionalFound = true;
-                     else
-                     if (optionalFound)
-                         throw new NCalcParserException($"In the declaration of the function '{function.Name}', optional parameters may not be declared ahead of required ones", ctx.Scanner.Cursor.Position);
-                     else
-                         mandatoryParams++;
+        Parser<LogicalExpression> functionDecl = ZeroOrMany(docComment).AndSkip(Terms.Text("fn")).And(letterIdentifier).And(paramList).And(OneOf(bracedExpressionOrStatementSequence, funcBodyExpression))
+            .Then<LogicalExpression>((ctx, x) =>
+            {
+                Function function = new(x.Item2.ToString()!, x.Item4) { Description = string.Join("\n", x.Item1).Trim(), };
 
-                     if (function.Parameters.Any((x) => x.Name.Equals(param.Name, paramNameCompareRule)))
-                         throw new NCalcParserException($"Duplicate parameter name '{param.Name}' in the declaration of the function '{function.Name}'", ctx.Scanner.Cursor.Position);
+                bool optionalFound = false;
+                int mandatoryParams = 0;
+                StringComparison paramNameCompareRule = ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                foreach (var param in x.Item3)
+                {
+                    if (param.IsOptional)
+                        optionalFound = true;
+                    else
+                    if (optionalFound)
+                        throw new NCalcParserException($"In the declaration of the function '{function.Name}', optional parameters may not be declared ahead of required ones", ctx.Scanner.Cursor.Position);
+                    else
+                        mandatoryParams++;
 
-                     function.Parameters.Add(param);
-                     function.MandatoryParamCount = mandatoryParams;
-                 }
-                 ((LogicalExpressionParserContext)ctx).UserFunctions.Add(function.Name, function);
-                 return new FunctionExpression(function);
-             }).Named("FunctionDeclaration");
+                    if (function.Parameters.Any((x) => x.Name.Equals(param.Name, paramNameCompareRule)))
+                        throw new NCalcParserException($"Duplicate parameter name '{param.Name}' in the declaration of the function '{function.Name}'", ctx.Scanner.Cursor.Position);
+
+                    function.Parameters.Add(param);
+                    function.MandatoryParamCount = mandatoryParams;
+                }
+                ((LogicalExpressionParserContext)ctx).UserFunctions.Add(function.Name, function);
+                return new FunctionExpression(function);
+            }).Named("FunctionDeclaration");
 
         statements.Add(operatorSequence);
 
@@ -2142,7 +2144,9 @@ public static class LogicalExpressionParser
         expressionOrBracedStatementSequence.Parser = OneOf(curlyBracedTopLevel, expressionOrAssignment);
         bracedExpressionOrStatementSequence.Parser = curlyBracedTopLevel;
 
-        var expressionParser = OneOf(topLevel, curlyBracedTopLevel).AndSkip(ZeroOrMany(Literals.WhiteSpace(true))).Eof()
+        var whitespaceParser = new WhiteSpaceParser(options);
+
+        var expressionParser = OneOf(topLevel, curlyBracedTopLevel).AndSkip(ZeroOrMany(whitespaceParser)).Eof()
                 .ElseError(InvalidTokenMessage);
 
         AppContext.TryGetSwitch("NCalc.EnableParlotParserCompilation", out var enableParserCompilation);
@@ -2153,7 +2157,7 @@ public static class LogicalExpressionParser
     private static BigDecimal? TryParseDecimal((LogicalExpression, TextSpan, LogicalExpression, TextSpan, LogicalExpression) val, bool useUnderscores)
     {
         StringBuilder sb = new();
-        if (val.Item1 != null)
+        if (val.Item1 is not null)
             sb.Append(val.Item1.ToString());
         else
             sb.Append('0');
@@ -2168,7 +2172,7 @@ public static class LogicalExpressionParser
         sb.Append(fracPart);
         if (val.Item4.Length == 0)
         {
-            if (val.Item5 != null)
+            if (val.Item5 is not null)
                 return null;
         }
 
@@ -2211,7 +2215,7 @@ public static class LogicalExpressionParser
 
         string message;
         TextPosition position;
-        if (error != null)
+        if (error is not null)
         {
             position = error.Position;
             message = $"{error.Message} at position {position}";

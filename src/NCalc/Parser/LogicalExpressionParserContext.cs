@@ -78,6 +78,9 @@ public sealed class LogicalExpressionParserContext : ParseContext
         AcceptUnderscores = AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.AcceptUnderscoresInNumbers) ?? false;
         UnsignedHexBinOct = Options.HasFlag(ExpressionOptions.HexBinOctAreUnsigned);
         UseBigNumbers = Options.HasFlag(ExpressionOptions.UseBigNumbers);
+
+        if (Options.HasFlag(ExpressionOptions.SupportCStyleComments) || Options.HasFlag(ExpressionOptions.SupportPythonComments))
+            this.WhiteSpaceParser = new NCalc.Parser.WhiteSpaceParser(Options);
     }
 
     public bool AcceptUnderscores { get; private set; }

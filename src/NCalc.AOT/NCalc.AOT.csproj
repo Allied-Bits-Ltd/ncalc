@@ -98,6 +98,7 @@
       <Compile Include="..\NCalc\Parser\LogicalExpressionParser.cs" Link="Parser\LogicalExpressionParser.cs" />
       <Compile Include="..\NCalc\Parser\LogicalExpressionParserContext.cs" Link="Parser\LogicalExpressionParserContext.cs" />
       <Compile Include="..\NCalc\Parser\ParlotExpressionLocation.cs" Link="Parser\ParlotExpressionLocation.cs" />
+      <Compile Include="..\NCalc\Parser\WhiteSpaceParser.cs" Link="Parser\WhiteSpaceParser.cs" />
       <Compile Include="..\NCalc\Visitors\AsyncEvaluationVisitor.cs" Link="Visitors\AsyncEvaluationVisitor.cs" />
       <Compile Include="..\NCalc\Visitors\AsyncEvaluationVisitor.NoRecurse.cs" Link="Visitors\AsyncEvaluationVisitor.NoRecurse.cs" />
       <Compile Include="..\NCalc\Visitors\EvaluationVisitor.cs" Link="Visitors\EvaluationVisitor.cs" />
@@ -151,6 +152,5 @@
       <Folder Include="Handlers\" />
       <Folder Include="Logging\" />
       <Folder Include="Visitors\" />
-      <Folder Include="Parser\" />
     </ItemGroup>
 </Project>

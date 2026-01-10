@@ -1625,7 +1625,10 @@ public class AdvFeatureTests
     [Fact]
     public void ShouldHandleAssignmentOfFunctionResult()
     {
-        var expression = new Expression("fn BuildNum(date = null) { if (date == null) { date = #2001-01-01Z#; }; Truncate(date - #2000-01-01Z#) }; BuildNum()", ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseIfStatement | ExpressionOptions.AllowNullParameter | ExpressionOptions.SupportTimeOperations);
+        var expression = new Expression("fn DateOfBuild(n) => #2000-01-01Z# + n * 86400 * 10000000;\r\n fn BuildNum(date = null) { if (date == null) { date = #2001-01-01Z#; }; Truncate(date - #2000-01-01Z#) }; BuildNum()", ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseIfStatement | ExpressionOptions.AllowNullParameter | ExpressionOptions.SupportTimeOperations);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
@@ -1807,6 +1810,101 @@ public class AdvFeatureTests
         Assert.Equal(expectedVarValue, context.a);
     }
 #endif
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("//comment\r\n 1")]
+    [InlineData("/* comment\r\n other line */ 1")]
+    [InlineData("1 /*comment\r\n other line */")]
+    [InlineData("1 // c")]
+    [InlineData("1 // comment")]
+    [InlineData("1 // comment\r\n")]
+    [InlineData("1 // comment\r\n ")]
+    [InlineData("1 + // comment\r\n 1")]
+    public void ShouldHandleComments(string input)
+    {
+        var expression = new Expression(input,
+            ExpressionOptions.NoCache |
+            ExpressionOptions.OverflowProtection |
+            ExpressionOptions.IgnoreCaseAtBuiltInFunctions |
+            ExpressionOptions.AllowCharValues |
+            ExpressionOptions.NoStringTypeCoercion |
+            ExpressionOptions.LowerCaseIdentifierLookup |
+            ExpressionOptions.SupportTimeOperations |
+            ExpressionOptions.UseUnicodeCharsForOperations |
+            ExpressionOptions.UseAssignments |
+            ExpressionOptions.UseStatementSequences |
+            ExpressionOptions.ReduceDivResultToInteger |
+            ExpressionOptions.UseBigNumbers |
+            ExpressionOptions.AllowNullParameter |
+            ExpressionOptions.CompareNullValues |
+            ExpressionOptions.SupportCStyleComments |
+            ExpressionOptions.UseIfStatement |
+            ExpressionOptions.UseLoops);
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public void ShouldHandleStatementSequenceWithComments()
+    {
+        string input = "// Returns the date when the build with the given number was made\r\nfn DateOfBuild(n) => #2000-01-01Z# + n * 86400 * 10000000;\r\n\r\n/*\r\n// Returns the build number\r\nfn BuildNum(date = null)  \r\n{\r\n  if (date = null) { date := #today# };\r\n  return Trunc(TimespanMSec(date - #2000-01-01Z#) / 86400000);\r\n};\r\n*/\r\n\r\n// Returns the build number\r\nfn BuildNum2(date = null)  \r\n{\r\n  if (date = null) { date := #today# };\r\n return 0;\r\n};\r\n";
+        var expression = new Expression(input,
+            ExpressionOptions.NoCache |
+            ExpressionOptions.OverflowProtection |
+            ExpressionOptions.IgnoreCaseAtBuiltInFunctions |
+            ExpressionOptions.AllowCharValues |
+            ExpressionOptions.NoStringTypeCoercion |
+            ExpressionOptions.LowerCaseIdentifierLookup |
+            ExpressionOptions.SupportTimeOperations |
+            ExpressionOptions.UseUnicodeCharsForOperations |
+            ExpressionOptions.UseAssignments |
+            ExpressionOptions.UseStatementSequences |
+            ExpressionOptions.ReduceDivResultToInteger |
+            ExpressionOptions.UseBigNumbers |
+            ExpressionOptions.AllowNullParameter |
+            ExpressionOptions.CompareNullValues |
+            ExpressionOptions.SupportCStyleComments |
+            ExpressionOptions.UseIfStatement |
+            ExpressionOptions.UseLoops);
+
+
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public void ShouldHandleDocComments()
+    {
+        string input = "/// Returns the date when the build with the given number was made\r\nfn DateOfBuild(n) => #2000-01-01Z# + n * 86400 * 10000000;\r\n\r\n/// Returns the build number\r\nfn BuildNum(date = null)  \r\n{\r\n  if (date = null) { date := #today# };\r\n return 0;\r\n};\r\n";
+        var expression = new Expression(input,
+            ExpressionOptions.NoCache |
+            ExpressionOptions.OverflowProtection |
+            ExpressionOptions.IgnoreCaseAtBuiltInFunctions |
+            ExpressionOptions.AllowCharValues |
+            ExpressionOptions.NoStringTypeCoercion |
+            ExpressionOptions.LowerCaseIdentifierLookup |
+            ExpressionOptions.SupportTimeOperations |
+            ExpressionOptions.UseUnicodeCharsForOperations |
+            ExpressionOptions.UseAssignments |
+            ExpressionOptions.UseStatementSequences |
+            ExpressionOptions.ReduceDivResultToInteger |
+            ExpressionOptions.UseBigNumbers |
+            ExpressionOptions.AllowNullParameter |
+            ExpressionOptions.CompareNullValues |
+            ExpressionOptions.SupportCStyleComments |
+            ExpressionOptions.UseIfStatement |
+            ExpressionOptions.UseLoops);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(2, expression.UserFunctions.Count);
+        Assert.Equal("Returns the date when the build with the given number was made", expression.UserFunctions["DateOfBuild"].Description);
+        Assert.Equal("Returns the build number", expression.UserFunctions["BuildNum"].Description);
+    }
 
     [Theory]
     [InlineData("2 + 2; 3 + 3", 6)]
