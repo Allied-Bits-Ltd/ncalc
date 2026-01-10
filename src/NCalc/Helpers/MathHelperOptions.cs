@@ -48,6 +48,12 @@ public readonly struct MathHelperOptions(CultureInfo cultureInfo, ExpressionOpti
         get => options.HasFlag(ExpressionOptions.ReduceDivResultToInteger);
     }
 
+    public bool SupportTimeOperations
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => options.HasFlag(ExpressionOptions.SupportTimeOperations);
+    }
+
     public bool UseBigNumbers
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

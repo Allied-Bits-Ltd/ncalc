@@ -375,12 +375,8 @@ public static class EvaluationHelper
             return result;
         }
 
-        // Handle everything else
-        if (!TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result))
-        {
-            throw new NCalcEvaluationException($"Comparison of incomparable type was attempted. The types of the operands are {a.GetType().Name} and {b.GetType().Name}.");
-        }
-
+        // Handle everything else. We are not interested in the value returned by CompareUsingMostPreciseType because it would return false only when comparison of non-compatible types is allowed and in this case, the result is returned based on object hash codes.
+        TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result);
         return result;
     }
 
@@ -471,20 +467,7 @@ public static class EvaluationHelper
         }
         else
         {
-            if (!TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result))
-            {
-                // false is returned when incompatible types are compared
-                return comparisonType switch
-                {
-                    ComparisonType.Equal => false,
-                    ComparisonType.Greater => false,
-                    ComparisonType.GreaterOrEqual => false,
-                    ComparisonType.Less => false,
-                    ComparisonType.LessOrEqual => false,
-                    ComparisonType.NotEqual => true,
-                    _ => throw new ArgumentOutOfRangeException(nameof(comparisonType), comparisonType, null)
-                };
-            }
+            TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result);
         }
 
         return comparisonType switch

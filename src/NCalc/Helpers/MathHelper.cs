@@ -2570,6 +2570,14 @@ public static class MathHelper
 
     public static object Truncate(object? a, MathHelperOptions options)
     {
+        if (options.SupportTimeOperations)
+        {
+            if (a is TimeSpan ts)
+                return new TimeSpan((int) ts.TotalDays, 0, 0, 0);
+            else
+            if (a is DateTime dt)
+                return dt.Date;
+        }
         if (a != null && (IsBoxedIntegerNumber(a) || a is BigInteger))
         {
             return a;

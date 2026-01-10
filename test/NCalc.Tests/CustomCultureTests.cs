@@ -58,7 +58,7 @@ public class CustomCultureTests
             }
             catch (Exception ex)
             {
-                Assert.True(typeof(NCalcConversionException) == ex.GetType() || typeof(FormatException) == ex.GetType());
+                Assert.True(typeof(NCalcConversionException) == ex.GetType() || typeof(FormatException) == ex.GetType() || typeof(NCalcEvaluationException) == ex.GetType());
             }
 
             //combining decimal dot and comma fails
@@ -75,7 +75,7 @@ public class CustomCultureTests
             }
             catch (Exception ex)
             {
-                Assert.True(typeof(NCalcConversionException) == ex.GetType() || typeof(FormatException) == ex.GetType());
+                Assert.True(typeof(NCalcConversionException) == ex.GetType() || typeof(FormatException) == ex.GetType() || typeof(NCalcEvaluationException) == ex.GetType());
             }
         }
     }
@@ -95,7 +95,7 @@ public class CustomCultureTests
                 var expr = new Expression("[a]<2.0") { Parameters = { ["a"] = "1.7" } };
                 expr.Evaluate(TestContext.Current.CancellationToken);
             }
-            catch (FormatException)
+            catch (Exception)
             {
                 exceptionThrown = true;
             }

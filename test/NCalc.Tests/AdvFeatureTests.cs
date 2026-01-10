@@ -938,6 +938,17 @@ public class AdvFeatureTests
     }
 
     [Theory]
+    [InlineData("return 1; 2", 1)]
+    public void ShouldHandleReturn(string input, int expectedValue)
+    {
+        var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Theory]
     [InlineData("20*5%", 1)]
     [InlineData("20/5%", 400)]
     [InlineData("20/2.5%", 800)]
@@ -1609,6 +1620,17 @@ public class AdvFeatureTests
         Assert.True(eventFired);
 
         Assert.Equal(expectedExprValue, iResult);
+    }
+
+    [Fact]
+    public void ShouldHandleAssignmentOfFunctionResult()
+    {
+        var expression = new Expression("fn BuildNum(date = null) { if (date == null) { date = #2001-01-01Z#; }; Truncate(date - #2000-01-01Z#) }; BuildNum()", ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseIfStatement | ExpressionOptions.AllowNullParameter | ExpressionOptions.SupportTimeOperations);
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.IsType<TimeSpan>(result);
+        Assert.Equal(366, ((TimeSpan)result).TotalDays);
     }
 
     [Theory]
@@ -2715,6 +2737,18 @@ public class AsyncAdvFeatureTests
             Assert.Equal(expectedValue, (int)lResult);
         else
             Assert.Equal(expectedValue, result);
+    }
+
+
+    [Theory]
+    [InlineData("return 1; 2", 1)]
+    public async Task ShouldHandleReturnAsync(string input, int expectedValue)
+    {
+        var expression = new AsyncExpression(input, ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
+
+        var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedValue, result);
     }
 
     [Theory]

@@ -135,7 +135,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     {
         LogicalExpression ??= GetLogicalExpression(cancellationToken);
 
-        return InternalEvaluateAsync(cancellationToken);
+        return new ValueTask<object?>(InternalEvaluateAsync(cancellationToken));
     }
 
     /// <summary>
@@ -147,10 +147,10 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     {
         LogicalExpression = GetLogicalExpression(parser, parserContext);
 
-        return InternalEvaluateAsync(cancellationToken);
+        return new ValueTask<object?>(InternalEvaluateAsync(cancellationToken));
     }
 
-    private ValueTask<object?> InternalEvaluateAsync(CancellationToken cancellationToken = default)
+    private async Task<object?> InternalEvaluateAsync(CancellationToken cancellationToken = default)
     {
         if (Error is not null)
             throw Error;
@@ -163,17 +163,27 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
 
         // If array evaluation, execute the same expression multiple times
         if (Options.HasFlag(ExpressionOptions.IterateParameters))
-            return IterateParametersAsync(cancellationToken);
+            return await IterateParametersAsync(cancellationToken).ConfigureAwait(false);
 
         var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
 
         if (LogicalExpression is null)
-            return new ValueTask<object?>((object?)null);
+            return null;
 
-        if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
-            return evaluationVisitor.EvaluateNoRecurseAsync(LogicalExpression, cancellationToken);
-        else
-            return LogicalExpression.Accept(evaluationVisitor, cancellationToken);
+        try
+        {
+            if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+                return await evaluationVisitor.EvaluateNoRecurseAsync(LogicalExpression, cancellationToken).ConfigureAwait(false);
+            else
+                return await LogicalExpression.Accept(evaluationVisitor, cancellationToken).ConfigureAwait(false);
+        }
+        catch (NCalcFlowControl flex)
+        {
+            if (flex.Type == NCalcFlowControl.FlowControlType.Return)
+                return flex.ReturnValue;
+            else
+                throw;
+        }
     }
 
     private async ValueTask<object?> IterateParametersAsync(CancellationToken cancellationToken = default)

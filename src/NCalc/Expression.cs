@@ -188,10 +188,20 @@ public partial class Expression : ExpressionBase<ExpressionContext>
 
         var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
 
-        if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
-            return evaluationVisitor.EvaluateNoRecurse(LogicalExpression, cancellationToken);
-        else
-            return LogicalExpression.Accept(evaluationVisitor, cancellationToken);
+        try
+        {
+            if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+                return evaluationVisitor.EvaluateNoRecurse(LogicalExpression, cancellationToken);
+            else
+                return LogicalExpression.Accept(evaluationVisitor, cancellationToken);
+        }
+        catch (NCalcFlowControl flex)
+        {
+            if (flex.Type == NCalcFlowControl.FlowControlType.Return)
+                return flex.ReturnValue;
+            else
+                throw;
+        }
     }
 
     private object? IterateParameters()

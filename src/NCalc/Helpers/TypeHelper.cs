@@ -4,6 +4,8 @@ using System.Runtime.CompilerServices;
 
 using ExtendedNumerics;
 
+using NCalc.Exceptions;
+
 namespace NCalc.Helpers;
 
 public static class TypeHelper
@@ -139,11 +141,12 @@ public static class TypeHelper
 
     public static bool CompareUsingMostPreciseType(object? a, object? b, ComparisonOptions comparisonOptions, MathHelperOptions mathHelperOptions, out int outcome)
     {
+        bool result = false;
+        object? aValue;
+        object? bValue;
+
         try
         {
-            object? aValue;
-            object? bValue;
-
             if (MathHelper.IsBoxedIntegerNumberOrBigNumber(a) && MathHelper.IsBoxedIntegerNumberOrBigNumber(b))
             {
                 object aVal = a!;
@@ -198,24 +201,23 @@ public static class TypeHelper
             {
                 Type mpt = GetMostPreciseType(a?.GetType(), b?.GetType());
 
-                aValue = a != null ? Convert.ChangeType(a, mpt, comparisonOptions.CultureInfo) : null;
-                bValue = b != null ? Convert.ChangeType(b, mpt, comparisonOptions.CultureInfo) : null;
+                aValue = a is not null ? Convert.ChangeType(a, mpt, comparisonOptions.CultureInfo) : null;
+                bValue = b is not null ? Convert.ChangeType(b, mpt, comparisonOptions.CultureInfo) : null;
             }
 
-            var comparer = GetStringComparer(comparisonOptions);
-
-            outcome = comparer.Compare(aValue, bValue);
-            return true;
+            result = true;
         }
-        catch (Exception)
+        catch (Exception ex) // Must be InvalidCastException, but maybe some conversion throws a different one ...
         {
-            if (comparisonOptions.CompareIncompatibleTypes)
-            {
-                outcome = -1;
-                return false;
-            }
+            if (!comparisonOptions.CompareIncompatibleTypes)
+                throw new NCalcEvaluationException($"Comparison of incomparable type was attempted. The types of the operands are {a?.GetType().Name ?? "null"} and {b?.GetType().Name ?? "null"}.", ex);
 
-            throw;
+            aValue = a is not null ? a.GetHashCode() : null;
+            bValue = b is not null ? b.GetHashCode() : null;
         }
+        var comparer = GetStringComparer(comparisonOptions);
+
+        outcome = comparer.Compare(aValue, bValue);
+        return result;
     }
 }

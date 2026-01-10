@@ -1,3 +1,9 @@
+# 8.7.4  (Allied Bits)
+
+* Now, it is possible to use the `return` keyword in any expression and not just in functions. 
+* The code related to comparison of incompatible types has been simplified. 
+* The `Truncate` built-in function now truncates DateTime to a date-only DateTime and TimeSpan to the Timespan with the number of days.
+
 # 8.7.3.1 (Allied Bits)
 
 * The `BoxedNumberComparer` class now implements IEqualityComparer interface.

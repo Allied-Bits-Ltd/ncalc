@@ -168,7 +168,7 @@ public static class BuiltInFunctionHelper
                 throw new NCalcEvaluationException("Tan() takes exactly 1 argument", location);
             return MathHelper.Tan(arguments[0].Evaluate(), context);
         }
-        if (functionName.Equals("Truncate", comparison))
+        if (functionName.Equals("Trunc", comparison) || functionName.Equals("Truncate", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Truncate() takes exactly 1 argument", location);
