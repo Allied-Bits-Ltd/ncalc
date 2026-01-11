@@ -92,7 +92,8 @@ Debug.Assert(0 == new Expression("Tan(0)").Evaluate());
 
 ```c#
 var expression = new Expression("SecretOperation(3, 6)");
-expression.Functions["SecretOperation"] = (args) => {
+expression.Functions["SecretOperation"] = (args) => 
+{
     return (int)args[0].Evaluate() + (int)args[1].Evaluate();
 };
 

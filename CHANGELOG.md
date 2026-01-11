@@ -1,4 +1,4 @@
-# 8.7.4  (Allied Bits)
+# 8.7.4 (Allied Bits)
 
 * (IMPORTANT) Reworked the handling of comments to have them treated as a whitespace. Additionally, a user function may be annotated not by a regular comment, but by a documentation comment in C# style. Consequently, regular comments don't work as function documentation anymore.
 * Now, it is possible to use the `return` keyword in any expression and not just in functions. 

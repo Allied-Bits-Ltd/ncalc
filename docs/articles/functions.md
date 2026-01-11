@@ -67,14 +67,14 @@ expression.Functions["SecretOperation"] = (args) => {
 A user can define a function right in the expression. Such a function can be called in the other parts of the expression. For user-defined functions to work, include the <xref:NCalc.ExpressionOptions.UseStatementSequences> flag into <xref:NCalc.ExpressionOptions> of an <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression>. The declaration syntax is similar to C# or Rust as shown in the below example:
 
 ```
-// This is a description of a function with all mandatory parameters
+/// This is a description of a function with all mandatory parameters
 fn sum3(a,b,c) { a + b + c }; sum3(1;2;3) // will return 6
 
-// This is a description of a function with an optional parameter
+/// This is a description of a function with an optional parameter
 fn sum3(a, b = 0, c = 3) => a + b + c; sum3(1;2) // will return 6 too
 ```
 
-After an expression is parsed (e.g. with a call to the <xref:NCalc.ExpressionBase`1.HasErrors(System.Threading.CancellationToken)> method), user-defined functions are available in the <xref:NCalc.ExpressionBase`1.UserFunctions> dictionary. A <xref:NCalc.Domain.Function> object includes a description if it was included in the expression in the form of a comment immediately before the function declaration. 
+After an expression is parsed (e.g. with a call to the <xref:NCalc.ExpressionBase`1.HasErrors(System.Threading.CancellationToken)> method), user-defined functions are available in the <xref:NCalc.ExpressionBase`1.UserFunctions> dictionary. A <xref:NCalc.Domain.Function> object includes a description if it was included in the expression in the form of a documentation comment ("///") immediately before the function declaration. 
 
 To return a value from a function, one can use a common `return` keyword followed by the value to return.
 
