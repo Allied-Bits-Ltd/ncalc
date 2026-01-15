@@ -405,14 +405,28 @@ public class MathsTests
     [InlineData("131055 ^ 8", 131047ul)]
     [InlineData("524288 | 128", 524416ul)]
     [InlineData("262143 & 131055", 131055ul)]
-    [InlineData("262143 << 2", 1048572ul)]
-    [InlineData("262143 >> 2", 65535ul)]
+    [InlineData("262143 << 2", 1048572)]
+    [InlineData("262143 >> 2", 65535)]
+    [InlineData("1 << 32", 0x0000000100000000ul)]
     public void Should_Not_Overflow_Bitwise(string formula, object expectedValue)
     {
         var e = new Expression(formula, CultureInfo.InvariantCulture);
         var res = e.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedValue, res);
+    }
+
+    [Fact]
+    public void Should_Not_Overflow_Shift_BigInt()
+    {
+        var e = new Expression("1 << 64", CultureInfo.InvariantCulture);
+        var res = e.Evaluate(TestContext.Current.CancellationToken);
+
+        BigInteger expected = new BigInteger(0x8000000000000000);
+
+        expected *= 2;
+
+        Assert.Equal(expected, res);
     }
 
 /*    [Theory]

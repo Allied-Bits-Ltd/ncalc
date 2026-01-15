@@ -204,7 +204,7 @@ public static class MathHelper
 #endif
         object? im1 = Add(100, b, false, options);
         if (im1 is null)
-            throw new InvalidOperationException($"No addition was possible for a number and an '{b.GetType()}' object");
+            throw new InvalidOperationException($"No addition was possible for a number and an object of type '{b.GetType()}'");
 
         object? im2 = Multiply(a, im1, false, options);
         if (im2 is null)
@@ -212,7 +212,7 @@ public static class MathHelper
 
         object? result = Divide(im2, 100, true, options);
         if (result is null)
-            throw new InvalidOperationException($"No division was possible for an '{im2.GetType()}' object and a number");
+            throw new InvalidOperationException($"No division was possible for an object of type '{im2.GetType()}' and a number");
 
         return result;
     }
@@ -3085,12 +3085,96 @@ public static class MathHelper
         return a << intB;
     }
 
+    public static object? LeftShift(object? a, object? b, bool reduceTypes, MathHelperOptions options)
+    {
+        if (a is BigInteger ba)
+        {
+            return LeftShift(ba, b, options);
+        }
+
+        if (!MathHelper.IsBoxedIntegerNumber(a))
+            throw new NCalcEvaluationException($"The left operand {a} cannot be bit-shifted");
+
+        long step;
+
+        if (b is BigInteger)
+        {
+            step = (long)b;
+        }
+        else
+        {
+            if (!MathHelper.IsBoxedIntegerNumber(b))
+                throw new NCalcEvaluationException($"The right operand {b} does not define the number of bits to shift {a}");
+
+            step = MathHelper.GetBoxedIntegerNumberAsLong(b) ?? throw new NCalcEvaluationException("");
+        }
+
+        if (step > int.MaxValue || step < 0)
+            throw new NCalcEvaluationException($"The value {step} cannot be used as a number of bits to shift {a}");
+
+        int stepInt = (int)step;
+
+        ulong ula = Convert.ToUInt64(a, options.CultureInfo);
+
+        if (options.UseBigNumbers && (ula > UInt32.MaxValue || step > 32))
+        {
+            if (reduceTypes)
+                return ReduceNumericType((new BigInteger(ula)) << stepInt);
+
+            return ((new BigInteger(ula)) << stepInt);
+        }
+        else
+        {
+            if (reduceTypes)
+                return ReduceNumericType(ula << stepInt);
+
+            return ula << stepInt;
+        }
+    }
+
     public static BigInteger? RightShift(BigInteger a, object? b, MathHelperOptions options)
     {
         if (b is null)
             return null;
         int intB = ConvertToInt(b, options);
         return a >> intB;
+    }
+
+    public static object? RightShift(object? a, object? b, bool reduceTypes, MathHelperOptions options)
+    {
+        if (a is BigInteger ba)
+        {
+            return RightShift(ba, b, options);
+        }
+
+        if (!MathHelper.IsBoxedIntegerNumber(a))
+            throw new NCalcEvaluationException($"The left operand {a} cannot be bit-shifted");
+
+        long step;
+
+        if (b is BigInteger)
+        {
+            step = (long)b;
+        }
+        else
+        {
+            if (!MathHelper.IsBoxedIntegerNumber(b))
+                throw new NCalcEvaluationException($"The right operand {b} does not define the number of bits to shift {a}");
+
+            step = MathHelper.GetBoxedIntegerNumberAsLong(b) ?? throw new NCalcEvaluationException("");
+        }
+
+        if (step > int.MaxValue || step < 0)
+            throw new NCalcEvaluationException($"The value {step} cannot be used as a number of bits to shift {a}");
+
+        int stepInt = (int)step;
+
+        ulong ula = Convert.ToUInt64(a, options.CultureInfo);
+
+        if (reduceTypes)
+            return ReduceNumericType(ula >> stepInt);
+
+        return ula << stepInt;
     }
 
     public static long? GetBoxedIntegerNumberAsLong(object? obj)
@@ -3332,19 +3416,20 @@ public static class MathHelper
 
     public static object? ReduceNumericType(object value, MathHelperOptions options = default)
     {
+        object? lValue = value;
         if (value is BigDecimal bdValue)
         {
-            return MathHelper.ReduceToSaneNumber(bdValue, false, options);
+            lValue = MathHelper.ReduceToSaneNumber(bdValue, false, options);
         }
-
+        else
         if (value is BigInteger biValue)
         {
-            return MathHelper.ReduceToSaneNumber(biValue, options);
+            lValue = MathHelper.ReduceToSaneNumber(biValue, options);
         }
 
-        if (MathHelper.IsBoxedIntegerNumber(value))
+        if (MathHelper.IsBoxedIntegerNumber(lValue))
         {
-            if (value is ulong ulValue)
+            if (lValue is ulong ulValue)
             {
                 if (ulValue <= int.MaxValue)
                     return (int)(uint)ulValue;
@@ -3355,7 +3440,7 @@ public static class MathHelper
             }
             else
             {
-                long candidate = MathHelper.ConvertToLong(value, options);
+                long candidate = MathHelper.ConvertToLong(lValue, options);
                 if (candidate >= int.MinValue && candidate <= int.MaxValue)
                     return (int)candidate;
                 else
@@ -3365,16 +3450,7 @@ public static class MathHelper
             }
         }
 
-        return value;
-        /*
-        if (options.DecimalAsDefault == true)
-        {
-            return MathHelper.ConvertToDecimal(value, options);
-        }
-        else
-        {
-            return MathHelper.ConvertToDouble(value, options);
-        }*/
+        return lValue;
     }
 
     public static object? ReduceToSaneNumber(BigDecimal value, bool forceInteger = false, MathHelperOptions? options = default)

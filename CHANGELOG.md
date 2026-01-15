@@ -1,9 +1,13 @@
+# 8.7.5 (Allied Bits)
+
+* (IMPORTANT) Reworked the Left Shift and Right Shift operations so that they validate parameters and allow only integers. Also, fixed Left Shift to produce correct results when the operation overflows 64 bits and Big numbers are enabled.
+
 # 8.7.4 (Allied Bits)
 
 * (IMPORTANT) Reworked the handling of comments to have them treated as a whitespace. Additionally, a user function may be annotated not by a regular comment, but by a documentation comment in C# style. Consequently, regular comments don't work as function documentation anymore.
 * Now, it is possible to use the `return` keyword in any expression and not just in functions. 
 * The code related to comparison of incompatible types has been simplified. 
-* The `Truncate` built-in function now truncates DateTime to a date-only DateTime and TimeSpan to the Timespan with the number of days.
+* The `Truncate` built-in function now truncates DateTime to a date-only DateTime and TimeSpan to a Timespan with the number of days.
 
 # 8.7.3.1 (Allied Bits)
 

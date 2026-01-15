@@ -672,10 +672,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         return null;
                     if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
                         return null;
-                    if (leftValue is BigInteger)
-                        return MathHelper.LeftShift((BigInteger)leftValue, rightValue, context);
-                    return Convert.ToUInt64(leftValue, context.CultureInfo) <<
-                            Convert.ToInt32(rightValue, context.CultureInfo);
+
+                    return MathHelper.LeftShift(leftValue, rightValue, true, context);
                 }
                 case BinaryExpressionType.RightShift:
                 {
@@ -683,10 +681,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         return null;
                     if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
                         return null;
-                    if (leftValue is BigInteger)
-                        return MathHelper.RightShift((BigInteger)leftValue, rightValue, context);
-                    return Convert.ToUInt64(leftValue, context.CultureInfo) >>
-                            Convert.ToInt32(rightValue, context.CultureInfo);
+
+                    return MathHelper.RightShift(leftValue, rightValue, true, context);
                 }
                 case BinaryExpressionType.Exponentiation:
                     if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))

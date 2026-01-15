@@ -638,10 +638,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         return null;
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return null;
-                    if (leftValue is BigInteger)
-                        return MathHelper.LeftShift((BigInteger)leftValue, rightValue, context);
-                    return Convert.ToUInt64(leftValue, context.CultureInfo) <<
-                            Convert.ToInt32(rightValue, context.CultureInfo);
+                    return MathHelper.LeftShift(leftValue, rightValue, true, context);
 
                 case BinaryExpressionType.RightShift:
                     if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -649,10 +646,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return null;
 
-                    if (leftValue is BigInteger)
-                        return MathHelper.RightShift((BigInteger)leftValue, rightValue, context);
-                    return Convert.ToUInt64(leftValue, context.CultureInfo) >>
-                            Convert.ToInt32(rightValue, context.CultureInfo);
+                    return MathHelper.RightShift(leftValue, rightValue, true, context);
 
                 case BinaryExpressionType.Exponentiation:
                     if (!TryGetValueOrNull(left.Value, out leftValue))
