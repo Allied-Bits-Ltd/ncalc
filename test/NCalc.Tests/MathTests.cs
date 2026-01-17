@@ -419,7 +419,7 @@ public class MathsTests
     [Fact]
     public void Should_Not_Overflow_Shift_BigInt()
     {
-        var e = new Expression("1 << 64", CultureInfo.InvariantCulture);
+        var e = new Expression("1 << 64", ExpressionOptions.UseBigNumbers, CultureInfo.InvariantCulture);
         var res = e.Evaluate(TestContext.Current.CancellationToken);
 
         BigInteger expected = new BigInteger(0x8000000000000000);

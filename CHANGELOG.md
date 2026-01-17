@@ -1,3 +1,7 @@
+# 8.7.5.1 (Allied Bits)
+
+* Fixed a failing test - it was missing an option.
+
 # 8.7.5 (Allied Bits)
 
 * (IMPORTANT) Reworked the Left Shift and Right Shift operations so that they validate parameters and allow only integers. Also, fixed Left Shift to produce correct results when the operation overflows 64 bits and Big numbers are enabled.
