@@ -4,6 +4,8 @@ using System.Runtime.CompilerServices;
 
 using ExtendedNumerics;
 
+using Microsoft.Extensions.Options;
+
 using NCalc.Exceptions;
 
 namespace NCalc.Helpers;
@@ -142,8 +144,8 @@ public static class TypeHelper
     public static bool CompareUsingMostPreciseType(object? a, object? b, ComparisonOptions comparisonOptions, MathHelperOptions mathHelperOptions, out int outcome)
     {
         bool result = false;
-        object? aValue;
-        object? bValue;
+        object? aValue = null;
+        object? bValue = null;
 
         try
         {
@@ -199,10 +201,64 @@ public static class TypeHelper
             }
             else
             {
-                Type mpt = GetMostPreciseType(a?.GetType(), b?.GetType());
+                Type? mpt = null;
+                bool compareStrings = false;
 
-                aValue = a is not null ? Convert.ChangeType(a, mpt, comparisonOptions.CultureInfo) : null;
-                bValue = b is not null ? Convert.ChangeType(b, mpt, comparisonOptions.CultureInfo) : null;
+                if (a is string)
+                {
+                    bool aConverted = false;
+                    if (!comparisonOptions.AllOptions.HasFlag(ExpressionOptions.NoStringTypeCoercion))
+                    {
+                        try
+                        {
+                            a = (new Expression((string)a, mathHelperOptions.AllOptions, mathHelperOptions.CultureInfo)).Evaluate();
+                            aConverted = true;
+                        }
+                        catch
+                        {
+                        }
+                    }
+                    if (!aConverted)
+                    {
+                        aValue = a;
+                        if (b is string)
+                            bValue = (string)b;
+                        else
+                            bValue = b?.ToString() ?? "null";
+                        compareStrings = true;
+                    }
+                }
+                if (b is string)
+                {
+                    bool bConverted = false;
+                    if (!comparisonOptions.AllOptions.HasFlag(ExpressionOptions.NoStringTypeCoercion))
+                    {
+                        try
+                        {
+                            b = (new Expression((string)b, mathHelperOptions.AllOptions, mathHelperOptions.CultureInfo)).Evaluate();
+                            bConverted = true;
+                        }
+                        catch
+                        {
+                        }
+                    }
+                    if (!bConverted)
+                    {
+                        bValue = b;
+                        if (a is string)
+                            aValue = (string)a;
+                        else
+                            aValue = a?.ToString() ?? "null";
+                        compareStrings = true;
+                    }
+                }
+
+                if (!compareStrings)
+                {
+                    mpt = GetMostPreciseType(a?.GetType(), b?.GetType());
+                    aValue = a is not null ? Convert.ChangeType(a, mpt, comparisonOptions.CultureInfo) : null;
+                    bValue = b is not null ? Convert.ChangeType(b, mpt, comparisonOptions.CultureInfo) : null;
+                }
             }
 
             result = true;

@@ -1,7 +1,7 @@
 namespace NCalc.Tests;
 
 [Trait("Category", "Strings")]
-public class StringTests
+public class StringTests : TestBase
 {
     [Theory]
     [InlineData("経済協力開発機構", "'経済協力開発機構'")]
@@ -38,6 +38,6 @@ public class StringTests
     [InlineData("'1' + '2'")]
     public void ShouldHandleStringAddition(string expr)
     {
-        Assert.Equal(3m, new Expression(expr, ExpressionOptions.DecimalAsDefault).Evaluate(TestContext.Current.CancellationToken));
+        CheckResult(3m, new Expression(expr, ExpressionOptions.DecimalAsDefault).Evaluate(TestContext.Current.CancellationToken));
     }
 }

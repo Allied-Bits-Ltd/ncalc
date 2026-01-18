@@ -1,5 +1,7 @@
 using System.Numerics;
 
+using ExtendedNumerics;
+
 using NCalc.Exceptions;
 using NCalc.Helpers;
 using NCalc.Tests.TestData;
@@ -9,7 +11,7 @@ using Assert = Xunit.Assert;
 namespace NCalc.Tests;
 
 [Trait("Category", "Math")]
-public class MathsTests
+public class MathsTests : TestBase
 {
     [Theory]
     [ClassData(typeof(BuiltInFunctionsTestData))]
@@ -287,24 +289,42 @@ public class MathsTests
         Assert.Equal(false, new Expression("(0=1500000)||(((0+2200000000)-1500000)<0)").Evaluate(TestContext.Current.CancellationToken));
     }
 
-    [Fact]
-    public void ShouldNotConvertRealTypes()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShouldNotConvertRealTypes(bool useBigNumbers)
     {
         object? result;
 
-        var e = new Expression("x/2");
+        ExpressionOptions options = useBigNumbers ? ExpressionOptions.UseBigNumbers : ExpressionOptions.None;
+
+        Expression e = new Expression("x/2", options);
         e.Parameters["x"] = 2F;
         Assert.IsType<float>(e.Evaluate(TestContext.Current.CancellationToken));
 
-        e = new Expression("x/2");
+        e = new Expression("x/2", options);
         e.Parameters["x"] = 2D;
         Assert.IsType<double>(e.Evaluate(TestContext.Current.CancellationToken));
 
-        e = new Expression("x/2");
+        e = new Expression("x/2", options);
+        e.Parameters["x"] = 2m;
+        Assert.IsType<decimal>(e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShouldNotConvertRealTypesDecimal(bool useBigNumbers)
+    {
+        object? result;
+
+        ExpressionOptions options = useBigNumbers ? ExpressionOptions.UseBigNumbers : ExpressionOptions.None;
+
+        Expression e = new Expression("x/2", options);
         e.Parameters["x"] = 2m;
         Assert.IsType<decimal>(e.Evaluate(TestContext.Current.CancellationToken));
 
-        e = new Expression("a / b * 100");
+        e = new Expression("a / b * 100", options);
         e.Parameters["a"] = 20M;
         e.Parameters["b"] = 20M;
 
@@ -320,7 +340,7 @@ public class MathsTests
         var expression = new Expression(input);
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
-        Assert.Equal(expected, result);
+        CheckResult(expected, result);
     }
 
     [Theory]
@@ -331,7 +351,38 @@ public class MathsTests
         var expression = new Expression(input, ExpressionOptions.ReduceDivResultToInteger);
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
-        Assert.Equal(expected, result);
+        CheckResult(expected, result);
+    }
+
+    [Theory]
+    [InlineData("750/500", 1.5)]
+    [InlineData("2000/1000", 2)]
+    public void ShouldHandleIntegerDivision(string input, object expected)
+    {
+        var expression = new Expression(input, BaseExpressionOptions);
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        CheckResult(expected, result);
+    }
+
+    [Theory]
+    [InlineData(750, 500, false, true, 1.5)]
+    [InlineData(750, 500, true, true, 1.5)]
+    [InlineData(750, 500, false, false, 1.5)]
+    [InlineData(750, 500, true, false, 1.5)]
+    [InlineData(2000, 1000, false, true, 2)]
+    [InlineData(2000, 1000, true, true, 2)]
+    [InlineData(2000, 1000, false, false, 2)]
+    [InlineData(2000, 1000, true, false, 2)]
+    [InlineData(1000, 2000, false, true, 0.5)]
+    [InlineData(1000, 2000, true, true, 0.5)]
+    [InlineData(1000, 2000, false, false, 0.5)]
+    [InlineData(1000, 2000, true, false, 0.5)]
+    public void ShouldHandleIntegerDivisionDirect(long a, long b, bool useBigNumbers, bool reduceTypes, object expected)
+    {
+        ExpressionOptions options = useBigNumbers ? BaseExpressionOptions : BaseExpressionOptions & ~ExpressionOptions.UseBigNumbers;
+
+        var result = MathHelper.Divide(a, b, reduceTypes, new MathHelperOptions(CultureInfo.CurrentCulture, options));
+        CheckResult(expected, result);
     }
 
     [Fact]
@@ -413,7 +464,7 @@ public class MathsTests
         var e = new Expression(formula, CultureInfo.InvariantCulture);
         var res = e.Evaluate(TestContext.Current.CancellationToken);
 
-        Assert.Equal(expectedValue, res);
+        CheckResult(expectedValue, res);
     }
 
     [Fact]
@@ -471,14 +522,16 @@ public class MathsTests
     }
 */
     [Theory]
-    [InlineData("3 + '3'", ExpressionOptions.AllowCharValues, 54)]
+    [InlineData("3 + '3'", ExpressionOptions.AllowCharValues, 54l)]
     [InlineData("3 + '3'", ExpressionOptions.None, 6d)]
-    [InlineData("'4' + '2'", ExpressionOptions.AllowCharValues, 102)]
+    [InlineData("'4' + '2'", ExpressionOptions.AllowCharValues, 102l)]
     [InlineData("'4' + '2'", ExpressionOptions.StringConcat, "42")]
     [InlineData("'4' + '2'", ExpressionOptions.None, 6d)]
     public void ShouldHandleCharAddition(string expression, ExpressionOptions options, object expected)
     {
-        Assert.Equal(expected, new Expression(expression, options | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        var result = new Expression(expression, options | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken);
+
+        CheckResult(expected, result);
     }
 
     [Fact]
@@ -645,4 +698,16 @@ public class MathsTests
         result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(3.0d, result);
     }
+
+    [Fact]
+    public void ShouldConvertBigNumbers()
+    {
+        BigDecimal x = 1;
+        double y = 1.0;
+
+        object? result = MathHelper.Subtract(x, y, true, new MathHelperOptions());
+
+        Assert.Equal((int) 0, result);
+    }
+
 }

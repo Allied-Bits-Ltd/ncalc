@@ -1,7 +1,7 @@
 namespace NCalc.Tests;
 
 [Trait("Category", "Decimals")]
-public class DecimalsTests
+public class DecimalsTests : TestBase
 {
     [Theory]
     // It's not possible to specify decimal literals in annotations, so here we use
@@ -66,9 +66,9 @@ public class DecimalsTests
     public void ShouldDivideDoubleAndDecimal()
     {
         var e = new Expression("1.8 / Abs([var1])");
-        e.Parameters["var1"] = 0.5;
+        e.Parameters["var1"] = 0.5m;
 
-        Assert.Equal(3.6d, e.Evaluate(TestContext.Current.CancellationToken));
+        CheckResult(3.6d, e.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class DecimalsTests
     [Fact]
     public void ShouldNotLoosePrecision()
     {
-        Assert.Equal(0.5, new Expression("3/6").Evaluate(TestContext.Current.CancellationToken));
+        CheckResult(0.5, new Expression("3/6").Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -119,7 +119,8 @@ public class DecimalsTests
         Assert.Equal(9.61m, e.Evaluate(TestContext.Current.CancellationToken));
 
         var e2 = new Expression("Pow(3.1, 2)", ExpressionOptions.DecimalAsDefault);
-        Assert.Equal(9.61m, e2.Evaluate(TestContext.Current.CancellationToken));
+        var result = e2.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(9.61m, result);
     }
 
     [Fact]

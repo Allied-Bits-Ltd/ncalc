@@ -5,7 +5,7 @@ using NCalc.Tests.TestData;
 namespace NCalc.Tests;
 
 [Trait("Category", "Evaluations")]
-public class EvaluationTests
+public class EvaluationTests : TestBase
 {
     [Theory]
     [ClassData(typeof(EvaluationTestData))]
@@ -84,27 +84,27 @@ public class EvaluationTests
         eifs.Parameters["divider"] = 5;
         eifs.Parameters["divided"] = 5;
 
-        Assert.Equal(1d, eifs.Evaluate(TestContext.Current.CancellationToken));
+        CheckResult(1d, eifs.Evaluate(TestContext.Current.CancellationToken));
 
         // Test first case false, no next case, return default value
         eifs = new Expression("ifs([divider] != 0, [divided] / [divider], -1)");
         eifs.Parameters["divider"] = 0;
         eifs.Parameters["divided"] = 5;
 
-        Assert.Equal(-1, eifs.Evaluate(TestContext.Current.CancellationToken));
+        CheckResult(-1, eifs.Evaluate(TestContext.Current.CancellationToken));
 
         // Test first case false, next case true, return next value (eg 4th expr)
 
         eifs = new Expression("ifs([number] == 3, 5, [number] == 5, 3, 8)");
         eifs.Parameters["number"] = 5;
-        Assert.Equal(3, eifs.Evaluate(TestContext.Current.CancellationToken));
+        CheckResult(3, eifs.Evaluate(TestContext.Current.CancellationToken));
 
         // Test first case false, next case false, return default value (eg 5th expr)
 
         eifs = new Expression("ifs([number] == 3, 5, [number] == 5, 3, 8)");
         eifs.Parameters["number"] = 1337;
 
-        Assert.Equal(8, eifs.Evaluate(TestContext.Current.CancellationToken));
+        CheckResult(8, eifs.Evaluate(TestContext.Current.CancellationToken));
 
         eifs = new Expression("ifs([number] == 3, 5, [number] == 5, 3)");
         eifs.Parameters["number"] = 1337;
@@ -119,12 +119,12 @@ public class EvaluationTests
         eif.Parameters["divider"] = 5;
         eif.Parameters["divided"] = 5;
 
-        Assert.Equal(1d, eif.Evaluate(TestContext.Current.CancellationToken));
+        CheckResult(1d, eif.Evaluate(TestContext.Current.CancellationToken));
 
         eif = new Expression("if([divider] <> 0, [divided] / [divider], 0)");
         eif.Parameters["divider"] = 0;
         eif.Parameters["divided"] = 5;
-        Assert.Equal(0, eif.Evaluate(TestContext.Current.CancellationToken));
+        CheckResult(0, eif.Evaluate(TestContext.Current.CancellationToken));
 
         eif = new Expression("if([divider] <> 0, [divided] / [divider])");
         eif.Parameters["divider"] = 0;

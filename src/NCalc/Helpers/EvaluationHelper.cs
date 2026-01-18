@@ -66,7 +66,7 @@ public static class EvaluationHelper
 
         try
         {
-            return MathHelper.Add(leftValue, rightValue, true, context);
+            return MathHelper.Add(leftValue, rightValue, context.Options.HasFlag(ExpressionOptions.ReduceArithmeticResultType), context);
         }
         catch (NCalcConversionException) when (leftValue is string && rightValue is string)
         {
@@ -116,7 +116,7 @@ public static class EvaluationHelper
                 return ((TimeSpan)leftValue).Subtract((TimeSpan)rightValue);
             }
         }
-        return MathHelper.Subtract(leftValue, rightValue, true, context);
+        return MathHelper.Subtract(leftValue, rightValue, context.Options.HasFlag(ExpressionOptions.ReduceArithmeticResultType), context);
     }
 
     /// <summary>
@@ -161,7 +161,7 @@ public static class EvaluationHelper
                     return new TimeSpan((long)Math.Round(dt));
             }
         }
-        return MathHelper.Multiply(leftValue, rightValue, true, context);
+        return MathHelper.Multiply(leftValue, rightValue, context.Options.HasFlag(ExpressionOptions.ReduceArithmeticResultType), context);
     }
 
     /// <summary>
@@ -194,7 +194,7 @@ public static class EvaluationHelper
                 }
             }
         }
-        return MathHelper.Divide(leftValue, rightValue, true, context);
+        return MathHelper.Divide(leftValue, rightValue, context.Options.HasFlag(ExpressionOptions.ReduceArithmeticResultType), context);
     }
 
     /// <summary>
@@ -302,82 +302,7 @@ public static class EvaluationHelper
 
     public static int Compare(object? a, object? b, ComparisonOptions comparisonOptions, MathHelperOptions mathHelperOptions)
     {
-        int result;
-
-        // Handle possible NaN
-        if (a is double dA)
-        {
-            if (Double.IsNaN(dA))
-                return -1;
-        }
-        else
-        if (a is float fA)
-        {
-            if (float.IsNaN(fA))
-                return -1;
-        }
-        if (b is double dB)
-        {
-            if (Double.IsNaN(dB))
-                return 1;
-        }
-        else
-        if (b is float fB)
-        {
-            if (float.IsNaN(fB))
-                return 1;
-        }
-
-        // Handle null
-        if (a is null || b is null)
-        {
-            if (a is null && b is null)
-                return 0;
-            else
-            if (a is null)
-                return -1;
-            else
-                return 1;
-        }
-
-        // Handle bug numbers
-        if (a is BigDecimal || b is BigDecimal)
-        {
-            if (a is BigDecimal bdA)
-            {
-                if (b is BigDecimal bdB)
-                    result = bdA.CompareTo(bdB);
-                else
-                    result = bdA.CompareTo(MathHelper.ConvertToBigDecimal(b));
-            }
-            else
-            {
-                result = ((BigDecimal)b).CompareTo(MathHelper.ConvertToBigDecimal(a));
-            }
-
-            return result;
-        }
-        else
-        if (a is BigInteger || b is BigInteger)
-        {
-            if (a is BigInteger biA)
-            {
-                if (b is BigInteger biB)
-                    result = biA.CompareTo(biB);
-                else
-                    result = biA.CompareTo(MathHelper.ConvertToBigInteger(b));
-            }
-            else
-            {
-                result = ((BigInteger)b).CompareTo(MathHelper.ConvertToBigInteger(a));
-            }
-
-            return result;
-        }
-
-        // Handle everything else. We are not interested in the value returned by CompareUsingMostPreciseType because it would return false only when comparison of non-compatible types is allowed and in this case, the result is returned based on object hash codes.
-        TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result);
-        return result;
+        return MathHelper.Compare(a, b, comparisonOptions, mathHelperOptions);
     }
 
     public static bool Compare(object? a, object? b, ComparisonType comparisonType, ExpressionContextBase context)

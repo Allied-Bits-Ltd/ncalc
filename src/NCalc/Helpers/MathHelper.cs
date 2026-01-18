@@ -913,6 +913,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
+        Type t = GetBroaderType(a.GetType(), b.GetType());
+
         a = ConvertIfNeeded(a, "+", options);
         b = ConvertIfNeeded(b, "+", options);
 
@@ -926,22 +928,22 @@ public static class MathHelper
         {
             if (a is BigDecimal bdA)
             {
-                return Add(bdA, b);
+                return ReduceNumericType(Add(bdA, b), reduceTypes ? null : t, options);
             }
             else
             if (b is BigDecimal bdB)
             {
-                return Add(bdB, a);
+                return ReduceNumericType(Add(bdB, a), reduceTypes ? null : t, options);
             }
             else
             if (a is BigInteger biA)
             {
-                return Add(biA, b);
+                return ReduceNumericType(Add(biA, b), reduceTypes ? null : t, options);
             }
             else
             if (b is BigInteger biB)
             {
-                return Add(biB, a);
+                return ReduceNumericType(Add(biB, a), reduceTypes ? null : t, options);
             }
             else
             if (a is long || a is ulong || b is long || b is ulong)
@@ -965,33 +967,24 @@ public static class MathHelper
 
                     result = Add(result, a);
                 }
-                if (reduceTypes)
-                {
-                    if (result >= long.MinValue && result <= long.MaxValue)
-                        return (long)result;
-                    else
-                    if (result >= ulong.MinValue && result <= ulong.MaxValue)
-                        return (ulong)result;
-                }
-                return result;
+                return ReduceNumericType(result, reduceTypes ? null : t, options);
             }
         }
 
-        //var func = options.OverflowProtection ? AddFuncChecked : AddFunc;
         try
         {
             object result = ExecuteOperation(a, b, '+', ArithmeticOperation.Add, options, typeCode);
-            if (reduceTypes && typesWereExpanded)
-                return ReduceNumericType(result, options);
-            else
-                return result;
+            return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
         catch (OverflowException)
         {
             TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
             if (newTypeCode == TypeCode.Empty)
                 throw;
-            return Add(a, b, reduceTypes, options);
+            object? result = Add(a, b, reduceTypes, options);
+            if (result is null)
+                return null;
+            return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
     }
 
@@ -1022,6 +1015,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
+        Type t = GetBroaderType(a.GetType(), b.GetType());
+
         a = ConvertIfNeeded(a, "-", options);
         b = ConvertIfNeeded(b, "-", options);
 
@@ -1047,29 +1042,16 @@ public static class MathHelper
                 bdResult = Subtract(a, bdB);
             }
 
-            if (bdResult != null)
+            if (bdResult is not null)
             {
                 if (bdResult.Value.GetFractionalPart().IsZero())
                 {
                     result = bdResult.Value.WholeValue;
+                    return ReduceNumericType(result, reduceTypes ? null : t, options);
                 }
                 else
                 {
-                    if (reduceTypes)
-                    {
-                        if (options.DecimalAsDefault && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
-                            return (decimal)bdResult;
-                        else
-                        if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
-                            return (float)bdResult;
-                        else
-                        if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
-                            return (double)bdResult;
-                        else
-                        if (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
-                            return (decimal)bdResult;
-                    }
-                    return bdResult;
+                    return ReduceNumericType(bdResult, reduceTypes ? null : t, options);
                 }
             }
 
@@ -1109,33 +1091,25 @@ public static class MathHelper
                 }
             }
 
-            if (result != null && reduceTypes)
-            {
-                if (result >= long.MinValue && result <= long.MaxValue)
-                    return (long)result;
-                else
-                if (result >= ulong.MinValue && result <= ulong.MaxValue)
-                    return (ulong)result;
-
-                return result;
-            }
+            if (result is not null)
+                return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
 
         //var func = options.OverflowProtection ? SubtractFuncChecked : SubtractFunc;
         try
         {
             object result = ExecuteOperation(a, b, '-', ArithmeticOperation.Subtract, options, typeCode);
-            if (reduceTypes && typesWereExpanded)
-                return ReduceNumericType(result, options);
-            else
-                return result;
+            return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
         catch (OverflowException)
         {
             TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
             if (newTypeCode == TypeCode.Empty)
                 throw;
-            return Subtract(a, b, reduceTypes, options);
+            object? result = Subtract(a, b, reduceTypes, options);
+            if (result is null)
+                return result;
+            return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
     }
 
@@ -1161,6 +1135,8 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
+        Type t = GetBroaderType(a.GetType(), b.GetType());
+
         a = ConvertIfNeeded(a, "*", options);
         b = ConvertIfNeeded(b, "*", options);
 
@@ -1182,22 +1158,22 @@ public static class MathHelper
         {
             if (a is BigDecimal bdA)
             {
-                return Multiply(bdA, b);
+                return ReduceNumericType(Multiply(bdA, b), reduceTypes ? null : t, options);
             }
             else
             if (b is BigDecimal bdB)
             {
-                return Multiply(bdB, a);
+                return ReduceNumericType(Multiply(bdB, a), reduceTypes ? null : t, options);
             }
             else
             if (a is BigInteger biA)
             {
-                return Multiply(biA, b);
+                return ReduceNumericType(Multiply(biA, b), reduceTypes ? null : t, options);
             }
             else
             if (b is BigInteger biB)
             {
-                return Multiply(biB, a);
+                return ReduceNumericType(Multiply(biB, a), reduceTypes ? null : t, options);
             }
             else
             if (a is long || a is ulong || b is long || b is ulong)
@@ -1221,15 +1197,7 @@ public static class MathHelper
 
                     result = Multiply(result, a);
                 }
-                if (reduceTypes)
-                {
-                    if (result >= long.MinValue && result <= long.MaxValue)
-                        return (long)result;
-                    else
-                    if (result >= ulong.MinValue && result <= ulong.MaxValue)
-                        return (ulong)result;
-                }
-                return result;
+                return ReduceNumericType(result, reduceTypes ? null : t, options);
             }
         }
 
@@ -1237,17 +1205,17 @@ public static class MathHelper
         try
         {
             object result = ExecuteOperation(a, b, '*', ArithmeticOperation.Multiply, options, typeCode);
-            if (reduceTypes && typesWereExpanded)
-                return ReduceNumericType(result, options);
-            else
-                return result;
+            return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
         catch (OverflowException)
         {
             TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
             if (newTypeCode == TypeCode.Empty)
                 throw;
-            return Multiply(a, b, reduceTypes, options);
+            object? result = Multiply(a, b, reduceTypes, options);
+            if (result is null)
+                return null;
+            return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
     }
 
@@ -1273,16 +1241,77 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
+        Type typeA = a.GetType(); //Type t = GetBroaderType(a.GetType(), b.GetType());
+
         a = ConvertIfNeeded(a, "/", options);
         b = ConvertIfNeeded(b, "/", options);
-
-        bool useInteger = false;
 
         TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
-                $"Division is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+                $"Division is not implemented for operands of types {a.GetType()} and {b.GetType()}");
+
+        // Convert types to floating-point ones because otherwise, we get an integer division
+        if (options.UseBigNumbers)
+        {
+            if (typeCode != TypeCode.Object)
+            {
+                a = ConvertToBigDecimal(a);
+                b = ConvertToBigDecimal(b);
+                typeCode = TypeCode.Object;
+            }
+        }
+        else
+        {
+            if (IsBoxedIntegerNumber(a))
+            {
+                long? tl = GetBoxedIntegerNumberAsLong(a);
+                if (tl is null)
+                    return null;
+
+                a = (decimal)tl;
+                typeCode = TypeCode.Decimal;
+            }
+            else
+            if (a is decimal)
+            {
+                typeCode = TypeCode.Decimal;
+            }
+            else
+            if (a is float)
+            {
+                double? da = GetBoxedNumberAsDouble(a);
+                if (da is null)
+                    return null;
+                a = da.Value;
+                typeCode = TypeCode.Double;
+            }
+
+            if (IsBoxedIntegerNumber(b))
+            {
+                long? tl = GetBoxedIntegerNumberAsLong(b);
+                if (tl is null)
+                    return null;
+
+                b = (decimal)tl;
+                typeCode = TypeCode.Decimal;
+            }
+            else
+            if (b is decimal)
+            {
+                typeCode = TypeCode.Decimal;
+            }
+            else
+            if (b is float)
+            {
+                double? db = GetBoxedNumberAsDouble(b);
+                if (db is null)
+                    return null;
+                b = db.Value;
+                typeCode = TypeCode.Double;
+            }
+        }
 
         if (options.UseBigNumbers && typeCode == TypeCode.Object)
         {
@@ -1307,7 +1336,7 @@ public static class MathHelper
             {
                 bdResult = Divide(a, new BigDecimal(biB));
             }
-            else
+            /*else
             if (a is long || a is ulong || b is long || b is ulong)
             {
                 if (a is long || a is ulong)
@@ -1328,13 +1357,13 @@ public static class MathHelper
 
                     bdResult = Divide(a, bdResult.Value);
                 }
-            }
+            }*/
 
-            if (bdResult != null)
+            if (bdResult is not null)
             {
                 if (reduceTypes)
                 {
-                    if ((a is BigInteger || IsBoxedIntegerNumber(a) || options.ReduceDivResultToInteger) && bdResult.Value.GetFractionalPart().IsZero())
+                    if ((IsBoxedIntegerNumberOrBigNumber(typeA) || options.ReduceDivResultToInteger) && bdResult.Value.GetFractionalPart().IsZero())
                     {
                         BigInteger biResult = bdResult.Value.WholeValue;
 
@@ -1347,16 +1376,16 @@ public static class MathHelper
                         return biResult;
                     }
                     else
-                    if (options.DecimalAsDefault && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
+                    if ((options.DecimalAsDefault || typeA == typeof(decimal)) && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
                     {
                         return (decimal)bdResult;
                     }
                     else
-                    if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
+                    /*if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
                     {
                         return (float)bdResult;
                     }
-                    else
+                    else*/
                     if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
                     {
                         return (double)bdResult;
@@ -1367,44 +1396,47 @@ public static class MathHelper
                         return (decimal)bdResult;
                     }
                 }
+                else // try to keep the original type of a
+                {
+                    if (IsBoxedIntegerNumberOrBigNumber(typeA) && bdResult.Value.GetFractionalPart().IsZero())
+                    {
+                        BigInteger biResult = bdResult.Value.WholeValue;
+
+                        if ((typeA == typeof(short)) && biResult >= short.MinValue && biResult <= short.MaxValue)
+                            return (short)biResult;
+                        else
+                        if ((typeA == typeof(ushort)) && biResult >= ushort.MinValue && biResult <= ushort.MaxValue)
+                            return (ushort)biResult;
+                        else
+                        if ((typeA == typeof(int)) && biResult >= int.MinValue && biResult <= int.MaxValue)
+                            return (int)biResult;
+                        else
+                        if ((typeA == typeof(uint)) && biResult >= uint.MinValue && biResult <= uint.MaxValue)
+                            return (uint)biResult;
+                        else
+                        if ((typeA == typeof(long)) && biResult >= long.MinValue && biResult <= long.MaxValue)
+                            return (long)biResult;
+                        else
+                        if ((typeA == typeof(ulong)) && biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
+                            return (ulong)biResult;
+
+                        return biResult;
+                    }
+
+                    if ((options.DecimalAsDefault || typeA == typeof(decimal)) && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
+                        return (decimal)bdResult;
+                    else
+                    if ((typeA == typeof(float)) && bdResult >= float.MinValue && bdResult <= float.MaxValue)
+                        return (float)bdResult;
+                    else
+                    if ((typeA == typeof(double)) && bdResult >= double.MinValue && bdResult <= double.MaxValue)
+                        return (double)bdResult;
+                }
 
                 return bdResult;
             }
-        }
 
-        if (IsBoxedIntegerNumber(a) || options.ReduceDivResultToInteger)
-        {
-            if (a is decimal || b is decimal)
-            {
-                if (a != null && a.GetType() != typeof(decimal))
-                    a = Convert.ChangeType(a, TypeCode.Decimal);
-                else
-                if (b != null && b.GetType() != typeof(decimal))
-                    b = Convert.ChangeType(b, TypeCode.Decimal);
-
-                if (a != null && b != null)
-                {
-                    object? modObj = Modulo(a, b, false, options);
-                    if (modObj is decimal mod && mod == 0)
-                        useInteger = true;
-                }
-            }
-            else
-            if (a is double || b is double)
-            {
-                if (a != null && a.GetType() != typeof(double))
-                    a = Convert.ChangeType(a, TypeCode.Double);
-                else
-                if (b != null && b.GetType() != typeof(double))
-                    b = Convert.ChangeType(b, TypeCode.Double);
-
-                if (a != null && b != null)
-                {
-                    object? modObj = Modulo(a, b, false, options);
-                    if (modObj is double mod && mod == 0)
-                        useInteger = true;
-                }
-            }
+            typeCode = TypeCode.Empty;
         }
 
         if (a is null || b is null)
@@ -1416,7 +1448,7 @@ public static class MathHelper
 
         try
         {
-            result = ExecuteOperation(a, b, '/', ArithmeticOperation.Divide, options);
+            result = ExecuteOperation(a, b, '/', ArithmeticOperation.Divide, options, typeCode);
         }
         catch (OverflowException)
         {
@@ -1425,49 +1457,120 @@ public static class MathHelper
                 throw;
             result = Divide(a, b, reduceTypes, options);
         }
-        if (result is null || !useInteger)
+        if (result is null)
+            return result;
+
+        if (reduceTypes || options.ReduceDivResultToInteger)
         {
-            /*if (reduceTypes && result is not null)
-                return ReduceNumericType(result, false, options);
+            if ((IsBoxedIntegerNumberOrBigNumber(typeA) || options.ReduceDivResultToInteger) && IsBoxedFloatingNumberInteger(result) == true)
+            {
+                long? iResult = GetBoxedIntegerNumberAsLong(result);
+                if (iResult is null)
+                    return result;
+
+                if (iResult >= int.MinValue && iResult <= int.MaxValue)
+                    return (int)iResult;
+                else
+                if (iResult >= uint.MinValue && iResult <= uint.MaxValue)
+                    return (uint)iResult;
+
+                return iResult;
+            }
             else
-                */return result;
-        }
+            if ((options.DecimalAsDefault || typeA == typeof(decimal)) && (result is not decimal))
+            {
+                try
+                {
+                    if (result is BigDecimal)
+                        return (decimal)result;
 
-        if (reduceTypes)
+                    return ConvertToDecimal(result, options);
+                }
+                catch
+                {
+                }
+            }
+            else
+            {
+                double? dResult = null;
+                if (result is BigDecimal bdResult)
+                {
+                    if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
+                        dResult = (double)bdResult;
+                }
+                else
+                if (result is double)
+                {
+                    dResult = (double)result;
+                }
+
+                if (dResult is not null)
+                {
+                    /*if (dResult >= float.MinValue && dResult <= float.MaxValue)
+                      return (float)dResult;*/
+
+                    return dResult;
+                }
+            }
+
+            return result;
+        }
+        else // try to keep the original type of a
         {
-            if (result is decimal decResult)
+            if (IsBoxedIntegerNumberOrBigNumber(typeA) && IsBoxedFloatingNumberInteger(result) == true)
             {
-                long lResult = (long)decResult;
-                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                    return (int)lResult;
-                else
-                    return lResult;
-            }
-            if (result is double dResult)
-            {
-                long lResult = (long)dResult;
-                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                    return (int)lResult;
-                else
-                    return lResult;
-            }
-            if (result is float fResult)
-            {
-                long lResult = (long)fResult;
-                if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
-                    return (int)lResult;
-                else
-                    return lResult;
-            }
-        }
+                long? iResult = GetBoxedIntegerNumberAsLong(result);
+                if (iResult is null)
+                    return result;
 
-        return result;
+                if ((typeA == typeof(short)) && iResult >= short.MinValue && iResult <= short.MaxValue)
+                    return (short)iResult;
+                else
+                if ((typeA == typeof(ushort)) && iResult >= ushort.MinValue && iResult <= ushort.MaxValue)
+                    return (ushort)iResult;
+                else
+                if ((typeA == typeof(int)) && iResult >= int.MinValue && iResult <= int.MaxValue)
+                    return (int)iResult;
+                else
+                if ((typeA == typeof(uint)) && iResult >= uint.MinValue && iResult <= uint.MaxValue)
+                    return (uint)iResult;
+                else
+                if ((typeA == typeof(ulong)) && iResult >= (long) ulong.MinValue)
+                    return (ulong)iResult;
+                else
+                if ((typeA == typeof(long)) && iResult >= long.MinValue && iResult <= long.MaxValue)
+                    return (long)iResult;
+
+                return iResult;
+            }
+
+            if ((typeA == typeof(float)) && (double)result >= float.MinValue && (double)result <= float.MaxValue)
+            {
+                double dResult = (double)result;
+                return (float)dResult;
+            }
+            else
+            if ((typeA == typeof(decimal)) && (result is not decimal))
+            {
+                try
+                {
+                    return ConvertToDecimal(result, options);
+                }
+                catch
+                {
+                }
+            }
+
+            return result;
+        }
     }
 
     public static object? IntegerDivide(object? a, object? b, bool truncateFirst, bool reduceTypes, MathHelperOptions options)
     {
         if (a is null || b is null)
             return null;
+
+        Type t = GetBroaderType(a.GetType(), b.GetType());
 
         a = ConvertIfNeeded(a, "/", options);
         b = ConvertIfNeeded(b, "/", options);
@@ -1549,17 +1652,9 @@ public static class MathHelper
                 }
             }
 
-            if (biResult != null)
+            if (biResult is not null)
             {
-                if (reduceTypes)
-                {
-                    if (biResult >= long.MinValue && biResult <= long.MaxValue)
-                        return (long)biResult;
-                    else
-                    if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
-                        return (ulong)biResult;
-                }
-                return biResult;
+                return ReduceNumericType(biResult, reduceTypes ? null : t, options);
             }
         }
 
@@ -1584,13 +1679,11 @@ public static class MathHelper
             result = Divide(a, b, reduceTypes, options);
         }
 
-        if (result is null || IsBoxedIntegerNumber(result))
-        {
-            if (reduceTypes && result is not null)
-                return ReduceNumericType(result, options);
-            else
-                return result;
-        }
+        if (result is null)
+            return result;
+
+        if (IsBoxedIntegerNumber(result))
+            return ReduceNumericType(result, reduceTypes ? null : t, options);
 
         if (reduceTypes)
         {
@@ -1599,26 +1692,62 @@ public static class MathHelper
                 long lResult = (long)Math.Truncate(decResult);
                 if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
                     return (int)lResult;
-                else
-                    return lResult;
+
+                return lResult;
             }
             if (result is double dResult)
             {
                 long lResult = (long)Math.Truncate(dResult);
                 if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
                     return (int)lResult;
-                else
-                    return lResult;
+
+                return lResult;
             }
             if (result is float fResult)
             {
                 long lResult = (long)Math.Truncate(fResult);
                 if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
                     return (int)lResult;
-                else
-                    return lResult;
+
+                return lResult;
             }
         }
+        else
+        {
+            if (result is decimal decResult)
+            {
+                long lResult = (long)Math.Truncate(decResult);
+                if (t == typeof(long) || lResult < Int32.MinValue || lResult > Int32.MaxValue)
+                    return lResult;
+
+                return (int)lResult;
+            }
+            if (result is double dResult)
+            {
+                long lResult = (long)Math.Truncate(dResult);
+                if (t == typeof(long) || lResult < Int32.MinValue || lResult > Int32.MaxValue)
+                    return lResult;
+
+                return (int)lResult;
+            }
+            if (result is float fResult)
+            {
+                long lResult = (long)Math.Truncate(fResult);
+                if (t == typeof(long) || lResult < Int32.MinValue || lResult > Int32.MaxValue)
+                    return lResult;
+
+                return (int)lResult;
+            }
+            else
+            if (result is long lResult)
+            {
+                if (t == typeof(long) || lResult < Int32.MinValue || lResult > Int32.MaxValue)
+                    return lResult;
+
+                return (int)lResult;
+            }
+        }
+
         return result;
     }
 
@@ -1643,6 +1772,8 @@ public static class MathHelper
     {
         if (a is null || b is null)
             return null;
+
+        Type t = GetBroaderType(a.GetType(), b.GetType());
 
         a = ConvertIfNeeded(a, "%", options);
         b = ConvertIfNeeded(b, "%", options);
@@ -1713,41 +1844,36 @@ public static class MathHelper
                     biResult = IntegerDivide(a, biResult.Value);
                 }
             }
-
-            if (reduceTypes)
-            {
-                if (biResult != null)
-                {
-                    if (biResult >= long.MinValue && biResult <= long.MaxValue)
-                        return (long)biResult;
-                    else
-                    if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
-                        return (ulong)biResult;
-
-                    return biResult;
-                }
-            }
+            if (biResult is not null)
+                return ReduceNumericType(biResult, reduceTypes ? null : t, options);
         }
 
         try
         {
             object result = ExecuteOperation(a, b, '%', ArithmeticOperation.Modulo, options, typeCode);
-            if (reduceTypes && typesWereExpanded)
-                return ReduceNumericType(result, options);
-            else
-                return result;
+            return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
         catch (OverflowException)
         {
             TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
             if (newTypeCode == TypeCode.Empty)
                 throw;
-            return Modulo(a, b, reduceTypes, options);
+            object? result = Modulo(a, b, reduceTypes, options);
+            if (result is null)
+                return null;
+            return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
     }
 
     public static object? Max(object? a, object? b, MathHelperOptions options)
     {
+        int cmpResult = Compare(a, b, options, options);
+        if (cmpResult == -1)
+            return b;
+
+        return a;
+
+        /*
         if (a is null && b is null)
         {
             return null;
@@ -1799,12 +1925,18 @@ public static class MathHelper
             TypeCode.Double => Math.Max((double)a!, (double)b!),
             TypeCode.Decimal => Math.Max((decimal)a!, (decimal)b!),
             _ => null,
-        };
+        };*/
     }
 
     public static object? Min(object? a, object? b, MathHelperOptions options)
     {
-        if (a is null && b is null)
+        int cmpResult = Compare(a, b, options, options);
+        if (cmpResult == 1)
+            return b;
+
+        return a;
+
+        /*if (a is null && b is null)
         {
             return null;
         }
@@ -1855,7 +1987,7 @@ public static class MathHelper
             TypeCode.Double => Math.Min((double)a!, (double)b!),
             TypeCode.Decimal => Math.Min((decimal)a!, (decimal)b!),
             _ => null
-        };
+        };*/
     }
 
     /// <summary>
@@ -1900,18 +2032,39 @@ public static class MathHelper
             if (a is BigInteger)
             {
                 if (b is BigDecimal)
+                {
                     a = ConvertToBigDecimal(a);
+                }
+                else
+                if (IsBoxedFloatingNumber(b))
+                {
+                    a = ConvertToBigDecimal(a);
+                    b = ConvertToBigDecimal(b);
+                }
                 else
                 if (b is not BigInteger)
+                {
                     b = ConvertToBigInteger(b);
+                }
                 return TypeCode.Object;
             }
             if (b is BigInteger)
             {
                 if (a is BigDecimal)
+                {
                     b = ConvertToBigDecimal(b);
+                }
                 else
+                if (IsBoxedFloatingNumber(a))
+                {
+                    a = ConvertToBigDecimal(a);
+                    b = ConvertToBigDecimal(b);
+                }
+                else
+                {
                     a = ConvertToBigInteger(a);
+                }
+
                 return TypeCode.Object;
             }
             if (a is BigDecimal)
@@ -1963,7 +2116,9 @@ public static class MathHelper
             // the code below is used to upgrade both variables
             TypeCode resultTypeCode = TypeCodeExpandBits(typeCodeB, ref a, ref b, options);
             if (typeCodeA == typeCodeB && typeCodeA == resultTypeCode)
+            {
                 return TypeCode.Empty; // nowhere else to expand
+            }
             else
             {
                 typesWereExpanded = true;
@@ -2063,6 +2218,98 @@ public static class MathHelper
                 return int.MaxValue;
             default: return null;
         }
+    }
+
+    public static Type GetBroaderType(Type typeA, Type typeB)
+    {
+        if (typeA == typeB)
+            return typeA;
+
+        if (typeA == typeof(BigDecimal))
+            return typeA;
+
+        if (typeB == typeof(BigDecimal))
+            return typeA;
+
+        if (typeA == typeof(BigInteger))
+            return typeA;
+
+        if (typeB == typeof(BigInteger))
+            return typeB;
+
+        if (typeA == typeof(decimal))
+            return typeA;
+
+        if (typeB == typeof(decimal))
+            return typeB;
+
+        if (typeA == typeof(double))
+            return typeA;
+
+        if (typeB == typeof(double))
+            return typeB;
+
+        if (typeA == typeof(float))
+            return typeA;
+
+        if (typeB == typeof(float))
+            return typeB;
+
+        if (typeA == typeof(long))
+            return typeA;
+
+        if (typeB == typeof(long))
+            return typeB;
+
+        if (typeA == typeof(ulong))
+            return typeA;
+
+        if (typeB == typeof(ulong))
+            return typeB;
+
+        if (typeA == typeof(int))
+            return typeA;
+
+        if (typeB == typeof(int))
+            return typeB;
+
+        if (typeA == typeof(uint))
+            return typeA;
+
+        if (typeB == typeof(uint))
+            return typeB;
+
+        if (typeA == typeof(short))
+            return typeA;
+
+        if (typeB == typeof(short))
+            return typeB;
+
+        if (typeA == typeof(ushort))
+            return typeA;
+
+        if (typeB == typeof(ushort))
+            return typeB;
+
+        if (typeA == typeof(char))
+            return typeA;
+
+        if (typeB == typeof(char))
+            return typeB;
+
+        if (typeA == typeof(sbyte))
+            return typeA;
+
+        if (typeB == typeof(sbyte))
+            return typeB;
+
+        if (typeA == typeof(byte))
+            return typeA;
+
+        if (typeB == typeof(byte))
+            return typeB;
+
+        return typeA;
     }
 
     public static object Abs(object? a, MathHelperOptions options)
@@ -2288,46 +2535,26 @@ public static class MathHelper
 
     public static object Pow(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
-        if (options.DecimalAsDefault || options.UseBigNumbers)
+        if (a is null)
+            throw new ArgumentNullException(nameof(a));
+        if (b is null)
+            throw new ArgumentNullException(nameof(b));
+
+        Type typeA = a.GetType();
+        if ((options.DecimalAsDefault || options.UseBigNumbers) && (IsBoxedFloatingNumberInteger(b) == true))
         {
             var @base = new BigDecimal(ConvertToDecimal(a, options));
             var exponent = new BigInteger(ConvertToDecimal(b, options));
 
-            BigDecimal result = BigDecimal.Pow(@base, exponent);
-            if (result.GetFractionalPart().IsZero())
-            {
-                BigInteger bi = result.WholeValue;
-                if (reduceTypes)
-                {
-                    if (bi >= int.MinValue && bi <= int.MaxValue)
-                        return (int)bi;
-                    if (bi >= long.MinValue && bi <= long.MaxValue)
-                        return (long)bi;
-                    if (bi >= ulong.MinValue && bi <= ulong.MaxValue)
-                        return (ulong)bi;
-                }
-                if (options.UseBigNumbers)
-                    return bi;
-            }
-            else
-            if (reduceTypes)
-            {
-                if (options.DecimalAsDefault && (result >= decimal.MinValue && result <= decimal.MaxValue))
-                    return (decimal)result;
-                else
-                if (result >= float.MinValue && result <= float.MaxValue)
-                    return (float)result;
-                else
-                if (result >= double.MinValue && result <= double.MaxValue)
-                    return (double)result;
-                else
-                if (result >= decimal.MinValue && result <= decimal.MaxValue)
-                    return (decimal)result;
-            }
-            return result;
+            BigDecimal bdResult = BigDecimal.Pow(@base, exponent);
+            return ReduceNumericType(bdResult, reduceTypes ? null : typeA, options) ?? throw new NCalcEvaluationException("Pow result could not be reduced to a smaller type");
         }
 
-        return Math.Pow(ConvertToDouble(a, options), ConvertToDouble(b, options));
+        double result = Math.Pow(ConvertToDouble(a, options), ConvertToDouble(b, options));
+        if (typeA == typeof(decimal))
+            return (decimal)result;
+
+        return result;
     }
 
     public static object Factorial(object a, object b, MathHelperOptions options)
@@ -2422,7 +2649,7 @@ public static class MathHelper
 
     public static object Round(object? a, object? b, MidpointRounding rounding, MathHelperOptions options)
     {
-        if (a != null && (IsBoxedIntegerNumber(a) || a is BigInteger))
+        if (a is not null && (IsBoxedIntegerNumber(a) || a is BigInteger))
             return a;
 
         if (a is BigDecimal bdA)
@@ -2578,7 +2805,7 @@ public static class MathHelper
             if (a is DateTime dt)
                 return dt.Date;
         }
-        if (a != null && (IsBoxedIntegerNumber(a) || a is BigInteger))
+        if (a is not null && (IsBoxedIntegerNumber(a) || a is BigInteger))
         {
             return a;
         }
@@ -2672,9 +2899,28 @@ public static class MathHelper
             BigInteger bigI => ((long)bigI),
             BigDecimal bigD => ((long)(decimal)bigD),
 
+            long l => l,
             int i => i,
+            short s => s,
+            sbyte sb => sb,
             char ch => Convert.ToInt64(ch.ToString(), options.CultureInfo),
             _ => Convert.ToInt64(value, options.CultureInfo)
+        };
+    }
+
+    public static ulong ConvertToULong(object? value, MathHelperOptions options)
+    {
+        return value switch
+        {
+            BigInteger bigI => bigI.Sign >= 0 ? ((ulong)bigI) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong)),
+            BigDecimal bigD => bigD.Sign >= 0 ? ((ulong)(decimal)bigD) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigDecimal), typeof(ulong)),
+
+            ulong ul => ul,
+            uint ui => ui,
+            ushort us => us,
+            byte b => b,
+            char ch => Convert.ToUInt64(ch.ToString(), options.CultureInfo),
+            _ => Convert.ToUInt64(value, options.CultureInfo)
         };
     }
 
@@ -3177,25 +3423,155 @@ public static class MathHelper
         return ula << stepInt;
     }
 
+    public static int Compare(object? a, object? b, ComparisonOptions comparisonOptions, MathHelperOptions mathHelperOptions)
+    {
+        int result;
+
+        // Handle possible NaN
+        if (a is double dA)
+        {
+            if (Double.IsNaN(dA))
+                return -1;
+        }
+        else
+        if (a is float fA)
+        {
+            if (float.IsNaN(fA))
+                return -1;
+        }
+        if (b is double dB)
+        {
+            if (Double.IsNaN(dB))
+                return 1;
+        }
+        else
+        if (b is float fB)
+        {
+            if (float.IsNaN(fB))
+                return 1;
+        }
+
+        // Handle null
+        if (a is null || b is null)
+        {
+            if (a is null && b is null)
+                return 0;
+            else
+            if (a is null)
+                return -1;
+            else
+                return 1;
+        }
+
+        // Handle bug numbers
+        if (a is BigDecimal || b is BigDecimal)
+        {
+            if (a is BigDecimal bdA)
+            {
+                if (b is BigDecimal bdB)
+                    result = bdA.CompareTo(bdB);
+                else
+                    result = bdA.CompareTo(MathHelper.ConvertToBigDecimal(b));
+            }
+            else
+            {
+                result = ((BigDecimal)b).CompareTo(MathHelper.ConvertToBigDecimal(a));
+            }
+
+            return result;
+        }
+        else
+        if (a is BigInteger || b is BigInteger)
+        {
+            if (a is BigInteger biA)
+            {
+                if (b is BigInteger biB)
+                    result = biA.CompareTo(biB);
+                else
+                    result = biA.CompareTo(MathHelper.ConvertToBigInteger(b));
+            }
+            else
+            {
+                result = ((BigInteger)b).CompareTo(MathHelper.ConvertToBigInteger(a));
+            }
+
+            return result;
+        }
+
+        // Handle everything else. We are not interested in the value returned by CompareUsingMostPreciseType because it would return false only when comparison of non-compatible types is allowed and in this case, the result is returned based on object hash codes.
+        TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result);
+        return result;
+    }
+
     public static long? GetBoxedIntegerNumberAsLong(object? obj)
     {
         if (obj is null)
             return null;
 
-        switch (obj)
+        try
         {
-            case byte b: return (long)b;
-            case sbyte sb: return (long)sb;
-            case short s: return (long)s;
-            case ushort us: return (long)us;
-            case int i: return (long)i;
-            case uint ui: return (long)ui;
-            case long l: return l;
-            case ulong ul: if (ul < Int64.MaxValue) return (long)ul; else return null;
-            case BigInteger bi: return (long)bi;
-            case BigDecimal bd: if (bd.GetFractionalPart().IsZero()) return (long)(bd.GetWholePart()); else return null;
-            default:
-                throw new ArgumentException("Provided object is not a supported numeric type.");
+            switch (obj)
+            {
+                case byte b: return (long)b;
+                case sbyte sb: return (long)sb;
+                case short s: return (long)s;
+                case ushort us: return (long)us;
+                case int i: return (long)i;
+                case uint ui: return (long)ui;
+                case long l: return l;
+                case ulong ul: if (ul < Int64.MaxValue) return (long)ul; else return null;
+                case float fl: if (fl == Math.Truncate(fl)) return (long)fl; else return null;
+                case double db: if (db == Math.Truncate(db)) return (long)db; else return null;
+                case decimal dd: if (dd == Math.Truncate(dd)) return (long)dd; else return null;
+                case BigInteger bi: return (long)bi;
+                case BigDecimal bd: if (bd.GetFractionalPart().IsZero()) return (long)(bd.GetWholePart()); else return null;
+                default:
+                    throw new ArgumentException("Provided object is not a supported numeric type.");
+            }
+        }
+        catch (InvalidCastException)
+        {
+            return null;
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
+    }
+
+    public static ulong? GetBoxedIntegerNumberAsULong(object? obj)
+    {
+        if (obj is null)
+            return null;
+
+        try
+        {
+            switch (obj)
+            {
+                case byte b: return (ulong)(long)b;
+                case sbyte sb: if (sb > 0) return (ulong)sb; else return null;
+                case short s: if (s > 0) return (ulong)s; else return null;
+                case ushort us: return (ulong)(long)us;
+                case int i: if (i > 0) return (ulong)i; else return null;
+                case uint ui: return (ulong)ui;
+                case long l: if (l > 0) return (ulong)l; else return null;
+                case ulong ul: return ul;
+                case float fl: if (fl == Math.Truncate(fl)) return (ulong)fl; else return null;
+                case double db: if (db == Math.Truncate(db)) return (ulong)db; else return null;
+                case decimal dd: if (dd == Math.Truncate(dd)) return (ulong)dd; else return null;
+                case BigInteger bi: return (ulong)bi;
+                case BigDecimal bd: if (bd.GetFractionalPart().IsZero()) return (ulong)(bd.GetWholePart()); else return null;
+                default:
+                    throw new ArgumentException("Provided object is not a supported numeric type.");
+            }
+        }
+        catch (InvalidCastException)
+        {
+            return null;
+        }
+        catch (OverflowException)
+        {
+            return null;
         }
     }
 
@@ -3223,6 +3599,7 @@ public static class MathHelper
                 throw new ArgumentException("Provided object is not a supported numeric type.");
         }
     }
+
     public static decimal? GetBoxedNumberAsDecimal(object? obj)
     {
         if (obj is null)
@@ -3285,6 +3662,19 @@ public static class MathHelper
                    t == typeof(long) || t == typeof(ulong);
     }
 
+    public static bool IsBoxedIntegerNumberOrBigNumber(Type t)
+    {
+        if (t == typeof(BigInteger))
+        {
+            return true;
+        }
+
+        return t == typeof(byte) || t == typeof(sbyte) ||
+                   t == typeof(short) || t == typeof(ushort) ||
+                   t == typeof(int) || t == typeof(uint) ||
+                   t == typeof(long) || t == typeof(ulong);
+    }
+
     public static bool IsBoxedNumber(object? obj)
     {
         if (obj is null)
@@ -3296,6 +3686,43 @@ public static class MathHelper
                t == typeof(int) || t == typeof(uint) ||
                t == typeof(long) || t == typeof(ulong) ||
                t == typeof(float) || t == typeof(double) || t == typeof(decimal);
+    }
+
+    public static bool IsBoxedFloatingNumber(object? obj)
+    {
+        if (obj is null)
+            return false;
+
+        var t = obj.GetType();
+        return t == typeof(float) || t == typeof(double) || t == typeof(decimal);
+    }
+
+    /// <summary>
+    /// Checks if the given number is a floating point number and if it is, whether it contains only the whole part
+    /// </summary>
+    /// <param name="obj">the number to check</param>
+    /// <returns><see langword="null"/> if <paramref name="obj"/> is not a floating point number, <see langword="true"/> if <paramref name="obj"/> is a floating point number without a fractional part, and <see langword="false"/> if it has a non-zero fractional part.</returns>
+    public static bool? IsBoxedFloatingNumberInteger(object? obj)
+    {
+        if (obj is null)
+            return null;
+
+        if (obj is float ft)
+        {
+            return ft == Math.Truncate(ft);
+        }
+
+        if (obj is double dt)
+        {
+            return dt == Math.Truncate(dt);
+        }
+
+        if (obj is decimal dct)
+        {
+            return dct == Math.Truncate(dct);
+        }
+
+        return null;
     }
 
     public static bool IsBoxedNumberOrBigNumber(object? obj)
@@ -3312,6 +3739,18 @@ public static class MathHelper
                t == typeof(int) || t == typeof(uint) ||
                t == typeof(long) || t == typeof(ulong) ||
                t == typeof(float) || t == typeof(double) || t == typeof(decimal);
+    }
+
+    public static bool IsBoxedFloatingNumberOrBigNumber(object? obj)
+    {
+        if (obj is null)
+            return false;
+
+        if (obj is BigDecimal)
+            return true;
+
+        var t = obj.GetType();
+        return t == typeof(float) || t == typeof(double) || t == typeof(decimal);
     }
 
     public static bool? IsBoxedPositiveNumber(object? number)
@@ -3414,89 +3853,134 @@ public static class MathHelper
         }
     }
 
-    public static object? ReduceNumericType(object value, MathHelperOptions options = default)
+    public static object? ReduceNumericType(object value, Type? restrictToType = null, MathHelperOptions options = default)
     {
         object? lValue = value;
         if (value is BigDecimal bdValue)
         {
-            lValue = MathHelper.ReduceToSaneNumber(bdValue, false, options);
+            lValue = MathHelper.ReduceBigDecimal(bdValue, restrictToType, false, options);
         }
         else
         if (value is BigInteger biValue)
         {
-            lValue = MathHelper.ReduceToSaneNumber(biValue, options);
+            lValue = MathHelper.ReduceBigInteger(biValue, restrictToType, options);
         }
-
         if (MathHelper.IsBoxedIntegerNumber(lValue))
         {
-            if (lValue is ulong ulValue)
+            if (restrictToType == typeof(ulong) || restrictToType == typeof(uint) || restrictToType == typeof(ushort) || restrictToType == typeof(byte) || restrictToType == typeof(char))
             {
-                if (ulValue <= int.MaxValue)
-                    return (int)(uint)ulValue;
+                ulong candidate = MathHelper.ConvertToULong(lValue, options);
+
+                if ((restrictToType is null || restrictToType == typeof(uint) || restrictToType == typeof(ushort)) && candidate <= uint.MaxValue)
+                    return (uint)candidate;
                 else
-                if (ulValue <= uint.MaxValue)
-                    return (uint)ulValue;
-                return ulValue;
+                if ((restrictToType is null || restrictToType == typeof(int) || restrictToType == typeof(short)) && candidate <= int.MaxValue)
+                    return (int)candidate;
+
+                return candidate;
             }
-            else
+
+            if ((restrictToType is null || restrictToType == typeof(long) || restrictToType == typeof(int) || restrictToType == typeof(short) || restrictToType == typeof(sbyte)))
             {
                 long candidate = MathHelper.ConvertToLong(lValue, options);
-                if (candidate >= int.MinValue && candidate <= int.MaxValue)
+                if ((restrictToType is null || restrictToType == typeof(int) || restrictToType == typeof(short)) && candidate >= int.MinValue && candidate <= int.MaxValue)
                     return (int)candidate;
                 else
-                if (candidate >= uint.MinValue && candidate <= uint.MaxValue)
+                if ((restrictToType is null || restrictToType == typeof(uint) || restrictToType == typeof(ushort)) && candidate >= uint.MinValue && candidate <= uint.MaxValue)
                     return (uint)(ulong)candidate;
+
                 return candidate;
             }
         }
+        else
+        if (IsBoxedFloatingNumberInteger(lValue) == true)
+        {
+            if ((restrictToType == typeof(ulong) || restrictToType == typeof(uint) || restrictToType == typeof(ushort) || restrictToType == typeof(byte) || restrictToType == typeof(char)))
+            {
+                ulong? candidate = GetBoxedIntegerNumberAsULong(lValue);
+                if (candidate is not null)
+                {
+                    if (restrictToType != typeof(ulong) && candidate >= uint.MinValue && candidate <= uint.MaxValue)
+                        return (uint)candidate;
+                    return candidate;
+                }
+            }
+            if ((restrictToType is null || restrictToType == typeof(long) || restrictToType == typeof(int) || restrictToType == typeof(short) || restrictToType == typeof(sbyte)))
+            {
+                long? candidate = GetBoxedIntegerNumberAsLong(lValue);
+                if (candidate is not null)
+                {
+                    if (restrictToType != typeof(long) && candidate >= int.MinValue && candidate <= int.MaxValue)
+                        return (int)candidate;
+                    return candidate;
+                }
+            }
+        }
 
+        if (lValue is double dValue)
+        {
+            if ((/*restrictToType is null || */restrictToType == typeof(float)) && dValue >= float.MinValue && dValue <= float.MaxValue)
+                return (float)dValue;
+            if (restrictToType is null || restrictToType == typeof(double))
+                return dValue;
+        }
+
+        // here, float and decimal are returned as is
         return lValue;
     }
 
-    public static object? ReduceToSaneNumber(BigDecimal value, bool forceInteger = false, MathHelperOptions? options = default)
+    public static object? ReduceBigDecimal(BigDecimal value, Type? restrictToType = null, bool forceInteger = false, MathHelperOptions? options = default)
     {
+        if (options is null)
+            options = MathHelperOptions.Empty;
+
+        BigInteger? biResult = null;
+
         if (forceInteger || value.GetFractionalPart().IsZero())
         {
-            BigInteger biResult = value.WholeValue;
+            biResult = value.WholeValue;
 
-            if (biResult >= long.MinValue && biResult <= long.MaxValue)
+            if ((restrictToType is null || restrictToType == typeof(long) || restrictToType == typeof(int) || restrictToType == typeof(short)) && biResult >= long.MinValue && biResult <= long.MaxValue)
                 return (long)biResult;
             else
-            if (biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
+            if ((restrictToType is null || restrictToType == typeof(ulong) || restrictToType == typeof(uint) || restrictToType == typeof(ushort)) && biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
                 return (ulong)biResult;
 
-            return biResult;
+            //return biResult;
         }
 
-        if ((options?.DecimalAsDefault == true) && (value >= decimal.MinValue && value <= decimal.MaxValue))
+        if (((restrictToType is null && (options.Value.DecimalAsDefault)) || restrictToType == typeof(decimal)) && (value >= decimal.MinValue && value <= decimal.MaxValue))
         {
             return (decimal)value;
         }
 
-        if (value >= float.MinValue && value <= float.MaxValue)
+        if (((/*restrictToType is null && */(options.Value.DecimalAsDefault != true)) || restrictToType == typeof(float)) && (value >= float.MinValue && value <= float.MaxValue))
         {
             return (float)value;
         }
 
-        if (value >= double.MinValue && value <= double.MaxValue)
+        if (((restrictToType is null && (options.Value.DecimalAsDefault != true)) || restrictToType == typeof(double)) && value >= double.MinValue && value <= double.MaxValue)
         {
             return (double)value;
         }
 
-        if (value >= decimal.MinValue && value <= decimal.MaxValue)
+        if (((restrictToType is null && (options.Value.DecimalAsDefault != true)) || restrictToType == typeof(decimal)) && value >= decimal.MinValue && value <= decimal.MaxValue)
         {
             return (decimal)value;
         }
 
+        if (biResult is not null)
+            return biResult;
+
         return value;
     }
 
-    public static object? ReduceToSaneNumber(BigInteger value, MathHelperOptions? options = default)
+    public static object? ReduceBigInteger(BigInteger value, Type? restrictToType = null, MathHelperOptions? options = default)
     {
-        if (value >= long.MinValue && value <= long.MaxValue)
+        if ((restrictToType is null || restrictToType == typeof(long) || restrictToType == typeof(int) || restrictToType == typeof(short)) && value >= long.MinValue && value <= long.MaxValue)
             return (long)value;
-
-        if (value >= ulong.MinValue && value <= ulong.MaxValue)
+        else
+        if ((restrictToType is null || restrictToType == typeof(ulong) || restrictToType == typeof(uint) || restrictToType == typeof(ushort)) && value >= ulong.MinValue && value <= ulong.MaxValue)
             return (ulong)value;
 
         return value;

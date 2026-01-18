@@ -192,4 +192,9 @@ public enum ExpressionOptions : long
     /// Specifies that Dynamic functions should not be used (required for AOT).
     /// </summary>
     AvoidDynamicFunctions = ((long)1) << 36,
+
+    /// <summary>
+    /// Specifies that when arithmetic operations are performed, the resulting type is reduced in order to avoid groing unnecessarily. 
+    /// </summary>
+    ReduceArithmeticResultType = ((long)1) << 37,
 }

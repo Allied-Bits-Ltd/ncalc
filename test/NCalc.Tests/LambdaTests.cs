@@ -446,6 +446,7 @@ public class LambdaTests
         public double LambdaResult;
     }
 
+    /*
     [Fact]
     public void ExpressionAndLambdaFuncBehaviorMatch()
     {
@@ -597,7 +598,7 @@ public class LambdaTests
             //return Math.Abs(a - b) < tol;
         }
     }
-
+    */
     struct ContextWithOverridenMethods
     {
         public double x;

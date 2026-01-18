@@ -1,3 +1,8 @@
+# 8.7.5.2 (Allied Bits)
+
+* When big numbers were used, a certain combination of operand types (a BigInteger and a floating point in any order) during math operations could fail to convert to a common big number type.
+* Division could work improperly when two integer numbers were divided.
+
 # 8.7.5.1 (Allied Bits)
 
 * Fixed a failing test - it was missing an option.

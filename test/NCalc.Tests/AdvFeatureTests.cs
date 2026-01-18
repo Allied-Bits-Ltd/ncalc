@@ -13,7 +13,7 @@ using Parlot.Fluent;
 namespace NCalc.Tests;
 
 [Trait("Category", "Advanced")]
-public class AdvFeatureTests
+public class AdvFeatureTests : TestBase
 {
     [Theory]
     [InlineData("{ 0 }", 0)]
@@ -2131,34 +2131,10 @@ public class AdvFeatureTests
         Assert.True(eventFired);
 
         Assert.NotNull(result);
-        if (result.GetType() == typeof(System.Double))
-        {
-            double dResult = (double)result;
-            Assert.Equal(expectedExprValue, (double)dResult);
-        }
-        else
-        if (result.GetType() == typeof(System.UInt64))
-        {
-            ulong uResult = (ulong)result;
-            Assert.Equal(expectedExprValue, (int)uResult);
-        }
-        else
-            Assert.Equal(expectedExprValue, result);
+        CheckResult(expectedExprValue, result);
 
         Assert.NotNull(expression.Parameters["a"]);
-        if (expression.Parameters["a"]!.GetType() == typeof(System.UInt64))
-        {
-            ulong uResult = (ulong)expression.Parameters["a"]!;
-            Assert.Equal(expectedExprValue, (int)uResult);
-        }
-        else
-        if (expression.Parameters["a"]!.GetType() == typeof(System.Double))
-        {
-            double dResult = (double)expression.Parameters["a"]!;
-            Assert.Equal(expectedExprValue, (int)dResult);
-        }
-        else
-            Assert.Equal(expectedExprValue, expression.Parameters["a"]!);
+        CheckResult(expectedExprValue, expression.Parameters["a"]!);
     }
 
 #if !AOT_COMPILATION

@@ -8,6 +8,8 @@ public readonly struct MathHelperOptions(CultureInfo cultureInfo, ExpressionOpti
 
     public ExpressionOptions AllOptions => options;
 
+    public static MathHelperOptions Empty = new();
+
     public bool AvoidDynamicFunctions
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -63,5 +65,10 @@ public readonly struct MathHelperOptions(CultureInfo cultureInfo, ExpressionOpti
     public static implicit operator MathHelperOptions(CultureInfo cultureInfo)
     {
         return new MathHelperOptions(cultureInfo, ExpressionOptions.None);
+    }
+
+    public static implicit operator ComparisonOptions(MathHelperOptions options)
+    {
+        return new ComparisonOptions(options.CultureInfo, options.AllOptions);
     }
 }

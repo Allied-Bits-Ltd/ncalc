@@ -177,7 +177,7 @@ public class DateTimeTests
     [Fact]
     public void ShouldDivideTimeSpan()
     {
-        var expr = new Expression("(#2026-01-03T00:00:00Z# - #2026-01-01T00:00:00Z#) / 2", ExpressionOptions.SupportTimeOperations | ExpressionOptions.UseBigNumbers);
+        var expr = new Expression("(#2026-01-03T00:00:00Z# - #2026-01-01T00:00:00Z#) / 2", ExpressionOptions.SupportTimeOperations | ExpressionOptions.UseBigNumbers | ExpressionOptions.DecimalAsDefault);
         var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
         var dt = new TimeSpan(1, 0, 0, 0);

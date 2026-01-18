@@ -3,7 +3,7 @@ using NCalc.Factories;
 namespace NCalc.Tests;
 
 [Trait("Category", "Operators")]
-public class OperatorsTests
+public class OperatorsTests : TestBase
 {
     [Theory]
     [InlineData("NOT true")]
@@ -59,7 +59,7 @@ public class OperatorsTests
     public void ShouldEvaluateOperators(string expression, object expected)
     {
         var result = new Expression(expression).Evaluate(TestContext.Current.CancellationToken);
-        Assert.Equal(expected, result);
+        CheckResult(expected, result);
     }
 
     [Theory]
@@ -77,7 +77,7 @@ public class OperatorsTests
     [InlineData("2 ** 4 / 2", 8d)]
     public void ShouldHandleOperatorsPriority(string expression, object expected)
     {
-        Assert.Equal(expected, new Expression(expression).Evaluate(TestContext.Current.CancellationToken));
+        CheckResult(expected, new Expression(expression).Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
