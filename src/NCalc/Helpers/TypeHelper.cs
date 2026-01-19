@@ -204,6 +204,11 @@ public static class TypeHelper
                 Type? mpt = null;
                 bool compareStrings = false;
 
+                if (a is string && b is string)
+                {
+                    compareStrings = true;
+                }
+                else
                 if (a is string)
                 {
                     bool aConverted = false;
