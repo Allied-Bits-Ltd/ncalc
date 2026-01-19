@@ -1,7 +1,9 @@
-# 8.7.5.2 (Allied Bits)
+# 8.7.6 (Allied Bits)
 
 * When big numbers were used, a certain combination of operand types (a BigInteger and a floating point in any order) during math operations could fail to convert to a common big number type.
 * Division could work improperly when two integer numbers were divided.
+* Improved conversion of types in math operations - now, an attempt is made to make a result to be of the type of  initial operand(s) after an operation which required the change of types of the operands.
+* Now, a string is parsed using `Expression` during comparison between a string and a non-string.
 
 # 8.7.5.1 (Allied Bits)
 
