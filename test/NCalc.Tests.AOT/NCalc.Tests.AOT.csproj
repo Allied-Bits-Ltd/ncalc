@@ -27,6 +27,7 @@
     <Compile Include="..\NCalc.Tests\OperatorsTests.cs" Link="OperatorsTests.cs" />
     <Compile Include="..\NCalc.Tests\ParametersAndFunctions.cs" Link="ParametersAndFunctions.cs" />
     <Compile Include="..\NCalc.Tests\StringTests.cs" Link="StringTests.cs" />
+    <Compile Include="..\NCalc.Tests\TestBase.cs" Link="TestBase.cs" />
     <Compile Include="..\NCalc.Tests\TestData\BuiltInFunctionsTestData.cs" Link="BuiltInFunctionsTestData.cs" />
     <Compile Include="..\NCalc.Tests\TestData\EvaluationTestData.cs" Link="EvaluationTestData.cs" />
     <Compile Include="..\NCalc.Tests\TestData\NullCheckTestData.cs" Link="NullCheckTestData.cs" />
