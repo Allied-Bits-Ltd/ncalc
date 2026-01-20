@@ -167,6 +167,10 @@ Debug.Assert(function()); //3
 Fast and lightweight parser creation tools by [Sébastien Ros](https://github.com/sebastienros) that NCalc uses for its
 parser.
 
+### [BigDecimal](https://github.com/AdamWhiteHat/BigDecimal)
+
+An arbitrary-precision decimal (base 10) floating-point number class by Adam White.
+
 ### [FastExpressionCompiler](https://github.com/dadhi/FastExpressionCompiler)
 
 Fast Compiler for C# Expression Trees. Developed by [Maksim Volkov](https://github.com/dadhi)
