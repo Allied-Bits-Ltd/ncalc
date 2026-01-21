@@ -3844,10 +3844,35 @@ public static class MathHelper
             case long l: return l == 1;
             case ulong ul: return ul == 1;
             case float f: return f == 1f;
-            case double d: return d == 1.1;
+            case double d: return d == 1d;
             case decimal dec: return dec == 1m;
             case BigInteger bi: return bi.IsOne;
             case BigDecimal bd: return (double) bd == 1;
+            default:
+                return null; // throw new ArgumentException("Provided object is not a supported numeric type.");
+        }
+    }
+
+    public static bool? IsBoxedNumberZeroOrOne(object? number)
+    {
+        if (number is null)
+            return null; // throw new ArgumentNullException(nameof(number));
+
+        switch (number)
+        {
+            case byte b: return b == 1 || b == 0;
+            case sbyte sb: return sb == 1 || sb == 0;
+            case short s: return s == 1 || s == 0;
+            case ushort us: return us == 1 || us == 0;
+            case int i: return i == 1 || i == 0;
+            case uint ui: return ui == 1 || ui == 0;
+            case long l: return l == 1 || l == 0;
+            case ulong ul: return ul == 1 || ul == 0;
+            case float f: return f == 1f || f == 0f;
+            case double d: return d == 1d || d == 0d;
+            case decimal dec: return dec == 1m || dec == 0m;
+            case BigInteger bi: return bi.IsOne || bi.IsZero;
+            case BigDecimal bd: return bd.IsZero() || ((double) bd == 1);
             default:
                 return null; // throw new ArgumentException("Provided object is not a supported numeric type.");
         }

@@ -1,3 +1,8 @@
+# 8.7.6.1 (Allied Bits)
+
+* Added the `MathHelper.IsBoxedNumberZeroOrOne` method
+* Fixed `MathHelper.IsBoxedNumberOne` that could return wrong result for a double value of one.
+
 # 8.7.6 (Allied Bits)
 
 * When big numbers were used, a certain combination of operand types (a BigInteger and a floating point in any order) during math operations could fail to convert to a common big number type.
