@@ -3524,7 +3524,7 @@ public static class MathHelper
                 case double db: if (db == Math.Truncate(db)) return (long)db; else return null;
                 case decimal dd: if (dd == Math.Truncate(dd)) return (long)dd; else return null;
                 case BigInteger bi: return (long)bi;
-                case BigDecimal bd: if (bd.GetFractionalPart().IsZero()) return (long)(bd.GetWholePart()); else return null;
+                case BigDecimal bd: if (bd.DecimalPlaces == 0) return (long)(bd.GetWholePart()); else return null;
                 default:
                     throw new ArgumentException("Provided object is not a supported numeric type.");
             }
@@ -3560,7 +3560,7 @@ public static class MathHelper
                 case double db: if (db == Math.Truncate(db)) return (ulong)db; else return null;
                 case decimal dd: if (dd == Math.Truncate(dd)) return (ulong)dd; else return null;
                 case BigInteger bi: return (ulong)bi;
-                case BigDecimal bd: if (bd.GetFractionalPart().IsZero()) return (ulong)(bd.GetWholePart()); else return null;
+                case BigDecimal bd: if (bd.DecimalPlaces == 0) return (ulong)(bd.GetWholePart()); else return null;
                 default:
                     throw new ArgumentException("Provided object is not a supported numeric type.");
             }
@@ -3722,6 +3722,11 @@ public static class MathHelper
             return dct == Math.Truncate(dct);
         }
 
+        if (obj is BigDecimal bd)
+        {
+            return bd.DecimalPlaces == 0;
+        }
+
         return null;
     }
 
@@ -3771,8 +3776,8 @@ public static class MathHelper
             case float f: return f > 0f;
             case double d: return d > 0.0;
             case decimal dec: return dec > 0m;
-            case BigInteger bi: return bi > 0;
-            case BigDecimal bd: return bd > 0;
+            case BigInteger bi: return bi.Sign > 0;
+            case BigDecimal bd: return bd.Sign > 0;
             default:
                 return null; //throw new ArgumentException("Provided object is not a supported numeric type.");
         }
@@ -3796,8 +3801,8 @@ public static class MathHelper
             case float f: return f < 0f;
             case double d: return d < 0.0;
             case decimal dec: return dec < 0m;
-            case BigInteger bi: return bi < 0;
-            case BigDecimal bd: return bd < 0;
+            case BigInteger bi: return bi.Sign < 0;
+            case BigDecimal bd: return bd.Sign < 0;
             default:
                 return null; //throw new ArgumentException("Provided object is not a supported numeric type.");
         }
@@ -3847,7 +3852,7 @@ public static class MathHelper
             case double d: return d == 1d;
             case decimal dec: return dec == 1m;
             case BigInteger bi: return bi.IsOne;
-            case BigDecimal bd: return (double) bd == 1;
+            case BigDecimal bd: return bd.CompareTo(1) == 0;
             default:
                 return null; // throw new ArgumentException("Provided object is not a supported numeric type.");
         }
@@ -3872,7 +3877,7 @@ public static class MathHelper
             case double d: return d == 1d || d == 0d;
             case decimal dec: return dec == 1m || dec == 0m;
             case BigInteger bi: return bi.IsOne || bi.IsZero;
-            case BigDecimal bd: return bd.IsZero() || ((double) bd == 1);
+            case BigDecimal bd: return bd.IsZero() || (bd.CompareTo(1) == 0);
             default:
                 return null; // throw new ArgumentException("Provided object is not a supported numeric type.");
         }
