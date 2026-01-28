@@ -1,3 +1,7 @@
+# 8.7.6.2 (Allied Bits)
+
+* Added optional parameters for dynamic expression parameters and functions to the constructor of the ExpresssionContext class.
+
 # 8.7.6.1 (Allied Bits)
 
 * Added the `MathHelper.IsBoxedNumberZeroOrOne` method
