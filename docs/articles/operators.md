@@ -1,6 +1,6 @@
 # Operators
 
-Expressions can be combined using operators, each with a specific precedence priority. The precedence rules determine the order in which operations are performed in an expression. Below is a list of operator precedence in descending order:
+Expressions can be combined using operators, each with a specific precedence priority. The precedence rules determine the order in which operations are performed in an expression. Below is the list of operators ordered by precedence in descending order:
 
 1. **Primary**
 2. **Factorial**
@@ -41,6 +41,8 @@ Lists are used to group expressions.
 "foo" in ("foo", "bar", 5) 
 secret_operation("my_db", 2) // Function arguments are actually a list!
 ```
+
+The elements of the list may be separated with a comma (",") or a semicolon (";"). A semicolon is recommended to avoid the possible conflict with a decimal separator or a number group separator.
 
 ### Indexed Access to Lists and Strings
 

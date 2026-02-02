@@ -103,11 +103,13 @@ When [Advanced Options](advanced_value_formats.md) are used, the format of time 
 Additionally, it is possible to define periods in a humane form (e.g. #5 weeks 3 days 28 hours#) as described in the [Advanced Value Formats and Operations](advanced_value_formats.md) topic.
 
 ## Booleans
+
 Booleans can be either `true` or `false`.
 
 ```
 true
 ```
+
 ## Strings
 
 Any characters between single or double quotes are evaluated as <xref:System.String>. 
@@ -173,9 +175,9 @@ Please read the [parameters page](parameters.md) for details.
 ## Lists
 
 Lists are collections of expressions enclosed in parentheses. They are the equivalent of `List<LogicalExpression>` in .NET.
-The elements of the list may be separated with a comma (",") or a semicolon (";"). A semicolon is recommended to avoid the possible conflict with a decimal separator or a number group separator.
+The elements of the list may be separated with a comma (",") or a semicolon (";"). A semicolon is recommended to avoid possible conflicts with a decimal separator or a number group separator.
 ```
-('Chers'; secretOperation(); 3.14)
+('Chars'; secretOperation(); 3.14)
 ```
 
 When [Advanced Options](advanced_value_formats.md) are used, the separator(s) that the parser should use to separate the values in the list is defined via the <xref:NCalc.AdvancedExpressionOptions.ArgumentSeparator> property, which suports comma, semicolon, colon, and space, as well as their combinations, as separators.
