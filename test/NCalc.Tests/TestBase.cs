@@ -26,8 +26,13 @@ public class TestBase
     {
     }
 
-    internal void CheckResult(object expected, object result, MathHelperOptions options = default)
+    internal void CheckResult(object expected, object? result, MathHelperOptions options = default)
     {
+        if (result is null)
+        {
+            Assert.Fail($"Comparison failed: actual result is null.");
+        }
+
         if (MathHelper.Compare(expected, result, options, options) != 0)
         {
             Assert.Fail($"Comparison failed: {expected} of type '{expected.GetType()}' expected, {result} of type '{result.GetType()}' obtained.");

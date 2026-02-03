@@ -1,3 +1,8 @@
+# 8.7.7 (Allied Bits)
+
+* Fixed the [inherited] wrong order of logical and bitwise operations. Now, a strong precedence (bit_and, bit_xor, bit_or, and, xor, or) is used.
+* Fixed the parsing of a date-only value in ISO format (e.g. #2026-02-02#)
+
 # 8.7.6.2 (Allied Bits)
 
 * Added optional parameters for dynamic expression parameters and functions to the constructor of the ExpresssionContext class.

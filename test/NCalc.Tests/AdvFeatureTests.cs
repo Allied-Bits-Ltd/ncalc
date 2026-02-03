@@ -785,7 +785,7 @@ public class AdvFeatureTests : TestBase
     }
 
     [Theory]
-    [InlineData("#2025-12-14Z#", new int[] { 2025, 12, 14 })]
+    [InlineData("#2025-12-14#", new int[] { 2025, 12, 14 })]
     public void ShouldParseDateXML(string input, int[] expectedValue)
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
@@ -1625,7 +1625,7 @@ public class AdvFeatureTests : TestBase
     [Fact]
     public void ShouldHandleAssignmentOfFunctionResult()
     {
-        var expression = new Expression("fn DateOfBuild(n) => #2000-01-01Z# + n * 86400 * 10000000;\r\n fn BuildNum(date = null) { if (date == null) { date = #2001-01-01Z#; }; Truncate(date - #2000-01-01Z#) }; BuildNum()", ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseIfStatement | ExpressionOptions.AllowNullParameter | ExpressionOptions.SupportTimeOperations);
+        var expression = new Expression("fn DateOfBuild(n) => #2000-01-01# + n * 86400 * 10000000;\r\n fn BuildNum(date = null) { if (date == null) { date = #2001-01-01#; }; Truncate(date - #2000-01-01#) }; BuildNum()", ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseIfStatement | ExpressionOptions.AllowNullParameter | ExpressionOptions.SupportTimeOperations);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
 
@@ -1848,7 +1848,7 @@ public class AdvFeatureTests : TestBase
     [Fact]
     public void ShouldHandleStatementSequenceWithComments()
     {
-        string input = "// Returns the date when the build with the given number was made\r\nfn DateOfBuild(n) => #2000-01-01Z# + n * 86400 * 10000000;\r\n\r\n/*\r\n// Returns the build number\r\nfn BuildNum(date = null)  \r\n{\r\n  if (date = null) { date := #today# };\r\n  return Trunc(TimespanMSec(date - #2000-01-01Z#) / 86400000);\r\n};\r\n*/\r\n\r\n// Returns the build number\r\nfn BuildNum2(date = null)  \r\n{\r\n  if (date = null) { date := #today# };\r\n return 0;\r\n};\r\n";
+        string input = "// Returns the date when the build with the given number was made\r\nfn DateOfBuild(n) => #2000-01-01# + n * 86400 * 10000000;\r\n\r\n/*\r\n// Returns the build number\r\nfn BuildNum(date = null)  \r\n{\r\n  if (date = null) { date := #today# };\r\n  return Trunc(TimespanMSec(date - #2000-01-01#) / 86400000);\r\n};\r\n*/\r\n\r\n// Returns the build number\r\nfn BuildNum2(date = null)  \r\n{\r\n  if (date = null) { date := #today# };\r\n return 0;\r\n};\r\n";
         var expression = new Expression(input,
             ExpressionOptions.NoCache |
             ExpressionOptions.OverflowProtection |
@@ -1868,7 +1868,6 @@ public class AdvFeatureTests : TestBase
             ExpressionOptions.UseIfStatement |
             ExpressionOptions.UseLoops);
 
-
         expression.AdvancedOptions = new AdvancedExpressionOptions();
         expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
 
@@ -1878,7 +1877,7 @@ public class AdvFeatureTests : TestBase
     [Fact]
     public void ShouldHandleDocComments()
     {
-        string input = "/// Returns the date when the build with the given number was made\r\nfn DateOfBuild(n) => #2000-01-01Z# + n * 86400 * 10000000;\r\n\r\n/// Returns the build number\r\nfn BuildNum(date = null)  \r\n{\r\n  if (date = null) { date := #today# };\r\n return 0;\r\n};\r\n";
+        string input = "/// Returns the date when the build with the given number was made\r\nfn DateOfBuild(n) => #2000-01-01# + n * 86400 * 10000000;\r\n\r\n/// Returns the build number\r\nfn BuildNum(date = null)  \r\n{\r\n  if (date = null) { date := #today# };\r\n return 0;\r\n};\r\n";
         var expression = new Expression(input,
             ExpressionOptions.NoCache |
             ExpressionOptions.OverflowProtection |

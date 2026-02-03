@@ -2653,7 +2653,7 @@ public static class MathHelper
             return a;
 
         if (a is BigDecimal bdA)
-            return BigDecimal.Round(bdA, ConvertToInt(b, options), (rounding == MidpointRounding.AwayFromZero) ? RoundingStrategy.AwayFromZero : RoundingStrategy.TowardZero);
+            return BigDecimal.Round(bdA, ConvertToInt(b, options), (rounding == MidpointRounding.AwayFromZero) ? RoundingStrategy.AwayFromZero : RoundingStrategy.ToEven);
 
         if (options.DecimalAsDefault)
             return Math.Round(ConvertToDecimal(a, options), ConvertToInt(b, options), rounding);

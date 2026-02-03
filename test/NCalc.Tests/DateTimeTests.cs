@@ -47,6 +47,24 @@ public class DateTimeTests
     }
 
     [Fact]
+    public void Should_Parse_Date_Iso()
+    {
+        string exprStr = "#2026-02-01#";
+        var expr = new Expression(exprStr);
+        Assert.Equal(new DateTime(2026, 2, 1), expr.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void Should_Parse_Date_Time_Iso()
+    {
+        string exprStr = "#2026-02-01T08:15:27Z#";
+        Assert.Equal(new DateTime(2026, 02, 1, 8, 15, 27), new Expression(exprStr).Evaluate(TestContext.Current.CancellationToken));
+
+        exprStr = "#2026-02-01T08:15:27.550Z#";
+        Assert.Equal(new DateTime(2026, 02, 1, 8, 15, 27, 550), new Expression(exprStr).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public void Should_Fail_With_Wrong_DateTime_Separator()
     {
         var trueTimeSeparator = CultureInfo.CurrentCulture.DateTimeFormat.TimeSeparator;

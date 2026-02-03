@@ -10,7 +10,8 @@ Expressions can be combined using operators, each with a specific precedence pri
 6. **Multiplicative**
 7. **Additive**
 8. **Relational**
-9. **Logical**
+9. **Bitwise**
+10. **Logical**
 
 ## Handling of null values
 
@@ -42,7 +43,7 @@ Lists are used to group expressions.
 secret_operation("my_db", 2) // Function arguments are actually a list!
 ```
 
-The elements of the list may be separated with a comma (",") or a semicolon (";"). A semicolon is recommended to avoid the possible conflict with a decimal separator or a number group separator.
+The elements of the list may be separated with a comma (",") or a semicolon (";"). A semicolon is recommended to avoid possible conflicts with a decimal separator or a number group separator.
 
 ### Indexed Access to Lists and Strings
 
@@ -152,12 +153,9 @@ Multiplicative operators perform multiplication, division, and modulus operation
 * `/` : Division
 * `//` : Integer Division (Python-like - division may be performed on floating-point operands, and the result is truncated)
 * `\\` : Integer Division (Basic-like - floating-point operands are truncated first)
-* `div` : Integer Division (Basic-like - floating-point operands are truncated first)
+* `div` : Integer Division (Basic-like - floating-point operands are truncated first)
 * `%` : Modulus (when percent calculation is disabled)
 * `mod` : Modulus (when percent calculation is enabled in <xref:NCalc.AdvancedExpressionOptions>)
-
-If floating-point values are passed to the modulus operation, they are truncated before the operation.
-
 
 **Example:**
 ```csharp
@@ -197,7 +195,7 @@ Additive operators perform addition and subtraction.
 When time operations are enabled using the <xref:NCalc.ExpressionOptions.SupportTimeOperations> flag in <xref:NCalc.ExpressionOptions>, it is possible to perform the following additional operations: 
 * add a time period value (TimeSpan) to a date (DateTime) or another time period (TimeSpan) value;
 * add ticks (100ns per tick) to a date (DateTime) or time period (TimeSpan) value;
-* subtract a time value (TimeSpan) from a date (DateTime) or another time period (TimeSpan) value;
+* subtract a time period value (TimeSpan) from a date (DateTime) or another time period (TimeSpan) value;
 * subtract a date value (DateTime) from another date (DateTime) value;
 * subtract ticks (100ns per tick) from a date (DateTime) or time period (TimeSpan) value.
 
@@ -254,16 +252,16 @@ When an attempt is made to compare the values that are not compatible (e.g., a s
 
 ### IN and NOT IN
 
-The `IN` and `NOT IN` operators check whether a value is present or absent within a specified collection or string.
+The `IN` and `NOT IN` operators check whether a value is present or absent within a specified list or string.
 
-* `IN` : Returns `true` if the left operand is found in the right operand (which can be a collection or string).
+* `IN` : Returns `true` if the left operand is found in the right operand (which can be a list or a string).
 * `NOT IN` : Returns `true` if the left operand is not found in the right operand.
 
 When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
-* `∈` (U+2208) : Returns `true` if the left operand is found in the right operand (which can be a collection or string). 
+* `∈` (U+2208) : Returns `true` if the left operand is found in the right operand (which can be a list or a string). 
 * `∉` (U+2209) : Returns `true` if the left operand is not found in the right operand.
 
-The right operand must be either a string or a collection (`IEnumerable`).
+The right operand must be either a string or a list (`IEnumerable`).
 
 **Examples:**
 ```csharp
@@ -296,40 +294,18 @@ With default matching, patterns can include:
 'abc' LIKE 'a%'                // True
 ```
 
-## Logical
-
-Logical operators perform logical comparisons between expressions.
-
-* `or`, `||` : Logical OR
-* `and`, `&&` : Logical AND
-* `xor` : Logical XOR
-
-**Examples:**
-```csharp
-true or false and true    // Evaluates to true
-(1 == 1) || false        // Evaluates to true
-```
-
-*Note:* The `and` operator has higher priority than the `or` or `xor` operator. Hence, in the example above, `false and true` is evaluated first.
-
-When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operators are also supported:
-* `∨` (U+2228) : Logical OR
-* `∧` (U+2229) : Logical AND
-* `⊕` (U+2295) : Logical XOR
-* `⊻` (U+22BB) : Logical XOR
-
 ## Bitwise
 
-Bitwise operators perform bitwise operations on integers.
+Bitwise operators perform bitwise operations on integers. The `and` operator has highest priority, followed by `xor` and then by `or`.
 
 * `<<` : Left shift
 * `>>` : Right shift
 
 By default, when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is not set in <xref:NCalc.ExpressionOptions>, the following operator symbols are used:
 
-* `|` : Bitwise OR
 * `&` : Bitwise AND
 * `^` : Bitwise XOR
+* `|` : Bitwise OR
 
 **Example:**
 ```csharp
@@ -338,12 +314,34 @@ By default, when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars>
 
 When the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in <xref:NCalc.ExpressionOptions>, the following operators are used:
 
-* `BIT_OR` : Bitwise OR
 * `BIT_AND` : Bitwise AND
 * `BIT_XOR` : Bitwise XOR
+* `BIT_OR` : Bitwise OR
 
 When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignments> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported (regardless of the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag):
 
 * `&=` : Bitwise AND with assignment of the result to the left operand
-* `|=` : Bitwise OR with assignment of the result to the left operand
 * `^=` : Bitwise XOR with assignment of the result to the left operand 
+* `|=` : Bitwise OR with assignment of the result to the left operand
+
+## Logical
+
+Logical operators perform logical comparisons between expressions.
+
+* `and`, `&&` : Logical AND
+* `xor` : Logical XOR
+* `or`, `||` : Logical OR
+
+**Examples:**
+```csharp
+true or false and true    // Evaluates to true
+(1 == 1) || false        // Evaluates to true
+```
+
+*Note:* The `and` operator has highest priority, followed by `xor` and then by `or`. Hence, in the example above, `false and true` is evaluated first.
+
+When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operators are also supported:
+* `∧` (U+2229) : Logical AND
+* `⊕` (U+2295) : Logical XOR
+* `⊻` (U+22BB) : Logical XOR
+* `∨` (U+2228) : Logical OR

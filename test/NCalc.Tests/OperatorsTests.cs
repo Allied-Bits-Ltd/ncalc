@@ -101,6 +101,30 @@ public class OperatorsTests : TestBase
     }
 
     [Theory]
+    [InlineData("1 | 1", 1)]
+    [InlineData("1 | 0", 1)]
+    [InlineData("1 ^ 1", 0)]
+    [InlineData("1 ^ 0", 1)]
+    [InlineData("1 & 1", 1)]
+    [InlineData("1 & 0", 0)]
+    [InlineData("1 ^ 0 ^ 1", 0)]
+    public void Should_Handle_Bitwise_Ops(string expr, ulong expected)
+    {
+        object? result = new Expression(expr).Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void Should_Use_Correct_BitwiseXOr_Precedence_540()
+    {
+        string expr = "1 = 1 ^ 2 = 2 || 3 = 3";
+        Assert.Equal(1 == 1 ^ 2 == 2 || 3 == 3, new Expression(expr).Evaluate(TestContext.Current.CancellationToken));
+
+        expr = "1 = 1 ^ 2 = 2 && 2 = 1";
+        Assert.Equal(1 == 1 ^ 2 == 2 && 2 == 1, new Expression(expr).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
     [InlineData("([a] != 0) && ([b]/[a]>2)", false)]
     [InlineData("([a] == 0) || ([b]/[a]>2)", true)]
     public void Should_Short_Circuit_Boolean_Expressions(string expression, bool expected)

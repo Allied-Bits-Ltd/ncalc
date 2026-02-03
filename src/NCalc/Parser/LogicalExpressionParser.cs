@@ -852,8 +852,8 @@ public static class LogicalExpressionParser
                     .AndSkip(hyphenChar)
                     .And(charIsNumber);
 
-            // dateIso => number-number-number[Z]
-            dateIso = dateDefinitionIso.AndSkip(Terms.Char('Z')).Then<LogicalExpression>((ctx, date) =>
+            // dateIso => number-number-number
+            dateIso = dateDefinitionIso.Then<LogicalExpression>((ctx, date) =>
             {
                 if (DateTime.TryParseExact($"{date.Item1}-{date.Item2}-{date.Item3}", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
                 {
@@ -1943,6 +1943,41 @@ public static class LogicalExpressionParser
                 .And(relational)))
             .Then(ParseBinaryExpression);
 
+        var binAndTypeParser = bitwiseAnd.Then(BinaryExpressionType.BitwiseAnd);
+
+        var binOrTypeParser = bitwiseOr.Then(BinaryExpressionType.BitwiseOr);
+
+        var binXorTypeParser = bitwiseXOr.Then(BinaryExpressionType.BitwiseXOr);
+
+        // "and" has higher precedence than "or"
+        var binAndParser = equality.And(ZeroOrMany(binAndTypeParser.And(equality)))
+            .Then(ParseBinaryExpression);
+
+        var binXorParser = binAndParser.And(ZeroOrMany(binXorTypeParser.And(binAndParser)))
+            .Then(ParseBinaryExpression);
+
+        var binOrParser = binXorParser.And(ZeroOrMany(binOrTypeParser.And(binXorParser)))
+            .Then(ParseBinaryExpression);
+
+        var andTypeParser = and.Then(BinaryExpressionType.And);
+
+        var orTypeParser = or.Then(BinaryExpressionType.Or);
+
+        var xorTypeParser = xor.Then(BinaryExpressionType.XOr);
+
+        var andParser = binOrParser.And(ZeroOrMany(andTypeParser.And(binOrParser)))
+            .Then(ParseBinaryExpression);
+
+        var xorParser = andParser.And(ZeroOrMany(xorTypeParser.And(andParser)))
+            .Then(ParseBinaryExpression);
+
+        var orParser = xorParser.And(ZeroOrMany(orTypeParser.And(xorParser)))
+            .Then(ParseBinaryExpression);
+
+        var logical = orParser;
+
+        /*
+         * old
         var andTypeParser = and.Then(BinaryExpressionType.And)
             .Or(bitwiseAnd.Then(BinaryExpressionType.BitwiseAnd));
 
@@ -1965,6 +2000,7 @@ public static class LogicalExpressionParser
         // logical => equality ( ( "and" | "or" | "xor" ) equality )* ;
         var logical = OneOf(orParser, xorParser).And(ZeroOrMany(xorTypeParser.And(orParser)))
             .Then(ParseBinaryExpression);
+        */
 
         // ternary => logical("?" logical ":" logical) ?
         var ternary = logical.And(ZeroOrOne(questionMark.SkipAnd(logical).AndSkip(colon).And(logical)))

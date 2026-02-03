@@ -12,7 +12,7 @@
             Add("fn sum3(a, b = 0, c = 3) => a + b + c; sum3(1;2)", 6);
             Add("fn DateOfBuild(n) => n * 5", null);
             Add("fn DateOfBuild(n) { return #01/01/2000# + n * 86400 * 10000000; } ", null);
-            Add("fn DateOfBuild(n) { return #2000-01-01Z# + n * 86400 * 10000000; } ", null);
+            Add("fn DateOfBuild(n) { return #2000-01-01# + n * 86400 * 10000000; } ", null);
             Add("fn DateOfBuild(n) { return #2000-01-01T00:00:00Z# + n * 86400 * 10000000; } ", null);
             Add("fn DateOfBuild(n) => n * 86400 * 10000000 + #01/01/2000# ", null);
             Add("fn DateOfBuild(n) => #01/01/2000# + n * 86400 * 10000000 ;", null);
