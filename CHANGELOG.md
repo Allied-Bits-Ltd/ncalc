@@ -1,6 +1,7 @@
 # 8.7.7 (Allied Bits)
 
-* Fixed the [inherited] wrong order of logical and bitwise operations. Now, a strong precedence (bit_and, bit_xor, bit_or, and, xor, or) is used.
+* When Unicode characters were enabled, a colon ":" was erroneously used for division (a Ratio character, \u2236, must have been used) and this got in the way of the ternary operator.
+* Fixed the [inherited] wrong order of logical and bitwise operations. Now, a strong precedence order (bit_and, bit_xor, bit_or, and, xor, or) is used.
 * Fixed the parsing of a date-only value in ISO format (e.g. #2026-02-02#)
 
 # 8.7.6.2 (Allied Bits)

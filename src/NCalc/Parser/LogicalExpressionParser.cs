@@ -465,7 +465,7 @@ public static class LogicalExpressionParser
         var percentChar = Terms.Char('%'); // CultureInfo defines a percent character, but we are yet to see another character than '%'
 
         var comma = Terms.Char(',');
-        var divided = useUnicodeForOps ? OneOf(Terms.Text("/"), Terms.Text(":"), Terms.Text("\u00F7")) : Terms.Text("/");
+        var divided = useUnicodeForOps ? OneOf(Terms.Text("/"), Terms.Text("\u2236"), Terms.Text("\u00F7")) : Terms.Text("/");
         var times = useUnicodeForOps ? OneOf(Terms.Text("*"), Terms.Text("\u00D7"), Terms.Text("\u2219")) : Terms.Text("*");
         var modulo = calculatePercent ? Terms.Text("mod", true) : OneOf(Terms.Text("%"), Terms.Text("mod", true));
         var intDivB = OneOf(Terms.Text("\\"), Terms.Text("div", true));

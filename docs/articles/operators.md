@@ -12,6 +12,7 @@ Expressions can be combined using operators, each with a specific precedence pri
 8. **Relational**
 9. **Bitwise**
 10. **Logical**
+11. **Ternary**
 
 ## Handling of null values
 
@@ -168,8 +169,8 @@ When time operations are enabled using the <xref:NCalc.ExpressionOptions.Support
 
 When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operators are also supported:
 * `×` (U+00D7) : Multiplication
-* `∙` (U+2219): Multiplication
-* `:` : Division
+* `∙` (U+2219) : Multiplication
+* `∶` (U+2236) : Division
 * `÷` (U+00F7) : Division
 
 When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignments> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
@@ -296,7 +297,7 @@ With default matching, patterns can include:
 
 ## Bitwise
 
-Bitwise operators perform bitwise operations on integers. The `and` operator has highest priority, followed by `xor` and then by `or`.
+Bitwise operators perform bitwise operations on integers. The `and` operator has the highest priority, followed by `xor` and then by `or`.
 
 * `<<` : Left shift
 * `>>` : Right shift
@@ -338,10 +339,19 @@ true or false and true    // Evaluates to true
 (1 == 1) || false        // Evaluates to true
 ```
 
-*Note:* The `and` operator has highest priority, followed by `xor` and then by `or`. Hence, in the example above, `false and true` is evaluated first.
+*Note:* The `and` operator has the highest priority, followed by `xor` and then by `or`. Hence, in the example above, `false and true` is evaluated first.
 
 When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operators are also supported:
 * `∧` (U+2229) : Logical AND
 * `⊕` (U+2295) : Logical XOR
 * `⊻` (U+22BB) : Logical XOR
 * `∨` (U+2228) : Logical OR
+
+## Ternary
+
+The ternary operator works as a short form of an "if then else" statement in regular programming languages and takes the form of "x ? y : z" where `x` is the condition, `y` and `z` are values or expressions that evaluate to values. if `x` is true, the value of `y` is returned, otherwise the value of `z` is returned.
+
+Examples:
+```csharp
+x > 0 ? x : 0 // Returns the larger of x and 0. 
+```
