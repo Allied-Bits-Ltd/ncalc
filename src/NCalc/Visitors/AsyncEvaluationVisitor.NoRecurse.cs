@@ -362,6 +362,21 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (!ExpressionEvaluated(task, 0, expression.LeftExpression))
                         return null;
 
+                    if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+                    {
+                        leftValue = task.ChildStates[0].Value;
+
+                        bool? leftBool = leftValue is bool lb ? lb : null;
+                        if (leftBool == false)
+                            return SetTaskValue(task, false);
+
+                        if (!ExpressionEvaluated(task, 1, expression.RightExpression))
+                            return null;
+                        rightValue = task.ChildStates[1].Value;
+
+                        return SetTaskValue(task, K3LogicHelper.And(leftValue, rightValue));
+                    }
+
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
                     if (!Convert.ToBoolean(leftValue, context.CultureInfo))
@@ -378,6 +393,22 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 case BinaryExpressionType.Or:
                     if (!ExpressionEvaluated(task, 0, expression.LeftExpression))
                         return null;
+
+                    if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+                    {
+                        leftValue = task.ChildStates[0].Value;
+
+                        bool? leftBool = leftValue is bool lb ? lb : null;
+                        if (leftBool == true)
+                            return SetTaskValue(task, true);
+
+                        if (!ExpressionEvaluated(task, 1, expression.RightExpression))
+                            return null;
+                        rightValue = task.ChildStates[1].Value;
+
+                        return SetTaskValue(task, K3LogicHelper.Or(leftValue, rightValue));
+                    }
+
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
                     if (Convert.ToBoolean(leftValue, context.CultureInfo))
@@ -392,6 +423,24 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 case BinaryExpressionType.XOr:
                     if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
                         return null;
+
+                    if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+                    {
+                        leftValue = task.ChildStates[0].Value;
+
+                        bool? leftBool = leftValue is bool lb ? lb : null;
+                        if (leftBool == null)
+                            return SetTaskValue(task, null);
+
+                        if (!ExpressionEvaluated(task, 1, expression.RightExpression))
+                            return null;
+                        rightValue = task.ChildStates[1].Value;
+                        if (rightValue == null)
+                            return SetTaskValue(task, null);
+
+                        return SetTaskValue(task, K3LogicHelper.Xor(leftValue, rightValue));
+                    }
+
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
                     if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
@@ -964,6 +1013,13 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 #else
             return new ValueTask<object?>((object?)null);
 #endif
+
+        if (expression.Type == UnaryExpressionType.Not && context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+        {
+            object? value = task.ChildStates[0].Value;
+
+            SetTaskValue(task, K3LogicHelper.Not(value));
+        }
 
         if (!TryGetValueOrNull(task.ChildStates[0].Value, out object? result))
         {

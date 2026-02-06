@@ -59,7 +59,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     private async Task<object?> UpdateParameterAsync(LogicalExpression leftExpression, object? value, CancellationToken cancellationToken = default)
     {
-        if (value is null && !context.Options.HasFlag(ExpressionOptions.AllowNullParameter))
+        if (value is null && !(context.Options.HasFlag(ExpressionOptions.AllowNullParameter) || context.Options.HasFlag(ExpressionOptions.UseTernaryLogic)))
         {
             return value;
         }
@@ -403,6 +403,18 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         , cancellationToken).ConfigureAwait(false);
                 }
                 case BinaryExpressionType.And:
+                    if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+                    {
+                        leftValue = await left.Value.ConfigureAwait(false);
+                        bool? leftBool = leftValue is bool lb ? lb : null;
+                        if (leftBool == false)
+                            return false;
+
+                        rightValue = await right.Value.ConfigureAwait(false);
+
+                        return K3LogicHelper.And(leftValue, rightValue);
+                    }
+
                     if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
                         return null;
                     if (!Convert.ToBoolean(leftValue, context.CultureInfo))
@@ -413,6 +425,18 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return Convert.ToBoolean(rightValue, context.CultureInfo);
 
                 case BinaryExpressionType.Or:
+                    if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+                    {
+                        leftValue = await left.Value.ConfigureAwait(false);
+                        bool? leftBool = leftValue is bool lb ? lb : null;
+                        if (leftBool == true)
+                            return true;
+
+                        rightValue = await right.Value.ConfigureAwait(false);
+
+                        return K3LogicHelper.Or(leftValue, rightValue);
+                    }
+
                     if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
                         return null;
                     if (Convert.ToBoolean(leftValue, context.CultureInfo))
@@ -423,6 +447,18 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return Convert.ToBoolean(rightValue, context.CultureInfo);
 
                 case BinaryExpressionType.XOr:
+                    if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+                    {
+                        leftValue = await left.Value.ConfigureAwait(false);
+                        bool? leftBool = leftValue is bool lb ? lb : null;
+                        if (leftBool == null)
+                            return null;
+
+                        rightValue = await right.Value.ConfigureAwait(false);
+
+                        return K3LogicHelper.Xor(leftValue, rightValue);
+                    }
+
                     return Convert.ToBoolean(await left.Value.ConfigureAwait(false), context.CultureInfo) ^
                             Convert.ToBoolean(await right.Value.ConfigureAwait(false), context.CultureInfo);
 
@@ -912,6 +948,13 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
+        if (expression.Type == UnaryExpressionType.Not && context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+        {
+            object? value = await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false);
+
+            return K3LogicHelper.Not(value);
+        }
+
         // Recursively evaluates the underlying expression
         var result = await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false);
 

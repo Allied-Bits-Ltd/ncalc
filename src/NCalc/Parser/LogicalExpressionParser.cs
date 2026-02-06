@@ -561,7 +561,7 @@ public static class LogicalExpressionParser
         var bitwiseOr = useCharsForOps ? OneOf(Terms.Text("BIT_OR", true), Terms.Text("|"))  : Terms.Text("BIT_OR", true);
         var bitwiseXOr = useCharsForOps ? OneOf(Terms.Text("BIT_XOR", true), Terms.Text("^")) : Terms.Text("BIT_XOR", true);
         var bitwiseNot = useCharsForOps ? OneOf(Terms.Text("BIT_NOT", true), Terms.Text("~")) : Terms.Text("BIT_NOT", true);
-        var returnParser = Terms.Text("return");
+        var returnParser = Terms.Text("return", true);
 
         var assignmentOperator = useUnicodeForOps
                                     ? OneOf(Terms.Text("\u2254"),
@@ -575,7 +575,7 @@ public static class LogicalExpressionParser
         var plusAssign = Terms.Text("+=");
         var minusAssign = Terms.Text("-=");
         var multiplyAssign = useUnicodeForOps ? OneOf(Terms.Text("*="), Terms.Text("\u00D7="), Terms.Text("\u2219=")) : Terms.Text("*=");
-        var divAssign = Terms.Text("/=");
+        var divAssign = useUnicodeForOps ? OneOf(Terms.Text("/="), Terms.Text("\u2236="), Terms.Text("\u00F7=")) : Terms.Text("/=");
         var orAssign = Terms.Text("|=");
         var andAssign = Terms.Text("&=");
         var xorAssign = Terms.Text("^=");
@@ -2118,7 +2118,7 @@ public static class LogicalExpressionParser
                         "+=" => BinaryExpressionType.PlusAssignment,
                         "-=" => BinaryExpressionType.MinusAssignment,
                         "\u00D7=" or "\u2219=" or "*=" => BinaryExpressionType.MultiplyAssignment,
-                        "/=" or "\u00F7=" => BinaryExpressionType.DivAssignment,
+                        "/=" or "\u2236=" or "\u00F7=" => BinaryExpressionType.DivAssignment,
                         "&=" => BinaryExpressionType.AndAssignment,
                         "|=" => BinaryExpressionType.OrAssignment,
                         "^=" => BinaryExpressionType.XOrAssignment,

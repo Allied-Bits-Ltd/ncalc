@@ -1,3 +1,7 @@
+# 8.8 (Allied Bits)
+
+* Added optional support for ternary logic (Kleene’s Strong Three-Valued Logic) in logic operations.
+
 # 8.7.7 (Allied Bits)
 
 * When Unicode characters were enabled, a colon ":" was erroneously used for division (a Ratio character, \u2236, must have been used) and this got in the way of the ternary operator.

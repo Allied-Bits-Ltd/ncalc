@@ -179,7 +179,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         if (UseNonRecursiveEvaluator)
             Options |= ExpressionOptions.UseNonRecursiveEvaluator;
 
-        if (Options.HasFlag(ExpressionOptions.AllowNullParameter))
+        if (Options.HasFlag(ExpressionOptions.AllowNullParameter) || Options.HasFlag(ExpressionOptions.UseTernaryLogic))
             Parameters["null"] = null;
 
         // If array evaluation, execute the same expression multiple times

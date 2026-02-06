@@ -22,10 +22,14 @@ This version of NCalc contains a number of advanced features compared to the ori
 * Support for the 'if' statement, which follows the regular C-like style.
 * Support for C-Style (line and block) and Python-style comments.
 * User-defined functions with named parameters (right in the expression, yes).
+* Percent calculations.
+* Factorials (both regular and any complex factorials on integers are supported).
+* Ternary logic support in logical operations
 * The 'return' flow control keyword that lets one return a value without completely evaluating the expression (useful in complex expressions with multiple statements, conditions, or loops, as well as with user-defined functions). 
-* Advanced date and time parsing, which takes into account culture settings (current or specific culture or custom separators) and supports times with or without seconds as well as 12-hour time.
-* Parsing of humane period expressions like "3 weeks 2 days 5 hours" (period identifiers are customizable and multiple identifier per period are supported).
-* Basic calculations with dates and time spans - one can add and subtract dates and times. Without these operations, date and time values are of little use (if only with custom functions).
+* Advanced date and time parsing, which takes into account culture settings (current or specific culture or custom separators) and supports times with or without seconds as well as 12-hour time and ISO 8601 dates and times.
+* Parsing of humane date expressions like "3 days ago" or "in 5 weeks" (identifiers are customizable and multiple identifiers are supported).
+* Parsing of humane period expressions like "3 weeks 2 days 5 hours" (period identifiers are customizable and multiple identifiers per period are supported).
+* Basic calculations with dates and time spans - one can add and subtract dates and times, multiply and divide time periods.
 * Currency support, which takes into account culture settings (current or specific culture or custom symbols) and produces decimal result from the currency value.
 * Optional use of BigInteger and BigDecimal types for basic math operations and most built-in funcitons.
 * Underscores in numbers and currency values. Modern programming languages support underscores for readability. Support is built-in with binary, octal, and hex numbers, while support in decimal numbers requires a [custom branch of Parlot](https://github.com/Allied-Bits-Ltd/parlot/tree/ABCalc). 
@@ -34,19 +38,15 @@ This version of NCalc contains a number of advanced features compared to the ori
 * Raw strings which are not parsed for escape sequences.
 * C-Style octal literals.
 * Result Reference character. A pseudo-function that would let a user application return some value, such as the result of a previous calculation. This is handy when an expression should include this result multiple times.
-* Percent calculations.
-* Factorials (both regular and any complex factorials on integers are supported).
 * Logical XOR operations.
 * Certain Unicode characters can be used as operators.
 * Lowercase lookup for parameter and function names.
 * Optional non-recursive evaluator for large and complex expressions.
 * The possibility to reuse a pre-created parser or parsers when parsing multiple expressions.
-* New flags in ExpressionOptions to skip date and GUID parsers in order to speed up parsing.
+* Flags in ExpressionOptions to skip date and GUID parsers in order to speed up parsing.
 * Minor improvements in the asynchronous code (CancellationToken and ConfigureAwait(false) are present in all calls).
 * The main projects have been combined into one project.
 * The AOT-compatible version of the library.
-
-This version borrows some updates of the main NCalc project, which resides [here on github](https://github.com/ncalc/ncalc).
 
 ## Docs
 

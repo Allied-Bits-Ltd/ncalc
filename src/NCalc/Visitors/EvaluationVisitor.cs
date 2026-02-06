@@ -58,7 +58,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     private object? UpdateParameter(LogicalExpression leftExpression, object? value, CancellationToken cancellationToken = default)
     {
-        if (value is null && !context.Options.HasFlag(ExpressionOptions.AllowNullParameter))
+        if (value is null && !(context.Options.HasFlag(ExpressionOptions.AllowNullParameter) || context.Options.HasFlag(ExpressionOptions.UseTernaryLogic)))
         {
             return value;
         }
@@ -377,6 +377,18 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         Convert.ToUInt64(rightValue, context.CultureInfo), cancellationToken);
 
                 case BinaryExpressionType.And:
+                    if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+                    {
+                        leftValue = left.Value;
+                        bool? leftBool = leftValue is bool lb ? lb : null;
+                        if (leftBool == false)
+                            return false;
+
+                        rightValue = right.Value;
+
+                        return K3LogicHelper.And(leftValue, rightValue);
+                    }
+
                     if (!TryGetValueOrNull(left.Value, out leftValue))
                         return null;
                     if (!Convert.ToBoolean(leftValue, context.CultureInfo))
@@ -388,6 +400,17 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     return Convert.ToBoolean(rightValue, context.CultureInfo);
 
                 case BinaryExpressionType.Or:
+                    if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+                    {
+                        leftValue = left.Value;
+                        bool? leftBool = leftValue is bool lb ? lb : null;
+                        if (leftBool == true)
+                            return true;
+                        rightValue = right.Value;
+
+                        return K3LogicHelper.Or(leftValue, rightValue);
+                    }
+
                     if (!TryGetValueOrNull(left.Value, out leftValue))
                         return null;
                     if (Convert.ToBoolean(leftValue, context.CultureInfo))
@@ -397,6 +420,21 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     return Convert.ToBoolean(rightValue, context.CultureInfo);
 
                 case BinaryExpressionType.XOr:
+                    if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+                    {
+                        leftValue = left.Value;
+                        bool? leftBool = leftValue is bool lb ? lb : null;
+                        if (leftBool == null)
+                            return null;
+
+                        rightValue = right.Value;
+                        bool? rightBool = rightValue is bool rb ? rb : null;
+                        if (rightBool == null)
+                            return null;
+
+                        return K3LogicHelper.Xor(leftValue, rightValue);
+                    }
+
                     if (!TryGetValueOrNull(left.Value, out leftValue))
                         return null;
                     if (!TryGetValueOrNull(right.Value, out rightValue))
@@ -872,6 +910,13 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
+        if (expression.Type == UnaryExpressionType.Not && context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+        {
+            object? value = expression.Expression.Accept(this, cancellationToken);
+
+            return K3LogicHelper.Not(value);
+        }
+
         // Recursively evaluates the underlying expression
         if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out object? result))
             return null;

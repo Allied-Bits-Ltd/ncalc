@@ -158,7 +158,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         if (UseNonRecursiveEvaluator)
             Options |= ExpressionOptions.UseNonRecursiveEvaluator;
 
-        if (Options.HasFlag(ExpressionOptions.AllowNullParameter))
+        if (Options.HasFlag(ExpressionOptions.AllowNullParameter) || Options.HasFlag(ExpressionOptions.UseTernaryLogic))
             Context.StaticParameters["null"] = null;
 
         // If array evaluation, execute the same expression multiple times

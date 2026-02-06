@@ -84,6 +84,7 @@
       <Compile Include="..\NCalc\Helpers\ComparisonType.cs" Link="Helpers\ComparisonType.cs" />
       <Compile Include="..\NCalc\Helpers\EvaluationHelper.cs" Link="Helpers\EvaluationHelper.cs" />
       <Compile Include="..\NCalc\Helpers\FlatHelpers.cs" Link="Helpers\FlatHelpers.cs" />
+      <Compile Include="..\NCalc\Helpers\K3LogicHelper.cs" Link="Helpers\K3LogicHelper.cs" />
       <Compile Include="..\NCalc\Helpers\MathFunctionHelper.cs" Link="Helpers\MathFunctionHelper.cs" />
       <Compile Include="..\NCalc\Helpers\MathHelper.cs" Link="Helpers\MathHelper.cs" />
       <Compile Include="..\NCalc\Helpers\MathHelperOptions.cs" Link="Helpers\MathHelperOptions.cs" />

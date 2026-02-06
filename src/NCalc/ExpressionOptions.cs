@@ -194,7 +194,13 @@ public enum ExpressionOptions : long
     AvoidDynamicFunctions = ((long)1) << 36,
 
     /// <summary>
-    /// Specifies that when arithmetic operations are performed, the resulting type is reduced in order to avoid groing unnecessarily. 
+    /// Specifies that when arithmetic operations are performed, the resulting type is reduced in order to avoid groing unnecessarily.
     /// </summary>
     ReduceArithmeticResultType = ((long)1) << 37,
+
+    /// <summary>
+    /// Specifies that logical operations with true/false and null should be performed using Kleene’s Strong Three-Valued Logic.
+    /// <para>Enabling this option also enables <seealso cref="AllowNullParameter"/>.</para>
+    /// </summary>
+    UseTernaryLogic = ((long)1) << 38,
 }

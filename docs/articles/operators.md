@@ -214,7 +214,8 @@ Relational operators compare two values and return a boolean result.
 
 These operators compare two values to check equality or inequality.
 
-* `=`, `==` : Equal to
+* `==` : Equal to
+* `=` : Equal to (unless the <xref:NCalc.ExpressionOptions.UseCStyleAssignments> flag in <xref:NCalc.ExpressionOptions> is set, in which case `=` is used for assignment)
 * `!=`, `<>` : Not equal to
 
 **Examples:**
@@ -327,7 +328,8 @@ When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignme
 
 ## Logical
 
-Logical operators perform logical comparisons between expressions.
+Logical operators perform logical operations between expressions. By default, binary logic is used, where null or a non-boolean value is not accepted as an operand. 
+When the  <xref:NCalc.ExpressionOptions.UseTernaryLogic> flag is set in <xref:NCalc.ExpressionOptions>, logic operations are performed in Kleene’s Strong Three-Valued Logic, where null and non-boolean values are treated as Unknown, and null is returned for Unknown.
 
 * `and`, `&&` : Logical AND
 * `xor` : Logical XOR
