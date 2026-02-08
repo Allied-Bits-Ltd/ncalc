@@ -162,7 +162,7 @@ Debug.Assert(function()); //3
 ## Related projects
 
 ### [Parlot](https://github.com/sebastienros/parlot) (Main project)
-### [AlliedBits.Parlot](https://github.com/Allied-Bits-Ltd/parlot) (the fork with some improvements required for Allied Bits enhancements of NCalc)
+### [AlliedBits.Parlot](https://github.com/Allied-Bits-Ltd/parlot) (the fork with improvements required for Allied Bits enhancements of NCalc)
 
 Fast and lightweight parser creation tools by [Sébastien Ros](https://github.com/sebastienros) that NCalc uses for its
 parser.
@@ -170,6 +170,10 @@ parser.
 ### [BigDecimal](https://github.com/AdamWhiteHat/BigDecimal)
 
 An arbitrary-precision decimal (base 10) floating-point number class by Adam White.
+
+### [ABCalc](https://alliedbits.com/abcalc)
+
+A powerful yet user-friendly calculator for complex expressions, offering multi-format results, persistent history, unlimited memory, and much more.
 
 ### [FastExpressionCompiler](https://github.com/dadhi/FastExpressionCompiler)
 
