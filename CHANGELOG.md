@@ -1,3 +1,7 @@
+# 8.8.1 (Allied Bits)
+
+* The "return" keyword now grabs the rest of the expression until the end of it for evaluation. I.e., where the statement "... { return 2 + 2 }" returned 2,  now, 4 is returned.
+
 # 8.8 (Allied Bits)
 
 * Added optional support for ternary logic (Kleene’s Strong Three-Valued Logic) in logic operations.

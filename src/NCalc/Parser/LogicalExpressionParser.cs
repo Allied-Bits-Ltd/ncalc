@@ -1887,7 +1887,7 @@ public static class LogicalExpressionParser
             (not, static (ctx, value) => new UnaryExpression(UnaryExpressionType.Not, value).SetLocation(new ParlotExpressionLocation(ctx))),
             (minus, static (ctx, value)  => new UnaryExpression(UnaryExpressionType.Negate, value).SetLocation(new ParlotExpressionLocation(ctx))),
             (bitwiseNot, static (ctx, value) => new UnaryExpression(UnaryExpressionType.BitwiseNot, value).SetLocation(new ParlotExpressionLocation(ctx))),
-            (returnParser, static (ctx, value) => new UnaryExpression(UnaryExpressionType.Return, value).SetLocation(new ParlotExpressionLocation(ctx))),
+            //(returnParser, static (ctx, value) => new UnaryExpression(UnaryExpressionType.Return, value).SetLocation(new ParlotExpressionLocation(ctx))),
         ];
         if (root2 is not null)
             unaryOps.Add((root2, static (ctx, value) => new UnaryExpression(UnaryExpressionType.SqRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
@@ -2010,6 +2010,12 @@ public static class LogicalExpressionParser
                     : new TernaryExpression(x.Item1, x.Item2.Item1, x.Item2.Item2).SetLocation(new ParlotExpressionLocation(ctx)))
             .Or(logical);
 
+        List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)> returnOps =
+        [
+            (returnParser, static (ctx, value) => new UnaryExpression(UnaryExpressionType.Return, value).SetLocation(new ParlotExpressionLocation(ctx))),
+        ];
+        var @return = ternary.Unary(returnOps.ToArray());
+
         List<Parser<string>> operatorSequenceElements = [
             intDivB, divided, times, modulo, plus,
             minus, leftShift, rightShift, greaterOrEqual,
@@ -2018,7 +2024,7 @@ public static class LogicalExpressionParser
         if (!options.HasFlag(ExpressionOptions.SupportCStyleComments))
             operatorSequenceElements.Insert(0, intDivP);
 
-        var operatorSequence = ternary.LeftAssociative(
+        var operatorSequence = @return.LeftAssociative(
             (OneOrMany(OneOf(operatorSequenceElements.ToArray())),
                 static (_, _) => throw new InvalidOperationException("Unknown operator sequence.")));
 

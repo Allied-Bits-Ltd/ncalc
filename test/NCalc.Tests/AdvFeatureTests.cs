@@ -1622,20 +1622,6 @@ public class AdvFeatureTests : TestBase
         Assert.Equal(expectedExprValue, iResult);
     }
 
-    [Fact]
-    public void ShouldHandleAssignmentOfFunctionResult()
-    {
-        var expression = new Expression("fn DateOfBuild(n) => #2000-01-01# + n * 86400 * 10000000;\r\n fn BuildNum(date = null) { if (date == null) { date = #2001-01-01#; }; Truncate(date - #2000-01-01#) }; BuildNum()", ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseIfStatement | ExpressionOptions.AllowNullParameter | ExpressionOptions.SupportTimeOperations);
-        expression.AdvancedOptions = new AdvancedExpressionOptions();
-        expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
-
-        var result = expression.Evaluate(TestContext.Current.CancellationToken);
-
-        Assert.NotNull(result);
-        Assert.IsType<TimeSpan>(result);
-        Assert.Equal(366, ((TimeSpan)result).TotalDays);
-    }
-
     [Theory]
     [InlineData("a := (1; 2; 3); a[1] := (2 + 2); a[1]", 4)]
     [InlineData("a := makelist(3); a[1] := (2 + 2); a[1]", 4)]
@@ -1903,6 +1889,32 @@ public class AdvFeatureTests : TestBase
         Assert.Equal(2, expression.UserFunctions.Count);
         Assert.Equal("Returns the date when the build with the given number was made", expression.UserFunctions["DateOfBuild"].Description);
         Assert.Equal("Returns the build number", expression.UserFunctions["BuildNum"].Description);
+    }
+
+
+    [Fact]
+    public void ShouldHandleEmbeddedFunction()
+    {
+        var expression = new Expression("fn DateOfBuild(n) => #2000-01-01# + n * 86400 * 10000000;\r\n fn BuildNum(date = null) { if (date == null) { date = #2001-01-01#; }; Truncate(date - #2000-01-01#) }; BuildNum()", ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseIfStatement | ExpressionOptions.AllowNullParameter | ExpressionOptions.SupportTimeOperations);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        Assert.IsType<TimeSpan>(result);
+        Assert.Equal(366, ((TimeSpan)result).TotalDays);
+    }
+
+    [Fact]
+    public void ShouldHandleEmbeddedFunction2()
+    {
+        var expression = new Expression("fn MeaningOfLife() { return 4*10 + 2 }; MeaningOfLife()", ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseIfStatement | ExpressionOptions.AllowNullParameter | ExpressionOptions.SupportTimeOperations);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        Assert.Equal(42, result);
     }
 
     [Theory]
