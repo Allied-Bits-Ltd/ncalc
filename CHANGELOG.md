@@ -1,3 +1,7 @@
+# 8.8.2 (Allied Bits)
+
+* (IMPORTANT) Reworked the handling of the LowerCaseIdentifierLookup expression option; now, it works as an "ignore case" flag with case-insensitive comparison of function and parameter names and does not require parameter names and function names in the lists to be in lowercase. Previously, lookup of functions did not work when function names contained uppercase letters and lower-case identifier matching was enabled.
+
 # 8.8.1 (Allied Bits)
 
 * The "return" keyword now grabs the rest of the expression until the end of it for evaluation. I.e., where the statement "... { return 2 + 2 }" returned 2,  now, 4 is returned.

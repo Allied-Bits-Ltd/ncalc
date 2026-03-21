@@ -224,7 +224,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         }
 
         //Context methods take precedence over built-in functions because they're user-customizable.
-        var mi = FindMethod(_expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? function.Identifier.Name.ToLowerInvariant() : function.Identifier.Name, args);
+        var mi = FindMethod(function.Identifier.Name, args, _expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? StringComparison.InvariantCultureIgnoreCase : StringComparison.InvariantCulture);
         if (mi != null)
         {
             return LinqExpression.Call(_context, mi.MethodInfo, mi.PreparedArguments);
@@ -321,17 +321,19 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
     {
         LinqExpression? result = null;
 
-        var identifierName = _expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? identifier.Name.ToLowerInvariant() : identifier.Name;
-
         if (_context is null)
         {
-            if (_parameters != null && _parameters.TryGetValue(identifierName, out var param))
+            object? param = null;
+            if (_parameters is not null &&
+                ((_expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true)
+                    ? EvaluationHelper.GetParameterValueFromListNoCase(_parameters, identifier.Name, out param)
+                    : _parameters.TryGetValue(identifier.Name, out param)))
                 result = LinqExpression.Constant(param);
             else
                 throw new NCalcParameterNotDefinedException(identifier.Name);
         }
         if (result is null && _context is not null)
-            result = LinqExpression.PropertyOrField(_context, identifierName);
+            result = LinqExpression.PropertyOrField(_context, identifier.Name);
 
         /*if (result is not null && identifier is IndexedIdentifier indIdent)
         {
@@ -371,7 +373,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         return SkipAndReturn(expressions);
     }
 
-    private ExtendedMethodInfo? FindMethod(string methodName, LinqExpression[] methodArgs)
+    private ExtendedMethodInfo? FindMethod(string methodName, LinqExpression[] methodArgs, StringComparison stringComparison)
     {
         if (_context is null)
             return null;
@@ -382,7 +384,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         do
         {
             var methods = contextType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-                .Where(m => m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase));
+                .Where(m => m.Name.Equals(methodName, stringComparison));
 
             var candidates = new List<ExtendedMethodInfo>();
 
@@ -548,9 +550,13 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
                 if (parameterArgs.UpdateParameterLists)
                 {
-                    if (_parameters != null)
-                        _parameters[_expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? identifierName.ToLowerInvariant() : identifierName] = value;
-
+                    if (_parameters is not null)
+                    {
+                        if (_expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true)
+                            EvaluationHelper.SetParameterValueFromListNoCase(_parameters, identifierName, value);
+                        else
+                            _parameters[identifierName] = value;
+                    }
                     if (_context != null)
                         return true;
                 }

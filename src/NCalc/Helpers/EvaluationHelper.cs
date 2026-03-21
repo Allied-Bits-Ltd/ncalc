@@ -82,7 +82,7 @@ public static class EvaluationHelper
     /// <param name="leftValue">The left operand.</param>
     /// <param name="rightValue">The right operand.</param>
     /// <param name="context">The evaluation context.</param>
-    /// <returns>The result of the substraction.</returns>
+    /// <returns>The result of the subtraction.</returns>
     public static object? Minus(object? leftValue, object? rightValue, ExpressionContextBase context)
     {
         if (context.Options.HasFlag(ExpressionOptions.SupportTimeOperations))
@@ -681,6 +681,44 @@ public static class EvaluationHelper
             paramName = ignoreCase ? userFunction.Parameters[i].Name.ToLowerInvariant() : userFunction.Parameters[i].Name;
             argumentStates.Add(paramName, state);
         }
+    }
+
+    internal static bool GetFunctionFromListNoCase(IDictionary<string, Function> dictionary, string functionName, out Function? function)
+    {
+        functionName = functionName.ToUpperInvariant();
+        KeyValuePair<string, Function>? functionPair = dictionary.FirstOrDefault((f) => f.Key.ToUpperInvariant() == functionName);
+        if (functionPair.HasValue && !string.IsNullOrEmpty(functionPair.Value.Key))
+        {
+            function = functionPair.Value.Value;
+            return true;
+        }
+
+        function = null;
+        return false;
+    }
+
+    internal static bool GetParameterValueFromListNoCase(IDictionary<string, object?> dictionary, string parameterName, out object? value)
+    {
+        parameterName = parameterName.ToUpperInvariant();
+        KeyValuePair<string, object?>? paramPair = dictionary.FirstOrDefault((f) => f.Key.ToUpperInvariant() == parameterName);
+        if (paramPair.HasValue && !string.IsNullOrEmpty(paramPair.Value.Key))
+        {
+            value = paramPair.Value.Value;
+            return true;
+        }
+
+        value = null;
+        return false;
+    }
+
+    internal static void SetParameterValueFromListNoCase(IDictionary<string, object?> dictionary, string parameterName, object? value)
+    {
+        var lParameterName = parameterName.ToUpperInvariant();
+        string? paramKey = dictionary.Keys.FirstOrDefault((k) => k.ToUpperInvariant() == lParameterName);
+        if (!string.IsNullOrEmpty(paramKey))
+            dictionary[paramKey] = value;
+        else
+            dictionary[parameterName] = value;
     }
 }
 

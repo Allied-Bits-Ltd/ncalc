@@ -60,92 +60,103 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     private async Task<object?> UpdateParameterAsync(LogicalExpression leftExpression, object? value, CancellationToken cancellationToken = default)
     {
         if (value is null && !(context.Options.HasFlag(ExpressionOptions.AllowNullParameter) || context.Options.HasFlag(ExpressionOptions.UseTernaryLogic)))
-        {
             return value;
-        }
 
-        if (leftExpression is BinaryExpression binExpr && binExpr.Type == BinaryExpressionType.IndexAccess)
+        switch (leftExpression)
         {
-            if (binExpr.LeftExpression is Identifier ident)
+            case BinaryExpression binExpr when binExpr.Type == BinaryExpressionType.IndexAccess:
             {
-                var identifierName = ident.Name;
-
-                var indexObj = await binExpr.RightExpression.Accept(this, cancellationToken).ConfigureAwait(false);
-                if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(indexObj))
-                    throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number", binExpr.RightExpression.Location);
-                var index = MathHelper.ConvertToInt(indexObj, context);
-
-                if (index < 0)
-                    throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} is less than zero ({index}), which is not a valid value (an index must be zero or positive)", binExpr.RightExpression.Location);
-
-                var parameterArgs = new UpdateParameterArgs(identifierName, ident.Id, index, value);
-
-                await OnUpdateParameterAsync(identifierName, parameterArgs, cancellationToken).ConfigureAwait(false);
-
-                if (!parameterArgs.UpdateParameterLists)
+                if (binExpr.LeftExpression is Identifier ident)
                 {
-                    return value;
-                }
+                    var identifierName = ident.Name;
 
-                if (!context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out object? staticParam) || staticParam is null)
-                    throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not set and cannot be assigned to by index", binExpr.LeftExpression.Location);
+                    var indexObj = await binExpr.RightExpression.Accept(this, cancellationToken).ConfigureAwait(false);
+                    if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(indexObj))
+                        throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number", binExpr.RightExpression.Location);
 
-                if (staticParam is string strParam)
-                {
-                    if (value is char || (value is string && ((string)value).Length == 1))
+                    var index = MathHelper.ConvertToInt(indexObj, context);
+                    if (index < 0)
+                        throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} is less than zero ({index}), which is not a valid value (an index must be zero or positive)", binExpr.RightExpression.Location);
+
+                    var parameterArgs = new UpdateParameterArgs(identifierName, ident.Id, index, value);
+
+                    await OnUpdateParameterAsync(identifierName, parameterArgs, cancellationToken).ConfigureAwait(false);
+
+                    if (!parameterArgs.UpdateParameterLists)
+                        return value;
+
+                    object? staticParam = null;
+                    if ((!(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup)
+                            ? EvaluationHelper.GetParameterValueFromListNoCase(context.StaticParameters, identifierName, out staticParam)
+                            : context.StaticParameters.TryGetValue(identifierName, out staticParam)))
+                        || staticParam is null)
+                        throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not set and cannot be assigned to by index", binExpr.LeftExpression.Location);
+
+                    if (staticParam is string strParam)
                     {
-                        if (strParam.Length <= index)
-                            throw new NCalcParameterIndexException(identifierName, $"A character in the '{identifierName}' string cannot be updated by index: the string has the length of {strParam.Length}, while the index is {index}", binExpr.RightExpression.Location);
+                        if (value is char || (value is string && ((string)value).Length == 1))
+                        {
+                            if (strParam.Length <= index)
+                                throw new NCalcParameterIndexException(identifierName, $"A character in the '{identifierName}' string cannot be updated by index: the string has the length of {strParam.Length}, while the index is {index}", binExpr.RightExpression.Location);
 
-                        char charValue;
+                            char charValue;
 
-                        if (value is string strValue)
-                            charValue = strValue[0];
+                            if (value is string strValue)
+                                charValue = strValue[0];
+                            else
+                                charValue = (char)value;
+
+                            strParam = strParam[0..index] + charValue + strParam[(index + 1)..];
+
+                            if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
+                                EvaluationHelper.SetParameterValueFromListNoCase(context.StaticParameters, identifierName, strParam);
+                            else
+                                context.StaticParameters[identifierName] = strParam;
+                        }
                         else
-                            charValue = (char)value;
-
-                        strParam = strParam[0..index] + charValue + strParam[(index + 1)..];
-                        context.StaticParameters[context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName] = strParam;
+                        {
+                            throw new NCalcParameterIndexException(identifierName, $"When updating a string in '{identifierName}' via the index, the value must be a character or a one-character string", binExpr.RightExpression.Location);
+                        }
                     }
                     else
                     {
-                        throw new NCalcParameterIndexException(identifierName, $"When updating a string in '{identifierName}' via the index, the value must be a character or a one-character string", binExpr.RightExpression.Location);
+                        if (staticParam is not IList list)
+                            throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' is not a list or a string and cannot be assigned to by index", binExpr.LeftExpression.Location);
+
+                        if (list.IsReadOnly)
+                            throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' is read-only and cannot be assigned to by index", binExpr.LeftExpression.Location);
+
+                        if (list.Count <= index)
+                            throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' cannot be assigned to by index: it has {list.Count} elements, while the index to update is {index}", binExpr.RightExpression.Location);
+
+                        list[index] = value;
                     }
                 }
                 else
                 {
-                    if (staticParam is not IList list)
-                        throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' is not a list or a string and cannot be assigned to by index", binExpr.LeftExpression.Location);
-
-                    if (list.IsReadOnly)
-                        throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' is read-only and cannot be assigned to by index", binExpr.LeftExpression.Location);
-
-                    if (list.Count <= index)
-                        throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' cannot be assigned to by index: it has {list.Count} elements, while the index to update is {index}", binExpr.RightExpression.Location);
-
-                    list[index] = value;
+                    throw new NCalcEvaluationException("The expression should evaluate to an identifier", binExpr.Location);
                 }
+
+                break;
             }
-            else
+            case Identifier identifier:
             {
-                throw new NCalcEvaluationException("The expression should evaluate to an identifier", binExpr.Location);
+                var identifierName = identifier.Name;
+
+                var parameterArgs = new UpdateParameterArgs(identifierName, identifier.Id, value);
+
+                await OnUpdateParameterAsync(identifierName, parameterArgs, cancellationToken).ConfigureAwait(false);
+
+                if (!parameterArgs.UpdateParameterLists)
+                    return value;
+
+                if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
+                    EvaluationHelper.SetParameterValueFromListNoCase(context.StaticParameters, identifierName, value);
+                else
+                    context.StaticParameters[identifierName] = value;
+
+                break;
             }
-        }
-        else
-        if (leftExpression is Identifier identifier)
-        {
-            var identifierName = identifier.Name;
-
-            var parameterArgs = new UpdateParameterArgs(identifierName, identifier.Id, value);
-
-            await OnUpdateParameterAsync(identifierName, parameterArgs, cancellationToken).ConfigureAwait(false);
-
-            if (!parameterArgs.UpdateParameterLists)
-            {
-                return value;
-            }
-
-            context.StaticParameters[context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName] = value;
         }
         return value;
     }
@@ -977,7 +988,10 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
         if (context.UserFunctions.Count > 0)
         {
-            if (context.UserFunctions.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? functionName.ToLowerInvariant() : functionName, out Function? userFunction) && userFunction is not null)
+            Function? userFunction;
+            if ((context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup)
+                ? EvaluationHelper.GetFunctionFromListNoCase(context.UserFunctions, functionName, out userFunction)
+                : context.UserFunctions.TryGetValue(functionName, out userFunction)) && userFunction is not null)
             {
                 EvaluationHelper.EnsureProperParamNumInFunctionCall(userFunction, functionCall);
                 return await ExecuteUserFunctionCallAsync(userFunction, functionCall, context, cancellationToken).ConfigureAwait(false);
@@ -1003,7 +1017,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             return functionArgs.Result;
         }
 
-        if (context.Functions.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? functionName.ToLowerInvariant() : functionName, out var expressionFunction))
+        AsyncExpressionFunction? expressionFunction = null;
+        if ((context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup)
+                ? GetFunctionFromListNoCase(context.Functions, functionName, out expressionFunction)
+                : context.Functions.TryGetValue(functionName, out expressionFunction))
+            && expressionFunction is not null)
         {
             return await expressionFunction(new AsyncExpressionFunctionData(functionCall.Identifier.Id, args, context), cancellationToken).ConfigureAwait(false);
         }
@@ -1039,16 +1057,29 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
         if (result is null)
         {
-            if (context.StaticParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var parameter))
+            object? parameter = null;
+            if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup)
+                    ? EvaluationHelper.GetParameterValueFromListNoCase(context.StaticParameters, identifierName, out parameter)
+                    : context.StaticParameters.TryGetValue(identifierName, out parameter))
             {
                 if (parameter is AsyncExpression expression)
                 {
                     //Share the parameters with child expression.
                     foreach (var p in context.StaticParameters)
-                        expression.Parameters[p.Key] = p.Value;
+                    {
+                        if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
+                            EvaluationHelper.SetParameterValueFromListNoCase(expression.Parameters, p.Key, p.Value);
+                        else
+                            expression.Parameters[p.Key] = p.Value;
+                    }
 
                     foreach (var p in context.DynamicParameters)
-                        expression.DynamicParameters[p.Key] = p.Value;
+                    {
+                        if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
+                            SetParameterValueFromListNoCase(expression.DynamicParameters, p.Key, p.Value);
+                        else
+                            expression.DynamicParameters[p.Key] = p.Value;
+                    }
 
                     expression.EvaluateFunctionAsync += context.AsyncEvaluateFunctionHandler;
                     expression.EvaluateParameterAsync += context.AsyncEvaluateParameterHandler;
@@ -1073,9 +1104,12 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         }
         if (result is null)
         {
-            if (context.DynamicParameters.TryGetValue(context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? identifierName.ToLowerInvariant() : identifierName, out var dynamicParameter))
+            AsyncExpressionParameter? dynamicParameter = null;
+            if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup)
+                    ? GetParameterValueFromListNoCase(context.DynamicParameters, identifierName, out dynamicParameter)
+                    : context.DynamicParameters.TryGetValue(identifierName, out dynamicParameter))
             {
-                result = await dynamicParameter(new AsyncExpressionParameterData(identifier.Id, context), cancellationToken).ConfigureAwait(false);
+                result = dynamicParameter is null ? null : await dynamicParameter(new AsyncExpressionParameterData(identifier.Id, context), cancellationToken).ConfigureAwait(false);
                 if (result is null)
                 {
                     return result;
@@ -1263,7 +1297,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 return context.AsyncMatchStringHandler.Invoke(args, cancellationToken);
             else
 #if NET8_0_OR_GREATER
-            return ValueTask.CompletedTask;
+                return ValueTask.CompletedTask;
 #else
                 return new ValueTask(Task.CompletedTask);
 #endif
@@ -1277,6 +1311,44 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         {
             return ex.ReturnValue;
         }
+    }
+
+    private static bool GetFunctionFromListNoCase(IDictionary<string, AsyncExpressionFunction> dictionary, string functionName, out AsyncExpressionFunction? function)
+    {
+        functionName = functionName.ToUpperInvariant();
+        KeyValuePair<string, AsyncExpressionFunction>? functionPair = dictionary.FirstOrDefault((f) => f.Key.ToUpperInvariant() == functionName);
+        if (functionPair.HasValue && !string.IsNullOrEmpty(functionPair.Value.Key))
+        {
+            function = functionPair.Value.Value;
+            return true;
+        }
+
+        function = null;
+        return false;
+    }
+
+    internal static bool GetParameterValueFromListNoCase(IDictionary<string, AsyncExpressionParameter> dictionary, string parameterName, out AsyncExpressionParameter? value)
+    {
+        parameterName = parameterName.ToUpperInvariant();
+        KeyValuePair<string, AsyncExpressionParameter>? paramPair = dictionary.FirstOrDefault((f) => f.Key.ToUpperInvariant() == parameterName);
+        if (paramPair.HasValue && !string.IsNullOrEmpty(paramPair.Value.Key))
+        {
+            value = paramPair.Value.Value;
+            return true;
+        }
+
+        value = null;
+        return false;
+    }
+
+    internal static void SetParameterValueFromListNoCase(IDictionary<string, AsyncExpressionParameter> dictionary, string parameterName, AsyncExpressionParameter value)
+    {
+        var lParameterName = parameterName.ToUpperInvariant();
+        string? paramKey = dictionary.Keys.FirstOrDefault((k) => k.ToUpperInvariant() == lParameterName);
+        if (!string.IsNullOrEmpty(paramKey))
+            dictionary[paramKey] = value;
+        else
+            dictionary[parameterName] = value;
     }
 }
 

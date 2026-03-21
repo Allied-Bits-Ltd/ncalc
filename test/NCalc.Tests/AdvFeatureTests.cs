@@ -1917,6 +1917,18 @@ public class AdvFeatureTests : TestBase
         Assert.Equal(42, result);
     }
 
+    [Fact]
+    public void ShouldHandleEmbeddedFunctionLowercase()
+    {
+        var expression = new Expression("fn MeaningOfLife() { return 4*10 + 2 }; MeaningOfLife()", ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments | ExpressionOptions.UseIfStatement | ExpressionOptions.AllowNullParameter | ExpressionOptions.SupportTimeOperations | ExpressionOptions.LowerCaseIdentifierLookup);
+        expression.AdvancedOptions = new AdvancedExpressionOptions();
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        Assert.Equal(42, result);
+    }
+
     [Theory]
     [InlineData("2 + 2; 3 + 3", 6)]
     [InlineData("(2 + 2); 3 + 3", 6)]
