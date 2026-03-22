@@ -53,7 +53,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         if (!TryGetValueOrNull(expression.LeftExpression.Accept(this, cancellationToken), out object? value))
             return null;
 
-        return (Convert.ToBoolean(value, context.CultureInfo) ? expression.MiddleExpression : expression.RightExpression).Accept(this, cancellationToken);
+        return (MathHelper.ConvertToBoolean(value, "Ternary", context.CultureInfo, expression.LeftExpression.Location) ? expression.MiddleExpression : expression.RightExpression).Accept(this, cancellationToken);
     }
 
     private object? UpdateParameter(LogicalExpression leftExpression, object? value, CancellationToken cancellationToken = default)
@@ -74,7 +74,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     var indexObj = binExpr.RightExpression.Accept(this, cancellationToken);
                     if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(indexObj))
                         throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number", binExpr.RightExpression.Location);
-                    var index = MathHelper.ConvertToInt(indexObj, context);
+
+                    var index = MathHelper.ConvertToInt(indexObj, "Indexed access", context.CultureInfo, binExpr.RightExpression.Location);
 
                     var parameterArgs = new UpdateParameterArgs(identifierName, ident.Id, index, value);
 
@@ -313,7 +314,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         {
                             leftValue = lValPerc.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
 
                             object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
                             if (result is null)
@@ -324,7 +325,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         {
                             leftValue = lValPercent.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
+
                             object? result = MathHelper.Divide(leftValue, rightValue, true, context);
                             if (result is null)
                                 return null;
@@ -336,7 +338,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         {
                             rightValue = rValPercent.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
 
                             object? result = MathHelper.DividePercent(leftValue, rightValue, context);
                             if (result is null)
@@ -347,7 +349,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     }
 
                     if (!noConvertToDouble)
-                        leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                        leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
 
                     {
                         object? result = EvaluationHelper.Divide(leftValue, rightValue, context);
@@ -366,8 +368,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken);
-                    return UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) &
-                        Convert.ToUInt64(rightValue, context.CultureInfo), cancellationToken);
+
+                    return UpdateParameter(
+                        expression.LeftExpression,
+                        MathHelper.ConvertToULong(leftValue, "And with assignment", context.CultureInfo, expression.LeftExpression.Location) &
+                            MathHelper.ConvertToULong(rightValue, "And with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        cancellationToken);
 
                 case BinaryExpressionType.OrAssignment:
                     if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -378,8 +384,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken);
-                    return UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) |
-                        Convert.ToUInt64(rightValue, context.CultureInfo), cancellationToken);
+
+                    return UpdateParameter(
+                        expression.LeftExpression,
+                        MathHelper.ConvertToULong(leftValue, "Or with assignment", context.CultureInfo, expression.LeftExpression.Location) |
+                            MathHelper.ConvertToULong(rightValue, "Or with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        cancellationToken);
 
                 case BinaryExpressionType.XOrAssignment:
                     if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -389,8 +399,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken);
-                    return UpdateParameter(expression.LeftExpression, Convert.ToUInt64(leftValue, context.CultureInfo) ^
-                        Convert.ToUInt64(rightValue, context.CultureInfo), cancellationToken);
+
+                    return UpdateParameter(
+                        expression.LeftExpression,
+                        MathHelper.ConvertToULong(leftValue, "Xor with assignment", context.CultureInfo, expression.LeftExpression.Location) ^
+                            MathHelper.ConvertToULong(rightValue, "XOr with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        cancellationToken);
 
                 case BinaryExpressionType.And:
                     if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
@@ -407,13 +421,14 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     if (!TryGetValueOrNull(left.Value, out leftValue))
                         return null;
-                    if (!Convert.ToBoolean(leftValue, context.CultureInfo))
+
+                    if (!MathHelper.ConvertToBoolean(leftValue, "And", context.CultureInfo, expression.LeftExpression.Location))
                         return false;
 
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return null;
 
-                    return Convert.ToBoolean(rightValue, context.CultureInfo);
+                    return MathHelper.ConvertToBoolean(rightValue, "And", context.CultureInfo, expression.RightExpression.Location);
 
                 case BinaryExpressionType.Or:
                     if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
@@ -429,23 +444,24 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     if (!TryGetValueOrNull(left.Value, out leftValue))
                         return null;
-                    if (Convert.ToBoolean(leftValue, context.CultureInfo))
+                    if (MathHelper.ConvertToBoolean(leftValue, "Or", context.CultureInfo, expression.LeftExpression.Location))
                         return true;
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return null;
-                    return Convert.ToBoolean(rightValue, context.CultureInfo);
+
+                    return MathHelper.ConvertToBoolean(rightValue, "Or", context.CultureInfo, expression.RightExpression.Location);
 
                 case BinaryExpressionType.XOr:
                     if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
                     {
                         leftValue = left.Value;
                         bool? leftBool = leftValue is bool lb ? lb : null;
-                        if (leftBool == null)
+                        if (leftBool is null)
                             return null;
 
                         rightValue = right.Value;
                         bool? rightBool = rightValue is bool rb ? rb : null;
-                        if (rightBool == null)
+                        if (rightBool is null)
                             return null;
 
                         return K3LogicHelper.Xor(leftValue, rightValue);
@@ -455,8 +471,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         return null;
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return null;
-                    return Convert.ToBoolean(leftValue, context.CultureInfo) ^
-                            Convert.ToBoolean(rightValue, context.CultureInfo);
+                    return MathHelper.ConvertToBoolean(leftValue, "XOr", context.CultureInfo, expression.LeftExpression.Location) ^
+                           MathHelper.ConvertToBoolean(rightValue, "XOr", context.CultureInfo, expression.RightExpression.Location);
 
                 case BinaryExpressionType.Div:
                 {
@@ -473,11 +489,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         {
                             leftValue = lValPerc.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
 
                             object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
                             if (result is null)
                                 return null;
+
                             return new Percent(result);
                         }
                         else
@@ -485,7 +502,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         {
                             leftValue = lValPercent.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
+
                             object? result = MathHelper.Divide(leftValue, rightValue, true, context);
                             if (result is null)
                                 return null;
@@ -497,14 +515,14 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         {
                             rightValue = rValPercent.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
 
                             return MathHelper.DividePercent(leftValue, rightValue, context);
                         }
                     }
 
                     if (!noConvertToDouble)
-                        leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                        leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
 
                     return EvaluationHelper.Divide(leftValue, rightValue, context);
                 }
@@ -515,6 +533,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         return null;
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return null;
+
                     return MathHelper.IntegerDivide(leftValue, rightValue, (expression.Type == BinaryExpressionType.IntDivB), true, context);
 
                 case BinaryExpressionType.Equal:
@@ -663,8 +682,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseAnd(leftValue, rightValue);
-                    return Convert.ToUInt64(leftValue, context.CultureInfo) &
-                            Convert.ToUInt64(rightValue, context.CultureInfo);
+
+                    return MathHelper.ConvertToULong(leftValue, "Bitwise And", context.CultureInfo, expression.LeftExpression.Location) &
+                            MathHelper.ConvertToULong(rightValue, "Bitwise And", context.CultureInfo, expression.RightExpression.Location);
 
                 case BinaryExpressionType.BitwiseOr:
                     if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -674,8 +694,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseOr(leftValue, rightValue);
-                    return Convert.ToUInt64(leftValue, context.CultureInfo) |
-                            Convert.ToUInt64(rightValue, context.CultureInfo);
+
+                    return MathHelper.ConvertToULong(leftValue, "Bitwise Or", context.CultureInfo, expression.LeftExpression.Location) |
+                            MathHelper.ConvertToULong(rightValue, "Bitwise Or", context.CultureInfo, expression.RightExpression.Location);
 
                 case BinaryExpressionType.BitwiseXOr:
                     if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -684,8 +705,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         return null;
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseXOr(leftValue, rightValue);
-                    return Convert.ToUInt64(leftValue, context.CultureInfo) ^
-                            Convert.ToUInt64(rightValue, context.CultureInfo);
+
+                    return MathHelper.ConvertToULong(leftValue, "Bitwise XOr", context.CultureInfo, expression.LeftExpression.Location) ^
+                            MathHelper.ConvertToULong(rightValue, "Bitwise XOr", context.CultureInfo, expression.RightExpression.Location);
 
                 case BinaryExpressionType.LeftShift:
                     if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -762,8 +784,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (rightValue is not null && rightValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
                         throw new NCalcParameterIndexException("The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
 
-                    int? leftInt = (leftValue is null) ? null : (leftValue is NCalc.Domain.Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, context);
-                    int? rightInt = (rightValue is null) ? null : (rightValue is NCalc.Domain.Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, context);
+                    int? leftInt = (leftValue is null) ? null : (leftValue is NCalc.Domain.Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, "Range Index", context.CultureInfo, expression.LeftExpression.Location);
+                    int? rightInt = (rightValue is null) ? null : (rightValue is NCalc.Domain.Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, "Range Index", context.CultureInfo, expression.RightExpression.Location);
 
                     if (leftInt.HasValue && leftInt < 0)
                         throw new NCalcParameterIndexException("The lower boundary should be zero or a positive number", expression.LeftExpression.Location);
@@ -856,17 +878,18 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         int index;
                         try
                         {
-                            index = MathHelper.ConvertToInt(rightValue, context);
+                            index = MathHelper.ConvertToInt(rightValue, "Indexed access", context.CultureInfo, expression.RightExpression.Location);
                         }
-                        catch
+                        catch(Exception ex)
                         {
-                            throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
+                            throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location, ex);
                         }
 
                         if (identList is not null)
                         {
                             if (index < 0 || index >= identList.Count)
                                 throw new NCalcParameterIndexException($"The index is out of bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
+
                             result = identList[index];
                         }
                         else
@@ -874,6 +897,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         {
                             if (index < 0 || index >= identString.Length)
                                 throw new NCalcParameterIndexException($"The index is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
+
                             result = identString[index];
                         }
                         if (result is LogicalExpression expr)
@@ -895,7 +919,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (!TryGetValueOrNull(Evaluate(expression.LeftExpression, cancellationToken), out leftValue))
                             break;
 
-                        if (!Convert.ToBoolean(leftValue, context.CultureInfo))
+                        if (!MathHelper.ConvertToBoolean(leftValue, "While loop", context.CultureInfo, expression.LeftExpression.Location))
                             break;
 
                         try

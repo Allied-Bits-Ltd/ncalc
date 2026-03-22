@@ -5,6 +5,7 @@ using System.Reflection;
 using ExtendedNumerics;
 
 using NCalc.Exceptions;
+using NCalc.Parser;
 
 namespace NCalc.Helpers;
 
@@ -1484,7 +1485,7 @@ public static class MathHelper
                     if (result is BigDecimal)
                         return (decimal)result;
 
-                    return ConvertToDecimal(result, options);
+                    return ConvertToDecimal(result, "Divide", options.CultureInfo, null);
                 }
                 catch
                 {
@@ -1499,9 +1500,9 @@ public static class MathHelper
                         dResult = (double)bdResult;
                 }
                 else
-                if (result is double)
+                if (result is double dd)
                 {
-                    dResult = (double)result;
+                    dResult = dd;
                 }
 
                 if (dResult is not null)
@@ -1554,7 +1555,7 @@ public static class MathHelper
             {
                 try
                 {
-                    return ConvertToDecimal(result, options);
+                    return ConvertToDecimal(result, "Div", options.CultureInfo, null);
                 }
                 catch
                 {
@@ -1590,7 +1591,8 @@ public static class MathHelper
                 {
                     BigInteger biA = bdA.WholeValue;
                     if (!((b is BigInteger) || (b is BigDecimal)))
-                        b = ConvertToLong(b, options);
+                        b = ConvertToLong(b, "Integer Div", options.CultureInfo, null);
+
                     biResult = IntegerDivide(biA, b);
                 }
                 else
@@ -1605,7 +1607,8 @@ public static class MathHelper
                 {
                     BigInteger biB = bdB.WholeValue;
                     if (!((a is BigInteger) || (a is BigDecimal)))
-                        a = ConvertToLong(a, options);
+                        a = ConvertToLong(a, "Integer Div", options.CultureInfo, null);
+
                     biResult = IntegerDivide(a, biB);
                 }
                 else
@@ -1617,7 +1620,7 @@ public static class MathHelper
             if (a is BigInteger biA)
             {
                 if (truncateFirst)
-                    b = ConvertToLong(b, options);
+                    b = ConvertToLong(b, "Integer Div", options.CultureInfo, null);
 
                 biResult = IntegerDivide(biA, b);
             }
@@ -1625,7 +1628,7 @@ public static class MathHelper
             if (b is BigInteger biB)
             {
                 if (truncateFirst)
-                    a = ConvertToLong(a, options);
+                    a = ConvertToLong(a, "Integer Div", options.CultureInfo, null);
 
                 biResult = IntegerDivide(a, biB);
             }
@@ -1660,8 +1663,8 @@ public static class MathHelper
 
         if (truncateFirst)
         {
-            a = ConvertToLong(a, options);
-            b = ConvertToLong(b, options);
+            a = ConvertToLong(a, "Integer Div", options.CultureInfo, null);
+            b = ConvertToLong(b, "Integer Div", options.CultureInfo, null);
         }
 
         //var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
@@ -1676,6 +1679,7 @@ public static class MathHelper
             TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
             if (newTypeCode == TypeCode.Empty)
                 throw;
+
             result = Divide(a, b, reduceTypes, options);
         }
 
@@ -1795,6 +1799,7 @@ public static class MathHelper
                 else
                 if (!(b is BigInteger))
                     b = ConvertToBigInteger(b);
+
                 biResult = BigInteger.Remainder(biA, (BigInteger) b);
             }
             else
@@ -1806,6 +1811,7 @@ public static class MathHelper
                 else
                 if (!(a is BigInteger))
                     a = ConvertToBigInteger(a);
+
                 biResult = BigInteger.Remainder((BigInteger)a, biB);
             }
             else
@@ -1813,6 +1819,7 @@ public static class MathHelper
             {
                 if (!(b is BigInteger))
                     b = ConvertToBigInteger(b);
+
                 biResult = BigInteger.Remainder(biA, (BigInteger)b);
             }
             else
@@ -1820,6 +1827,7 @@ public static class MathHelper
             {
                 if (!(a is BigInteger))
                     a = ConvertToBigInteger(a);
+
                 biResult = BigInteger.Remainder((BigInteger)a, biB);
             }
             else
@@ -1858,9 +1866,11 @@ public static class MathHelper
             TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
             if (newTypeCode == TypeCode.Empty)
                 throw;
+
             object? result = Modulo(a, b, reduceTypes, options);
             if (result is null)
                 return null;
+
             return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
     }
@@ -2015,8 +2025,10 @@ public static class MathHelper
                 b = Convert.ChangeType(b, TypeCode.UInt16, options.CultureInfo);
         }
 
-        var typeCodeA = Type.GetTypeCode(a.GetType());
-        var typeCodeB = Type.GetTypeCode(b.GetType());
+        var typeA = a.GetType();
+        var typeB = b.GetType();
+        var typeCodeA = Type.GetTypeCode(typeA);
+        var typeCodeB = Type.GetTypeCode(typeB);
 
         if (typeCodeA == typeCodeB && !forceExpandBits)
             return typeCodeA;
@@ -2088,6 +2100,10 @@ public static class MathHelper
                 typesWereExpanded = true;
                 return typeCodeA;
             }
+            catch (InvalidCastException icex)
+            {
+                throw new NCalcConversionException($"Conversion of a value '{b}' of type {typeB.Name} to type '{typeA.Name}' failed.", b.ToString() ?? "null", typeB, typeA, icex);
+            }
             catch (OverflowException)
             {
                 typesWereExpanded = true;
@@ -2103,6 +2119,10 @@ public static class MathHelper
                 a = Convert.ChangeType(a, typeCodeB, options.CultureInfo);
                 typesWereExpanded = true;
                 return typeCodeB;
+            }
+            catch (InvalidCastException icex)
+            {
+                throw new NCalcConversionException($"Conversion of a value '{a}' of type {typeA.Name} to type '{typeB.Name}' failed.", a.ToString() ?? "null", typeA, typeB, icex);
             }
             catch (OverflowException)
             {
@@ -2130,19 +2150,23 @@ public static class MathHelper
     private static TypeCode TypeCodeExpandBits(TypeCode typeCode, ref object a, ref object b, MathHelperOptions options)
     {
         TypeCode result = TypeCode.Empty;
+        Type t = typeof(long);
         switch (typeCode)
         {
             case TypeCode.SByte:
             case TypeCode.Byte:
                 result = TypeCode.Int16;
+                t = typeof(short);
                 break;
             case TypeCode.Int16:
             case TypeCode.UInt16:
                 result = TypeCode.Int32;
+                t = typeof(int);
                 break;
             case TypeCode.Int32:
             case TypeCode.UInt32:
                 result = TypeCode.Int64;
+                t = typeof(long);
                 break;
             case TypeCode.Int64:
             case TypeCode.UInt64:
@@ -2159,9 +2183,23 @@ public static class MathHelper
 
                 break;
             case TypeCode.Single:
-                        result = TypeCode.Double;
-                        break;
+                result = TypeCode.Double;
+                t = typeof(double);
+                break;
             case TypeCode.Double:
+                if (options.UseBigNumbers)
+                {
+                    a = ConvertToBigDecimal(a);
+                    b = ConvertToBigDecimal(b);
+                    return TypeCode.Object;
+                }
+                else
+                {
+                    result = typeCode;
+                    t = typeof(double);
+                }
+
+                break;
             case TypeCode.Decimal:
                 if (options.UseBigNumbers)
                 {
@@ -2172,8 +2210,8 @@ public static class MathHelper
                 else
                 {
                     result = typeCode;
+                    t = typeof(decimal);
                 }
-
                 break;
             case TypeCode.Object:
                 return options.UseBigNumbers ? TypeCode.Object : TypeCode.Empty;
@@ -2182,8 +2220,26 @@ public static class MathHelper
         }
         if (result != TypeCode.Empty && result != TypeCode.Object)
         {
-            a = Convert.ChangeType(a, result, options.CultureInfo);
-            b = Convert.ChangeType(b, result, options.CultureInfo);
+            var typeA = a.GetType();
+            var typeB = b.GetType();
+
+            try
+            {
+                a = Convert.ChangeType(a, result, options.CultureInfo);
+            }
+            catch (InvalidCastException icex)
+            {
+                throw new NCalcConversionException($"Conversion of a value '{a}' of type {typeA.Name} to type '{t.Name}' failed.", a.ToString() ?? "null", typeA, t, icex);
+            }
+
+            try
+            {
+                b = Convert.ChangeType(b, result, options.CultureInfo);
+            }
+            catch (InvalidCastException icex)
+            {
+                throw new NCalcConversionException($"Conversion of a value '{b}' of type {typeB.Name} to type '{t.Name}' failed.", b.ToString() ?? "null", typeB, t, icex);
+            }
         }
         return result;
     }
@@ -2333,9 +2389,9 @@ public static class MathHelper
         }
 
         if (options.DecimalAsDefault)
-            return Math.Abs(ConvertToDecimal(a, options));
+            return Math.Abs(ConvertToDecimal(a, "Abs", options.CultureInfo, null));
 
-        return Math.Abs(ConvertToDouble(a, options));
+        return Math.Abs(ConvertToDouble(a, "Abs", options.CultureInfo, null));
     }
 
     public static object Acos(object? a, MathHelperOptions options)
@@ -2351,7 +2407,7 @@ public static class MathHelper
                 return BigDecimal.Arccos(bdA);
             }
         }
-        return Math.Acos(ConvertToDouble(a, options));
+        return Math.Acos(ConvertToDouble(a, "Acos", options.CultureInfo, null));
     }
 
     public static object Asin(object? a, MathHelperOptions options)
@@ -2367,7 +2423,7 @@ public static class MathHelper
                 return BigDecimal.Arcsin(bdA);
             }
         }
-        return Math.Asin(ConvertToDouble(a, options));
+        return Math.Asin(ConvertToDouble(a, "Asin", options.CultureInfo, null));
     }
 
     public static object Atan(object? a, MathHelperOptions options)
@@ -2383,12 +2439,12 @@ public static class MathHelper
                 return BigDecimal.Arctan(bdA);
             }
         }
-        return Math.Atan(ConvertToDouble(a, options));
+        return Math.Atan(ConvertToDouble(a, "Atan", options.CultureInfo, null));
     }
 
     public static object Atan2(object? a, object? b, MathHelperOptions options)
     {
-        return Math.Atan2(ConvertToDouble(a, options), ConvertToDouble(b, options));
+        return Math.Atan2(ConvertToDouble(a, "Atan2", options.CultureInfo, null), ConvertToDouble(b, "Atan2", options.CultureInfo, null));
     }
 
     public static object Ceiling(object? a, MathHelperOptions options)
@@ -2405,9 +2461,9 @@ public static class MathHelper
             }
         }
         if (options.DecimalAsDefault)
-            return Math.Ceiling(ConvertToDecimal(a, options));
+            return Math.Ceiling(ConvertToDecimal(a, "Ceiling", options.CultureInfo, null));
 
-        return Math.Ceiling(ConvertToDouble(a, options));
+        return Math.Ceiling(ConvertToDouble(a, "Ceiling", options.CultureInfo, null));
     }
 
     public static object Cos(object? a, MathHelperOptions options)
@@ -2423,7 +2479,7 @@ public static class MathHelper
                 return BigDecimal.Cos(bdA);
             }
         }
-        return Math.Cos(ConvertToDouble(a, options));
+        return Math.Cos(ConvertToDouble(a, "Cos", options.CultureInfo, null));
     }
 
     public static object Exp(object? a, MathHelperOptions options)
@@ -2439,7 +2495,7 @@ public static class MathHelper
                 return BigDecimal.Exp(bdA);
             }
         }
-        return Math.Exp(ConvertToDouble(a, options));
+        return Math.Exp(ConvertToDouble(a, "Exp", options.CultureInfo, null));
     }
 
     public static object Floor(object? a, MathHelperOptions options)
@@ -2456,15 +2512,15 @@ public static class MathHelper
             }
         }
         if (options.DecimalAsDefault)
-            return Math.Floor(ConvertToDecimal(a, options));
+            return Math.Floor(ConvertToDecimal(a, "Floor", options.CultureInfo, null));
 
-        return Math.Floor(ConvertToDouble(a, options));
+        return Math.Floor(ConvertToDouble(a, "Floor", options.CultureInfo, null));
     }
 
     // ReSharper disable once InconsistentNaming
     public static object IEEERemainder(object? a, object? b, MathHelperOptions options)
     {
-        return Math.IEEERemainder(ConvertToDouble(a, options), ConvertToDouble(b, options));
+        return Math.IEEERemainder(ConvertToDouble(a, "IEEERemainder", options.CultureInfo, null), ConvertToDouble(b, "IEEEReminder", options.CultureInfo, null));
     }
 
     public static object Ln(object? a, MathHelperOptions options)
@@ -2480,7 +2536,7 @@ public static class MathHelper
                 return BigDecimal.Ln(bdA);
             }
         }
-        return Math.Log(ConvertToDouble(a, options));
+        return Math.Log(ConvertToDouble(a, "Ln", options.CultureInfo, null));
     }
 
     public static object Log(object? a, object? b, MathHelperOptions options)
@@ -2489,14 +2545,14 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Log(new BigDecimal(biA), ConvertToInt(b, options));
+                return BigDecimal.Log(new BigDecimal(biA), ConvertToInt(b, "Log", options.CultureInfo, null));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Log(bdA, ConvertToInt(b, options));
+                return BigDecimal.Log(bdA, ConvertToInt(b, "Log", options.CultureInfo, null));
             }
         }
-        return Math.Log(ConvertToDouble(a, options), ConvertToDouble(b, options));
+        return Math.Log(ConvertToDouble(a, "Log", options.CultureInfo, null), ConvertToDouble(b, "Log", options.CultureInfo, null));
     }
 
 #if NET8_0_OR_GREATER
@@ -2513,7 +2569,7 @@ public static class MathHelper
                 return BigDecimal.Log2(bdA);
             }
         }
-        return Math.Log2(ConvertToDouble(a, options));
+        return Math.Log2(ConvertToDouble(a, "Log2", options.CultureInfo, null));
     }
 #endif
 
@@ -2530,7 +2586,7 @@ public static class MathHelper
                 return BigDecimal.Log10(bdA);
             }
         }
-        return Math.Log10(ConvertToDouble(a, options));
+        return Math.Log10(ConvertToDouble(a, "Log2", options.CultureInfo, null));
     }
 
     public static object Pow(object? a, object? b, bool reduceTypes, MathHelperOptions options)
@@ -2543,14 +2599,14 @@ public static class MathHelper
         Type typeA = a.GetType();
         if ((options.DecimalAsDefault || options.UseBigNumbers) && (IsBoxedFloatingNumberInteger(b) == true))
         {
-            var @base = new BigDecimal(ConvertToDecimal(a, options));
-            var exponent = new BigInteger(ConvertToDecimal(b, options));
+            var @base = new BigDecimal(ConvertToDecimal(a, "Pow", options.CultureInfo, null));
+            var exponent = new BigInteger(ConvertToDecimal(b, "Pow", options.CultureInfo, null));
 
             BigDecimal bdResult = BigDecimal.Pow(@base, exponent);
             return ReduceNumericType(bdResult, reduceTypes ? null : typeA, options) ?? throw new NCalcEvaluationException("Pow result could not be reduced to a smaller type");
         }
 
-        double result = Math.Pow(ConvertToDouble(a, options), ConvertToDouble(b, options));
+        double result = Math.Pow(ConvertToDouble(a, "Pow", options.CultureInfo, null), ConvertToDouble(b, "Pow", options.CultureInfo, null));
         if (typeA == typeof(decimal))
             return (decimal)result;
 
@@ -2561,7 +2617,7 @@ public static class MathHelper
     {
         if (!options.UseBigNumbers)
         {
-            return Factorial(ConvertToLong(a, options), ConvertToLong(b, options), options);
+            return Factorial(ConvertToLong(a, "Factorial", options.CultureInfo, null), ConvertToLong(b, "Factorial", options.CultureInfo, null), options);
         }
 
         BigInteger value;
@@ -2571,7 +2627,7 @@ public static class MathHelper
         else
             value = ConvertToBigInteger(a);
 
-        long step = ConvertToLong(b, options);
+        long step = ConvertToLong(b, "Factorial", options.CultureInfo, null);
         if (value <= 0)
             throw new NotImplementedException("Factorial operation is not implemented for negative or zero values");
         if (step <= 0)
@@ -2653,12 +2709,12 @@ public static class MathHelper
             return a;
 
         if (a is BigDecimal bdA)
-            return BigDecimal.Round(bdA, ConvertToInt(b, options), (rounding == MidpointRounding.AwayFromZero) ? RoundingStrategy.AwayFromZero : RoundingStrategy.ToEven);
+            return BigDecimal.Round(bdA, ConvertToInt(b, "Round", options.CultureInfo, null), (rounding == MidpointRounding.AwayFromZero) ? RoundingStrategy.AwayFromZero : RoundingStrategy.ToEven);
 
         if (options.DecimalAsDefault)
-            return Math.Round(ConvertToDecimal(a, options), ConvertToInt(b, options), rounding);
+            return Math.Round(ConvertToDecimal(a, "Round", options.CultureInfo, null), ConvertToInt(b, "Round", options.CultureInfo, null), rounding);
 
-        return Math.Round(ConvertToDouble(a, options), ConvertToInt(b, options), rounding);
+        return Math.Round(ConvertToDouble(a, "Round", options.CultureInfo, null), ConvertToInt(b, "Round", options.CultureInfo, null), rounding);
     }
 
     public static object Sign(object? a, MathHelperOptions options)
@@ -2674,9 +2730,9 @@ public static class MathHelper
         }
 
         if (options.DecimalAsDefault)
-            return Math.Sign(ConvertToDecimal(a, options));
+            return Math.Sign(ConvertToDecimal(a, "Sign", options.CultureInfo, null));
 
-        return Math.Sign(ConvertToDouble(a, options));
+        return Math.Sign(ConvertToDouble(a, "Sign", options.CultureInfo, null));
     }
 
     public static object Sin(object? a, MathHelperOptions options)
@@ -2692,7 +2748,7 @@ public static class MathHelper
                 return BigDecimal.Sin(bdA);
             }
         }
-        return Math.Sin(ConvertToDouble(a, options));
+        return Math.Sin(ConvertToDouble(a, "Sin", options.CultureInfo, null));
     }
 
     public static object? Sqrt(object? a, MathHelperOptions options)
@@ -2712,7 +2768,7 @@ public static class MathHelper
             }
         }
 
-        var d = ConvertToDouble(a, options);
+        var d = ConvertToDouble(a, "Sqrt", options.CultureInfo, null);
 
         return Math.Sqrt(d);
     }
@@ -2734,7 +2790,7 @@ public static class MathHelper
             }
         }
 
-        var d = ConvertToDouble(a, options);
+        var d = ConvertToDouble(a, "Fthrt", options.CultureInfo, null);
 
         return Math.Sqrt(Math.Sqrt(d));
     }
@@ -2757,7 +2813,7 @@ public static class MathHelper
             }
         }
 
-        var d = ConvertToDouble(a, options);
+        var d = ConvertToDouble(a, "Cbrt", options.CultureInfo, null);
 
         return Math.Cbrt(d);
     }
@@ -2776,7 +2832,7 @@ public static class MathHelper
                 return BigDecimal.Tan(bdA);
             }
         }
-        return Math.Tan(ConvertToDouble(a, options));
+        return Math.Tan(ConvertToDouble(a, "Tan", options.CultureInfo, null));
     }
 
     public static object Cot(object? a, MathHelperOptions options)
@@ -2792,7 +2848,7 @@ public static class MathHelper
                 return BigDecimal.One /  BigDecimal.Tan(bdA);
             }
         }
-        return 1 / Math.Tan(ConvertToDouble(a, options));
+        return 1 / Math.Tan(ConvertToDouble(a, "Cot", options.CultureInfo, null));
     }
 
     public static object Truncate(object? a, MathHelperOptions options)
@@ -2816,9 +2872,9 @@ public static class MathHelper
         }
 
         if (options.DecimalAsDefault)
-            return Math.Truncate(ConvertToDecimal(a, options));
+            return Math.Truncate(ConvertToDecimal(a, "Truncate", options.CultureInfo, null));
 
-        return Math.Truncate(ConvertToDouble(a, options));
+        return Math.Truncate(ConvertToDouble(a, "Truncate", options.CultureInfo, null));
     }
 
     private static object ConvertIfNeeded(object value, string operationName, MathHelperOptions options)
@@ -2867,6 +2923,28 @@ public static class MathHelper
         };
     }
 
+    public static double ConvertToDouble(object? value, string operation, CultureInfo cultureInfo, ExpressionLocation? location)
+    {
+        try
+        {
+            return value switch
+            {
+                BigInteger bigI => ((double)bigI),
+                BigDecimal bigD => ((double)bigD),
+                double @double => @double,
+                char ch => Convert.ToDouble(ch.ToString(), cultureInfo),
+                _ => Convert.ToDouble(value, cultureInfo)
+            };
+        }
+        catch (InvalidCastException icex)
+        {
+            if (value is not null)
+                throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(double).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(double), location ?? ExpressionLocation.Empty, icex);
+            else
+                throw new NCalcConversionException($"Conversion of a null value to type '{typeof(double).Name}' in the '{operation}' operation failed.", typeof(double), location ?? ExpressionLocation.Empty, icex);
+        }
+    }
+
     public static decimal ConvertToDecimal(object? value, MathHelperOptions options)
     {
         return value switch
@@ -2877,6 +2955,28 @@ public static class MathHelper
             char ch => Convert.ToDecimal(ch.ToString(), options.CultureInfo),
             _ => Convert.ToDecimal(value, options.CultureInfo)
         };
+    }
+
+    public static decimal ConvertToDecimal(object? value, string operation, CultureInfo cultureInfo, ExpressionLocation? location)
+    {
+        try
+        {
+            return value switch
+            {
+                BigInteger bigI => ((decimal)bigI),
+                BigDecimal bigD => ((decimal)bigD),
+                decimal @decimal => @decimal,
+                char ch => Convert.ToDecimal(ch.ToString(), cultureInfo),
+                _ => Convert.ToDecimal(value, cultureInfo)
+            };
+        }
+        catch (InvalidCastException icex)
+        {
+            if (value is not null)
+                throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(decimal).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(decimal), location ?? ExpressionLocation.Empty, icex);
+            else
+                throw new NCalcConversionException($"Conversion of a null value to type '{typeof(decimal).Name}' in the '{operation}' operation failed.", typeof(decimal), location ?? ExpressionLocation.Empty, icex);
+        }
     }
 
     public static int ConvertToInt(object? value, MathHelperOptions options)
@@ -2890,6 +2990,29 @@ public static class MathHelper
             char ch => Convert.ToInt32(ch.ToString(), options.CultureInfo),
             _ => Convert.ToInt32(value, options.CultureInfo)
         };
+    }
+
+    public static int ConvertToInt(object? value, string operation, CultureInfo cultureInfo, ExpressionLocation? location)
+    {
+        try
+        {
+            return value switch
+            {
+                BigInteger bigI => ((int)bigI),
+                BigDecimal bigD => ((int)bigD),
+
+                int i => i,
+                char ch => Convert.ToInt32(ch.ToString(), cultureInfo),
+                _ => Convert.ToInt32(value, cultureInfo)
+            };
+        }
+        catch (InvalidCastException icex)
+        {
+            if (value is not null)
+                throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(int).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(int), location ?? ExpressionLocation.Empty, icex);
+            else
+                throw new NCalcConversionException($"Conversion of a null value to type '{typeof(int).Name}' in the '{operation}' operation failed.", typeof(int), location ?? ExpressionLocation.Empty, icex);
+        }
     }
 
     public static long ConvertToLong(object? value, MathHelperOptions options)
@@ -2908,6 +3031,32 @@ public static class MathHelper
         };
     }
 
+    public static long ConvertToLong(object? value, string operation, CultureInfo cultureInfo, ExpressionLocation? location)
+    {
+        try
+        {
+            return value switch
+            {
+                BigInteger bigI => ((long)bigI),
+                BigDecimal bigD => ((long)(decimal)bigD),
+
+                long l => l,
+                int i => i,
+                short s => s,
+                sbyte sb => sb,
+                char ch => Convert.ToInt64(ch.ToString(), cultureInfo),
+                _ => Convert.ToInt64(value, cultureInfo)
+            };
+        }
+        catch (InvalidCastException icex)
+        {
+            if (value is not null)
+                throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(long).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(long), location ?? ExpressionLocation.Empty, icex);
+            else
+                throw new NCalcConversionException($"Conversion of a null value to type '{typeof(long).Name}' in the '{operation}' operation failed.", typeof(long), location ?? ExpressionLocation.Empty, icex);
+        }
+    }
+
     public static ulong ConvertToULong(object? value, MathHelperOptions options)
     {
         return value switch
@@ -2922,6 +3071,50 @@ public static class MathHelper
             char ch => Convert.ToUInt64(ch.ToString(), options.CultureInfo),
             _ => Convert.ToUInt64(value, options.CultureInfo)
         };
+    }
+
+    public static ulong ConvertToULong(object? value, string operation, CultureInfo cultureInfo, ExpressionLocation? location)
+    {
+        try
+        {
+            return value switch
+            {
+                BigInteger bigI => bigI.Sign >= 0 ? ((ulong)bigI) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong)),
+                BigDecimal bigD => bigD.Sign >= 0 ? ((ulong)(decimal)bigD) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigDecimal), typeof(ulong)),
+
+                ulong ul => ul,
+                uint ui => ui,
+                ushort us => us,
+                byte b => b,
+                char ch => Convert.ToUInt64(ch.ToString(), cultureInfo),
+                _ => Convert.ToUInt64(value, cultureInfo)
+            };
+        }
+        catch (InvalidCastException icex)
+        {
+            if (value is not null)
+                throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(ulong).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(ulong), location ?? ExpressionLocation.Empty, icex);
+            else
+                throw new NCalcConversionException($"Conversion of a null value to type '{typeof(ulong).Name}' in the '{operation}' operation failed.", typeof(ulong), location ?? ExpressionLocation.Empty, icex);
+        }
+    }
+
+    public static bool ConvertToBoolean(object? value, string operation, CultureInfo cultureInfo, ExpressionLocation? location)
+    {
+        try
+        {
+            if (value is bool b)
+                return b;
+            else
+                return Convert.ToBoolean(value, cultureInfo);
+        }
+        catch (InvalidCastException icex)
+        {
+            if (value is not null)
+                throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(bool).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(bool), location ?? ExpressionLocation.Empty, icex);
+            else
+                throw new NCalcConversionException($"Conversion of a null value to type '{typeof(bool).Name}' in the '{operation}' operation failed.", typeof(bool), location ?? ExpressionLocation.Empty, icex);
+        }
     }
 
     private static object ExecuteOperation(object a, object b, char operatorName, ArithmeticOperation operation, MathHelperOptions options, TypeCode typeCode = TypeCode.Empty)
@@ -3262,7 +3455,7 @@ public static class MathHelper
             case ulong value: return value;
             case BigInteger value: return value;
             default:
-                throw new ArgumentException("The source of the conversion to a BigInteger must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger).", nameof(a));
+                throw new NCalcConversionException("The source of the conversion to a BigInteger must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger).", a.ToString() ?? string.Empty, a.GetType(), typeof(BigInteger));
         }
     }
 
@@ -3284,7 +3477,7 @@ public static class MathHelper
             case BigInteger value: return new BigDecimal(value);
             case BigDecimal value: return value;
             default:
-                throw new ArgumentException("The source of the conversion to a BigDecimal must be a boxed numeric type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", nameof(a));
+                throw new NCalcConversionException("The source of the conversion to a BigDecimal must be a boxed numeric type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", a.ToString() ?? string.Empty, a.GetType(), typeof(BigDecimal));
         }
     }
 
@@ -3327,7 +3520,7 @@ public static class MathHelper
     {
         if (b is null)
             return null;
-        int intB = ConvertToInt(b, options);
+        int intB = ConvertToInt(b, "Left Shift", options.CultureInfo, null);
         return a << intB;
     }
 
@@ -3360,7 +3553,7 @@ public static class MathHelper
 
         int stepInt = (int)step;
 
-        ulong ula = Convert.ToUInt64(a, options.CultureInfo);
+        ulong ula = ConvertToULong(a, "Left Shift", options.CultureInfo, null);
 
         if (options.UseBigNumbers && (ula > UInt32.MaxValue || step > 32))
         {
@@ -3382,7 +3575,7 @@ public static class MathHelper
     {
         if (b is null)
             return null;
-        int intB = ConvertToInt(b, options);
+        int intB = ConvertToInt(b, "Right Shift", options.CultureInfo, null);
         return a >> intB;
     }
 
@@ -3415,7 +3608,7 @@ public static class MathHelper
 
         int stepInt = (int)step;
 
-        ulong ula = Convert.ToUInt64(a, options.CultureInfo);
+        ulong ula = ConvertToULong(a, "Right Shift", options.CultureInfo, null);
 
         if (reduceTypes)
             return ReduceNumericType(ula >> stepInt);
@@ -3899,7 +4092,7 @@ public static class MathHelper
         {
             if (restrictToType == typeof(ulong) || restrictToType == typeof(uint) || restrictToType == typeof(ushort) || restrictToType == typeof(byte) || restrictToType == typeof(char))
             {
-                ulong candidate = MathHelper.ConvertToULong(lValue, options);
+                ulong candidate = MathHelper.ConvertToULong(lValue, string.Empty, options.CultureInfo, null);
 
                 if ((restrictToType is null || restrictToType == typeof(uint) || restrictToType == typeof(ushort)) && candidate <= uint.MaxValue)
                     return (uint)candidate;
@@ -3912,7 +4105,7 @@ public static class MathHelper
 
             if ((restrictToType is null || restrictToType == typeof(long) || restrictToType == typeof(int) || restrictToType == typeof(short) || restrictToType == typeof(sbyte)))
             {
-                long candidate = MathHelper.ConvertToLong(lValue, options);
+                long candidate = MathHelper.ConvertToLong(lValue, string.Empty, options.CultureInfo, null);
                 if ((restrictToType is null || restrictToType == typeof(int) || restrictToType == typeof(short)) && candidate >= int.MinValue && candidate <= int.MaxValue)
                     return (int)candidate;
                 else

@@ -187,7 +187,7 @@ public static class AsyncBuiltInFunctionHelper
                 throw new NCalcEvaluationException("List size is evaluated to null in a call to MakeList()", location);
             if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(sizeObj))
                 throw new NCalcEvaluationException("List size is not evaluated to an integer number in a call to MakeList()", location);
-            int size = MathHelper.ConvertToInt(sizeObj, context);
+            int size = MathHelper.ConvertToInt(sizeObj, "MakeList", context.CultureInfo, location);
             if (size <= 0)
                 throw new NCalcEvaluationException($"List size is {size}, and it must be positive in a call to MakeList()", location);
 
@@ -208,7 +208,7 @@ public static class AsyncBuiltInFunctionHelper
                 if (i == arguments.Length - 1)
                     return await argument.EvaluateAsync(cancellationToken).ConfigureAwait(false);
 
-                var tf = Convert.ToBoolean(await argument.EvaluateAsync(cancellationToken).ConfigureAwait(false), context.CultureInfo);
+                var tf = MathHelper.ConvertToBoolean(await argument.EvaluateAsync(cancellationToken).ConfigureAwait(false), "ifs", context.CultureInfo, location);
                 if (tf)
                     return await arguments[i + 1].EvaluateAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -221,13 +221,15 @@ public static class AsyncBuiltInFunctionHelper
         {
             if (arguments.Length < 2 || arguments.Length > 3)
                 throw new NCalcEvaluationException("iff() takes 2 or 3 arguments", location);
-            var cond = Convert.ToBoolean(await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false), context.CultureInfo);
+
+            var cond = MathHelper.ConvertToBoolean(await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false), "iff", context.CultureInfo, location);
             return cond ? await arguments[1].EvaluateAsync(cancellationToken).ConfigureAwait(false) : ((arguments.Length == 3) ? await arguments[2].EvaluateAsync(cancellationToken).ConfigureAwait(false) : null);
         }
         if (functionName.Equals("in", comparison))
         {
             if (arguments.Length < 2)
                 throw new NCalcEvaluationException("in() takes at least 2 arguments", location);
+
             var parameter = await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false);
             var evaluation = false;
             for (var i = 1; i < arguments.Length; i++)

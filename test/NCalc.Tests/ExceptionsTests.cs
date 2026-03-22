@@ -132,6 +132,18 @@ public class ExceptionsTests
         Assert.Throws<NCalcParserException>(() => expression.Evaluate(TestContext.Current.CancellationToken));
     }
 
+    [Theory]
+    [InlineData("()>0.", typeof(NCalcParserException))]
+    [InlineData("009&()", typeof(NCalcConversionException))]
+    [InlineData("0000000000000000<<()", typeof(NCalcEvaluationException))]
+    [InlineData("(' (' +'2(' , 2)/--1", typeof(NCalcConversionException))]
+    [InlineData("!() --19", typeof(NCalcConversionException))]
+    public void Should_Throw_Issue_551(string input, Type expectedExceptionType)
+    {
+        var expression = new Expression(input);
+        Assert.Throws(expectedExceptionType, () => expression.Evaluate(TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public void Should_Throw_Issue_208()
     {

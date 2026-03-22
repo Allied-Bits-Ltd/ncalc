@@ -223,6 +223,7 @@ public static class TypeHelper
                         {
                         }
                     }
+
                     if (!aConverted)
                     {
                         aValue = a;
@@ -230,6 +231,7 @@ public static class TypeHelper
                             bValue = (string)b;
                         else
                             bValue = b?.ToString() ?? "null";
+
                         compareStrings = true;
                     }
                 }
@@ -254,6 +256,7 @@ public static class TypeHelper
                             aValue = (string)a;
                         else
                             aValue = a?.ToString() ?? "null";
+
                         compareStrings = true;
                     }
                 }
@@ -261,6 +264,7 @@ public static class TypeHelper
                 if (!compareStrings)
                 {
                     mpt = GetMostPreciseType(a?.GetType(), b?.GetType());
+
                     aValue = a is not null ? Convert.ChangeType(a, mpt, comparisonOptions.CultureInfo) : null;
                     bValue = b is not null ? Convert.ChangeType(b, mpt, comparisonOptions.CultureInfo) : null;
                 }
@@ -271,7 +275,7 @@ public static class TypeHelper
         catch (Exception ex) // Must be InvalidCastException, but maybe some conversion throws a different one ...
         {
             if (!comparisonOptions.CompareIncompatibleTypes)
-                throw new NCalcEvaluationException($"Comparison of incomparable type was attempted. The types of the operands are {a?.GetType().Name ?? "null"} and {b?.GetType().Name ?? "null"}.", ex);
+                throw new NCalcEvaluationException($"Comparison of incomparable types was attempted. The types of the operands are {a?.GetType().Name ?? "null"} and {b?.GetType().Name ?? "null"}.", ex);
 
             aValue = a is not null ? a.GetHashCode() : null;
             bValue = b is not null ? b.GetHashCode() : null;

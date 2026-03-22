@@ -195,7 +195,7 @@ public static class BuiltInFunctionHelper
                 throw new NCalcEvaluationException("List size is evaluated to null in a call to MakeList()", location);
             if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(sizeObj))
                 throw new NCalcEvaluationException("List size is not evaluated to an integer number in a call to MakeList()", location);
-            int size = MathHelper.ConvertToInt(sizeObj, context);
+            int size = MathHelper.ConvertToInt(sizeObj, "MakeList", context.CultureInfo, location);
             if (size <= 0)
                 throw new NCalcEvaluationException($"List size is {size}, and it must be positive in a call to MakeList()", location);
 
@@ -221,7 +221,7 @@ public static class BuiltInFunctionHelper
                 throw new NCalcEvaluationException("String length is evaluated to null in a call to MakeStr()", location);
             if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(sizeObj))
                 throw new NCalcEvaluationException("String length is not evaluated to an integer number in a call to MakeStr()", location);
-            int size = MathHelper.ConvertToInt(sizeObj, context);
+            int size = MathHelper.ConvertToInt(sizeObj, "MakeString", context.CultureInfo, location);
             if (size <= 0)
                 throw new NCalcEvaluationException($"String length is {size}, and it must be positive in a call to MakeStr()", location);
 
@@ -236,6 +236,7 @@ public static class BuiltInFunctionHelper
                 Int32 valueCode = Convert.ToInt32(value);
                 if (valueCode < 1 || valueCode > 65535)
                     throw new NCalcEvaluationException("If a string element in `value` in a call to MakeStr() is provided as a character code, it must be in the range of [1..65535]", location);
+
                 valueStr = ((char)valueCode).ToString();
             }
             else
@@ -283,7 +284,7 @@ public static class BuiltInFunctionHelper
                 if (i == arguments.Length - 1)
                     return argument.Evaluate();
 
-                var tf = Convert.ToBoolean(argument.Evaluate(), context.CultureInfo);
+                var tf = MathHelper.ConvertToBoolean(argument.Evaluate(), "ifs", context.CultureInfo, argument.LogicalExpression?.Location);
                 if (tf)
                     return arguments[i + 1].Evaluate();
             }
@@ -296,19 +297,33 @@ public static class BuiltInFunctionHelper
         {
             if (arguments.Length < 2 || arguments.Length > 3)
                 throw new NCalcEvaluationException("iff() takes 2 or 3 arguments", location);
-            var cond = Convert.ToBoolean(arguments[0].Evaluate(), context.CultureInfo);
+
+            var cond = MathHelper.ConvertToBoolean(arguments[0].Evaluate(), "iff", context.CultureInfo, arguments[0].LogicalExpression?.Location);
             return cond ? arguments[1].Evaluate() : ((arguments.Length == 3) ? arguments[2].Evaluate() : null);
         }
         if (functionName.Equals("in", comparison))
         {
             if (arguments.Length < 2)
                 throw new NCalcEvaluationException("in() takes at least 2 arguments", location);
+
             var parameter = arguments[0].Evaluate();
             var evaluation = false;
             for (var i = 1; i < arguments.Length; i++)
             {
                 int compareResult;
-                if (!TypeHelper.CompareUsingMostPreciseType(parameter, arguments[i].Evaluate(), context, out compareResult) || compareResult != 0) continue;
+                try
+                {
+                    if (!TypeHelper.CompareUsingMostPreciseType(parameter, arguments[i].Evaluate(), context, out compareResult) || compareResult != 0)
+                        continue;
+                }
+                catch (NCalcConversionException cex)
+                {
+                    LogicalExpression? lex = arguments[i].LogicalExpression;
+                    if (lex is not null)
+                        cex.Location = lex.Location;
+
+                    throw;
+                }
                 evaluation = true;
                 break;
             }

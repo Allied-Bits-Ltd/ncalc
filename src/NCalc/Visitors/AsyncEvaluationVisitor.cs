@@ -54,7 +54,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         if (!TryGetValueOrNull(await expression.LeftExpression.Accept(this, cancellationToken).ConfigureAwait(false), out object? value))
             return null;
 
-        return await (Convert.ToBoolean(value, context.CultureInfo) ? expression.MiddleExpression : expression.RightExpression).Accept(this, cancellationToken).ConfigureAwait(false);
+        return await (MathHelper.ConvertToBoolean(value, "Ternary", context.CultureInfo, expression.LeftExpression.Location) ? expression.MiddleExpression : expression.RightExpression).Accept(this, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<object?> UpdateParameterAsync(LogicalExpression leftExpression, object? value, CancellationToken cancellationToken = default)
@@ -74,7 +74,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(indexObj))
                         throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number", binExpr.RightExpression.Location);
 
-                    var index = MathHelper.ConvertToInt(indexObj, context);
+                    var index = MathHelper.ConvertToInt(indexObj, "Indexed access", context.CultureInfo, binExpr.RightExpression.Location);
                     if (index < 0)
                         throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} is less than zero ({index}), which is not a valid value (an index must be zero or positive)", binExpr.RightExpression.Location);
 
@@ -323,18 +323,20 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         {
                             leftValue = lValPerc.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
 
                             object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
                             if (result is null)
                                 return null;
+
                             return await UpdateParameterAsync(expression.LeftExpression, new Percent(result), cancellationToken).ConfigureAwait(false);
                         }
                         if (lval is Percent lValPercent)
                         {
                             leftValue = lValPercent.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
+
                             object? result = MathHelper.Divide(leftValue, rightValue, true, context);
                             if (result is null)
                                 return null;
@@ -346,7 +348,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         {
                             rightValue = rValPercent.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
 
                             object? result = MathHelper.DividePercent(leftValue, rightValue, context);
                             if (result is null)
@@ -357,7 +359,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     }
 
                     if (!noConvertToDouble)
-                        leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                        leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
 
                     {
                         object? result = MathHelper.Divide(leftValue, rightValue, true, context);
@@ -377,10 +379,12 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return await UpdateParameterAsync(expression.LeftExpression,
                             MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
-                    return await UpdateParameterAsync(expression.LeftExpression,
-                        Convert.ToUInt64(leftValue, context.CultureInfo) &
-                        Convert.ToUInt64(rightValue, context.CultureInfo)
-                        , cancellationToken).ConfigureAwait(false);
+
+                    return await UpdateParameterAsync(
+                        expression.LeftExpression,
+                        MathHelper.ConvertToULong(leftValue, "And with assignment", context.CultureInfo, expression.LeftExpression.Location) &
+                            MathHelper.ConvertToULong(rightValue, "And with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        cancellationToken).ConfigureAwait(false);
                 }
                 case BinaryExpressionType.OrAssignment:
                 {
@@ -392,10 +396,12 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return await UpdateParameterAsync(expression.LeftExpression,
                             MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
-                    return await UpdateParameterAsync(expression.LeftExpression,
-                        Convert.ToUInt64(leftValue, context.CultureInfo) |
-                        Convert.ToUInt64(rightValue, context.CultureInfo)
-                        , cancellationToken).ConfigureAwait(false);
+
+                    return await UpdateParameterAsync(
+                        expression.LeftExpression,
+                        MathHelper.ConvertToULong(leftValue, "Or with assignment", context.CultureInfo, expression.LeftExpression.Location) |
+                            MathHelper.ConvertToULong(rightValue, "Or with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        cancellationToken).ConfigureAwait(false);
                 }
                 case BinaryExpressionType.XOrAssignment:
                 {
@@ -408,10 +414,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         return await UpdateParameterAsync(expression.LeftExpression,
                             MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false);
 
-                    return await UpdateParameterAsync(expression.LeftExpression,
-                        Convert.ToUInt64(leftValue, context.CultureInfo) ^
-                        Convert.ToUInt64(rightValue, context.CultureInfo)
-                        , cancellationToken).ConfigureAwait(false);
+                    return await UpdateParameterAsync(
+                        expression.LeftExpression,
+                        MathHelper.ConvertToULong(leftValue, "Xor with assignment", context.CultureInfo, expression.LeftExpression.Location) ^
+                            MathHelper.ConvertToULong(rightValue, "XOr with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        cancellationToken).ConfigureAwait(false);
                 }
                 case BinaryExpressionType.And:
                     if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
@@ -428,12 +435,13 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                     if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
                         return null;
-                    if (!Convert.ToBoolean(leftValue, context.CultureInfo))
+                    if (!MathHelper.ConvertToBoolean(leftValue, "And", context.CultureInfo, expression.LeftExpression.Location))
                         return false;
 
                     if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
                         return null;
-                    return Convert.ToBoolean(rightValue, context.CultureInfo);
+
+                    return MathHelper.ConvertToBoolean(rightValue, "And", context.CultureInfo, expression.RightExpression.Location);
 
                 case BinaryExpressionType.Or:
                     if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
@@ -450,12 +458,13 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                     if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
                         return null;
-                    if (Convert.ToBoolean(leftValue, context.CultureInfo))
+                    if (MathHelper.ConvertToBoolean(leftValue, "Or", context.CultureInfo, expression.LeftExpression.Location))
                         return true;
 
                     if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
                         return null;
-                    return Convert.ToBoolean(rightValue, context.CultureInfo);
+
+                    return MathHelper.ConvertToBoolean(rightValue, "Or", context.CultureInfo, expression.RightExpression.Location);
 
                 case BinaryExpressionType.XOr:
                     if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
@@ -469,9 +478,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                         return K3LogicHelper.Xor(leftValue, rightValue);
                     }
-
-                    return Convert.ToBoolean(await left.Value.ConfigureAwait(false), context.CultureInfo) ^
-                            Convert.ToBoolean(await right.Value.ConfigureAwait(false), context.CultureInfo);
+                    return MathHelper.ConvertToBoolean(await left.Value.ConfigureAwait(false), "XOr", context.CultureInfo, expression.LeftExpression.Location) ^
+                           MathHelper.ConvertToBoolean(await right.Value.ConfigureAwait(false), "XOr", context.CultureInfo, expression.RightExpression.Location);
 
                 case BinaryExpressionType.Div:
                 {
@@ -490,7 +498,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         {
                             leftValue = lValPerc.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
 
                             object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
                             if (result is null)
@@ -501,7 +509,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         {
                             leftValue = lValPercent.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
+
                             object? result = MathHelper.Divide(leftValue, rightValue, true, context);
                             if (result is null)
                                 return null;
@@ -513,14 +522,14 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         {
                             rightValue = rValPercent.Value;
                             if (!noConvertToDouble)
-                                leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
 
                             return MathHelper.DividePercent(leftValue, rightValue, context);
                         }
                     }
 
                     if (!noConvertToDouble)
-                        leftValue = Convert.ToDouble(leftValue, context.CultureInfo);
+                        leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
 
                     return MathHelper.Divide(leftValue, rightValue, true, context);
                 }
@@ -686,8 +695,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseAnd(leftValue, rightValue);
-                    return Convert.ToUInt64(leftValue, context.CultureInfo) &
-                        Convert.ToUInt64(rightValue, context.CultureInfo);
+
+                    return MathHelper.ConvertToULong(leftValue, "Bitwise And", context.CultureInfo, expression.LeftExpression.Location) &
+                            MathHelper.ConvertToULong(rightValue, "Bitwise And", context.CultureInfo, expression.RightExpression.Location);
                 }
                 case BinaryExpressionType.BitwiseOr:
                 {
@@ -698,8 +708,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseOr(leftValue, rightValue);
-                    return Convert.ToUInt64(leftValue, context.CultureInfo) |
-                            Convert.ToUInt64(rightValue, context.CultureInfo);
+
+                    return MathHelper.ConvertToULong(leftValue, "Bitwise Or", context.CultureInfo, expression.LeftExpression.Location) |
+                        MathHelper.ConvertToULong(rightValue, "Bitwise Or", context.CultureInfo, expression.RightExpression.Location);
                 }
                 case BinaryExpressionType.BitwiseXOr:
                 {
@@ -710,8 +721,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseXOr(leftValue, rightValue);
-                    return Convert.ToUInt64(leftValue, context.CultureInfo) ^
-                            Convert.ToUInt64(rightValue, context.CultureInfo);
+
+                    return MathHelper.ConvertToULong(leftValue, "Bitwise XOr", context.CultureInfo, expression.LeftExpression.Location) ^
+                            MathHelper.ConvertToULong(rightValue, "Bitwise XOr", context.CultureInfo, expression.RightExpression.Location);
                 }
                 case BinaryExpressionType.LeftShift:
                 {
@@ -792,8 +804,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (rightValue is not null && rightValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
                         throw new NCalcParameterIndexException("The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
 
-                    int? leftInt = (leftValue is null) ? null : (leftValue is NCalc.Domain.Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, context);
-                    int? rightInt = (rightValue is null) ? null : (rightValue is NCalc.Domain.Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, context);
+                    int? leftInt = (leftValue is null) ? null : (leftValue is NCalc.Domain.Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, "Range Index", context.CultureInfo, expression.LeftExpression.Location);
+                    int? rightInt = (rightValue is null) ? null : (rightValue is NCalc.Domain.Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, "Range Index", context.CultureInfo, expression.RightExpression.Location);
 
                     if (leftInt.HasValue && leftInt < 0)
                         throw new NCalcParameterIndexException("The lower boundary should be zero or a positive number", expression.LeftExpression.Location);
@@ -888,7 +900,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         int index;
                         try
                         {
-                            index = MathHelper.ConvertToInt(rightValue, context);
+                            index = MathHelper.ConvertToInt(rightValue, "Index Access", context.CultureInfo, expression.RightExpression.Location);
                         }
                         catch
                         {
@@ -928,7 +940,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         if (!TryGetValueOrNull(await EvaluateAsync(expression.LeftExpression, cancellationToken).ConfigureAwait(false), out leftValue))
                             break;
 
-                        if (!Convert.ToBoolean(leftValue, context.CultureInfo))
+                        if (!MathHelper.ConvertToBoolean(leftValue, "While loop", context.CultureInfo, expression.LeftExpression.Location))
                             break;
 
                         try

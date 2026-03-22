@@ -8,22 +8,37 @@ public sealed class NCalcParameterIndexException: NCalcEvaluationException
 
     public string ParameterName { get; }
 
-    public NCalcParameterIndexException(string parameterName, string message) : base(message)
+    public NCalcParameterIndexException(string parameterName, string message)
+        : base(message)
     {
         ParameterName = parameterName;
     }
 
-    public NCalcParameterIndexException(string parameterName, string message, ExpressionLocation location) : base(message, location)
+    public NCalcParameterIndexException(string parameterName, string message, ExpressionLocation location)
+        : base(message, location)
     {
         ParameterName = parameterName;
     }
 
-    public NCalcParameterIndexException(string message) : base(message)
+    public NCalcParameterIndexException(string message)
+        : base(message)
+    {
+        ParameterName = string.Empty;
+    }
+
+    public NCalcParameterIndexException(string message, Exception innerException)
+        : base(message, innerException)
     {
         ParameterName = string.Empty;
     }
 
     public NCalcParameterIndexException(string message, ExpressionLocation location) : base(message, location)
+    {
+        ParameterName = string.Empty;
+    }
+
+    public NCalcParameterIndexException(string message, ExpressionLocation location, Exception innerException)
+        : base(message, location, innerException)
     {
         ParameterName = string.Empty;
     }

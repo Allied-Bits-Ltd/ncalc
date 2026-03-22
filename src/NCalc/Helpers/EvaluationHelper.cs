@@ -419,16 +419,16 @@ public static class EvaluationHelper
     {
         return expression.Type switch
         {
-            UnaryExpressionType.Not => !Convert.ToBoolean(result, context.CultureInfo),
+            UnaryExpressionType.Not => !MathHelper.ConvertToBoolean(result, "Not", context.CultureInfo, expression.Location),
             UnaryExpressionType.Negate =>
                 (result is BigDecimal)
                     ? MathHelper.Subtract((object)(long)0, (BigDecimal)result)
                     : ((result is BigInteger)
                         ? MathHelper.TryReduceToUInt64(MathHelper.Subtract((object)(long)0, (BigInteger)result))
                         : MathHelper.Subtract(0, result, true, context)),
-            UnaryExpressionType.FromEnd => new NCalc.Domain.Index(MathHelper.ConvertToInt(result, context), true),
+            UnaryExpressionType.FromEnd => new NCalc.Domain.Index(MathHelper.ConvertToInt(result, "From End", context.CultureInfo, expression.Location), true),
             UnaryExpressionType.BitwiseNot =>
-                (result is BigInteger biResult) ? MathHelper.TryReduceToUInt64(~biResult) : ~Convert.ToUInt64(result, context.CultureInfo),
+                (result is BigInteger biResult) ? MathHelper.TryReduceToUInt64(~biResult) : ~MathHelper.ConvertToULong(result, "Bitwise Not", context.CultureInfo, expression.Location),
             UnaryExpressionType.SqRoot => MathHelper.Sqrt(result, context.CultureInfo),
 #if NET8_0_OR_GREATER
             UnaryExpressionType.CbRoot => MathHelper.Cbrt(result, context.CultureInfo),
@@ -457,10 +457,10 @@ public static class EvaluationHelper
         bool? outcome = null;
         if (context is ExpressionContext actualCtx)
         {
-            if (actualCtx.MatchStringHandler != null)
+            if (actualCtx.MatchStringHandler is not null)
             {
                 MatchStringArgs args = new MatchStringArgs(value, pattern, context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer));
-                actualCtx.MatchStringHandler?.Invoke(args);
+                actualCtx.MatchStringHandler.Invoke(args);
                 outcome = args.Matches;
             }
         }
