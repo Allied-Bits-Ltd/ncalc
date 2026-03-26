@@ -1,5 +1,6 @@
-# 8.8.2 (Allied Bits)
+# 8.9 (Allied Bits)
 
+* (IMPORTANT) Changed the way ValueExpression is serialized to JSON. The new way works correctly for deserialization, but the format is different from the one used before.
 * (IMPORTANT) Reworked the handling of the LowerCaseIdentifierLookup expression option; now, it works as an "ignore case" flag with case-insensitive comparison of function and parameter names and does not require parameter names and function names in the lists to be in lowercase. Previously, lookup of functions did not work when function names contained uppercase letters and lower-case identifier matching was enabled.
 * If, during the type conversion, an InvalidCastException error happens, it gets converted to an NCalcConversionException that carries plenty of additional information about the operation that failed.
 
