@@ -56,6 +56,26 @@ public class SerializationTests
         var expressionJson = JsonSerializer.Serialize(expression);
         Assert.True(JsonSerializer.Deserialize<LogicalExpression>(expressionJson) is BinaryExpression);
     }
+
+    /*
+    [Fact]
+    public void DeserializationShouldWork_Issue_552()
+    {
+        const string expressionString = "4.0";
+        //const string expressionString = "waterLevel > 4.0";
+
+        var logicalExpression = LogicalExpressionFactory.Create(expressionString, options: ExpressionOptions.NoCache, cancellationToken: TestContext.Current.CancellationToken); //Created a BinaryExpression object.
+
+        var jsonExpression = JsonSerializer.Serialize(logicalExpression);
+
+        var deserializedLogicalExpression = JsonSerializer.Deserialize<LogicalExpression>(jsonExpression); //The object is still a BinaryExpression.
+
+        var expression = new Expression(deserializedLogicalExpression);
+
+        expression.Parameters = new Dictionary<string, object?> { {"waterLevel", 4.0}, };
+
+        var result = expression.Evaluate();
+    }*/
 #endif
 
     [Fact]
