@@ -90,6 +90,25 @@ public class ParserTests
         Assert.Equal(expectedResult, result);
     }
 
+    [InlineData("φ")]
+    [InlineData("π")]
+    [InlineData("2 ∶ 2")]
+    [InlineData("2 ∙ 2")]
+    [InlineData("2 ≠ 2")]
+    [Theory]
+    public void ShouldParseUnicodeChars(string formula)
+    {
+        var expression = new Expression(formula, options: ExpressionOptions.UseUnicodeCharsForOperations);
+        expression.AdvancedOptions = new();
+
+        expression.EvaluateParameter += (name, args) =>
+            {
+                args.Result = 1;
+            };
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+    }
+
     [InlineData("(1,2,3,4,5)", 5)]
     [InlineData("()", 0)]
     [InlineData("('Hello', func())", 2)]

@@ -524,14 +524,17 @@ public static class LogicalExpressionParser
         var resultRefChar = Terms.Char('@');
         var atChar = Terms.Char('@');
 
-        var letterIdentifier =
 #if NET8_0_OR_GREATER
-            Terms.Identifier(SearchValues.Create("_" + Character.AZ), SearchValues.Create("_" + Character.AlphaNumeric));
+        string extraIdentChars = "_";
+        if (extOptions is not null)
+            extraIdentChars += extOptions.ExtraIdentifierChars;
+        string extraStartIdentChar = supportCurrency ? "" : "$";
+        var letterIdentifier = Terms.Identifier(SearchValues.Create(extraStartIdentChar + extraIdentChars + Character.AZ), SearchValues.Create(extraIdentChars + Character.AlphaNumeric));
 #else
-            Terms.Identifier();
+        var letterIdentifier = Terms.Identifier();
 #endif
 
-        var identifier = supportCurrency ? letterIdentifier : Terms.Identifier();
+        var identifier = letterIdentifier;
         // We don't let $ at the beginning of identifiers as it may be confused with currency
 
         Parser<string>? not;

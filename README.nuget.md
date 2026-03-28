@@ -34,7 +34,8 @@ This version of NCalc contains a number of advanced features compared to the ori
 * Result Reference character. A pseudo-function that would let a user application return some value, such as the result of a previous calculation. This is handy when an expression should include this result multiple times.
 * Logical XOR operations.
 * Certain Unicode characters can be used as operators.
-* Lowercase lookup for parameter and function names.
+* The option to use Unicode characters in identifiers (useful for greek letter constants used in physics).
+* Case-insensitive lookup for parameter and function names.
 * Optional non-recursive evaluator for large and complex expressions.
 * The possibility to reuse a pre-created parser or parsers when parsing multiple expressions.
 * Flags in ExpressionOptions to skip date and GUID parsers in order to speed up parsing.

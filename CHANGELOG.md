@@ -1,3 +1,7 @@
+# 8.9.1 (Allied Bits)
+
+* Added the ExtraIdentifierChars property to the AdvancedExpressionOptions class. This property lets one specify additional characters accepted in identifiers (useful if your identifiers may contain Unicode characters). The default value of the property contains the Unicode characters for greek letters Pi and Phi, and to use them, it suffices to assign the AdvancedOptions property of an Expression or AsyncExpression instance.
+
 # 8.9 (Allied Bits)
 
 * (IMPORTANT) Changed the way ValueExpression is serialized to JSON. The new way works correctly for deserialization, but the format is different from the one used before.

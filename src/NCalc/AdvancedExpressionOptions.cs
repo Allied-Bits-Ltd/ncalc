@@ -167,6 +167,10 @@
 
         public ArgumentSeparatorKind ArgumentSeparator { get; set; }
 
+#if NET8_0_OR_GREATER
+        public string ExtraIdentifierChars { get; set; }
+#endif
+
         public CultureInfo? CultureInfo
         {
             get => (_cultureInfo != null) ? _cultureInfo : CultureInfo.CurrentCulture;
@@ -286,6 +290,9 @@
         {
             _cultureInfo = cultureInfo;
             Flags = advOptions;
+#if NET8_0_OR_GREATER
+            ExtraIdentifierChars = "φϕπ";
+#endif
             InitFieldsFromCulture();
         }
 

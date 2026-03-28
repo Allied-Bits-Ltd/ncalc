@@ -27,18 +27,18 @@ Over the years, several variants of NCalc have evolved from the original library
 * Basic calculations with dates and time spans - one can add and subtract dates and times, multiply and divide time periods.
 * Currency support, which takes into account culture settings (current or specific culture or custom symbols) and produces decimal result from the currency value.
 * Optional use of BigInteger and BigDecimal types for basic math operations and most built-in funcitons.
-* Underscores in numbers and currency values. Modern programming languages support underscores for readability. 
+* Underscores in numbers and currency values. Modern programming languages support underscores for readability.
 * Custom decimal and group separators in numbers and currency.
 * An optional secondary decimal number separator. 
 * Raw strings which are not parsed for escape sequences.
 * C-Style octal literals.
-* The Result Reference character - a pseudo-function that would let a user application return some value, such as the result of a previous calculation.
+* Result Reference character. A pseudo-function that would let a user application return some value, such as the result of a previous calculation. This is handy when an expression should include this result multiple times.
 * Logical XOR operations.
 * Certain Unicode characters can be used as operators.
+* The option to use Unicode characters in identifiers (useful for greek letter constants used in physics).
 * Optional non-recursive evaluator for large and complex expressions.
 * The possibility to reuse a pre-created parser or parsers when parsing multiple expressions.
 * The AOT-compatible version of the library.
-
 
 ## Useful Links
 
