@@ -1034,6 +1034,22 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         return SetTaskValue(task, new Percent(result!));
     }
 
+    public virtual object? Visit(ComplexNumberExpression expression, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
+    {
+        // Request the value of the backing expression
+        if (!ExpressionEvaluated(task, 0, expression.Expression))
+            return null;
+
+        object? result = null;
+        if (!TryGetValueOrNull(task.ChildStates[0].Value, out result))
+            return SetTaskValue(task, null);
+
+        if (result is null)
+            throw new NCalcEvaluationException("A null value cannot be used to initialize a complex number", expression.Expression.Location);
+
+        return SetTaskValue(task, new ComplexNumber(0, result, new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options)));
+    }
+
     public virtual object? Visit(ValueExpression expression, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
     {
         return SetTaskValue(task, expression.Value);

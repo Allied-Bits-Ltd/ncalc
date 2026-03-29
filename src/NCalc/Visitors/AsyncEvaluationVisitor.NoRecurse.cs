@@ -1075,6 +1075,37 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             SetTaskValue(task, new Percent(result!)));
     }
 
+    public virtual ValueTask<object?> Visit(ComplexNumberExpression expression, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
+    {
+        // Request the value of the backing expression
+        if (!ExpressionEvaluated(task, 0, expression.Expression))
+#if NET8_0_OR_GREATER
+            return ValueTask.FromResult((object?)null);
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
+
+        if (!TryGetValueOrNull(task.ChildStates[0].Value, out object? result))
+        {
+            SetTaskValue(task, null);
+#if NET8_0_OR_GREATER
+            return ValueTask.FromResult((object?)null);
+#else
+            return new ValueTask<object?>((object?)null);
+#endif
+        }
+
+        if (result is null)
+            throw new NCalcEvaluationException("A null value cannot be used to initialize a complex number", expression.Expression.Location);
+
+#if NET8_0_OR_GREATER
+        return ValueTask.FromResult(
+#else
+        return new ValueTask<object?>(
+#endif
+            SetTaskValue(task, new ComplexNumber(0, result, new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options))));
+    }
+
     public virtual ValueTask<object?> Visit(ValueExpression expression, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
     {
 #if NET8_0_OR_GREATER

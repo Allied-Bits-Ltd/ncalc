@@ -4,6 +4,7 @@ using System.Reflection;
 
 using ExtendedNumerics;
 
+using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Parser;
 
@@ -925,50 +926,58 @@ public static class MathHelper
             throw new InvalidOperationException(
                 $"Addition is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
 
-        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        if (typeCode == TypeCode.Object)
         {
-            if (a is BigDecimal bdA)
+            if (a is ComplexNumber) // then b is ComplexNumber too ;)
             {
-                return ReduceNumericType(Add(bdA, b), reduceTypes ? null : t, options);
+                return (ComplexNumber)a + (ComplexNumber)b;
             }
-            else
-            if (b is BigDecimal bdB)
-            {
-                return ReduceNumericType(Add(bdB, a), reduceTypes ? null : t, options);
-            }
-            else
-            if (a is BigInteger biA)
-            {
-                return ReduceNumericType(Add(biA, b), reduceTypes ? null : t, options);
-            }
-            else
-            if (b is BigInteger biB)
-            {
-                return ReduceNumericType(Add(biB, a), reduceTypes ? null : t, options);
-            }
-            else
-            if (a is long || a is ulong || b is long || b is ulong)
-            {
-                BigInteger result;
-                if (a is long || a is ulong)
-                {
-                    if (a is long la)
-                        result = new BigInteger(la);
-                    else
-                        result = new BigInteger((ulong)a);
 
-                    result = Add(result, b);
+            if (options.UseBigNumbers)
+            {
+                if (a is BigDecimal bdA)
+                {
+                    return ReduceNumericType(Add(bdA, b), reduceTypes ? null : t, options);
                 }
                 else
+                if (b is BigDecimal bdB)
                 {
-                    if (b is long lb)
-                        result = new BigInteger(lb);
-                    else
-                        result = new BigInteger((ulong)b);
-
-                    result = Add(result, a);
+                    return ReduceNumericType(Add(bdB, a), reduceTypes ? null : t, options);
                 }
-                return ReduceNumericType(result, reduceTypes ? null : t, options);
+                else
+                if (a is BigInteger biA)
+                {
+                    return ReduceNumericType(Add(biA, b), reduceTypes ? null : t, options);
+                }
+                else
+                if (b is BigInteger biB)
+                {
+                    return ReduceNumericType(Add(biB, a), reduceTypes ? null : t, options);
+                }
+                else
+                if (a is long || a is ulong || b is long || b is ulong)
+                {
+                    BigInteger result;
+                    if (a is long || a is ulong)
+                    {
+                        if (a is long la)
+                            result = new BigInteger(la);
+                        else
+                            result = new BigInteger((ulong)a);
+
+                        result = Add(result, b);
+                    }
+                    else
+                    {
+                        if (b is long lb)
+                            result = new BigInteger(lb);
+                        else
+                            result = new BigInteger((ulong)b);
+
+                        result = Add(result, a);
+                    }
+                    return ReduceNumericType(result, reduceTypes ? null : t, options);
+                }
             }
         }
 
@@ -1027,75 +1036,86 @@ public static class MathHelper
             throw new InvalidOperationException(
                 $"Subtraction is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
 
-        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        if (typeCode == TypeCode.Object)
         {
-            BigInteger? result = null;
-            BigDecimal? bdResult = null;
-
-            // If any of the arguments are BigDecimal, calculate the result and either reduce it to minimal size
-            if (a is BigDecimal bdA)
+            if (a is ComplexNumber) // then b is ComplexNumber too ;)
             {
-                bdResult = Subtract(bdA, b);
-            }
-            else
-            if (b is BigDecimal bdB)
-            {
-                bdResult = Subtract(a, bdB);
+                return (ComplexNumber)a - (ComplexNumber)b;
             }
 
-            if (bdResult is not null)
+            if (options.UseBigNumbers)
             {
-                if (bdResult.Value.GetFractionalPart().IsZero())
-                {
-                    result = bdResult.Value.WholeValue;
-                    return ReduceNumericType(result, reduceTypes ? null : t, options);
-                }
-                else
-                {
-                    return ReduceNumericType(bdResult, reduceTypes ? null : t, options);
-                }
-            }
+                BigInteger? result = null;
+                BigDecimal? bdResult = null;
 
-            // If there was no BigDecimal calculation performed, proceed with the operation
-            if (result is null)
-            {
-                if (a is BigInteger biA)
+                // If any of the arguments are BigDecimal, calculate the result and either reduce it to minimal size
+                switch (a)
                 {
-                    result = Subtract(biA, b);
+                    case BigDecimal bdA:
+                        bdResult = Subtract(bdA, b);
+                        break;
+                    default:
+                        if (b is BigDecimal bdB)
+                        {
+                            bdResult = Subtract(a, bdB);
+                        }
+
+                        break;
                 }
-                else
-                if (b is BigInteger biB)
+
+                if (bdResult is not null)
                 {
-                    result = Subtract(a, biB);
-                }
-                else
-                if (a is long || a is ulong || b is long || b is ulong)
-                {
-                    if (a is long || a is ulong)
+                    if (bdResult.Value.GetFractionalPart().IsZero())
                     {
-                        if (a is long la)
-                            result = new BigInteger(la);
-                        else
-                            result = new BigInteger((ulong)a);
-
-                        result = Subtract(result.Value, b);
+                        result = bdResult.Value.WholeValue;
+                        return ReduceNumericType(result, reduceTypes ? null : t, options);
                     }
                     else
                     {
-                        if (b is long lb)
-                            result = new BigInteger(lb);
-                        else
-                            result = new BigInteger((ulong)b);
-
-                        result = Subtract(a, result.Value);
+                        return ReduceNumericType(bdResult, reduceTypes ? null : t, options);
                     }
                 }
+
+                // If there was no BigDecimal calculation performed, proceed with the operation
+                if (result is null)
+                {
+                    if (a is BigInteger biA)
+                    {
+                        result = Subtract(biA, b);
+                    }
+                    else
+                    if (b is BigInteger biB)
+                    {
+                        result = Subtract(a, biB);
+                    }
+                    else
+                    if (a is long || a is ulong || b is long || b is ulong)
+                    {
+                        if (a is long || a is ulong)
+                        {
+                            if (a is long la)
+                                result = new BigInteger(la);
+                            else
+                                result = new BigInteger((ulong)a);
+
+                            result = Subtract(result.Value, b);
+                        }
+                        else
+                        {
+                            if (b is long lb)
+                                result = new BigInteger(lb);
+                            else
+                                result = new BigInteger((ulong)b);
+
+                            result = Subtract(a, result.Value);
+                        }
+                    }
+                }
+
+                if (result is not null)
+                    return ReduceNumericType(result, reduceTypes ? null : t, options);
             }
-
-            if (result is not null)
-                return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
-
         //var func = options.OverflowProtection ? SubtractFuncChecked : SubtractFunc;
         try
         {
@@ -1155,50 +1175,58 @@ public static class MathHelper
             throw new InvalidOperationException(
                 $"Multiplication is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
 
-        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        if (typeCode == TypeCode.Object)
         {
-            if (a is BigDecimal bdA)
+            if (a is ComplexNumber) // then b is ComplexNumber too ;)
             {
-                return ReduceNumericType(Multiply(bdA, b), reduceTypes ? null : t, options);
+                return (ComplexNumber)a * (ComplexNumber)b;
             }
-            else
-            if (b is BigDecimal bdB)
-            {
-                return ReduceNumericType(Multiply(bdB, a), reduceTypes ? null : t, options);
-            }
-            else
-            if (a is BigInteger biA)
-            {
-                return ReduceNumericType(Multiply(biA, b), reduceTypes ? null : t, options);
-            }
-            else
-            if (b is BigInteger biB)
-            {
-                return ReduceNumericType(Multiply(biB, a), reduceTypes ? null : t, options);
-            }
-            else
-            if (a is long || a is ulong || b is long || b is ulong)
-            {
-                BigInteger result;
-                if (a is long || a is ulong)
-                {
-                    if (a is long la)
-                        result = new BigInteger(la);
-                    else
-                        result = new BigInteger((ulong)a);
 
-                    result = Multiply(result, b);
+            if (options.UseBigNumbers)
+            {
+                if (a is BigDecimal bdA)
+                {
+                    return ReduceNumericType(Multiply(bdA, b), reduceTypes ? null : t, options);
                 }
                 else
+                if (b is BigDecimal bdB)
                 {
-                    if (b is long lb)
-                        result = new BigInteger(lb);
-                    else
-                        result = new BigInteger((ulong)b);
-
-                    result = Multiply(result, a);
+                    return ReduceNumericType(Multiply(bdB, a), reduceTypes ? null : t, options);
                 }
-                return ReduceNumericType(result, reduceTypes ? null : t, options);
+                else
+                if (a is BigInteger biA)
+                {
+                    return ReduceNumericType(Multiply(biA, b), reduceTypes ? null : t, options);
+                }
+                else
+                if (b is BigInteger biB)
+                {
+                    return ReduceNumericType(Multiply(biB, a), reduceTypes ? null : t, options);
+                }
+                else
+                if (a is long || a is ulong || b is long || b is ulong)
+                {
+                    BigInteger result;
+                    if (a is long || a is ulong)
+                    {
+                        if (a is long la)
+                            result = new BigInteger(la);
+                        else
+                            result = new BigInteger((ulong)a);
+
+                        result = Multiply(result, b);
+                    }
+                    else
+                    {
+                        if (b is long lb)
+                            result = new BigInteger(lb);
+                        else
+                            result = new BigInteger((ulong)b);
+
+                        result = Multiply(result, a);
+                    }
+                    return ReduceNumericType(result, reduceTypes ? null : t, options);
+                }
             }
         }
 
@@ -1252,6 +1280,11 @@ public static class MathHelper
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
                 $"Division is not implemented for operands of types {a.GetType()} and {b.GetType()}");
+
+        if ((typeCode == TypeCode.Object) && (a is ComplexNumber)) // then b is ComplexNumber too ;)
+        {
+            return (ComplexNumber)a / (ComplexNumber)b;
+        }
 
         // Convert types to floating-point ones because otherwise, we get an integer division
         if (options.UseBigNumbers)
@@ -1376,12 +1409,12 @@ public static class MathHelper
 
                         return biResult;
                     }
-                    else
+
                     if ((options.DecimalAsDefault || typeA == typeof(decimal)) && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
                     {
                         return (decimal)bdResult;
                     }
-                    else
+
                     /*if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
                     {
                         return (float)bdResult;
@@ -1391,7 +1424,7 @@ public static class MathHelper
                     {
                         return (double)bdResult;
                     }
-                    else
+
                     if (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
                     {
                         return (decimal)bdResult;
@@ -1405,19 +1438,19 @@ public static class MathHelper
 
                         if ((typeA == typeof(short)) && biResult >= short.MinValue && biResult <= short.MaxValue)
                             return (short)biResult;
-                        else
+
                         if ((typeA == typeof(ushort)) && biResult >= ushort.MinValue && biResult <= ushort.MaxValue)
                             return (ushort)biResult;
-                        else
+
                         if ((typeA == typeof(int)) && biResult >= int.MinValue && biResult <= int.MaxValue)
                             return (int)biResult;
-                        else
+
                         if ((typeA == typeof(uint)) && biResult >= uint.MinValue && biResult <= uint.MaxValue)
                             return (uint)biResult;
-                        else
+
                         if ((typeA == typeof(long)) && biResult >= long.MinValue && biResult <= long.MaxValue)
                             return (long)biResult;
-                        else
+
                         if ((typeA == typeof(ulong)) && biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
                             return (ulong)biResult;
 
@@ -1426,10 +1459,10 @@ public static class MathHelper
 
                     if ((options.DecimalAsDefault || typeA == typeof(decimal)) && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
                         return (decimal)bdResult;
-                    else
+
                     if ((typeA == typeof(float)) && bdResult >= float.MinValue && bdResult <= float.MaxValue)
                         return (float)bdResult;
-                    else
+
                     if ((typeA == typeof(double)) && bdResult >= double.MinValue && bdResult <= double.MaxValue)
                         return (double)bdResult;
                 }
@@ -1471,7 +1504,7 @@ public static class MathHelper
 
                 if (iResult >= int.MinValue && iResult <= int.MaxValue)
                     return (int)iResult;
-                else
+
                 if (iResult >= uint.MinValue && iResult <= uint.MaxValue)
                     return (uint)iResult;
 
@@ -1526,19 +1559,19 @@ public static class MathHelper
 
                 if ((typeA == typeof(short)) && iResult >= short.MinValue && iResult <= short.MaxValue)
                     return (short)iResult;
-                else
+
                 if ((typeA == typeof(ushort)) && iResult >= ushort.MinValue && iResult <= ushort.MaxValue)
                     return (ushort)iResult;
-                else
+
                 if ((typeA == typeof(int)) && iResult >= int.MinValue && iResult <= int.MaxValue)
                     return (int)iResult;
-                else
+
                 if ((typeA == typeof(uint)) && iResult >= uint.MinValue && iResult <= uint.MaxValue)
                     return (uint)iResult;
-                else
+
                 if ((typeA == typeof(ulong)) && iResult >= (long) ulong.MinValue)
                     return (ulong)iResult;
-                else
+
                 if ((typeA == typeof(long)) && iResult >= long.MinValue && iResult <= long.MaxValue)
                     return (long)iResult;
 
@@ -1550,7 +1583,7 @@ public static class MathHelper
                 double dResult = (double)result;
                 return (float)dResult;
             }
-            else
+
             if ((typeA == typeof(decimal)) && (result is not decimal))
             {
                 try
@@ -1581,6 +1614,35 @@ public static class MathHelper
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
                 $"Integer division is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+
+        if ((typeCode == TypeCode.Object) && (a is ComplexNumber)) // then b is ComplexNumber too ;)
+        {
+            if (a is ComplexNumber cnA)
+            {
+                if (!cnA.IsReal)
+                    throw new InvalidOperationException(
+                        $"Integer division is not implemented for complex numbers");
+                a = cnA.Real;
+                if (!options.UseBigNumbers)
+                {
+                    a = (double)a;
+                    typeCode = TypeCode.Double;
+                }
+            }
+
+            if (b is ComplexNumber cnB)
+            {
+                if (!cnB.IsReal)
+                    throw new InvalidOperationException(
+                        $"Integer division is not implemented for complex numbers");
+                b = cnB.Real;
+                if (!options.UseBigNumbers)
+                {
+                    b = (double)b;
+                    typeCode = TypeCode.Double;
+                }
+            }
+        }
 
         if (options.UseBigNumbers && typeCode == TypeCode.Object)
         {
@@ -1786,7 +1848,36 @@ public static class MathHelper
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
-                $"Modulo operation is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+                $"The Modulo operation is not implemented for operands of types {a.GetType().ToString()} and {b.GetType().ToString()}");
+
+        if ((typeCode == TypeCode.Object) && (a is ComplexNumber)) // then b is ComplexNumber too ;)
+        {
+            if (a is ComplexNumber cnA)
+            {
+                if (!cnA.IsReal)
+                    throw new InvalidOperationException(
+                        $"The Modulo operation is not implemented for complex numbers");
+                a = cnA.Real;
+                if (!options.UseBigNumbers)
+                {
+                    a = (double)a;
+                    typeCode = TypeCode.Double;
+                }
+            }
+
+            if (b is ComplexNumber cnB)
+            {
+                if (!cnB.IsReal)
+                    throw new InvalidOperationException(
+                        $"The Modulo operation is not implemented for complex numbers");
+                b = cnB.Real;
+                if (!options.UseBigNumbers)
+                {
+                    b = (double)b;
+                    typeCode = TypeCode.Double;
+                }
+            }
+        }
 
         if (options.UseBigNumbers && typeCode == TypeCode.Object)
         {
@@ -2025,12 +2116,28 @@ public static class MathHelper
                 b = Convert.ChangeType(b, TypeCode.UInt16, options.CultureInfo);
         }
 
+        if (a is ComplexNumber cnA && b is ComplexNumber cnB && cnA.IsReal && cnB.IsReal)
+        {
+            a = ReduceComplexToReal(cnA, options);
+            b = ReduceComplexToReal(cnB, options);
+        }
+        else
+        if (a is ComplexNumber cnA2 && cnA2.IsReal)
+        {
+            a = ReduceComplexToReal(cnA2, options);
+        }
+        else
+        if (b is ComplexNumber cnB2 && cnB2.IsReal)
+        {
+            b = ReduceComplexToReal(cnB2, options);
+        }
+
         var typeA = a.GetType();
         var typeB = b.GetType();
         var typeCodeA = Type.GetTypeCode(typeA);
         var typeCodeB = Type.GetTypeCode(typeB);
 
-        if (typeCodeA == typeCodeB && !forceExpandBits)
+        if (typeCodeA == typeCodeB && !forceExpandBits && a is not ComplexNumber && b is not ComplexNumber)
             return typeCodeA;
 
         if (TypeCodeBitSize(typeCodeA, out var floatingPointA) is not { } bitSizeA)
@@ -2038,6 +2145,27 @@ public static class MathHelper
 
         if (TypeCodeBitSize(typeCodeB, out var floatingPointB) is not { } bitSizeB)
             return TypeCode.Empty;
+
+        if (a is ComplexNumber)
+        {
+            if (b is ComplexNumber)
+            {
+                return TypeCode.Object;
+            }
+            else
+            {
+                b = new ComplexNumber(MathHelper.ConvertToBigDecimal(b), BigDecimal.Zero, options);
+                typesWereExpanded = true;
+                return TypeCode.Object;
+            }
+        }
+
+        if (b is ComplexNumber) //a is not a complex number here
+        {
+            a = new ComplexNumber(MathHelper.ConvertToBigDecimal(a), BigDecimal.Zero, options);
+            typesWereExpanded = true;
+            return TypeCode.Object;
+        }
 
         if (options.UseBigNumbers && (typeCodeA == TypeCode.Object || typeCodeB == TypeCode.Object))
         {
@@ -2214,7 +2342,7 @@ public static class MathHelper
                 }
                 break;
             case TypeCode.Object:
-                return options.UseBigNumbers ? TypeCode.Object : TypeCode.Empty;
+                return options.UseBigNumbers || a is ComplexNumber || b is ComplexNumber ? TypeCode.Object : TypeCode.Empty;
             default:
                 return TypeCode.Empty;
         }
@@ -2280,6 +2408,12 @@ public static class MathHelper
     {
         if (typeA == typeB)
             return typeA;
+
+        if (typeA == typeof(ComplexNumber))
+            return typeA;
+
+        if (typeB == typeof(ComplexNumber))
+            return typeB;
 
         if (typeA == typeof(BigDecimal))
             return typeA;
@@ -2370,6 +2504,9 @@ public static class MathHelper
 
     public static object Abs(object? a, MathHelperOptions options)
     {
+        if (a is ComplexNumber cnA)
+            return -cnA;
+
         if (options.UseBigNumbers)
         {
             if (a is BigInteger biA)
@@ -2396,6 +2533,9 @@ public static class MathHelper
 
     public static object Acos(object? a, MathHelperOptions options)
     {
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Acos(cnA, options);
+
         if (options.UseBigNumbers)
         {
             if (a is BigInteger biA)
@@ -2423,6 +2563,10 @@ public static class MathHelper
                 return BigDecimal.Arcsin(bdA);
             }
         }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Asin(cnA, options);
+
         return Math.Asin(ConvertToDouble(a, "Asin", options.CultureInfo, null));
     }
 
@@ -2439,6 +2583,10 @@ public static class MathHelper
                 return BigDecimal.Arctan(bdA);
             }
         }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Atan(cnA, options);
+
         return Math.Atan(ConvertToDouble(a, "Atan", options.CultureInfo, null));
     }
 
@@ -2460,6 +2608,10 @@ public static class MathHelper
                 return BigDecimal.Ceiling(bdA);
             }
         }
+
+        if (a is ComplexNumber)
+            throw new InvalidOperationException($"The Ceiling function is not defined for complex numbers");
+
         if (options.DecimalAsDefault)
             return Math.Ceiling(ConvertToDecimal(a, "Ceiling", options.CultureInfo, null));
 
@@ -2479,7 +2631,31 @@ public static class MathHelper
                 return BigDecimal.Cos(bdA);
             }
         }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Cos(cnA, options);
+
         return Math.Cos(ConvertToDouble(a, "Cos", options.CultureInfo, null));
+    }
+
+    public static object Cosh(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Cosh(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Cosh(bdA);
+            }
+        }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Cosh(cnA, options);
+
+        return Math.Cos(ConvertToDouble(a, "Cosh", options.CultureInfo, null));
     }
 
     public static object Exp(object? a, MathHelperOptions options)
@@ -2495,6 +2671,10 @@ public static class MathHelper
                 return BigDecimal.Exp(bdA);
             }
         }
+
+        if (a is ComplexNumber)
+            throw new InvalidOperationException($"The Exp function is not defined for complex numbers");
+
         return Math.Exp(ConvertToDouble(a, "Exp", options.CultureInfo, null));
     }
 
@@ -2511,6 +2691,10 @@ public static class MathHelper
                 return BigDecimal.Floor(bdA);
             }
         }
+
+        if (a is ComplexNumber)
+            throw new InvalidOperationException($"The Floor function is not defined for complex numbers");
+
         if (options.DecimalAsDefault)
             return Math.Floor(ConvertToDecimal(a, "Floor", options.CultureInfo, null));
 
@@ -2520,6 +2704,9 @@ public static class MathHelper
     // ReSharper disable once InconsistentNaming
     public static object IEEERemainder(object? a, object? b, MathHelperOptions options)
     {
+        if (a is ComplexNumber)
+            throw new InvalidOperationException($"The IEEERemainder function is not defined for complex numbers");
+
         return Math.IEEERemainder(ConvertToDouble(a, "IEEERemainder", options.CultureInfo, null), ConvertToDouble(b, "IEEEReminder", options.CultureInfo, null));
     }
 
@@ -2536,6 +2723,10 @@ public static class MathHelper
                 return BigDecimal.Ln(bdA);
             }
         }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Log(cnA, options);
+
         return Math.Log(ConvertToDouble(a, "Ln", options.CultureInfo, null));
     }
 
@@ -2552,6 +2743,10 @@ public static class MathHelper
                 return BigDecimal.Log(bdA, ConvertToInt(b, "Log", options.CultureInfo, null));
             }
         }
+
+        if (a is ComplexNumber cnA && MathHelper.IsBoxedNumberOrBigNumber(b))
+            return ComplexNumber.Log(cnA, MathHelper.ConvertToBigDecimal(b!), options);
+
         return Math.Log(ConvertToDouble(a, "Log", options.CultureInfo, null), ConvertToDouble(b, "Log", options.CultureInfo, null));
     }
 
@@ -2569,6 +2764,10 @@ public static class MathHelper
                 return BigDecimal.Log2(bdA);
             }
         }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Log(cnA, 2, options);
+
         return Math.Log2(ConvertToDouble(a, "Log2", options.CultureInfo, null));
     }
 #endif
@@ -2586,6 +2785,10 @@ public static class MathHelper
                 return BigDecimal.Log10(bdA);
             }
         }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Log(cnA, 10, options);
+
         return Math.Log10(ConvertToDouble(a, "Log2", options.CultureInfo, null));
     }
 
@@ -2595,6 +2798,15 @@ public static class MathHelper
             throw new ArgumentNullException(nameof(a));
         if (b is null)
             throw new ArgumentNullException(nameof(b));
+
+        if (a is ComplexNumber cnA)
+        {
+            if (b is ComplexNumber cnB)
+                return ComplexNumber.Pow(cnA, cnB, options);
+            else
+            if (MathHelper.IsBoxedIntegerNumberOrBigNumber(b))
+                return ComplexNumber.Pow(cnA, MathHelper.ConvertToBigDecimal(b), options);
+        }
 
         Type typeA = a.GetType();
         if ((options.DecimalAsDefault || options.UseBigNumbers) && (IsBoxedFloatingNumberInteger(b) == true))
@@ -2619,6 +2831,9 @@ public static class MathHelper
         {
             return Factorial(ConvertToLong(a, "Factorial", options.CultureInfo, null), ConvertToLong(b, "Factorial", options.CultureInfo, null), options);
         }
+
+        if (a is ComplexNumber || b is ComplexNumber)
+            throw new InvalidOperationException($"The Factorial function is not defined for complex numbers");
 
         BigInteger value;
 
@@ -2705,11 +2920,14 @@ public static class MathHelper
 
     public static object Round(object? a, object? b, MidpointRounding rounding, MathHelperOptions options)
     {
-        if (a is not null && (IsBoxedIntegerNumber(a) || a is BigInteger))
-            return a;
+        if (IsBoxedIntegerNumberOrBigNumber(a))
+            return a!;
 
         if (a is BigDecimal bdA)
             return BigDecimal.Round(bdA, ConvertToInt(b, "Round", options.CultureInfo, null), (rounding == MidpointRounding.AwayFromZero) ? RoundingStrategy.AwayFromZero : RoundingStrategy.ToEven);
+
+        if (a is ComplexNumber || b is ComplexNumber)
+            throw new InvalidOperationException($"The round function is not defined for complex numbers");
 
         if (options.DecimalAsDefault)
             return Math.Round(ConvertToDecimal(a, "Round", options.CultureInfo, null), ConvertToInt(b, "Round", options.CultureInfo, null), rounding);
@@ -2728,6 +2946,9 @@ public static class MathHelper
         {
             return bdA.Sign;
         }
+
+        if (a is ComplexNumber)
+            throw new InvalidOperationException($"The Sign function is not defined for complex numbers");
 
         if (options.DecimalAsDefault)
             return Math.Sign(ConvertToDecimal(a, "Sign", options.CultureInfo, null));
@@ -2748,7 +2969,30 @@ public static class MathHelper
                 return BigDecimal.Sin(bdA);
             }
         }
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Sin(cnA, options);
+
         return Math.Sin(ConvertToDouble(a, "Sin", options.CultureInfo, null));
+    }
+
+    public static object Sinh(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Sinh(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Sinh(bdA);
+            }
+        }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Sinh(cnA, options);
+
+        return Math.Sinh(ConvertToDouble(a, "Sinh", options.CultureInfo, null));
     }
 
     public static object? Sqrt(object? a, MathHelperOptions options)
@@ -2767,6 +3011,9 @@ public static class MathHelper
                 return BigDecimal.SquareRoot(bdA, BigDecimal.Precision);
             }
         }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Sqrt(cnA, options);
 
         var d = ConvertToDouble(a, "Sqrt", options.CultureInfo, null);
 
@@ -2789,6 +3036,9 @@ public static class MathHelper
                 return BigDecimal.SquareRoot(BigDecimal.SquareRoot(bdA, BigDecimal.Precision), BigDecimal.Precision);
             }
         }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Sqrt(ComplexNumber.Sqrt(cnA, options), options);
 
         var d = ConvertToDouble(a, "Fthrt", options.CultureInfo, null);
 
@@ -2813,6 +3063,9 @@ public static class MathHelper
             }
         }
 
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Pow(cnA, 1.0 / 3.0, options);
+
         var d = ConvertToDouble(a, "Cbrt", options.CultureInfo, null);
 
         return Math.Cbrt(d);
@@ -2832,6 +3085,10 @@ public static class MathHelper
                 return BigDecimal.Tan(bdA);
             }
         }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Tan(cnA, options);
+
         return Math.Tan(ConvertToDouble(a, "Tan", options.CultureInfo, null));
     }
 
@@ -2848,6 +3105,10 @@ public static class MathHelper
                 return BigDecimal.One /  BigDecimal.Tan(bdA);
             }
         }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Cot(cnA, options);
+
         return 1 / Math.Tan(ConvertToDouble(a, "Cot", options.CultureInfo, null));
     }
 
@@ -2870,6 +3131,9 @@ public static class MathHelper
         {
             return bdA.WholeValue;
         }
+
+        if (a is ComplexNumber)
+            throw new InvalidOperationException($"The Truncate function is not defined for complex numbers");
 
         if (options.DecimalAsDefault)
             return Math.Truncate(ConvertToDecimal(a, "Truncate", options.CultureInfo, null));
@@ -2915,6 +3179,7 @@ public static class MathHelper
     {
         return value switch
         {
+            ComplexNumber cn => cn.IsReal ? (double) cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to double", cn.ToString(), typeof(ComplexNumber), typeof(double)),
             BigInteger bigI => ((double)bigI),
             BigDecimal bigD => ((double)bigD),
             double @double => @double,
@@ -2929,6 +3194,7 @@ public static class MathHelper
         {
             return value switch
             {
+                ComplexNumber cn => cn.IsReal ? (double)cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to double", cn.ToString(), typeof(ComplexNumber), typeof(double)),
                 BigInteger bigI => ((double)bigI),
                 BigDecimal bigD => ((double)bigD),
                 double @double => @double,
@@ -2949,6 +3215,7 @@ public static class MathHelper
     {
         return value switch
         {
+            ComplexNumber cn => cn.IsReal ? (decimal)cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to decimal", cn.ToString(), typeof(ComplexNumber), typeof(decimal)),
             BigInteger bigI => ((decimal)bigI),
             BigDecimal bigD => ((decimal)bigD),
             decimal @decimal => @decimal,
@@ -2963,6 +3230,7 @@ public static class MathHelper
         {
             return value switch
             {
+                ComplexNumber cn => cn.IsReal ? (decimal)cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to decimal", cn.ToString(), typeof(ComplexNumber), typeof(decimal)),
                 BigInteger bigI => ((decimal)bigI),
                 BigDecimal bigD => ((decimal)bigD),
                 decimal @decimal => @decimal,
@@ -2983,6 +3251,7 @@ public static class MathHelper
     {
         return value switch
         {
+            ComplexNumber cn => cn.IsReal ? (int)cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to an integer", cn.ToString(), typeof(ComplexNumber), typeof(int)),
             BigInteger bigI => ((int)bigI),
             BigDecimal bigD => ((int)bigD),
 
@@ -2998,6 +3267,7 @@ public static class MathHelper
         {
             return value switch
             {
+                ComplexNumber cn => cn.IsReal ? (int)cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to an integer", cn.ToString(), typeof(ComplexNumber), typeof(int)),
                 BigInteger bigI => ((int)bigI),
                 BigDecimal bigD => ((int)bigD),
 
@@ -3019,6 +3289,10 @@ public static class MathHelper
     {
         return value switch
         {
+            ComplexNumber cn => cn.IsReal
+                ? (cn.Real.DecimalPlaces == 0
+                    ? (long)cn.Real.WholeValue : throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)))
+                : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)),
             BigInteger bigI => ((long)bigI),
             BigDecimal bigD => ((long)(decimal)bigD),
 
@@ -3037,6 +3311,10 @@ public static class MathHelper
         {
             return value switch
             {
+                ComplexNumber cn => cn.IsReal
+                    ? (cn.Real.DecimalPlaces == 0
+                        ? (long)cn.Real.WholeValue : throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)))
+                    : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)),
                 BigInteger bigI => ((long)bigI),
                 BigDecimal bigD => ((long)(decimal)bigD),
 
@@ -3061,6 +3339,13 @@ public static class MathHelper
     {
         return value switch
         {
+            ComplexNumber cn => cn.IsReal
+                ? (cn.Real.DecimalPlaces != 0
+                    ? throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to ulong", cn.ToString(), typeof(ComplexNumber), typeof(ulong))
+                    : (cn.Real.Sign >= 0
+                        ? (ulong)cn.Real.WholeValue
+                        : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong))))
+                : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to ulong", cn.ToString(), typeof(ComplexNumber), typeof(ulong)),
             BigInteger bigI => bigI.Sign >= 0 ? ((ulong)bigI) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong)),
             BigDecimal bigD => bigD.Sign >= 0 ? ((ulong)(decimal)bigD) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigDecimal), typeof(ulong)),
 
@@ -3079,6 +3364,13 @@ public static class MathHelper
         {
             return value switch
             {
+                ComplexNumber cn => cn.IsReal
+                    ? (cn.Real.DecimalPlaces != 0
+                        ? throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to ulong", cn.ToString(), typeof(ComplexNumber), typeof(ulong))
+                        : (cn.Real.Sign >= 0
+                            ? (ulong)cn.Real.WholeValue
+                            : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong))))
+                    : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to ulong", cn.ToString(), typeof(ComplexNumber), typeof(ulong)),
                 BigInteger bigI => bigI.Sign >= 0 ? ((ulong)bigI) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong)),
                 BigDecimal bigD => bigD.Sign >= 0 ? ((ulong)(decimal)bigD) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigDecimal), typeof(ulong)),
 
@@ -3454,6 +3746,10 @@ public static class MathHelper
             case long value: return value;
             case ulong value: return value;
             case BigInteger value: return value;
+            case ComplexNumber cn:
+                return cn.IsReal && cn.Real.GetFractionalPart().IsZero()
+                    ? cn.Real.GetWholePart()
+                    : throw new NCalcConversionException("A complex number cannot be converted to BigInteger", cn.ToString() ?? string.Empty, typeof(ComplexNumber), typeof(BigInteger));
             default:
                 throw new NCalcConversionException("The source of the conversion to a BigInteger must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger).", a.ToString() ?? string.Empty, a.GetType(), typeof(BigInteger));
         }
@@ -3619,6 +3915,26 @@ public static class MathHelper
     public static int Compare(object? a, object? b, ComparisonOptions comparisonOptions, MathHelperOptions mathHelperOptions)
     {
         int result;
+
+        if (a is ComplexNumber || b is ComplexNumber)
+        {
+            if (a is ComplexNumber cnA)
+            {
+                if (!cnA.IsReal)
+                    throw new InvalidOperationException($"The comparison operation is not defined for complex numbers");
+                a = cnA.Real;
+                if (!mathHelperOptions.UseBigNumbers)
+                    a = (double)a;
+            }
+            if (b is ComplexNumber cnB)
+            {
+                if (!cnB.IsReal)
+                    throw new InvalidOperationException($"The comparison operation is not defined for complex numbers");
+                b = cnB.Real;
+                if (!mathHelperOptions.UseBigNumbers)
+                    b = (double)b;
+            }
+        }
 
         // Handle possible NaN
         if (a is double dA)
@@ -4076,9 +4392,25 @@ public static class MathHelper
         }
     }
 
+    static object ReduceComplexToReal(ComplexNumber value, MathHelperOptions? options = default)
+    {
+        if (!value.IsReal)
+            return value;
+
+        if (options?.UseBigNumbers == true)
+            return value.Real;
+
+        return (double)value.Real;
+    }
+
     public static object? ReduceNumericType(object value, Type? restrictToType = null, MathHelperOptions options = default)
     {
         object? lValue = value;
+        if (value is ComplexNumber cn && cn.IsReal)
+        {
+            value = MathHelper.ReduceComplexToReal(cn);
+        }
+
         if (value is BigDecimal bdValue)
         {
             lValue = MathHelper.ReduceBigDecimal(bdValue, restrictToType, false, options);

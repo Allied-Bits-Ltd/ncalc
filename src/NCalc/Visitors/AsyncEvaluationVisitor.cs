@@ -992,6 +992,14 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         return new Percent(result);
     }
 
+    public virtual async ValueTask<object?> Visit(ComplexNumberExpression expression, CancellationToken cancellationToken = default)
+    {
+        object? result = await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false);
+        if (result is null)
+            return result;
+        return new ComplexNumber(0, result, new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options));
+    }
+
     public virtual async ValueTask<object?> Visit(FunctionCall functionCall, CancellationToken cancellationToken = default)
     {
         var argsCount = functionCall.Parameters.Count;

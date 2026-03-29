@@ -1,0 +1,640 @@
+﻿using System;
+using System.CodeDom;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+using ExtendedNumerics;
+
+using NCalc.Exceptions;
+using NCalc.Helpers;
+using NCalc.Visitors;
+
+namespace NCalc.Domain
+{
+    public readonly struct ComplexNumber :
+        IEquatable<ComplexNumber>,
+        IFormattable
+    {
+        public BigDecimal Real { get; }
+        public BigDecimal Imaginary { get; }
+
+        public bool IsReal => Imaginary.IsZero();
+
+        public bool IsZero
+        {
+            get
+            {
+                bool realZero = (BigDecimal)MathHelper.Abs(Real, _mathHelperOptions) < Tolerance;
+                bool imaginaryZero = (BigDecimal)MathHelper.Abs(Imaginary, _mathHelperOptions) < Tolerance;
+                return realZero && imaginaryZero;
+            }
+        }
+
+        private readonly MathHelperOptions _mathHelperOptions;
+
+        public ComplexNumber(BigDecimal real, BigDecimal imaginary)
+        {
+            Real = real;
+            Imaginary = imaginary;
+            _mathHelperOptions = MathHelperOptions.Empty;
+        }
+
+        public ComplexNumber(BigDecimal real, BigDecimal imaginary, MathHelperOptions options)
+        {
+            Real = real;
+            Imaginary = imaginary;
+            _mathHelperOptions = options;
+        }
+
+        public ComplexNumber(object real, object imaginary, MathHelperOptions options)
+        {
+            Real = MathHelper.ConvertToBigDecimal(real);
+            Imaginary = MathHelper.ConvertToBigDecimal(imaginary);
+            _mathHelperOptions = options;
+        }
+
+        // Static instances
+        public static readonly ComplexNumber Zero = new(BigDecimal.Zero, BigDecimal.Zero);
+        public static readonly ComplexNumber One = new(BigDecimal.One, BigDecimal.Zero);
+        public static readonly ComplexNumber ImaginaryOne = new(BigDecimal.Zero, BigDecimal.One);
+
+        // Magnitude (modulus)
+        public BigDecimal Magnitude
+        {
+            get
+            {
+                object result = (BigDecimal)MathHelper.Sqrt(Real * Real + Imaginary * Imaginary, _mathHelperOptions)!;
+                switch (result)
+                {
+                    case BigDecimal bd:
+                        return bd;
+                    case double d:
+                        return new BigDecimal(d);
+                    default:
+                        return Double.NaN;
+                }
+            }
+        }
+
+        public BigDecimal MagnitudeSquared
+        {
+            get
+            {
+                BigDecimal realSquared = Real * Real;
+                BigDecimal imaginarySquared = Imaginary * Imaginary;
+                return realSquared + imaginarySquared;
+            }
+        }
+
+        // Phase (argument)
+        public BigDecimal Phase
+        {
+            get
+            {
+                object result = (BigDecimal)MathHelper.Atan2(Imaginary, Real, _mathHelperOptions);
+                switch (result)
+                {
+                    case BigDecimal bd:
+                        return bd;
+                    case double d:
+                        return new BigDecimal(d);
+                    default:
+                        return Double.NaN;
+                }
+            }
+        }
+
+        // Conjugate
+        public ComplexNumber Conjugate() => new(Real, -Imaginary);
+
+        // Arithmetic operators
+        public static ComplexNumber operator +(ComplexNumber a, ComplexNumber b) =>
+            new(a.Real + b.Real, a.Imaginary + b.Imaginary);
+
+        public static ComplexNumber operator -(ComplexNumber a, ComplexNumber b) =>
+            new(a.Real - b.Real, a.Imaginary - b.Imaginary);
+
+        public static ComplexNumber operator *(ComplexNumber a, ComplexNumber b) =>
+            new(
+                a.Real * b.Real - a.Imaginary * b.Imaginary,
+                a.Real * b.Imaginary + a.Imaginary * b.Real
+            );
+
+        public static ComplexNumber operator /(ComplexNumber a, ComplexNumber b)
+        {
+            BigDecimal denom = b.Real * b.Real + b.Imaginary * b.Imaginary;
+
+            if (denom.IsZero())
+                throw new DivideByZeroException();
+
+            return new ComplexNumber(
+                (a.Real * b.Real + a.Imaginary * b.Imaginary) / denom,
+                (a.Imaginary * b.Real - a.Real * b.Imaginary) / denom
+            );
+        }
+
+        public static ComplexNumber operator /(ComplexNumber value, double divisor)
+        {
+            if (divisor == 0.0)
+                throw new DivideByZeroException();
+
+            BigDecimal real = value.Real / divisor;
+            BigDecimal imaginary = value.Imaginary / divisor;
+
+            return new ComplexNumber(real, imaginary);
+        }
+
+        public static ComplexNumber operator /(ComplexNumber value, BigDecimal divisor)
+        {
+            if (divisor == 0.0)
+                throw new DivideByZeroException();
+
+            BigDecimal real = value.Real / divisor;
+            BigDecimal imaginary = value.Imaginary / divisor;
+
+            return new ComplexNumber(real, imaginary);
+        }
+
+        public static ComplexNumber operator /(double scalar, ComplexNumber value)
+        {
+            return new ComplexNumber(scalar, 0.0) / value;
+        }
+
+        public static ComplexNumber operator /(BigDecimal scalar, ComplexNumber value)
+        {
+            return new ComplexNumber(scalar, 0.0) / value;
+        }
+
+        // Unary operators
+        public static ComplexNumber operator -(ComplexNumber a) =>
+            new(-a.Real, -a.Imaginary);
+
+        // Equality (with tolerance)
+        private const double Tolerance = 1e-10;
+
+        public bool Equals(ComplexNumber other)
+        {
+            BigDecimal diff = Real - other.Real;
+            if ((diff.IsPositive() && diff > Tolerance) || (diff < -Tolerance))
+                return false;
+
+            diff = Imaginary - other.Imaginary;
+            if ((diff.IsPositive() && diff > Tolerance) || (diff < -Tolerance))
+                return false;
+
+            return true;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is ComplexNumber other)
+                return Equals(other);
+
+            if (IsReal && MathHelper.IsBoxedNumberOrBigNumber(obj))
+                return Real.Equals(MathHelper.ConvertToBigDecimal(obj!));
+
+            return false;
+        }
+
+        public override int GetHashCode() => (Real, Imaginary).GetHashCode();
+
+        public static bool operator ==(ComplexNumber a, ComplexNumber b) => a.Equals(b);
+
+        public static bool operator !=(ComplexNumber a, ComplexNumber b) => !a.Equals(b);
+
+        // Formatting
+        public override string ToString() => ToString(null, CultureInfo.InvariantCulture);
+
+        public string ToString(string? format, IFormatProvider? formatProvider)
+        {
+            formatProvider ??= CultureInfo.InvariantCulture;
+
+            string realStr = Real.ToString();
+
+            object absImg = MathHelper.Abs(Imaginary, _mathHelperOptions);
+
+            string imagStr;
+
+            if (absImg is BigDecimal bd)
+                imagStr = bd.ToString();
+            else
+                if (absImg is double d)
+                    imagStr = d.ToString(format, formatProvider);
+                else
+                    imagStr = string.Empty;
+
+            string sign = Imaginary >= 0 ? "+" : "-";
+
+            return $"{realStr} {sign} {imagStr}i";
+        }
+
+        public static ComplexNumber FromPolar(BigDecimal magnitude, BigDecimal phase, MathHelperOptions options)
+        {
+            BigDecimal real = magnitude * (BigDecimal)MathHelper.Cos(phase, options);
+            BigDecimal imaginary = magnitude * (BigDecimal)MathHelper.Sin(phase, options);
+            return new ComplexNumber(real, imaginary);
+        }
+
+        public static ComplexNumber Sqrt(ComplexNumber value, MathHelperOptions options)
+        {
+            if (value.Real.IsZero() && value.Imaginary.IsZero())
+                return Zero;
+
+            BigDecimal magnitude = value.Magnitude;
+            BigDecimal realPart = (BigDecimal)MathHelper.Sqrt((magnitude + value.Real) / 2.0, options)!;
+            BigDecimal imaginaryPart = (BigDecimal)MathHelper.Sqrt((magnitude - value.Real) / 2.0, options)!;
+
+            if (value.Imaginary < 0.0)
+                imaginaryPart = -imaginaryPart;
+
+            return new ComplexNumber(realPart, imaginaryPart);
+        }
+
+        public static ComplexNumber Exp(ComplexNumber value, MathHelperOptions options)
+        {
+            BigDecimal expReal = (BigDecimal)MathHelper.Exp(value.Real, options)!;
+            BigDecimal cosImaginary = (BigDecimal)MathHelper.Cos(value.Imaginary, options)!;
+            BigDecimal sinImaginary = (BigDecimal)MathHelper.Sin(value.Imaginary, options)!;
+
+            BigDecimal real = expReal * cosImaginary;
+            BigDecimal imaginary = expReal * sinImaginary;
+
+            return new ComplexNumber(real, imaginary);
+        }
+
+        public static ComplexNumber Log(ComplexNumber value, MathHelperOptions options)
+        {
+            if (value.Real == 0.0 && value.Imaginary == 0.0)
+                throw new ArgumentOutOfRangeException(nameof(value), "Logarithm of zero is undefined.");
+
+            BigDecimal magnitude = value.Magnitude;
+            BigDecimal phase = value.Phase;
+
+            BigDecimal real = (BigDecimal)MathHelper.Ln(magnitude, options)!;
+            BigDecimal imaginary = phase;
+
+            return new ComplexNumber(real, imaginary);
+        }
+
+        public static ComplexNumber Log(ComplexNumber value, BigDecimal baseValue, MathHelperOptions options)
+        {
+            if (baseValue.IsNegative() || baseValue.IsZero() || baseValue == 1.0)
+                throw new ArgumentOutOfRangeException(nameof(baseValue), "Logarithm base must be positive and not equal to 1.");
+
+            ComplexNumber naturalLog = Log(value, options);
+            BigDecimal naturalLogOfBase = (BigDecimal)MathHelper.Ln(baseValue, options)!;
+
+            ComplexNumber result = naturalLog / naturalLogOfBase;
+            return result;
+        }
+
+        public static ComplexNumber Pow(ComplexNumber value, ComplexNumber power, MathHelperOptions options)
+        {
+            if (value.Real.IsZero() && value.Imaginary.IsZero())
+            {
+                if (power.Real.IsZero() && power.Imaginary.IsZero())
+                    return One;
+
+                return Zero;
+            }
+
+            ComplexNumber logarithm = Log(value, options);
+            ComplexNumber product = power * logarithm;
+            ComplexNumber result = Exp(product, options);
+            return result;
+        }
+
+        public static ComplexNumber Pow(ComplexNumber value, BigDecimal power, MathHelperOptions options)
+        {
+            ComplexNumber complexPower = new ComplexNumber(power, 0.0);
+            ComplexNumber result = Pow(value, complexPower, options);
+            return result;
+        }
+
+        public static ComplexNumber Sin(ComplexNumber value, MathHelperOptions options)
+        {
+            BigDecimal x = value.Real;
+            BigDecimal y = value.Imaginary;
+
+            BigDecimal sinX = (BigDecimal)MathHelper.Sin(x, options)!;
+            BigDecimal cosX = (BigDecimal)MathHelper.Cos(x, options)!;
+            BigDecimal sinhY = (BigDecimal)MathHelper.Sinh(y, options)!;
+            BigDecimal coshY = (BigDecimal)MathHelper.Cosh(y, options)!;
+
+            BigDecimal real = sinX * coshY;
+            BigDecimal imaginary = cosX * sinhY;
+
+            return new ComplexNumber(real, imaginary);
+        }
+
+        public static ComplexNumber Cos(ComplexNumber value, MathHelperOptions options)
+        {
+            BigDecimal x = value.Real;
+            BigDecimal y = value.Imaginary;
+
+            BigDecimal sinX = (BigDecimal)MathHelper.Sin(x, options)!;
+            BigDecimal cosX = (BigDecimal)MathHelper.Cos(x, options)!;
+            BigDecimal sinhY = (BigDecimal)MathHelper.Sinh(y, options)!;
+            BigDecimal coshY = (BigDecimal)MathHelper.Cosh(y, options)!;
+
+            BigDecimal real = cosX * coshY;
+            BigDecimal imaginary = -sinX * sinhY;
+
+            return new ComplexNumber(real, imaginary);
+        }
+
+        public static ComplexNumber Tan(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber sine = Sin(value, options);
+            ComplexNumber cosine = Cos(value, options);
+            ComplexNumber result = sine / cosine;
+            return result;
+        }
+
+        public static ComplexNumber Cot(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber tangent = Tan(value, options);
+            ComplexNumber result = One / tangent;
+            return result;
+        }
+
+        public static ComplexNumber Sec(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber cosine = Cos(value, options);
+            ComplexNumber result = One / cosine;
+            return result;
+        }
+
+        public static ComplexNumber Csc(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber sine = Sin(value, options);
+            ComplexNumber result = One / sine;
+            return result;
+        }
+
+        public static ComplexNumber Asin(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber iz = ImaginaryOne * value;
+            ComplexNumber oneMinusZSquared = One - value * value;
+            ComplexNumber squareRoot = Sqrt(oneMinusZSquared, options);
+            ComplexNumber inside = iz + squareRoot;
+            ComplexNumber logarithm = Log(inside, options);
+            ComplexNumber result = -ImaginaryOne * logarithm;
+            return result;
+        }
+
+        public static ComplexNumber Acos(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber oneMinusZSquared = One - value * value;
+            ComplexNumber squareRoot = Sqrt(oneMinusZSquared, options);
+            ComplexNumber inside = value + ImaginaryOne * squareRoot;
+            ComplexNumber logarithm = Log(inside, options);
+            ComplexNumber result = -ImaginaryOne * logarithm;
+            return result;
+        }
+
+        public static ComplexNumber Atan(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber iz = ImaginaryOne * value;
+            ComplexNumber oneMinusIz = One - iz;
+            ComplexNumber onePlusIz = One + iz;
+
+            ComplexNumber log1 = Log(oneMinusIz, options);
+            ComplexNumber log2 = Log(onePlusIz, options);
+            ComplexNumber difference = log1 - log2;
+
+            ComplexNumber result = (ImaginaryOne / 2.0) * difference;
+            return result;
+        }
+
+        public static ComplexNumber Acot(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber reciprocal = One / value;
+            ComplexNumber result = Atan(reciprocal, options);
+            return result;
+        }
+
+        public static ComplexNumber Asec(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber reciprocal = One / value;
+            ComplexNumber result = Acos(reciprocal, options);
+            return result;
+        }
+
+        public static ComplexNumber Acsc(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber reciprocal = One / value;
+            ComplexNumber result = Asin(reciprocal, options);
+            return result;
+        }
+
+        public static ComplexNumber Sinh(ComplexNumber value, MathHelperOptions options)
+        {
+            BigDecimal x = value.Real;
+            BigDecimal y = value.Imaginary;
+
+            BigDecimal sinhX = (BigDecimal)MathHelper.Sinh(x, options)!;
+            BigDecimal coshX = (BigDecimal)MathHelper.Cosh(x, options)!;
+            BigDecimal sinY = (BigDecimal)MathHelper.Sin(y, options)!;
+            BigDecimal cosY = (BigDecimal)MathHelper.Cos(y, options)!;
+
+            BigDecimal real = sinhX * cosY;
+            BigDecimal imaginary = coshX * sinY;
+
+            return new ComplexNumber(real, imaginary);
+        }
+
+        public static ComplexNumber Cosh(ComplexNumber value, MathHelperOptions options)
+        {
+            BigDecimal x = value.Real;
+            BigDecimal y = value.Imaginary;
+
+            BigDecimal sinhX = (BigDecimal)MathHelper.Sinh(x, options)!;
+            BigDecimal coshX = (BigDecimal)MathHelper.Cosh(x, options)!;
+            BigDecimal sinY = (BigDecimal)MathHelper.Sin(y, options)!;
+            BigDecimal cosY = (BigDecimal)MathHelper.Cos(y, options)!;
+
+            BigDecimal real = coshX * cosY;
+            BigDecimal imaginary = sinhX * sinY;
+
+            return new ComplexNumber(real, imaginary);
+        }
+
+        public static ComplexNumber Tanh(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber sinh = Sinh(value, options);
+            ComplexNumber cosh = Cosh(value, options);
+            ComplexNumber result = sinh / cosh;
+            return result;
+        }
+
+        public static ComplexNumber Coth(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber tanh = Tanh(value, options);
+            ComplexNumber result = One / tanh;
+            return result;
+        }
+
+        public static ComplexNumber Sech(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber cosh = Cosh(value, options);
+            ComplexNumber result = One / cosh;
+            return result;
+        }
+
+        public static ComplexNumber Csch(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber sinh = Sinh(value, options);
+            ComplexNumber result = One / sinh;
+            return result;
+        }
+
+        public static ComplexNumber Asinh(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber zSquared = value * value;
+            ComplexNumber insideSqrt = zSquared + One;
+            ComplexNumber squareRoot = Sqrt(insideSqrt, options);
+            ComplexNumber insideLog = value + squareRoot;
+            ComplexNumber result = Log(insideLog, options);
+            return result;
+        }
+
+        public static ComplexNumber Acosh(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber sqrt1 = Sqrt(value - One, options);
+            ComplexNumber sqrt2 = Sqrt(value + One, options);
+            ComplexNumber insideLog = value + sqrt1 * sqrt2;
+            ComplexNumber result = Log(insideLog, options);
+            return result;
+        }
+
+        public static ComplexNumber Atanh(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber numerator = One + value;
+            ComplexNumber denominator = One - value;
+            ComplexNumber quotient = numerator / denominator;
+            ComplexNumber logarithm = Log(quotient, options);
+            ComplexNumber result = logarithm / 2.0;
+            return result;
+        }
+
+        public static ComplexNumber Acoth(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber numerator = value + One;
+            ComplexNumber denominator = value - One;
+            ComplexNumber quotient = numerator / denominator;
+            ComplexNumber logarithm = Log(quotient, options);
+            ComplexNumber result = logarithm / 2.0;
+            return result;
+        }
+
+        public static ComplexNumber Asech(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber reciprocal = One / value;
+            ComplexNumber result = Acosh(reciprocal, options);
+            return result;
+        }
+
+        public static ComplexNumber Acsch(ComplexNumber value, MathHelperOptions options)
+        {
+            ComplexNumber reciprocal = One / value;
+            ComplexNumber result = Asinh(reciprocal, options);
+            return result;
+        }
+
+        private static BigDecimal Hypot(BigDecimal x, BigDecimal y, MathHelperOptions options)
+        {
+            BigDecimal absX = (BigDecimal)MathHelper.Abs(x, options);
+            BigDecimal absY = (BigDecimal)MathHelper.Abs(y, options);
+
+            if (absX > absY)
+            {
+                BigDecimal ratio = absY / absX;
+                BigDecimal result = absX * (BigDecimal)MathHelper.Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!;
+                return result;
+            }
+
+            if (absY > 0.0)
+            {
+                BigDecimal ratio = absX / absY;
+                BigDecimal result = absY * (BigDecimal)MathHelper.Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!;
+                return result;
+            }
+
+            return 0.0;
+        }
+
+        /*// Parsing (simple format: "a + bi")
+        public static ComplexNumber Parse(string s)
+        {
+            if (TryParse(s, out var result))
+                return result;
+
+            throw new FormatException("Invalid complex number format.");
+        }
+
+        public static bool TryParse(string? s, out ComplexNumber result)
+        {
+            result = Zero;
+
+            if (string.IsNullOrWhiteSpace(s))
+                return false;
+
+            s = s.Replace(" ", "").ToLowerInvariant();
+
+            // Example: "3+4i", "3-4i"
+            int iIndex = s.IndexOf('i');
+            if (iIndex < 0)
+                return false;
+
+            string withoutI = s[..iIndex];
+
+            int plusIndex = withoutI.LastIndexOf('+');
+            int minusIndex = withoutI.LastIndexOf('-', 1);
+
+            int splitIndex = plusIndex > 0 ? plusIndex : minusIndex;
+
+            if (splitIndex <= 0)
+                return false;
+
+            string realPart = withoutI[..splitIndex];
+            string imagPart = withoutI[splitIndex..];
+
+            if (!double.TryParse(realPart, out double real))
+                return false;
+
+            if (!double.TryParse(imagPart, out double imag))
+                return false;
+
+            result = new ComplexNumber(real, imag);
+            return true;
+        }*/
+    }
+
+    public sealed class ComplexNumberExpression : LogicalExpression
+    {
+        public LogicalExpression Expression { get; set; }
+
+        //public bool NegatedImaginary { get; set; }
+
+        private readonly MathHelperOptions _mathHelperOptions;
+
+        public ComplexNumberExpression(LogicalExpression expression, MathHelperOptions mathHelperOptions)
+        {
+            Expression = expression;
+            _mathHelperOptions = mathHelperOptions;
+        }
+
+        public override T Accept<T>(ILogicalExpressionVisitor<T> visitor, CancellationToken cancellationToken = default)
+        {
+            return visitor.Visit(this, cancellationToken);
+        }
+
+        internal override T AcceptNoRecurse<T>(ILogicalExpressionNoRecurseVisitor<T> visitor, ExpressionTask<T> task, CancellationToken cancellationToken = default)
+        {
+            return visitor.Visit(this, task, cancellationToken);
+        }
+    }
+}
