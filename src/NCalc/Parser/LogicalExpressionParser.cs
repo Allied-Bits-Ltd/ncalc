@@ -126,6 +126,14 @@ public static class LogicalExpressionParser
 
         var comment = OneOf(comments.ToArray());
 
+        bool useComplexNumbers = (extOptions?.Flags.HasFlag(AdvExpressionOptions.UseComplexNumbers) == true);
+
+        var imaginaryChar = Terms.Char('i');
+        Parser<string>? imaginaryCharParser = useComplexNumbers ? Terms.Text("i") : null;
+
+        Parser<LogicalExpression>? imaginaryCharExpression = imaginaryCharParser?
+                .Then<LogicalExpression>((ctx, x) => new ComplexNumberExpression(new ValueExpression(1), new Helpers.MathHelperOptions(cultureInfo, options)).SetLocation(new ParlotExpressionLocation(ctx))) ?? null;
+
         var hexNumber = Terms.Text("0x")
             .SkipAnd(Terms.Pattern(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') || (acceptUnderscores && c == '_') /*acceptableHexChars.Contains(c)*/))
             .Then<LogicalExpression>(static (ctx, x) =>
@@ -295,6 +303,7 @@ public static class LogicalExpressionParser
             ? [Terms.Text(decimalSeparator.ToString()), Terms.Text(decimalSeparator2.ToString()), Terms.Text("E", true)]
             : [Terms.Text(decimalSeparator.ToString()), Terms.Text("E", true)];
 
+        //var intNumberParser
         var intNumber = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
             .AndSkip(Not(OneOf(floatNumExclusions)))
             .Then<LogicalExpression>(static (ctx, d) => new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx)));
@@ -456,13 +465,12 @@ public static class LogicalExpressionParser
         }
 
         // Add percent support
-
         bool calculatePercent = (extOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true);
+        var percentChar = Terms.Char('%'); // CultureInfo defines a percent character, but we are yet to see a character different from '%'
+
         bool useCharsForOps = !options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars);
         bool useUnicodeForOps = options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations);
         bool useAssignments = options.HasFlag(ExpressionOptions.UseAssignments);
-
-        var percentChar = Terms.Char('%'); // CultureInfo defines a percent character, but we are yet to see another character than '%'
 
         var comma = Terms.Char(',');
         var divided = useUnicodeForOps ? OneOf(Terms.Text("/"), Terms.Text("\u2236"), Terms.Text("\u00F7")) : Terms.Text("/");
@@ -533,7 +541,6 @@ public static class LogicalExpressionParser
 #else
         var letterIdentifier = Terms.Identifier();
 #endif
-
         var identifier = letterIdentifier;
         // We don't let $ at the beginning of identifiers as it may be confused with currency
 
@@ -719,7 +726,7 @@ public static class LogicalExpressionParser
 
         if (!options.HasFlag(ExpressionOptions.DontParseDates))
         {
-            DateTimeFormatInfo dateTimeFormat = extOptions?.GetFormat(typeof(DateTimeFormatInfo)) as DateTimeFormatInfo ?? cultureInfo?.DateTimeFormat ?? CultureInfo.CurrentCulture.DateTimeFormat;
+            DateTimeFormatInfo dateTimeFormat = extOptions?.GetFormat(typeof(DateTimeFormatInfo)) as DateTimeFormatInfo ?? cultureInfo.DateTimeFormat;
 
             Sequence<TextSpan, TextSpan, TextSpan> dateDefinition;
             Sequence<TextSpan, TextSpan, TextSpan> dateDefinitionIso;
@@ -736,10 +743,10 @@ public static class LogicalExpressionParser
             string[] ncalcDateTime12Masks = new string[4];
             string[] ncalcDateShortTime12Masks = new string[4];
 
-            CultureInfo culture = cultureInfo ?? CultureInfo.CurrentCulture;
+            CultureInfo culture = cultureInfo;// ?? CultureInfo.CurrentCulture;
 
-            string builtInDateSep = (cultureInfo ?? CultureInfo.CurrentCulture).DateTimeFormat.DateSeparator;
-            string builtInTimeSep = (cultureInfo ?? CultureInfo.CurrentCulture).DateTimeFormat.TimeSeparator;
+            string builtInDateSep = (cultureInfo/* ?? CultureInfo.CurrentCulture*/).DateTimeFormat.DateSeparator;
+            string builtInTimeSep = (cultureInfo/* ?? CultureInfo.CurrentCulture*/).DateTimeFormat.TimeSeparator;
 
             string datePattern = culture.DateTimeFormat.ShortDatePattern;
             if (string.IsNullOrEmpty(datePattern))
@@ -1751,6 +1758,8 @@ public static class LogicalExpressionParser
         enabledParsers.Add(functionOrResultRef);
         enabledParsers.Add(groupExpression);
         enabledParsers.Add(bracketedIdentifierExpression);
+        if (imaginaryCharExpression is not null)
+            enabledParsers.Add(imaginaryCharExpression);
         enabledParsers.Add(identifierExpression);
         enabledParsers.Add(list);
         enabledParsers.Add(bracedExpressionOrStatementSequence);
@@ -1837,9 +1846,9 @@ public static class LogicalExpressionParser
 
         Parser<LogicalExpression> factorialOrPercent;
 
-        if (extOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true)
+        if (calculatePercent || useComplexNumbers)
         {
-            Parser<LogicalExpression>? numberPercent = factorial.And(ZeroOrOne(percentChar, '\0'))
+            Parser<LogicalExpression>? numberPercent = calculatePercent ? factorial.And(ZeroOrOne(percentChar, '\0'))
                 .Then<LogicalExpression>(static (ctx, x) =>
                 {
                     if (x.Item2 == '\0')
@@ -1848,10 +1857,28 @@ public static class LogicalExpressionParser
                         return x.Item1;
                     }
                     return new PercentExpression(x.Item1).SetLocation(new ParlotExpressionLocation(ctx));
-                });
-            Parser<LogicalExpression>? numberPercent2 = percentChar.And(factorial)
-                .Then<LogicalExpression>(static (ctx, x) => new PercentExpression(x.Item2).SetLocation(new ParlotExpressionLocation(ctx)));
-            factorialOrPercent = OneOf(numberPercent, numberPercent2);
+                }) : null;
+            Parser<LogicalExpression>? numberPercent2 = calculatePercent ? percentChar.And(factorial)
+                .Then<LogicalExpression>(static (ctx, x) => new PercentExpression(x.Item2).SetLocation(new ParlotExpressionLocation(ctx))) : null;
+
+            Parser<LogicalExpression>? numberComplex = useComplexNumbers ? factorial.And(ZeroOrOne(imaginaryChar, '\0'))
+                .Then<LogicalExpression>((ctx, x) =>
+                {
+                    if (x.Item2 == '\0')
+                    {
+                        // there is just a primary discovered
+                        return x.Item1;
+                    }
+                    return new ComplexNumberExpression(x.Item1, new Helpers.MathHelperOptions(cultureInfo, options)).SetLocation(new ParlotExpressionLocation(ctx));
+                }) : null;
+
+            if (calculatePercent && useComplexNumbers)
+                factorialOrPercent = OneOf(numberPercent!, numberPercent2!, numberComplex!);
+            else
+            if (calculatePercent)
+                factorialOrPercent = OneOf(numberPercent!, numberPercent2!);
+            else
+                factorialOrPercent = numberComplex!;
         }
         else
         {

@@ -32,7 +32,11 @@ public abstract class LogicalExpression
 
     protected ExpressionLocation _location;
 
+    public CultureInfo? CultureInfo => _cultureInfo;
+
     public ExpressionLocation Location => _location;
+
+    public ExpressionOptions Options => _options;
 
     public LogicalExpression()
     {

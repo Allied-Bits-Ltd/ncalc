@@ -973,6 +973,15 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         return new Percent(result!);
     }
 
+    public virtual object? Visit(ComplexNumberExpression expression, CancellationToken cancellationToken = default)
+    {
+        // Recursively evaluates the underlying expression
+        if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out object? result))
+            return null;
+
+        return new ComplexNumber(0, result!, new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options));
+    }
+
     public virtual object? Visit(ValueExpression expression, CancellationToken cancellationToken = default) => expression.Value;
     public virtual object? Visit(FunctionExpression expression, CancellationToken cancellationToken = default) => null;
 

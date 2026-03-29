@@ -9,6 +9,7 @@ namespace NCalc.Domain
     public class Percent
     {
         public object? Value { get; }
+
         public ValueType Type { get; }
 
         public Type OriginalType { get; }
@@ -21,7 +22,8 @@ namespace NCalc.Domain
                 byte or sbyte or short or int or long or ushort or uint or ulong => ValueType.Integer,
                 BigInteger => ValueType.Integer,
                 BigDecimal => ValueType.Float,
-                _ => throw new NCalcException("This value could not be handled: " + value)
+                null => throw new NCalcConversionException("A null value cannot be converted to a percent", typeof(Percent)),
+                _ => throw new NCalcConversionException($"The value '{value}' of type '{value.GetType().Name}' cannot be converted to percent", value.ToString() ?? string.Empty, value.GetType(), typeof(Percent)),
             };
 
             OriginalType = value.GetType();
@@ -36,7 +38,8 @@ namespace NCalc.Domain
                 decimal or double or float => ValueType.Float,
                 byte or sbyte or short or int or long or ushort or uint or ulong => ValueType.Integer,
                 BigInteger => ValueType.Integer,
-                _ => throw new NCalcException("This value could not be handled: " + value)
+                null => throw new NCalcConversionException("A null value cannot be converted to a percent", typeof(Percent)),
+                _ => throw new NCalcConversionException($"The value '{value}' of type '{originalType}' cannot be converted to percent", value.ToString() ?? string.Empty, originalType, typeof(Percent)),
             };
 
             Value = value;

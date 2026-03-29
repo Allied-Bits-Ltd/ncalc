@@ -45,7 +45,12 @@
         /// <summary>
         /// When enabled, supports parsing of periods expressed in a humane form like 3y7mo5w7d3h2min18s
         /// </summary>
-        ParseHumanePeriods = 1 << 7
+        ParseHumanePeriods = 1 << 7,
+
+        /// <summary>
+        /// When enabled, supports parsing of complex numbers
+        /// </summary>
+        UseComplexNumbers = 1 << 8,
     }
 
     public class AdvancedExpressionOptions : IFormatProvider

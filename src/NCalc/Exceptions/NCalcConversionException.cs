@@ -42,6 +42,14 @@ public class NCalcConversionException : NCalcEvaluationException
         TargetType = targetType;
     }
 
+    public NCalcConversionException(string message, Type targetType)
+        : base(message)
+    {
+        SourceValue = null;
+        SourceType = null;
+        TargetType = targetType;
+    }
+
     public NCalcConversionException(string message, Type targetType, ExpressionLocation location, Exception innerException)
         : base(message, location, innerException)
     {

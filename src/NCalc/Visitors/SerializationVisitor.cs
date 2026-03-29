@@ -201,6 +201,14 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         return EncapsulateNoValue(expression.Expression, false, parensNeeded) + "%";
     }
 
+    public string Visit(ComplexNumberExpression expression, CancellationToken cancellationToken = default)
+    {
+        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
+
+        bool parensNeeded = !(expression.Expression is Identifier || expression.Expression is ValueExpression);
+        return EncapsulateNoValue(expression.Expression, false, parensNeeded) + "i";
+    }
+
     public string Visit(ValueExpression expression, CancellationToken cancellationToken = default)
     {
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);

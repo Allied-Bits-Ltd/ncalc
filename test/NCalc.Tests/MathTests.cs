@@ -2,6 +2,7 @@ using System.Numerics;
 
 using ExtendedNumerics;
 
+using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Helpers;
 using NCalc.Tests.TestData;
@@ -710,4 +711,33 @@ public class MathsTests : TestBase
         Assert.Equal((int) 0, result);
     }
 
+    [Fact]
+    public void ShouldParseImaginaryNumber()
+    {
+        var expression = new NCalc.Expression("i", ExpressionOptions.None);
+        expression.AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.UseComplexNumbers);
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.IsType<ComplexNumber>(result);
+        Assert.True(((ComplexNumber)result).Real.IsZero());
+        Assert.True(((ComplexNumber)result).Imaginary.Equals(1));
+    }
+
+    [Theory]
+    [InlineData("2i", 0, 2)]
+    [InlineData("2i*2", 0, 4)]
+    [InlineData("(1+2i)*2", 2, 4)]
+    [InlineData("1 + i", 1, 1)]
+    [InlineData("1 - i", 1, -1)]
+    [InlineData("(2 + 5) + (2+2)i", 7, 4)]
+    public void ShouldHandleComplexNumbers(string expr, double expectedReal, double expectedImaginary)
+    {
+        var expression = new NCalc.Expression(expr, ExpressionOptions.None);
+        expression.AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.UseComplexNumbers);
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.IsType<ComplexNumber>(result);
+        Assert.True(((ComplexNumber)result).Real.Equals(expectedReal));
+        Assert.True(((ComplexNumber)result).Imaginary.Equals(expectedImaginary));
+    }
 }
