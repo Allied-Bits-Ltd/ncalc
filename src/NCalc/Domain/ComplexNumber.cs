@@ -20,7 +20,7 @@ namespace NCalc.Domain
         public BigDecimal Real { get; }
         public BigDecimal Imaginary { get; }
 
-        public bool IsReal => Imaginary.IsZero();
+        public bool IsReal => Imaginary.IsZero() || this.CheckIsReal();
 
         public bool IsZero
         {
@@ -173,6 +173,14 @@ namespace NCalc.Domain
 
         // Equality (with tolerance)
         private const double Tolerance = 1e-10;
+
+        public bool CheckIsReal()
+        {
+            if ((Imaginary.IsPositive() && Imaginary > Tolerance) || (Imaginary < -Tolerance))
+                return false;
+
+            return true;
+        }
 
         public bool Equals(ComplexNumber other)
         {
