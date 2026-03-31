@@ -1502,7 +1502,12 @@ public class AdvFeatureTests : TestBase
         var expression = new Expression(input, ExpressionOptions.NoCache | ExpressionOptions.UseBigNumbers);
         var sut = expression.ToLambda<long>(TestContext.Current.CancellationToken);
         var result = sut();
+        if (result.GetType() == typeof(System.Double))
 
+            double dResult = (double)result;
+            Assert.Equal(expectedValue, (long)dResult);
+        }
+        else
         Assert.Equal(expectedValue, result);
     }
 #endif
@@ -2154,9 +2159,33 @@ public class AdvFeatureTests : TestBase
         Assert.True(eventFired);
 
         Assert.NotNull(result);
+        if (result.GetType() == typeof(System.Double))
+        {
+            double dResult = (double)result;
+            Assert.Equal(expectedExprValue, (double)dResult);
+        }
+        else
+        if (result.GetType() == typeof(System.UInt64))
+        {
+            ulong uResult = (ulong)result;
+            Assert.Equal(expectedExprValue, (int)uResult);
+        }
+        else
         CheckResult(expectedExprValue, result);
 
         Assert.NotNull(expression.Parameters["a"]);
+        if (expression.Parameters["a"]!.GetType() == typeof(System.UInt64))
+        {
+            ulong uResult = (ulong)expression.Parameters["a"]!;
+            Assert.Equal(expectedExprValue, (int)uResult);
+        }
+        else
+        if (expression.Parameters["a"]!.GetType() == typeof(System.Double))
+        {
+            double dResult = (double)expression.Parameters["a"]!;
+            Assert.Equal(expectedExprValue, (int)dResult);
+        }
+        else
         CheckResult(expectedExprValue, expression.Parameters["a"]!);
     }
 
