@@ -2533,6 +2533,8 @@ public static class MathHelper
 
     public static object Acos(object? a, MathHelperOptions options)
     {
+        //BigDecimal.
+
         if (a is ComplexNumber cnA)
             return ComplexNumber.Acos(cnA, options);
 
@@ -2548,6 +2550,87 @@ public static class MathHelper
             }
         }
         return Math.Acos(ConvertToDouble(a, "Acos", options.CultureInfo, null));
+    }
+
+    public static object Arccot(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Arccot(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Arccot(bdA);
+            }
+        }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Acot(cnA, options);
+
+        return Arccot(ConvertToDouble(a, "Arccot", options.CultureInfo, null));
+    }
+
+    public static double Arccot(double x)
+    {
+        return Math.PI / 2 - Math.Atan(x);
+    }
+
+    public static object Arccsc(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Arccsc(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Arccsc(bdA);
+            }
+        }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Acsc(cnA, options);
+
+        return Arccsc(ConvertToDouble(a, "Arccot", options.CultureInfo, null));
+    }
+
+    public static double Arccsc(double x)
+    {
+        if (x == 0.0 || Math.Abs(x) < 1.0)
+            throw new ArgumentOutOfRangeException(nameof(x), "arccsc is defined only for |x| >= 1.");
+
+        return Math.Asin(1.0 / x);
+    }
+
+    public static object Arcsec(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Arcsec(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Arcsec(bdA);
+            }
+        }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Asec(cnA, options);
+
+        return Arcsec(ConvertToDouble(a, "Arccot", options.CultureInfo, null));
+    }
+
+    public static double Arcsec(double x)
+    {
+        if (x == 0.0 || Math.Abs(x) < 1.0)
+            throw new ArgumentOutOfRangeException(nameof(x), "arcsec is defined only for |x| >= 1.");
+
+        return Math.Acos(1.0 / x);
     }
 
     public static object Asin(object? a, MathHelperOptions options)
@@ -2656,6 +2739,128 @@ public static class MathHelper
             return ComplexNumber.Cosh(cnA, options);
 
         return Math.Cos(ConvertToDouble(a, "Cosh", options.CultureInfo, null));
+    }
+
+    public static object Cot(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Cot(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Cot(bdA);
+            }
+        }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Cot(cnA, options);
+
+        return Cot(ConvertToDouble(a, "Cot", options.CultureInfo, null));
+    }
+
+    public static double Cot(double x)
+    {
+        double sin = Math.Sin(x);
+        double cos = Math.Cos(x);
+
+        if (sin == 0.0)
+            throw new ArgumentOutOfRangeException(nameof(x), "cot is undefined when sin(x) = 0.");
+
+        return cos / sin;
+    }
+
+    public static object Coth(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Coth(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Coth(bdA);
+            }
+        }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Coth(cnA, options);
+
+        return Coth(ConvertToDouble(a, "Coth", options.CultureInfo, null));
+    }
+
+    public static double Coth(double x)
+    {
+        double sinh = Math.Sinh(x);
+        double cosh = Math.Cosh(x);
+
+        if (sinh == 0.0)
+            throw new ArgumentOutOfRangeException(nameof(x), "coth is undefined when sinh(x) = 0.");
+
+        return cosh / sinh;
+    }
+
+    public static object Csc(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Csc(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Csc(bdA);
+            }
+        }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Csc(cnA, options);
+
+        return Csc(ConvertToDouble(a, "Csc", options.CultureInfo, null));
+    }
+
+    public static double Csc(double x)
+    {
+        double sin = Math.Sin(x);
+
+        if (sin == 0.0)
+            throw new ArgumentOutOfRangeException(nameof(x), "csc is undefined when sin(x) = 0.");
+
+        return 1.0 / sin;
+    }
+
+    public static object Csch(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Csch(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Csch(bdA);
+            }
+        }
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Csch(cnA, options);
+
+        return Csch(ConvertToDouble(a, "Csch", options.CultureInfo, null));
+    }
+
+    public static double Csch(double x)
+    {
+        double sinh = Math.Sinh(x);
+
+        if (sinh == 0.0)
+            throw new ArgumentOutOfRangeException(nameof(x), "csch is undefined when sinh(x) = 0.");
+
+        return 1.0 / sinh;
     }
 
     public static object Exp(object? a, MathHelperOptions options)
@@ -2956,6 +3161,60 @@ public static class MathHelper
         return Math.Sign(ConvertToDouble(a, "Sign", options.CultureInfo, null));
     }
 
+    public static object Sec(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Sec(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Sec(bdA);
+            }
+        }
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Sec(cnA, options);
+
+        return Sec(ConvertToDouble(a, "Sec", options.CultureInfo, null));
+    }
+
+    public static double Sec(double x)
+    {
+        double cos = Math.Cos(x);
+
+        if (cos == 0.0)
+            throw new ArgumentOutOfRangeException(nameof(x), "sec is undefined when cos(x) = 0.");
+
+        return 1.0 / cos;
+    }
+    public static object Sech(object? a, MathHelperOptions options)
+    {
+        if (options.UseBigNumbers)
+        {
+            if (a is BigInteger biA)
+            {
+                return BigDecimal.Sech(new BigDecimal(biA));
+            }
+            if (a is BigDecimal bdA)
+            {
+                return BigDecimal.Sech(bdA);
+            }
+        }
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Sech(cnA, options);
+
+        return Sech(ConvertToDouble(a, "Sech", options.CultureInfo, null));
+    }
+
+    public static double Sech(double x)
+    {
+        double cosh = Math.Cosh(x);
+
+        return 1.0 / cosh;
+    }
+
     public static object Sin(object? a, MathHelperOptions options)
     {
         if (options.UseBigNumbers)
@@ -3092,24 +3351,24 @@ public static class MathHelper
         return Math.Tan(ConvertToDouble(a, "Tan", options.CultureInfo, null));
     }
 
-    public static object Cot(object? a, MathHelperOptions options)
+    public static object Tanh(object? a, MathHelperOptions options)
     {
         if (options.UseBigNumbers)
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.One / BigDecimal.Tan(new BigDecimal(biA));
+                return BigDecimal.Tanh(new BigDecimal(biA));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.One /  BigDecimal.Tan(bdA);
+                return BigDecimal.Tanh(bdA);
             }
         }
 
         if (a is ComplexNumber cnA)
-            return ComplexNumber.Cot(cnA, options);
+            return ComplexNumber.Tanh(cnA, options);
 
-        return 1 / Math.Tan(ConvertToDouble(a, "Cot", options.CultureInfo, null));
+        return Math.Tanh(ConvertToDouble(a, "Tanh", options.CultureInfo, null));
     }
 
     public static object Truncate(object? a, MathHelperOptions options)
