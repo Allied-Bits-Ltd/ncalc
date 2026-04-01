@@ -25,6 +25,7 @@
       <Compile Include="..\NCalc\Cache\LogicalExpressionCache.cs" Link="Cache\LogicalExpressionCache.cs" />
       <Compile Include="..\NCalc\Domain\BinaryExpression.cs" Link="Domain\BinaryExpression.cs" />
       <Compile Include="..\NCalc\Domain\BinaryExpressionType.cs" Link="Domain\BinaryExpressionType.cs" />
+      <Compile Include="..\NCalc\Domain\ComplexNumber.cs" Link="Domain\ComplexNumber.cs" />
       <Compile Include="..\NCalc\Domain\ExpressionGroup.cs" Link="Domain\ExpressionGroup.cs" />
       <Compile Include="..\NCalc\Domain\FunctionCall.cs" Link="Domain\FunctionCall.cs" />
       <Compile Include="..\NCalc\Domain\FunctionExpression.cs" Link="Domain\FunctionExpression.cs" />
