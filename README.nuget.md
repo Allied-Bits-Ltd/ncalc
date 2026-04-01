@@ -19,6 +19,7 @@ This version of NCalc contains a number of advanced features compared to the ori
 * Percent calculations.
 * Factorials (both regular and any complex factorials on integers are supported).
 * Ternary logic support in logical operations
+* Operations with complex numbers.
 * The 'return' flow control keyword that lets one return a value without completely evaluating the expression (useful in complex expressions with multiple statements, conditions, or loops, as well as with user-defined functions). 
 * Advanced date and time parsing, which takes into account culture settings (current or specific culture or custom separators) and supports times with or without seconds as well as 12-hour time and ISO 8601 dates and times.
 * Parsing of humane date expressions like "3 days ago" or "in 5 weeks" (identifiers are customizable and multiple identifiers are supported).
