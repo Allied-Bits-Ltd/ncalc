@@ -715,7 +715,7 @@ public class MathsTests : TestBase
     public void ShouldParseImaginaryNumber()
     {
         var expression = new NCalc.Expression("i", ExpressionOptions.None);
-        expression.AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.UseComplexNumbers);
+        expression.AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.ParseComplexNumbers);
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.IsType<ComplexNumber>(result);
@@ -733,11 +733,353 @@ public class MathsTests : TestBase
     public void ShouldHandleComplexNumbers(string expr, double expectedReal, double expectedImaginary)
     {
         var expression = new NCalc.Expression(expr, ExpressionOptions.None);
-        expression.AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.UseComplexNumbers);
+        expression.AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.ParseComplexNumbers);
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.IsType<ComplexNumber>(result);
         Assert.True(((ComplexNumber)result).Real.Equals(expectedReal));
         Assert.True(((ComplexNumber)result).Imaginary.Equals(expectedImaginary));
+    }
+
+    [Theory]
+    [InlineData("[1; 2]", 2, 2)]
+    [InlineData("[2]", 1, 2)]
+    [InlineData("[1; 2; 3]", 3, 3)]
+    public void ShouldHandleVectors(string expr, int expectedDims, int expectedLastDimValue)
+    {
+        var expression = new NCalc.Expression(expr, ExpressionOptions.None);
+        expression.AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.ParseVectors);
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.IsType<Domain.Vector>(result);
+        Domain.Vector resultVector = (Domain.Vector)result;
+        Assert.Equal(expectedDims, resultVector.Dimensions);
+        Assert.Equal(expectedLastDimValue, resultVector.Components[resultVector.Dimensions - 1]);
+    }
+
+    // ── Vector arithmetic via expressions ────────────────────────────────────
+
+    private static NCalc.Expression VecExpr(string expr)
+    {
+        var e = new NCalc.Expression(expr, ExpressionOptions.None);
+        e.AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.ParseVectors);
+        return e;
+    }
+
+    private static Domain.Vector EvalVec(string expr) =>
+        (Domain.Vector)VecExpr(expr).Evaluate(TestContext.Current.CancellationToken)!;
+
+    [Fact]
+    public void ShouldAddVectors()
+    {
+        var result = EvalVec("[1; 2; 3] + [4; 5; 6]");
+        Assert.Equal(3, result.Dimensions);
+        Assert.Equal((BigDecimal)5, result[0]);
+        Assert.Equal((BigDecimal)7, result[1]);
+        Assert.Equal((BigDecimal)9, result[2]);
+    }
+
+    [Fact]
+    public void ShouldSubtractVectors()
+    {
+        var result = EvalVec("[4; 5; 6] - [1; 2; 3]");
+        Assert.Equal(3, result.Dimensions);
+        Assert.Equal((BigDecimal)3, result[0]);
+        Assert.Equal((BigDecimal)3, result[1]);
+        Assert.Equal((BigDecimal)3, result[2]);
+    }
+
+    [Fact]
+    public void ShouldMultiplyVectorByScalarRight()
+    {
+        var result = EvalVec("[1; 2; 3] * 2");
+        Assert.Equal((BigDecimal)2, result[0]);
+        Assert.Equal((BigDecimal)4, result[1]);
+        Assert.Equal((BigDecimal)6, result[2]);
+    }
+
+    [Fact]
+    public void ShouldMultiplyVectorByScalarLeft()
+    {
+        var result = EvalVec("3 * [1; 2; 3]");
+        Assert.Equal((BigDecimal)3, result[0]);
+        Assert.Equal((BigDecimal)6, result[1]);
+        Assert.Equal((BigDecimal)9, result[2]);
+    }
+
+    [Fact]
+    public void ShouldDivideVectorByScalar()
+    {
+        var result = EvalVec("[4; 6; 8] / 2");
+        Assert.Equal((BigDecimal)2, result[0]);
+        Assert.Equal((BigDecimal)3, result[1]);
+        Assert.Equal((BigDecimal)4, result[2]);
+    }
+
+    [Fact]
+    public void ShouldEvaluateVectorArithmeticWithParameters()
+    {
+        var e = VecExpr("v * scale");
+        e.Parameters["v"] = new Domain.Vector([1, 2, 3]);
+        e.Parameters["scale"] = 5;
+        var result = (Domain.Vector)e.Evaluate(TestContext.Current.CancellationToken)!;
+        Assert.Equal((BigDecimal)5,  result[0]);
+        Assert.Equal((BigDecimal)10, result[1]);
+        Assert.Equal((BigDecimal)15, result[2]);
+    }
+
+    [Fact]
+    public void ShouldThrowOnVectorDimensionMismatch()
+    {
+        Assert.Throws<NCalcEvaluationException>(() => EvalVec("[1; 2] + [1; 2; 3]"));
+    }
+
+    [Fact]
+    public void ShouldThrowOnVectorPlusScalar()
+    {
+        Assert.Throws<InvalidOperationException>(() => EvalVec("[1; 2] + 5"));
+    }
+
+    [Fact]
+    public void ShouldThrowOnVectorTimesVector()
+    {
+        Assert.Throws<InvalidOperationException>(() => EvalVec("[1; 2] * [3; 4]"));
+    }
+
+    [Fact]
+    public void ShouldThrowOnScalarDividedByVector()
+    {
+        Assert.Throws<InvalidOperationException>(() => EvalVec("10 / [1; 2]"));
+    }
+
+    // ── MathHelper functions for Vector ──────────────────────────────────────
+
+    [Fact]
+    public void ShouldComputeAbsForVector()
+    {
+        var v = new Domain.Vector([-3, 4, -1]);
+        var result = (Domain.Vector)MathHelper.Abs(v, new MathHelperOptions())!;
+        Assert.Equal((BigDecimal)3, result[0]);
+        Assert.Equal((BigDecimal)4, result[1]);
+        Assert.Equal((BigDecimal)1, result[2]);
+    }
+
+    [Fact]
+    public void ShouldComputeFloorForVector()
+    {
+        var v = new Domain.Vector([new BigDecimal(1.7), new BigDecimal(-2.3), new BigDecimal(3.9)]);
+        var result = (Domain.Vector)MathHelper.Floor(v, new MathHelperOptions())!;
+        Assert.Equal((BigDecimal)1, result[0]);
+        Assert.Equal((BigDecimal)(-3), result[1]);
+        Assert.Equal((BigDecimal)3, result[2]);
+    }
+
+    [Fact]
+    public void ShouldComputeCeilingForVector()
+    {
+        var v = new Domain.Vector([new BigDecimal(1.2), new BigDecimal(-2.9), new BigDecimal(3.0)]);
+        var result = (Domain.Vector)MathHelper.Ceiling(v, new MathHelperOptions())!;
+        Assert.Equal((BigDecimal)2, result[0]);
+        Assert.Equal((BigDecimal)(-2), result[1]);
+        Assert.Equal((BigDecimal)3, result[2]);
+    }
+
+    [Fact]
+    public void ShouldComputeRoundForVector()
+    {
+        var v = new Domain.Vector([new BigDecimal(1.5), new BigDecimal(-2.5), new BigDecimal(3.4)]);
+        var result = (Domain.Vector)MathHelper.Round(v, 0, MidpointRounding.AwayFromZero, new MathHelperOptions())!;
+        Assert.Equal((BigDecimal)2, result[0]);
+        Assert.Equal((BigDecimal)(-3), result[1]);
+        Assert.Equal((BigDecimal)3, result[2]);
+    }
+
+    // ── MathHelper functions for ComplexNumber (previously threw) ─────────────
+
+    [Fact]
+    public void ShouldComputeFloorForComplexNumber()
+    {
+        var z = new ComplexNumber(new BigDecimal(2.7), new BigDecimal(1.9));
+        var result = (ComplexNumber)MathHelper.Floor(z, new MathHelperOptions())!;
+        Assert.Equal((BigDecimal)2, result.Real);
+        Assert.Equal((BigDecimal)1, result.Imaginary);
+    }
+
+    [Fact]
+    public void ShouldComputeCeilingForComplexNumber()
+    {
+        var z = new ComplexNumber(new BigDecimal(2.1), new BigDecimal(-1.1));
+        var result = (ComplexNumber)MathHelper.Ceiling(z, new MathHelperOptions())!;
+        Assert.Equal((BigDecimal)3, result.Real);
+        Assert.Equal((BigDecimal)(-1), result.Imaginary);
+    }
+
+    [Fact]
+    public void ShouldComputeRoundForComplexNumber()
+    {
+        var z = new ComplexNumber(new BigDecimal(2.5), new BigDecimal(-1.5));
+        var result = (ComplexNumber)MathHelper.Round(z, 0, MidpointRounding.AwayFromZero, new MathHelperOptions())!;
+        Assert.Equal((BigDecimal)3, result.Real);
+        Assert.Equal((BigDecimal)(-2), result.Imaginary);
+    }
+
+    [Fact]
+    public void ShouldComputeTruncateForComplexNumber()
+    {
+        var z = new ComplexNumber(new BigDecimal(3.9), new BigDecimal(-2.7));
+        var result = (ComplexNumber)MathHelper.Truncate(z, new MathHelperOptions())!;
+        Assert.Equal((BigDecimal)3, result.Real);
+        Assert.Equal((BigDecimal)(-2), result.Imaginary);
+    }
+
+    [Fact]
+    public void ShouldComputeExpForComplexNumber()
+    {
+        // e^(i*π) ≈ -1 + 0i  (Euler's identity)
+        var pi = new BigDecimal(Math.PI);
+        var z = new ComplexNumber(BigDecimal.Zero, pi);
+        var result = (ComplexNumber)MathHelper.Exp(z, new MathHelperOptions())!;
+        var comparer = new ComplexNumberToleranceComparer(1e-6);
+        Assert.True(comparer.Equals(result, new ComplexNumber(new BigDecimal(-1.0), BigDecimal.Zero)));
+    }
+
+    // ── Cosh bug fix (was calling Math.Cos instead of Math.Cosh) ─────────────
+
+    [Fact]
+    public void ShouldComputeCoshCorrectly()
+    {
+        // cosh(0) == 1, cos(0) == 1 — use a value where they differ
+        // cosh(1) ≈ 1.5430806, cos(1) ≈ 0.5403023
+        var result = (double)MathHelper.Cosh(1.0, new MathHelperOptions())!;
+        Assert.Equal(Math.Cosh(1.0), result, precision: 10);
+    }
+
+    // ── ComplexNumber ↔ System.Numerics.Complex interop ──────────────────────
+
+    [Fact]
+    public void ShouldConvertComplexNumberToSystemComplex()
+    {
+        var cn = new ComplexNumber(new BigDecimal(3.0), new BigDecimal(4.0));
+        Complex sys = cn.ToComplex();
+        Assert.Equal(3.0, sys.Real, precision: 10);
+        Assert.Equal(4.0, sys.Imaginary, precision: 10);
+    }
+
+    [Fact]
+    public void ShouldConvertSystemComplexToComplexNumber()
+    {
+        var sys = new Complex(3.0, 4.0);
+        ComplexNumber cn = ComplexNumber.FromComplex(sys);
+        Assert.True(cn.Real.Equals(new BigDecimal(3.0)));
+        Assert.True(cn.Imaginary.Equals(new BigDecimal(4.0)));
+    }
+
+    [Fact]
+    public void ShouldRoundTripComplexNumberViaExplicitCasts()
+    {
+        var original = new ComplexNumber(new BigDecimal(1.5), new BigDecimal(-2.5));
+        var sys = (Complex)original;
+        var restored = (ComplexNumber)sys;
+        var comparer = new ComplexNumberToleranceComparer(1e-10);
+        Assert.True(comparer.Equals(original, restored));
+    }
+
+    // ── Vector ↔ System.Numerics.Vector2/3/4 interop ─────────────────────────
+
+    [Fact]
+    public void ShouldConvertVectorToVector2()
+    {
+        var v = new Domain.Vector([1.0, 2.0]);
+        Vector2 v2 = v.ToVector2();
+        Assert.Equal(1.0f, v2.X, precision: 5);
+        Assert.Equal(2.0f, v2.Y, precision: 5);
+    }
+
+    [Fact]
+    public void ShouldConvertVector2ToVector()
+    {
+        var v2 = new Vector2(3.0f, 4.0f);
+        var v = Domain.Vector.FromVector2(v2);
+        Assert.Equal(2, v.Dimensions);
+        var comparer = new VectorToleranceComparer(1e-5);
+        Assert.True(comparer.Equals(v, new Domain.Vector([3.0, 4.0])));
+    }
+
+    [Fact]
+    public void ShouldConvertVectorToVector3()
+    {
+        var v = new Domain.Vector([1.0, 2.0, 3.0]);
+        Vector3 v3 = v.ToVector3();
+        Assert.Equal(1.0f, v3.X, precision: 5);
+        Assert.Equal(2.0f, v3.Y, precision: 5);
+        Assert.Equal(3.0f, v3.Z, precision: 5);
+    }
+
+    [Fact]
+    public void ShouldConvertVectorToVector4()
+    {
+        var v = new Domain.Vector([1.0, 2.0, 3.0, 4.0]);
+        Vector4 v4 = v.ToVector4();
+        Assert.Equal(1.0f, v4.X, precision: 5);
+        Assert.Equal(4.0f, v4.W, precision: 5);
+    }
+
+    [Fact]
+    public void ShouldRoundTripVectorViaVector3ExplicitCasts()
+    {
+        var original = new Domain.Vector([1.0, 2.0, 3.0]);
+        var v3 = (Vector3)original;
+        var restored = (Domain.Vector)v3;
+        var comparer = new VectorToleranceComparer(1e-5);
+        Assert.True(comparer.Equals(original, restored));
+    }
+
+    // ── VectorToleranceComparer ───────────────────────────────────────────────
+
+    [Fact]
+    public void VectorToleranceComparerShouldTreatNearlyEqualVectorsAsEqual()
+    {
+        var a = new Domain.Vector([1.0, 2.0, 3.0]);
+        var b = new Domain.Vector([1.0 + 1e-11, 2.0 - 1e-11, 3.0]);
+        var comparer = new VectorToleranceComparer(1e-10);
+        Assert.True(comparer.Equals(a, b));
+    }
+
+    [Fact]
+    public void VectorToleranceComparerShouldDistinguishVectorsOutsideTolerance()
+    {
+        var a = new Domain.Vector([1.0, 2.0, 3.0]);
+        var b = new Domain.Vector([1.0, 2.1, 3.0]);
+        var comparer = new VectorToleranceComparer(1e-10);
+        Assert.False(comparer.Equals(a, b));
+    }
+
+    [Fact]
+    public void VectorToleranceComparerShouldRejectDifferentDimensions()
+    {
+        var a = new Domain.Vector([1.0, 2.0]);
+        var b = new Domain.Vector([1.0, 2.0, 3.0]);
+        var comparer = new VectorToleranceComparer();
+        Assert.False(comparer.Equals(a, b));
+    }
+
+    // ── ComplexNumberToleranceComparer ────────────────────────────────────────
+
+    [Fact]
+    public void ComplexToleranceComparerShouldTreatNearlyEqualNumbersAsEqual()
+    {
+        var a = new ComplexNumber(new BigDecimal(1.0), new BigDecimal(2.0));
+        var b = new ComplexNumber(new BigDecimal(1.0 + 1e-11), new BigDecimal(2.0 - 1e-11));
+        var comparer = new ComplexNumberToleranceComparer(1e-10);
+        Assert.True(comparer.Equals(a, b));
+    }
+
+    [Fact]
+    public void ComplexToleranceComparerShouldDistinguishNumbersOutsideTolerance()
+    {
+        var a = new ComplexNumber(new BigDecimal(1.0), new BigDecimal(2.0));
+        var b = new ComplexNumber(new BigDecimal(1.0), new BigDecimal(2.5));
+        var comparer = new ComplexNumberToleranceComparer(1e-10);
+        Assert.False(comparer.Equals(a, b));
     }
 }

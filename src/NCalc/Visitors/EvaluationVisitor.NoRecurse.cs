@@ -6,6 +6,8 @@ using NCalc.Helpers;
 
 using static NCalc.Helpers.TypeHelper;
 
+using NCalcVector = NCalc.Domain.Vector;
+
 namespace NCalc.Visitors;
 
 /// <summary>
@@ -1034,7 +1036,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         return SetTaskValue(task, new Percent(result!));
     }
 
-    public virtual object? Visit(ComplexNumberExpression expression, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
+    public virtual object? Visit(ImaginaryNumberExpression expression, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
     {
         // Request the value of the backing expression
         if (!ExpressionEvaluated(task, 0, expression.Expression))
@@ -1048,6 +1050,30 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             throw new NCalcEvaluationException("A null value cannot be used to initialize a complex number", expression.Expression.Location);
 
         return SetTaskValue(task, new ComplexNumber(0, result, new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options)));
+    }
+
+    public virtual object? Visit(VectorExpression expression, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
+    {
+        // Ensure every component expression has been evaluated (one per call until all are ready)
+        for (int i = 0; i < expression.Expressions.Count; i++)
+        {
+            if (!ExpressionEvaluated(task, i, expression.Expressions[i]))
+                return null;
+        }
+
+        // All components evaluated — build the vector
+        var options = new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options);
+        var components = new List<BigDecimal>(expression.Expressions.Count);
+
+        for (int i = 0; i < expression.Expressions.Count; i++)
+        {
+            object? value = task.ChildStates[i].Value;
+            if (value is null)
+                throw new NCalcEvaluationException($"Vector component at index {i} evaluated to null.", expression.Expressions[i].Location);
+            components.Add(MathHelper.ConvertToBigDecimal(value));
+        }
+
+        return SetTaskValue(task, new NCalcVector(components, options));
     }
 
     public virtual object? Visit(ValueExpression expression, ExpressionTask<object?> task, CancellationToken cancellationToken = default)

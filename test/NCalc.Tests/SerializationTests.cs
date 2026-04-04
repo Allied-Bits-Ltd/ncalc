@@ -138,7 +138,7 @@ public class SerializationTests
     [Fact]
     public void Function_Serialization_Test()
     {
-        Assert.Equal("test(True and False, -(True and False))", new FunctionCall(new Identifier("test"), [
+        Assert.Equal("test(True and False; -(True and False))", new FunctionCall(new Identifier("test"), [
             new BinaryExpression(BinaryExpressionType.And, new ValueExpression(true), new ValueExpression(false)),
             new UnaryExpression(UnaryExpressionType.Negate,
                 new BinaryExpression(BinaryExpressionType.And, new ValueExpression(true), new ValueExpression(false)))

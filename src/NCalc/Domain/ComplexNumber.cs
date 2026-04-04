@@ -1,5 +1,6 @@
 ﻿using System;
 using System.CodeDom;
+using System.Numerics;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -365,8 +366,8 @@ namespace NCalc.Domain
 
         public static ComplexNumber FromPolar(BigDecimal magnitude, BigDecimal phase, MathHelperOptions options)
         {
-            BigDecimal real = magnitude * (BigDecimal)MathHelper.Cos(phase, options);
-            BigDecimal imaginary = magnitude * (BigDecimal)MathHelper.Sin(phase, options);
+            BigDecimal real = magnitude * MathHelper.ConvertToBigDecimal(MathHelper.Cos(phase, options)!);
+            BigDecimal imaginary = magnitude * MathHelper.ConvertToBigDecimal(MathHelper.Sin(phase, options)!);
             return new ComplexNumber(real, imaginary);
         }
 
@@ -376,8 +377,8 @@ namespace NCalc.Domain
                 return Zero;
 
             BigDecimal magnitude = value.Magnitude;
-            BigDecimal realPart = (BigDecimal)MathHelper.Sqrt((magnitude + value.Real) / 2.0, options)!;
-            BigDecimal imaginaryPart = (BigDecimal)MathHelper.Sqrt((magnitude - value.Real) / 2.0, options)!;
+            BigDecimal realPart = MathHelper.ConvertToBigDecimal(MathHelper.Sqrt((magnitude + value.Real) / 2.0, options)!);
+            BigDecimal imaginaryPart = MathHelper.ConvertToBigDecimal(MathHelper.Sqrt((magnitude - value.Real) / 2.0, options)!);
 
             if (value.Imaginary < 0.0)
                 imaginaryPart = -imaginaryPart;
@@ -387,9 +388,9 @@ namespace NCalc.Domain
 
         public static ComplexNumber Exp(ComplexNumber value, MathHelperOptions options)
         {
-            BigDecimal expReal = (BigDecimal)MathHelper.Exp(value.Real, options)!;
-            BigDecimal cosImaginary = (BigDecimal)MathHelper.Cos(value.Imaginary, options)!;
-            BigDecimal sinImaginary = (BigDecimal)MathHelper.Sin(value.Imaginary, options)!;
+            BigDecimal expReal = MathHelper.ConvertToBigDecimal(MathHelper.Exp(value.Real, options)!);
+            BigDecimal cosImaginary = MathHelper.ConvertToBigDecimal(MathHelper.Cos(value.Imaginary, options)!);
+            BigDecimal sinImaginary = MathHelper.ConvertToBigDecimal(MathHelper.Sin(value.Imaginary, options)!);
 
             BigDecimal real = expReal * cosImaginary;
             BigDecimal imaginary = expReal * sinImaginary;
@@ -405,7 +406,7 @@ namespace NCalc.Domain
             BigDecimal magnitude = value.Magnitude;
             BigDecimal phase = value.Phase;
 
-            BigDecimal real = (BigDecimal)MathHelper.Ln(magnitude, options)!;
+            BigDecimal real = MathHelper.ConvertToBigDecimal(MathHelper.Ln(magnitude, options)!);
             BigDecimal imaginary = phase;
 
             return new ComplexNumber(real, imaginary);
@@ -417,7 +418,7 @@ namespace NCalc.Domain
                 throw new ArgumentOutOfRangeException(nameof(baseValue), "Logarithm base must be positive and not equal to 1.");
 
             ComplexNumber naturalLog = Log(value, options);
-            BigDecimal naturalLogOfBase = (BigDecimal)MathHelper.Ln(baseValue, options)!;
+            BigDecimal naturalLogOfBase = MathHelper.ConvertToBigDecimal(MathHelper.Ln(baseValue, options)!);
 
             ComplexNumber result = naturalLog / naturalLogOfBase;
             return result;
@@ -676,6 +677,37 @@ namespace NCalc.Domain
             ComplexNumber result = Asinh(reciprocal, options);
             return result;
         }
+
+        // ── System.Numerics.Complex conversions ──────────────────────────────────
+        //
+        // System.Numerics.Complex stores both components as double, so conversion
+        // from ComplexNumber is a narrowing operation (BigDecimal → double).
+        // Both conversion operators are therefore explicit in both directions.
+
+        /// <summary>
+        /// Converts this complex number to a <see cref="Complex"/>.
+        /// Both the real and imaginary components are narrowed from
+        /// <see cref="BigDecimal"/> to <c>double</c>.
+        /// </summary>
+        public Complex ToComplex() =>
+            new Complex((double)Real, (double)Imaginary);
+
+        /// <summary>
+        /// Creates a <see cref="ComplexNumber"/> from a <see cref="Complex"/>.
+        /// Both components are widened from <c>double</c> to <see cref="BigDecimal"/>.
+        /// </summary>
+        public static ComplexNumber FromComplex(Complex c, MathHelperOptions options = default) =>
+            new ComplexNumber(new BigDecimal(c.Real), new BigDecimal(c.Imaginary), options);
+
+        /// <summary>
+        /// Explicitly converts a <see cref="ComplexNumber"/> to a <see cref="Complex"/>.
+        /// </summary>
+        public static explicit operator Complex(ComplexNumber c) => c.ToComplex();
+
+        /// <summary>
+        /// Explicitly converts a <see cref="Complex"/> to a <see cref="ComplexNumber"/>.
+        /// </summary>
+        public static explicit operator ComplexNumber(Complex c) => FromComplex(c);
     }
 
     public sealed class ComplexNumberToleranceComparer : IEqualityComparer<ComplexNumber>
@@ -727,15 +759,13 @@ namespace NCalc.Domain
         }
     }
 
-    public sealed class ComplexNumberExpression : LogicalExpression
+    public sealed class ImaginaryNumberExpression : LogicalExpression
     {
         public LogicalExpression Expression { get; set; }
 
-        //public bool NegatedImaginary { get; set; }
-
         private readonly MathHelperOptions _mathHelperOptions;
 
-        public ComplexNumberExpression(LogicalExpression expression, MathHelperOptions mathHelperOptions)
+        public ImaginaryNumberExpression(LogicalExpression expression, MathHelperOptions mathHelperOptions)
         {
             Expression = expression;
             _mathHelperOptions = mathHelperOptions;

@@ -50,12 +50,17 @@
         /// <summary>
         /// When enabled, supports parsing of complex numbers
         /// </summary>
-        UseComplexNumbers = 1 << 8,
+        ParseComplexNumbers = 1 << 8,
+
+        /// <summary>
+        /// When enabled, supports parsing of vectors
+        /// </summary>
+        ParseVectors = 1 << 9,
     }
 
     public class AdvancedExpressionOptions : IFormatProvider
     {
-        public enum ArgumentSeparatorKind
+        public enum ListItemSeparatorKind
         {
             CommaOrSemicolon,
             Comma,
@@ -170,7 +175,7 @@
         public DateOrderKind DateOrder { get; set; }
         public HoursFormatKind HoursFormat { get; set; }
 
-        public ArgumentSeparatorKind ArgumentSeparator { get; set; }
+        public ListItemSeparatorKind ListItemSeparator { get; set; }
 
 #if NET8_0_OR_GREATER
         public string ExtraIdentifierChars { get; set; }

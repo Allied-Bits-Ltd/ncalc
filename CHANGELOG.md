@@ -1,3 +1,10 @@
+# 9.0 (Allied Bits)
+
+* Added parsing of and operations with vectors (Vector class).
+* Added parsing of and operations with complex numbers (ComplexNumber class).
+* (IMPORTANT) The `AdvancedExpressionOptions.ArgumentSeparator` property has been renamed to `ListItemSeparator` to reflect the nature of the property. The same for the type.
+* Fixed the separators in the SerializationVisitor - now, the value for a separator is derived from AdvancedExpressionOptions.ListItemSeparator when AdvancedExpressionOptions is set.
+
 # 8.9.1 (Allied Bits)
 
 * Added the ExtraIdentifierChars property to the AdvancedExpressionOptions class. This property lets one specify additional characters accepted in identifiers (useful if your identifiers may contain Unicode characters). The default value of the property contains the Unicode characters for greek letters Pi and Phi, and to use them, it suffices to assign the AdvancedOptions property of an Expression or AsyncExpression instance.

@@ -128,7 +128,7 @@ public class ParserTests
     public void ShouldParseListsWithSpaceAsSeparator(string formula, int arrayExpectedCount)
     {
         AdvancedExpressionOptions advancedOptions = new();
-        advancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.Space;
+        advancedOptions.ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.Space;
         var logicalExpression = LogicalExpressionFactory.Create(formula, advancedOptions: advancedOptions, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.IsType<LogicalExpressionList>(logicalExpression);
@@ -141,7 +141,7 @@ public class ParserTests
     public void ShouldParseListsWithDifferentSeparators(string formula, int arrayExpectedCount)
     {
         AdvancedExpressionOptions advancedOptions = new();
-        advancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.SemicolonOrColonOrSpace;
+        advancedOptions.ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.SemicolonOrColonOrSpace;
         var logicalExpression = LogicalExpressionFactory.Create(formula, advancedOptions: advancedOptions, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.IsType<LogicalExpressionList>(logicalExpression);

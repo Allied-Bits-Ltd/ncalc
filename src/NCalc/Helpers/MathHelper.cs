@@ -7,6 +7,7 @@ using ExtendedNumerics;
 using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Parser;
+using NCalcVector = NCalc.Domain.Vector;
 
 namespace NCalc.Helpers;
 
@@ -933,6 +934,16 @@ public static class MathHelper
                 return (ComplexNumber)a + (ComplexNumber)b;
             }
 
+            if (a is NCalcVector va)
+            {
+                if (b is NCalcVector vb)
+                    return va + vb;
+                throw new InvalidOperationException("Addition of a vector and a scalar is not supported.");
+            }
+
+            if (b is NCalcVector)
+                throw new InvalidOperationException("Addition of a scalar and a vector is not supported.");
+
             if (options.UseBigNumbers)
             {
                 if (a is BigDecimal bdA)
@@ -1042,6 +1053,16 @@ public static class MathHelper
             {
                 return (ComplexNumber)a - (ComplexNumber)b;
             }
+
+            if (a is NCalcVector va)
+            {
+                if (b is NCalcVector vb)
+                    return va - vb;
+                throw new InvalidOperationException("Subtraction of a scalar from a vector is not supported.");
+            }
+
+            if (b is NCalcVector)
+                throw new InvalidOperationException("Subtraction of a vector from a scalar is not supported.");
 
             if (options.UseBigNumbers)
             {
@@ -1182,6 +1203,15 @@ public static class MathHelper
                 return (ComplexNumber)a * (ComplexNumber)b;
             }
 
+            if (a is NCalcVector va)
+            {
+                if (b is NCalcVector)
+                    throw new InvalidOperationException("Element-wise vector multiplication is not supported; use Dot() or Cross() for vector products.");
+                return va * (BigDecimal)b;
+            }
+            if (b is NCalcVector vb)
+                return vb * (BigDecimal)a;
+
             if (options.UseBigNumbers)
             {
                 if (a is BigDecimal bdA)
@@ -1284,6 +1314,18 @@ public static class MathHelper
         if ((typeCode == TypeCode.Object) && (a is ComplexNumber)) // then b is ComplexNumber too ;)
         {
             return (ComplexNumber)a / (ComplexNumber)b;
+        }
+
+        if (typeCode == TypeCode.Object)
+        {
+            if (a is NCalcVector va)
+            {
+                if (b is NCalcVector)
+                    throw new InvalidOperationException("Division of a vector by another vector is not supported.");
+                return va / (BigDecimal)b;
+            }
+            if (b is NCalcVector)
+                throw new InvalidOperationException("Division of a scalar by a vector is not supported.");
         }
 
         // Convert types to floating-point ones because otherwise, we get an integer division
@@ -2137,7 +2179,7 @@ public static class MathHelper
         var typeCodeA = Type.GetTypeCode(typeA);
         var typeCodeB = Type.GetTypeCode(typeB);
 
-        if (typeCodeA == typeCodeB && !forceExpandBits && a is not ComplexNumber && b is not ComplexNumber)
+        if (typeCodeA == typeCodeB && !forceExpandBits && a is not ComplexNumber && b is not ComplexNumber && a is not NCalcVector && b is not NCalcVector)
             return typeCodeA;
 
         if (TypeCodeBitSize(typeCodeA, out var floatingPointA) is not { } bitSizeA)
@@ -2163,6 +2205,25 @@ public static class MathHelper
         if (b is ComplexNumber) //a is not a complex number here
         {
             a = new ComplexNumber(MathHelper.ConvertToBigDecimal(a), BigDecimal.Zero, options);
+            typesWereExpanded = true;
+            return TypeCode.Object;
+        }
+
+        if (a is NCalcVector)
+        {
+            if (b is not NCalcVector)
+            {
+                // Vector op scalar: promote the scalar to BigDecimal so the arithmetic operators can consume it
+                b = ConvertToBigDecimal(b);
+                typesWereExpanded = true;
+            }
+            return TypeCode.Object;
+        }
+
+        if (b is NCalcVector) // a is not a vector here
+        {
+            // scalar op Vector: promote the scalar to BigDecimal so the arithmetic operators can consume it
+            a = ConvertToBigDecimal(a);
             typesWereExpanded = true;
             return TypeCode.Object;
         }
@@ -2342,7 +2403,7 @@ public static class MathHelper
                 }
                 break;
             case TypeCode.Object:
-                return options.UseBigNumbers || a is ComplexNumber || b is ComplexNumber ? TypeCode.Object : TypeCode.Empty;
+                return options.UseBigNumbers || a is ComplexNumber || b is ComplexNumber || a is NCalcVector || b is NCalcVector ? TypeCode.Object : TypeCode.Empty;
             default:
                 return TypeCode.Empty;
         }
@@ -2525,6 +2586,9 @@ public static class MathHelper
         if (a is ComplexNumber cnA)
             return cnA.Abs;
 
+        if (a is NCalcVector vA)
+            return NCalcVector.Abs(vA);
+
         if (options.DecimalAsDefault)
             return Math.Abs(ConvertToDecimal(a, "Abs", options.CultureInfo, null));
 
@@ -2692,8 +2756,11 @@ public static class MathHelper
             }
         }
 
-        if (a is ComplexNumber)
-            throw new InvalidOperationException($"The Ceiling function is not defined for complex numbers");
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Ceiling(cnA);
+
+        if (a is NCalcVector vA)
+            return NCalcVector.Ceiling(vA);
 
         if (options.DecimalAsDefault)
             return Math.Ceiling(ConvertToDecimal(a, "Ceiling", options.CultureInfo, null));
@@ -2738,7 +2805,7 @@ public static class MathHelper
         if (a is ComplexNumber cnA)
             return ComplexNumber.Cosh(cnA, options);
 
-        return Math.Cos(ConvertToDouble(a, "Cosh", options.CultureInfo, null));
+        return Math.Cosh(ConvertToDouble(a, "Cosh", options.CultureInfo, null));
     }
 
     public static object Cot(object? a, MathHelperOptions options)
@@ -2877,8 +2944,8 @@ public static class MathHelper
             }
         }
 
-        if (a is ComplexNumber)
-            throw new InvalidOperationException($"The Exp function is not defined for complex numbers");
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Exp(cnA, options);
 
         return Math.Exp(ConvertToDouble(a, "Exp", options.CultureInfo, null));
     }
@@ -2897,8 +2964,11 @@ public static class MathHelper
             }
         }
 
-        if (a is ComplexNumber)
-            throw new InvalidOperationException($"The Floor function is not defined for complex numbers");
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Floor(cnA);
+
+        if (a is NCalcVector vA)
+            return NCalcVector.Floor(vA);
 
         if (options.DecimalAsDefault)
             return Math.Floor(ConvertToDecimal(a, "Floor", options.CultureInfo, null));
@@ -3153,8 +3223,11 @@ public static class MathHelper
         if (a is BigDecimal bdA)
             return BigDecimal.Round(bdA, ConvertToInt(b, "Round", options.CultureInfo, null), (rounding == MidpointRounding.AwayFromZero) ? RoundingStrategy.AwayFromZero : RoundingStrategy.ToEven);
 
-        if (a is ComplexNumber || b is ComplexNumber)
-            throw new InvalidOperationException($"The round function is not defined for complex numbers");
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Round(cnA);
+
+        if (a is NCalcVector vA)
+            return NCalcVector.Round(vA);
 
         if (options.DecimalAsDefault)
             return Math.Round(ConvertToDecimal(a, "Round", options.CultureInfo, null), ConvertToInt(b, "Round", options.CultureInfo, null), rounding);
@@ -3413,8 +3486,8 @@ public static class MathHelper
             return bdA.WholeValue;
         }
 
-        if (a is ComplexNumber)
-            throw new InvalidOperationException($"The Truncate function is not defined for complex numbers");
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Truncate(cnA);
 
         if (options.DecimalAsDefault)
             return Math.Truncate(ConvertToDecimal(a, "Truncate", options.CultureInfo, null));

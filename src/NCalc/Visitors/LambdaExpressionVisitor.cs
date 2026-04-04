@@ -180,9 +180,14 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             return result;
     }
 
-    public LinqExpression Visit(ComplexNumberExpression expression, CancellationToken cancellationToken = default)
+    public LinqExpression Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException("Complex numbers are not supported in Lambda expressions");
+    }
+
+    public LinqExpression Visit(VectorExpression expression, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException("Vectors are not supported in Lambda expressions");
     }
 
     public LinqExpression Visit(ExpressionGroup group, CancellationToken cancellationToken = default)

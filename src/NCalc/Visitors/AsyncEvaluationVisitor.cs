@@ -7,6 +7,7 @@ using NCalc.Helpers;
 using static NCalc.Helpers.TypeHelper;
 using BinaryExpression = NCalc.Domain.BinaryExpression;
 using UnaryExpression = NCalc.Domain.UnaryExpression;
+using NCalcVector = NCalc.Domain.Vector;
 
 namespace NCalc.Visitors;
 
@@ -992,12 +993,29 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         return new Percent(result);
     }
 
-    public virtual async ValueTask<object?> Visit(ComplexNumberExpression expression, CancellationToken cancellationToken = default)
+    public virtual async ValueTask<object?> Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
         object? result = await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false);
         if (result is null)
             return result;
         return new ComplexNumber(0, result, new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options));
+    }
+
+    public virtual async ValueTask<object?> Visit(VectorExpression expression, CancellationToken cancellationToken = default)
+    {
+        var options = new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options);
+        var components = new List<BigDecimal>(expression.Expressions.Count);
+
+        for (int i = 0; i < expression.Expressions.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            object? component = await expression.Expressions[i].Accept(this, cancellationToken).ConfigureAwait(false);
+            if (component is null)
+                throw new NCalcEvaluationException($"Vector component at index {i} evaluated to null.", expression.Expressions[i].Location);
+            components.Add(MathHelper.ConvertToBigDecimal(component));
+        }
+
+        return new NCalcVector(components, options);
     }
 
     public virtual async ValueTask<object?> Visit(FunctionCall functionCall, CancellationToken cancellationToken = default)

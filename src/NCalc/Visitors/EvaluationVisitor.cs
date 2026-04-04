@@ -7,6 +7,8 @@ using NCalc.Helpers;
 
 using static NCalc.Helpers.TypeHelper;
 
+using NCalcVector = NCalc.Domain.Vector;
+
 namespace NCalc.Visitors;
 
 /// <summary>
@@ -306,7 +308,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return UpdateParameter(expression.LeftExpression, null, cancellationToken);
 
-                    bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal || leftValue is TimeSpan;
+                    bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal || leftValue is TimeSpan || leftValue is NCalcVector || rightValue is NCalcVector;
 
                     if (handlePercent)
                     {
@@ -481,7 +483,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return null;
 
-                    bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal || leftValue is TimeSpan;
+                    bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal || leftValue is TimeSpan || leftValue is NCalcVector || rightValue is NCalcVector;
 
                     if (handlePercent)
                     {
@@ -973,13 +975,30 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         return new Percent(result!);
     }
 
-    public virtual object? Visit(ComplexNumberExpression expression, CancellationToken cancellationToken = default)
+    public virtual object? Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
         // Recursively evaluates the underlying expression
         if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out object? result))
             return null;
 
         return new ComplexNumber(0, result!, new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options));
+    }
+
+    public virtual object? Visit(VectorExpression expression, CancellationToken cancellationToken = default)
+    {
+        var options = new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options);
+        var components = new List<BigDecimal>(expression.Expressions.Count);
+
+        for (int i = 0; i < expression.Expressions.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            object? component = expression.Expressions[i].Accept(this, cancellationToken);
+            if (component is null)
+                throw new NCalcEvaluationException($"Vector component at index {i} evaluated to null.", expression.Expressions[i].Location);
+            components.Add(MathHelper.ConvertToBigDecimal(component));
+        }
+
+        return new NCalcVector(components, options);
     }
 
     public virtual object? Visit(ValueExpression expression, CancellationToken cancellationToken = default) => expression.Value;
