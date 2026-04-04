@@ -126,13 +126,13 @@ public static class LogicalExpressionParser
 
         var comment = OneOf(comments.ToArray());
 
-        bool useComplexNumbers = (extOptions?.Flags.HasFlag(AdvExpressionOptions.UseComplexNumbers) == true);
+        bool useComplexNumbers = (extOptions?.Flags.HasFlag(AdvExpressionOptions.ParseComplexNumbers) == true);
 
         var imaginaryChar = Terms.Char('i');
         Parser<string>? imaginaryCharParser = useComplexNumbers ? Terms.Text("i") : null;
 
         Parser<LogicalExpression>? imaginaryCharExpression = imaginaryCharParser?
-                .Then<LogicalExpression>((ctx, x) => new ComplexNumberExpression(new ValueExpression(1), new Helpers.MathHelperOptions(cultureInfo, options)).SetLocation(new ParlotExpressionLocation(ctx))) ?? null;
+                .Then<LogicalExpression>((ctx, x) => new ImaginaryNumberExpression(new ValueExpression(1), new Helpers.MathHelperOptions(cultureInfo, options)).SetLocation(new ParlotExpressionLocation(ctx))) ?? null;
 
         var hexNumber = Terms.Text("0x")
             .SkipAnd(Terms.Pattern(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') || (acceptUnderscores && c == '_') /*acceptableHexChars.Contains(c)*/))
@@ -468,6 +468,9 @@ public static class LogicalExpressionParser
         bool calculatePercent = (extOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true);
         var percentChar = Terms.Char('%'); // CultureInfo defines a percent character, but we are yet to see a character different from '%'
 
+        bool useVectors = (extOptions?.Flags.HasFlag(AdvExpressionOptions.ParseVectors) == true);
+        //var vectorStr = Terms.Text("vec!");
+
         bool useCharsForOps = !options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars);
         bool useUnicodeForOps = options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations);
         bool useAssignments = options.HasFlag(ExpressionOptions.UseAssignments);
@@ -618,20 +621,20 @@ public static class LogicalExpressionParser
 
         var rangedIndex = openBrace.SkipAnd(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).And(ZeroOrOne(rangeText)).And(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).AndSkip(closeBrace);
 
-        AdvancedExpressionOptions.ArgumentSeparatorKind argumentSeparator = extOptions?.ArgumentSeparator ?? AdvancedExpressionOptions.ArgumentSeparatorKind.CommaOrSemicolon;
+        AdvancedExpressionOptions.ListItemSeparatorKind argumentSeparator = extOptions?.ListItemSeparator ?? AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSemicolon;
 
         Parser<char> argumentSeparatorChar = argumentSeparator switch
         {
-            AdvancedExpressionOptions.ArgumentSeparatorKind.CommaOrSemicolon => comma.Or(semicolon),
-            AdvancedExpressionOptions.ArgumentSeparatorKind.Comma => comma,
-            AdvancedExpressionOptions.ArgumentSeparatorKind.Semicolon => semicolon,
-            AdvancedExpressionOptions.ArgumentSeparatorKind.Colon => colon,
-            AdvancedExpressionOptions.ArgumentSeparatorKind.Space => space,
-            AdvancedExpressionOptions.ArgumentSeparatorKind.CommaOrSpace => comma.Or(space),
-            AdvancedExpressionOptions.ArgumentSeparatorKind.CommaOrSemicolonOrSpace => OneOf(comma, semicolon, space),
-            AdvancedExpressionOptions.ArgumentSeparatorKind.SemicolonOrColon => semicolon.Or(colon),
-            AdvancedExpressionOptions.ArgumentSeparatorKind.SemicolonOrSpace => semicolon.Or(space),
-            AdvancedExpressionOptions.ArgumentSeparatorKind.SemicolonOrColonOrSpace => OneOf(colon, semicolon, space),
+            AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSemicolon => comma.Or(semicolon),
+            AdvancedExpressionOptions.ListItemSeparatorKind.Comma => comma,
+            AdvancedExpressionOptions.ListItemSeparatorKind.Semicolon => semicolon,
+            AdvancedExpressionOptions.ListItemSeparatorKind.Colon => colon,
+            AdvancedExpressionOptions.ListItemSeparatorKind.Space => space,
+            AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSpace => comma.Or(space),
+            AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSemicolonOrSpace => OneOf(comma, semicolon, space),
+            AdvancedExpressionOptions.ListItemSeparatorKind.SemicolonOrColon => semicolon.Or(colon),
+            AdvancedExpressionOptions.ListItemSeparatorKind.SemicolonOrSpace => semicolon.Or(space),
+            AdvancedExpressionOptions.ListItemSeparatorKind.SemicolonOrColonOrSpace => OneOf(colon, semicolon, space),
             _ => comma.Or(semicolon),
         };
 
@@ -645,6 +648,18 @@ public static class LogicalExpressionParser
 
         var list = OneOf(emptyList, populatedList);
 
+        var vectorData =
+            Between(openBrace, Separated(argumentSeparatorChar/*(decimalSeparator == ',' || decimalSeparator2 == ',' || numGroupSeparator == ',' ? semicolon : comma.Or(semicolon))*/, expressionOrBracedStatementSequence),
+                    closeBrace.ElseError("Brace not closed."))
+                .Then<LogicalExpression>(static (ctx, values) => new LogicalExpressionList(values).SetLocation(new ParlotExpressionLocation(ctx)));
+
+        var vector = vectorData
+            .Then<LogicalExpression>((ctx, x) =>
+            {
+                ExpressionLocation loc = new ParlotExpressionLocation(ctx);
+                return new VectorExpression((LogicalExpressionList)x, new Helpers.MathHelperOptions(cultureInfo, options)).SetLocation(loc);
+            });
+
         var function = identifier
             .And(list)
             .Then<LogicalExpression>(static (ctx, x) =>
@@ -652,6 +667,7 @@ public static class LogicalExpressionParser
                 ExpressionLocation loc = new ParlotExpressionLocation(ctx);
                 return new FunctionCall((Identifier)new Identifier(x.Item1.ToString()!).SetLocation(loc), (LogicalExpressionList)x.Item2).SetLocation(loc);
             });
+
         var percentFunction = percentChar
             .And(list)
             .Then<LogicalExpression>(static (ctx, x) =>
@@ -1755,6 +1771,8 @@ public static class LogicalExpressionParser
         if (dateTime is not null) // dateTime will be initialized unless options.HasFlag(ExpressionOptions.DontParseDates)
             enabledParsers.Add(dateTime);
         enabledParsers.Add(stringValue);
+        if (useVectors)
+            enabledParsers.Add(vector);
         enabledParsers.Add(functionOrResultRef);
         enabledParsers.Add(groupExpression);
         enabledParsers.Add(bracketedIdentifierExpression);
@@ -1869,7 +1887,7 @@ public static class LogicalExpressionParser
                         // there is just a primary discovered
                         return x.Item1;
                     }
-                    return new ComplexNumberExpression(x.Item1, new Helpers.MathHelperOptions(cultureInfo, options)).SetLocation(new ParlotExpressionLocation(ctx));
+                    return new ImaginaryNumberExpression(x.Item1, new Helpers.MathHelperOptions(cultureInfo, options)).SetLocation(new ParlotExpressionLocation(ctx));
                 }) : null;
 
             if (calculatePercent && useComplexNumbers)

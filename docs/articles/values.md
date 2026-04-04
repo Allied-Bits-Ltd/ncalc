@@ -6,13 +6,14 @@ A value is a terminal token representing a concrete element. This can be:
 - A <xref:System.Numerics.BigInteger> or <xref:ExtendedNumerics.BigDecimal>
 - Any floating point number, like <xref:System.Double>
 - A <xref:NCalc.Domain.Percent>
-- A <xref:NCalc.Domain.ComplexNumber>
+- A <xref:NCalc.Domain.ComplexNumber> (can be converted to and from System.Numeric.Complex)
+- A <xref:NCalc.Domain.Vector>  (can be converted to and from System.Numeric.Vector<T> and System.Numeric.Vector[1..4])
 - A <xref:System.DateTime> or <xref:System.TimeSpan>
 - A <xref:System.Boolean>
 - A <xref:System.String>
 - A <xref:System.Char>
 - A <xref:NCalc.Domain.FunctionCall>
-- An <xref:NCalc.Domain.Identifier> (parameter)
+- An <xref:NCalc.Domain.Identifier> (parameter/variable)
 - A <xref:NCalc.Domain.LogicalExpressionList>  (List of other expressions)
 
 ## Integers
@@ -73,6 +74,10 @@ When percent calculation is enabled in [Advanced Options](advanced_value_formats
 ## Complex numbers
 
 When complex numbers are enabled in [Advanced Options](advanced_value_formats.md), the parser recognizes a standalone "i" as a square root of -1 and any Xi, where X is a number (e.g., "3.5i" or "(2+3)i") as an imaginary number. The notation "3+5i" or "(2+4) + (4-1)i" or "t-5i" (here, t is a parameter/variable) produces a complex number, which can be returned as a result of an expression evaluation or can be manipulated similar to other numbers. 
+
+## Vectors
+
+When vectors are enabled in [Advanced Options](advanced_value_formats.md), the parser recognizes a list of numbers in square brackets (e.g., "[1; 2; 5]" or "[3 4 7 9]" depending on how the list separator is set up) as a vector, which can be returned as a result of an expression evaluation or can be manipulated similar to other numbers. 
 
 ## DateTime
 
@@ -185,4 +190,4 @@ The elements of the list may be separated with a comma (",") or a semicolon (";"
 ('Chars'; secretOperation(); 3.14)
 ```
 
-When [Advanced Options](advanced_value_formats.md) are used, the separator(s) that the parser should use to separate the values in the list is defined via the <xref:NCalc.AdvancedExpressionOptions.ArgumentSeparator> property, which suports comma, semicolon, colon, and space, as well as their combinations, as separators.
+When [Advanced Options](advanced_value_formats.md) are used, the separator(s) that the parser should use to separate the values in the list is defined via the <xref:NCalc.AdvancedExpressionOptions.ListItemSeparator> property, which suports comma, semicolon, colon, and space, as well as their combinations, as separators.

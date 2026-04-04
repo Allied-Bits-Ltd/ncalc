@@ -13,7 +13,8 @@ namespace NCalc.Visitors
         T Visit(BinaryExpression expression, ExpressionTask<T> task, CancellationToken cancellationToken = default);
         T Visit(UnaryExpression expression, ExpressionTask<T> task, CancellationToken cancellationToken = default);
         T Visit(PercentExpression expression, ExpressionTask<T> task, CancellationToken cancellationToken = default);
-        T Visit(ComplexNumberExpression expression, ExpressionTask<T> task, CancellationToken cancellationToken = default);
+        T Visit(ImaginaryNumberExpression expression, ExpressionTask<T> task, CancellationToken cancellationToken = default);
+        T Visit(VectorExpression expression, ExpressionTask<T> task, CancellationToken cancellationToken = default);
         T Visit(ValueExpression expression, ExpressionTask<T> task, CancellationToken cancellationToken = default);
         T Visit(FunctionExpression expression, ExpressionTask<T> task, CancellationToken cancellationToken = default);
         T Visit(FunctionCall function, ExpressionTask<T> task, CancellationToken cancellationToken = default);

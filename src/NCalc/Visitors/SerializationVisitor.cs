@@ -201,12 +201,31 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         return EncapsulateNoValue(expression.Expression, false, parensNeeded) + "%";
     }
 
-    public string Visit(ComplexNumberExpression expression, CancellationToken cancellationToken = default)
+    public string Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         bool parensNeeded = !(expression.Expression is Identifier || expression.Expression is ValueExpression);
         return EncapsulateNoValue(expression.Expression, false, parensNeeded) + "i";
+    }
+
+    public string Visit(VectorExpression expression, CancellationToken cancellationToken = default)
+    {
+        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
+
+        string sep = GetListItemSeparator(context.AdvancedOptions);
+
+        var resultBuilder = new StringBuilder("[");
+        for (int i = 0; i < expression.Expressions.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (i > 0)
+                resultBuilder.Append(sep);
+
+            resultBuilder.Append(expression.Expressions[i].Accept(this, cancellationToken).TrimEnd());
+        }
+        resultBuilder.Append(']');
+        return resultBuilder.ToString();
     }
 
     public string Visit(ValueExpression expression, CancellationToken cancellationToken = default)
@@ -245,6 +264,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             return "@";
         }
 
+        string sep = GetListItemSeparator(context.AdvancedOptions);
         var resultBuilder = new StringBuilder(function.Identifier.Name +'(');
 
         for (int i = 0; i < function.Parameters.Count; i++)
@@ -253,7 +273,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             if (i < function.Parameters.Count - 1)
             {
                 resultBuilder.Remove(resultBuilder.Length - 1, 1);
-                resultBuilder.Append(", ");
+                resultBuilder.Append(sep);
             }
         }
 
@@ -276,6 +296,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     {
         list.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
+        string sep = GetListItemSeparator(context.AdvancedOptions);
         var resultBuilder = new StringBuilder("(");
         for (var i = 0; i < list.Count; i++)
         {
@@ -283,7 +304,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             resultBuilder.Append(list[i].Accept(this, cancellationToken).TrimEnd());
             if (i < list.Count - 1)
             {
-                resultBuilder.Append("; ");
+                resultBuilder.Append(sep);
             }
         }
         resultBuilder.Append(')');
@@ -327,11 +348,12 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             }
         }
         resultBuilder.Append("fn (");
+        string fnSep = GetListItemSeparator(context.AdvancedOptions);
         bool paramAdded = false;
         foreach (var param in function.Parameters)
         {
             if (paramAdded)
-                resultBuilder.Append(", ");
+                resultBuilder.Append(fnSep);
             else
                 paramAdded = true;
 
@@ -413,5 +435,28 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         }
 
         return resultBuilder.ToString();
+    }
+
+    private string GetListItemSeparator(AdvancedExpressionOptions? options)
+    {
+        if (context.AdvancedOptions is not null)
+        {
+            return context.AdvancedOptions.ListItemSeparator switch
+            {
+                AdvancedExpressionOptions.ListItemSeparatorKind.Comma => ", ",
+                AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSemicolon => ", ",
+                AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSpace => ", ",
+                AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSemicolonOrSpace => ", ",
+                AdvancedExpressionOptions.ListItemSeparatorKind.Semicolon => "; ",
+                AdvancedExpressionOptions.ListItemSeparatorKind.SemicolonOrColon => "; ",
+                AdvancedExpressionOptions.ListItemSeparatorKind.SemicolonOrSpace => "; ",
+                AdvancedExpressionOptions.ListItemSeparatorKind.SemicolonOrColonOrSpace => "; ",
+                AdvancedExpressionOptions.ListItemSeparatorKind.Colon => ": ",
+                AdvancedExpressionOptions.ListItemSeparatorKind.Space => " ",
+                _ => "; ",
+            };
+        }
+        else
+            return "; ";
     }
 }

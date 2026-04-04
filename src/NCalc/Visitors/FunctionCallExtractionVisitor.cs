@@ -71,7 +71,9 @@ public sealed class FunctionCallExtractionVisitor : ILogicalExpressionVisitor<Li
 
     public List<string> Visit(PercentExpression expression, CancellationToken cancellationToken = default) => expression.Expression.Accept(this, cancellationToken);
 
-    public List<string> Visit(ComplexNumberExpression expression, CancellationToken cancellationToken = default) => expression.Expression.Accept(this, cancellationToken);
+    public List<string> Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default) => expression.Expression.Accept(this, cancellationToken);
+
+    public List<string> Visit(VectorExpression expression, CancellationToken cancellationToken = default) => expression.Expressions.Accept(this, cancellationToken);
 
     public List<string> Visit(ValueExpression expression, CancellationToken cancellationToken = default) => [];
 

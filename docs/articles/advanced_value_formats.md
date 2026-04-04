@@ -12,6 +12,7 @@ Some of the behavior and support for advanced parsing features is controlled by 
 * Result Reference character
 * Percent calculations
 * Complex number calculations
+* Vector calculations
 
 Advanced options are configured by assigning an instance of the <xref:NCalc.AdvancedExpressionOptions> class to the 
 `AdvancedOptions` property of <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> that you create and adjusting its properties:
@@ -259,13 +260,154 @@ Operations that produce percent as a result return an instance of the <xref:NCal
 
 ## Complex Number Calculations
 
-This version of NCalc supports operations with complex numbers. Parsing of complex numbers can be enabled by including the <xref:NCalc.AdvExpressionOptions.UseComplexNumbers> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class. NCalc supports basic arithmetic operations with complex numbers as well as trigonometric functions that accept complex numbers (see MathHelper.cs for details). These operations are performed regardless of the option (i.e., the option affects only parsing and not calculations). 
+This version of NCalc supports operations with complex numbers. Parsing of complex numbers can be enabled by including the <xref:NCalc.AdvExpressionOptions.ParseComplexNumbers> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class. Arithmetic operations on complex numbers and the mathematical functions listed below are performed regardless of this option (i.e., the option affects only parsing of complex number literals, not calculations).
+
+```c#
+var expression = new NCalc.Expression("3 + 2i");
+expression.AdvancedOptions = new NCalc.AdvancedExpressionOptions();
+expression.AdvancedOptions.Flags |= NCalc.AdvExpressionOptions.ParseComplexNumbers;
+```
+
+### Complex Number Literal Syntax
 
 The notations recognized by the parser are:
-* `i`  : if recognized as a standalone character, denotes a square root from -1. Such an expression produces an instance of the <xref:NCalc.Domain.ComplexNumber> class with the zero real part and 1 (one) in an imaginary part. 
-* `Ni` (N is a number OR an expression that evaluates to a number) : denotes an imaginary number. Such an expression produces an instance of the <xref:NCalc.Domain.ComplexNumber> class with the zero real part and N in an imaginary part. 
-* `a + bi` or `a - bi` (a and b are numbers or expressions that evaluate to numbers) : produces an instance of the <xref:NCalc.Domain.ComplexNumber> class with the real part equal to the value of a (or the result of its evaluation and the value of b in an imaginary part. 
 
-The <xref:NCalc.Domain.ComplexNumber> class uses <xref:ExtendedNumerics.BigDecimal> for real and imaginary parts regardless of whether the use of big numbers is enabled. 
+* `i` : if recognized as a standalone value, denotes the imaginary unit (square root of −1). Produces an instance of <xref:NCalc.Domain.ComplexNumber> with real part 0 and imaginary part 1.
+* `Ni` (where N is a numeric literal or an expression that evaluates to a number) : denotes a purely imaginary number. Produces a <xref:NCalc.Domain.ComplexNumber> with real part 0 and imaginary part N.
+* `a + bi` or `a - bi` (where a and b are numbers or sub-expressions) : denotes a full complex number with real part a and imaginary part b (or −b).
 
-The supported operations on complex numbers include addition, subtraction, multiplication, division of two complex numbers as well of a complex number and a real number.
+Examples:
+```
+i           // 0 + 1i
+3i          // 0 + 3i
+2 + 3i      // 2 + 3i
+(1 + x) - 2i  // real part is an expression
+```
+
+The <xref:NCalc.Domain.ComplexNumber> struct uses <xref:ExtendedNumerics.BigDecimal> for both real and imaginary parts regardless of whether the use of big numbers is enabled.
+
+### Properties
+
+The <xref:NCalc.Domain.ComplexNumber> struct exposes the following read-only properties:
+
+* `Real` : the real part as a `BigDecimal`
+* `Imaginary` : the imaginary part as a `BigDecimal`
+* `Magnitude` / `Abs` : modulus |z| = √(real² + imaginary²)
+* `MagnitudeSquared` : real² + imaginary² (no square root, cheaper)
+* `Phase` : argument φ = atan2(imaginary, real), in radians
+* `IsReal` : true if the imaginary part is zero (within tolerance)
+* `IsImaginary` : true if the real part is zero and the imaginary part is non-zero
+* `IsZero` : true if both parts are zero (within tolerance)
+
+### Supported Arithmetic Operations
+
+The following operators are supported between two complex numbers, or between a complex number and a real number (scalar):
+
+* `a + b` : addition
+* `a - b` : subtraction
+* `-a` : negation
+* `a * b` : multiplication
+* `a / b` : division
+
+All of these work with any combination of two <xref:NCalc.Domain.ComplexNumber> values, or a <xref:NCalc.Domain.ComplexNumber> and a `double` or `BigDecimal` scalar.
+
+### Mathematical Functions
+
+The following static methods are available on <xref:NCalc.Domain.ComplexNumber> for use in custom function handlers or host code:
+
+**General:**
+* `Conjugate()` : complex conjugate (a + bi → a − bi)
+* `Normalize()` : unit complex number in the same direction (z / |z|)
+* `Reciprocal()` : 1 / z
+* `Sqrt(z)` : principal square root
+* `Pow(z, w)` : complex exponentiation zʷ; w may be a `ComplexNumber` or a `BigDecimal`
+* `Exp(z)` : e raised to the complex power z
+* `Log(z)` : natural logarithm (principal value)
+* `Log(z, base)` : logarithm with a real base
+* `FromPolar(magnitude, phase)` : construct from polar form
+* `MaxByMagnitude(x, y)` / `MinByMagnitude(x, y)` : the value with the larger/smaller modulus
+* `Floor(z)`, `Ceiling(z)`, `Round(z)`, `Truncate(z)` : element-wise rounding of real and imaginary parts
+
+**Trigonometric:**
+* `Sin(z)`, `Cos(z)`, `Tan(z)`
+* `Cot(z)`, `Sec(z)`, `Csc(z)`
+
+**Inverse trigonometric:**
+* `Asin(z)`, `Acos(z)`, `Atan(z)`
+* `Acot(z)`, `Asec(z)`, `Acsc(z)`
+
+**Hyperbolic:**
+* `Sinh(z)`, `Cosh(z)`, `Tanh(z)`
+* `Coth(z)`, `Sech(z)`, `Csch(z)`
+
+**Inverse hyperbolic:**
+* `Asinh(z)`, `Acosh(z)`, `Atanh(z)`
+* `Acoth(z)`, `Asech(z)`, `Acsch(z)`
+
+### Interoperability with System.Numerics.Complex
+
+<xref:NCalc.Domain.ComplexNumber> can be converted to and from <xref:System.Numerics.Complex>. Because `System.Numerics.Complex` stores both components as `double`, conversion from `ComplexNumber` is a narrowing operation (`BigDecimal` → `double`). Both conversion operators are therefore explicit:
+
+```c#
+ComplexNumber z = new ComplexNumber(3, 2);  // 3 + 2i
+Complex sys = (Complex)z;                   // explicit narrowing cast
+ComplexNumber back = (ComplexNumber)sys;    // explicit widening cast
+
+// Or via instance / static methods:
+Complex sys2 = z.ToComplex();
+ComplexNumber z2 = ComplexNumber.FromComplex(sys2);
+```
+## Vector calculations
+
+This version of NCalc supports operations with vectors of any number of dimensions. Parsing of vector literals can be enabled by including the <xref:NCalc.AdvExpressionOptions.ParseVectors> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class. Arithmetic operations on vectors are performed regardless of this option (i.e., the option affects only parsing of vector literals, not calculations).
+
+```c#
+var expression = new NCalc.Expression("[1; 2; 3]");
+expression.AdvancedOptions = new NCalc.AdvancedExpressionOptions();
+expression.AdvancedOptions.Flags |= NCalc.AdvExpressionOptions.ParseVectors;
+```
+
+### Vector Literal Syntax
+
+A vector literal is written as a bracket-enclosed list of component expressions:
+
+```
+[v1; v2; v3; ...]
+```
+
+The character used to separate dimension values is determined by the <xref:NCalc.AdvancedExpressionOptions.ListItemSeparator> property. When <xref:NCalc.AdvancedExpressionOptions> are not set for an expression, both comma (`,`) and semicolon (`;`) are accepted as separators. When `AdvancedExpressionOptions` are set, the separator is determined exclusively by the `ListItemSeparator` property (default: `CommaOrSemicolon`, i.e., both are accepted). For example, if `ListItemSeparator` is set to `Semicolon`, only the semicolon is accepted.
+
+Each component expression can be any expression that evaluates to a numeric value. The number of components determines the number of dimensions of the resulting vector. A vector must have at least one dimension.
+
+Examples:
+```
+[1; 2]          // 2-dimensional vector
+[1; 2; 3]       // 3-dimensional vector
+[x; y + 1; z]   // components can be arbitrary expressions
+```
+
+The result of evaluating a vector literal is an instance of the <xref:NCalc.Domain.Vector> struct. The <xref:NCalc.Domain.Vector> struct uses <xref:ExtendedNumerics.BigDecimal> for its components regardless of whether the use of big numbers is enabled.
+
+### Supported Operations
+
+The following arithmetic operations are supported between two vectors, or between a vector and a scalar:
+
+* `a + b` : element-wise addition of two vectors of equal dimension
+* `a - b` : element-wise subtraction of two vectors of equal dimension
+* `-a` : negation (element-wise)
+* `a * s` or `s * a` : multiplication of a vector by a scalar
+* `a / s` : division of a vector by a scalar
+
+In addition, the <xref:NCalc.Domain.Vector> struct provides the following methods for use in custom function handlers or host code:
+
+* `Dot(a, b)` : dot (inner) product of two vectors
+* `Cross(a, b)` : cross product (3-dimensional vectors only)
+* `Normalize()` : returns a unit vector in the same direction
+* `AngleBetween(a, b)` : angle in radians between two vectors
+* `Project(a, b)` : vector projection of `a` onto `b`
+* `Reject(a, b)` : component of `a` perpendicular to `b`
+* `Distance(a, b)` : Euclidean distance between two vectors (treated as points)
+* `DistanceSquared(a, b)` : squared Euclidean distance (no square root, cheaper)
+* `Lerp(a, b, t)` : linear interpolation between `a` and `b`
+* `Min(a, b)`, `Max(a, b)` : element-wise minimum and maximum
+* `Abs(v)`, `Floor(v)`, `Ceiling(v)`, `Round(v)` : element-wise rounding operations

@@ -1503,12 +1503,12 @@ public class AdvFeatureTests : TestBase
         var sut = expression.ToLambda<long>(TestContext.Current.CancellationToken);
         var result = sut();
         if (result.GetType() == typeof(System.Double))
-
+        {
             double dResult = (double)result;
             Assert.Equal(expectedValue, (long)dResult);
         }
         else
-        Assert.Equal(expectedValue, result);
+            Assert.Equal(expectedValue, result);
     }
 #endif
 
@@ -1895,7 +1895,6 @@ public class AdvFeatureTests : TestBase
         Assert.Equal("Returns the date when the build with the given number was made", expression.UserFunctions["DateOfBuild"].Description);
         Assert.Equal("Returns the build number", expression.UserFunctions["BuildNum"].Description);
     }
-
 
     [Fact]
     public void ShouldHandleEmbeddedFunction()
@@ -2301,7 +2300,7 @@ public class AdvFeatureTests : TestBase
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
-        expression.AdvancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.Comma;
+        expression.AdvancedOptions.ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.Comma;
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
@@ -2313,7 +2312,7 @@ public class AdvFeatureTests : TestBase
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
-        expression.AdvancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.Colon;
+        expression.AdvancedOptions.ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.Colon;
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
@@ -2325,7 +2324,7 @@ public class AdvFeatureTests : TestBase
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
-        expression.AdvancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.Space;
+        expression.AdvancedOptions.ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.Space;
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
@@ -2337,7 +2336,7 @@ public class AdvFeatureTests : TestBase
     {
         var expression = new Expression(input, ExpressionOptions.NoCache);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
-        expression.AdvancedOptions.ArgumentSeparator = AdvancedExpressionOptions.ArgumentSeparatorKind.CommaOrSemicolon;
+        expression.AdvancedOptions.ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSemicolon;
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(expectedValue, result);
@@ -2864,7 +2863,6 @@ public class AsyncAdvFeatureTests
         else
             Assert.Equal(expectedValue, result);
     }
-
 
     [Theory]
     [InlineData("return 1; 2", 1)]
