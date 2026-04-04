@@ -13,14 +13,19 @@ using NCalc.Visitors;
 
 namespace NCalc.Domain
 {
-    public readonly struct ComplexNumber :
+    public struct ComplexNumber :
         IEquatable<ComplexNumber>,
         IFormattable
     {
+        public static double Tolerance { get; set; } = 1e-10;
+
         public BigDecimal Real { get; }
+
         public BigDecimal Imaginary { get; }
 
         public bool IsReal => Imaginary.IsZero() || this.CheckIsReal();
+
+        public bool IsImaginary => Real.IsZero() && !Imaginary.IsZero();
 
         public bool IsZero
         {
@@ -33,6 +38,27 @@ namespace NCalc.Domain
         }
 
         private readonly MathHelperOptions _mathHelperOptions;
+
+        private BigDecimal? _magnitude;
+
+        public ComplexNumber(BigDecimal real)
+        {
+            Real = real;
+            Imaginary = 0;
+            _mathHelperOptions = MathHelperOptions.Empty;
+        }
+
+        public static implicit operator ComplexNumber(double value)
+        {
+            return new ComplexNumber(value, 0.0);
+        }
+
+        public ComplexNumber(BigDecimal real, MathHelperOptions options)
+        {
+            Real = real;
+            Imaginary = 0;
+            _mathHelperOptions = options;
+        }
 
         public ComplexNumber(BigDecimal real, BigDecimal imaginary)
         {
@@ -60,21 +86,17 @@ namespace NCalc.Domain
         public static readonly ComplexNumber One = new(BigDecimal.One, BigDecimal.Zero);
         public static readonly ComplexNumber ImaginaryOne = new(BigDecimal.Zero, BigDecimal.One);
 
+        public BigDecimal Abs => Magnitude;
+
         // Magnitude (modulus)
         public BigDecimal Magnitude
         {
             get
             {
-                object result = (BigDecimal)MathHelper.Sqrt(Real * Real + Imaginary * Imaginary, _mathHelperOptions)!;
-                switch (result)
-                {
-                    case BigDecimal bd:
-                        return bd;
-                    case double d:
-                        return new BigDecimal(d);
-                    default:
-                        return Double.NaN;
-                }
+                if (_magnitude is null)
+                    _magnitude = MathHelper.Hypot(Real, Imaginary, _mathHelperOptions);
+
+                return _magnitude.Value;
             }
         }
 
@@ -108,6 +130,16 @@ namespace NCalc.Domain
 
         // Conjugate
         public ComplexNumber Conjugate() => new(Real, -Imaginary);
+
+        public ComplexNumber Normalize()
+        {
+            BigDecimal magnitude = Magnitude;
+
+            if (magnitude.IsZero())
+                return Zero;
+
+            return this / magnitude;
+        }
 
         // Arithmetic operators
         public static ComplexNumber operator +(ComplexNumber a, ComplexNumber b) =>
@@ -167,15 +199,77 @@ namespace NCalc.Domain
             return new ComplexNumber(scalar, 0.0) / value;
         }
 
+        public static ComplexNumber operator +(ComplexNumber z, double r)
+        {
+            return new ComplexNumber(z.Real + r, z.Imaginary);
+        }
+
+        public static ComplexNumber operator +(double r, ComplexNumber z)
+        {
+            return new ComplexNumber(r + z.Real, z.Imaginary);
+        }
+
+        public static ComplexNumber operator -(ComplexNumber z, double r)
+        {
+            return new ComplexNumber(z.Real - r, z.Imaginary);
+        }
+
+        public static ComplexNumber operator -(double r, ComplexNumber z)
+        {
+            return new ComplexNumber(r - z.Real, -z.Imaginary);
+        }
+
+        public static ComplexNumber operator *(ComplexNumber z, double r)
+        {
+            return new ComplexNumber(z.Real * r, z.Imaginary * r);
+        }
+
+        public static ComplexNumber operator *(double r, ComplexNumber z)
+        {
+            return new ComplexNumber(r * z.Real, r * z.Imaginary);
+        }
+
+        public static ComplexNumber operator +(ComplexNumber z, BigDecimal r)
+        {
+            return new ComplexNumber(z.Real + r, z.Imaginary);
+        }
+
+        public static ComplexNumber operator +(BigDecimal r, ComplexNumber z)
+        {
+            return new ComplexNumber(r + z.Real, z.Imaginary);
+        }
+
+        public static ComplexNumber operator -(ComplexNumber z, BigDecimal r)
+        {
+            return new ComplexNumber(z.Real - r, z.Imaginary);
+        }
+
+        public static ComplexNumber operator -(BigDecimal r, ComplexNumber z)
+        {
+            return new ComplexNumber(r - z.Real, -z.Imaginary);
+        }
+
+        public static ComplexNumber operator *(ComplexNumber z, BigDecimal r)
+        {
+            return new ComplexNumber(z.Real * r, z.Imaginary * r);
+        }
+
+        public static ComplexNumber operator *(BigDecimal r, ComplexNumber z)
+        {
+            return new ComplexNumber(r * z.Real, r * z.Imaginary);
+        }
+
         // Unary operators
         public static ComplexNumber operator -(ComplexNumber a) =>
             new(-a.Real, -a.Imaginary);
 
         // Equality (with tolerance)
-        private const double Tolerance = 1e-10;
 
         public bool CheckIsReal()
         {
+            if (Imaginary.IsZero())
+                return true;
+
             if ((Imaginary.IsPositive() && Imaginary > Tolerance) || (Imaginary < -Tolerance))
                 return false;
 
@@ -184,26 +278,12 @@ namespace NCalc.Domain
 
         public bool Equals(ComplexNumber other)
         {
-            BigDecimal diff = Real - other.Real;
-            if ((diff.IsPositive() && diff > Tolerance) || (diff < -Tolerance))
-                return false;
-
-            diff = Imaginary - other.Imaginary;
-            if ((diff.IsPositive() && diff > Tolerance) || (diff < -Tolerance))
-                return false;
-
-            return true;
+            return Real.Equals(other.Real) && Imaginary.Equals(other.Imaginary);
         }
 
         public override bool Equals(object? obj)
         {
-            if (obj is ComplexNumber other)
-                return Equals(other);
-
-            if (IsReal && MathHelper.IsBoxedNumberOrBigNumber(obj))
-                return Real.Equals(MathHelper.ConvertToBigDecimal(obj!));
-
-            return false;
+            return obj is ComplexNumber other && Equals(other);
         }
 
         public override int GetHashCode() => (Real, Imaginary).GetHashCode();
@@ -236,6 +316,51 @@ namespace NCalc.Domain
             string sign = Imaginary >= 0 ? "+" : "-";
 
             return $"{realStr} {sign} {imagStr}i";
+        }
+
+        // Various functions
+
+        public ComplexNumber Reciprocal()
+        {
+            return One / this;
+        }
+
+        public static ComplexNumber MaxByMagnitude(ComplexNumber x, ComplexNumber y)
+        {
+            return x.Magnitude >= y.Magnitude ? x : y;
+        }
+
+        public static ComplexNumber MinByMagnitude(ComplexNumber x, ComplexNumber y)
+        {
+            return x.Magnitude <= y.Magnitude ? x : y;
+        }
+
+        public static ComplexNumber Floor(ComplexNumber value)
+        {
+            return new ComplexNumber(
+                MathHelper.ConvertToBigDecimal(MathHelper.Floor(value.Real, MathHelperOptions.Empty)),
+                MathHelper.ConvertToBigDecimal(MathHelper.Floor(value.Imaginary, MathHelperOptions.Empty)));
+        }
+
+        public static ComplexNumber Ceiling(ComplexNumber value)
+        {
+            return new ComplexNumber(
+                MathHelper.ConvertToBigDecimal(MathHelper.Ceiling(value.Real, MathHelperOptions.Empty)),
+                MathHelper.ConvertToBigDecimal(MathHelper.Ceiling(value.Imaginary, MathHelperOptions.Empty)));
+        }
+
+        public static ComplexNumber Round(ComplexNumber value)
+        {
+            return new ComplexNumber(
+                MathHelper.ConvertToBigDecimal(MathHelper.Round(value.Real, 0, MidpointRounding.AwayFromZero, MathHelperOptions.Empty)),
+                MathHelper.ConvertToBigDecimal(MathHelper.Round(value.Imaginary, 0, MidpointRounding.AwayFromZero, MathHelperOptions.Empty)));
+        }
+
+        public static ComplexNumber Truncate(ComplexNumber value)
+        {
+            return new ComplexNumber(
+                MathHelper.ConvertToBigDecimal(MathHelper.Truncate(value.Real, MathHelperOptions.Empty)),
+                MathHelper.ConvertToBigDecimal(MathHelper.Truncate(value.Imaginary, MathHelperOptions.Empty)));
         }
 
         public static ComplexNumber FromPolar(BigDecimal magnitude, BigDecimal phase, MathHelperOptions options)
@@ -551,74 +676,55 @@ namespace NCalc.Domain
             ComplexNumber result = Asinh(reciprocal, options);
             return result;
         }
+    }
 
-        private static BigDecimal Hypot(BigDecimal x, BigDecimal y, MathHelperOptions options)
+    public sealed class ComplexNumberToleranceComparer : IEqualityComparer<ComplexNumber>
+    {
+        private double? _tolerance;
+
+        public ComplexNumberToleranceComparer()
         {
-            BigDecimal absX = (BigDecimal)MathHelper.Abs(x, options);
-            BigDecimal absY = (BigDecimal)MathHelper.Abs(y, options);
-
-            if (absX > absY)
-            {
-                BigDecimal ratio = absY / absX;
-                BigDecimal result = absX * (BigDecimal)MathHelper.Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!;
-                return result;
-            }
-
-            if (absY > 0.0)
-            {
-                BigDecimal ratio = absX / absY;
-                BigDecimal result = absY * (BigDecimal)MathHelper.Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!;
-                return result;
-            }
-
-            return 0.0;
+            _tolerance = null;
         }
 
-        /*// Parsing (simple format: "a + bi")
-        public static ComplexNumber Parse(string s)
+        public ComplexNumberToleranceComparer(double tolerance)
         {
-            if (TryParse(s, out var result))
-                return result;
-
-            throw new FormatException("Invalid complex number format.");
+            _tolerance = tolerance;
         }
 
-        public static bool TryParse(string? s, out ComplexNumber result)
+        public bool Equals(ComplexNumber a, ComplexNumber b)
         {
-            result = Zero;
+            double tol = _tolerance ?? ComplexNumber.Tolerance;
 
-            if (string.IsNullOrWhiteSpace(s))
+            BigDecimal diff = a.Real - b.Real;
+            if ((diff.IsPositive() && diff > tol) || (diff < -tol))
                 return false;
 
-            s = s.Replace(" ", "").ToLowerInvariant();
-
-            // Example: "3+4i", "3-4i"
-            int iIndex = s.IndexOf('i');
-            if (iIndex < 0)
+            diff = a.Imaginary - b.Imaginary;
+            if ((diff.IsPositive() && diff > tol) || (diff < -tol))
                 return false;
 
-            string withoutI = s[..iIndex];
-
-            int plusIndex = withoutI.LastIndexOf('+');
-            int minusIndex = withoutI.LastIndexOf('-', 1);
-
-            int splitIndex = plusIndex > 0 ? plusIndex : minusIndex;
-
-            if (splitIndex <= 0)
-                return false;
-
-            string realPart = withoutI[..splitIndex];
-            string imagPart = withoutI[splitIndex..];
-
-            if (!double.TryParse(realPart, out double real))
-                return false;
-
-            if (!double.TryParse(imagPart, out double imag))
-                return false;
-
-            result = new ComplexNumber(real, imag);
             return true;
-        }*/
+        }
+
+        public int GetHashCode(ComplexNumber obj)
+        {
+            double tol = _tolerance ?? ComplexNumber.Tolerance;
+
+            if (tol == 0.0)
+                return obj.GetHashCode();
+
+            long realBucket = (long)Math.Round((double)(obj.Real / tol));
+            long imaginaryBucket = (long)Math.Round((double)(obj.Imaginary / tol));
+
+            unchecked
+            {
+                int hash = 17;
+                hash = hash * 23 + realBucket.GetHashCode();
+                hash = hash * 23 + imaginaryBucket.GetHashCode();
+                return hash;
+            }
+        }
     }
 
     public sealed class ComplexNumberExpression : LogicalExpression
