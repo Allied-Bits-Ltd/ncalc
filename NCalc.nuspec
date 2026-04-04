@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
     <id>AlliedBits.NCalc</id>
-    <version>8.9.1</version>
+    <version>9.0.0</version>
     <authors>Sebastien Ros and contributors, Eugene Mayevski</authors>
     <copyright>Sebastien Ros and contributors, Eugene Mayevski</copyright>
     <license type="expression">MIT</license>
@@ -10,7 +10,7 @@
     <icon>NCalc.png</icon>
     <title>The mathematical expression evaluator for .NET</title>
     <tags>ncalc math expression evaluation</tags>
-    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="909483805ecd64a4052f7d4399783d77581a3840" />
+    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="6646b7112caa7a7e3623b4946050853fc01e67ad" />
     <projectUrl>https://alliedbits.com/ncalc</projectUrl>
     <readme>README.nuget.md</readme>
     <description>This package by Allied Bits offers a number of advanced features compared to the original NCalc project.

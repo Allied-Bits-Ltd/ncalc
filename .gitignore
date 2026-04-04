@@ -17,3 +17,4 @@
 /docs/api/
 *.nupkg
 /build.cmd
+/.claude/
