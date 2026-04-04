@@ -5,6 +5,8 @@ using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Handlers;
 
+using NCalcVector = NCalc.Domain.Vector;
+
 namespace NCalc.Helpers;
 
 /// <summary>
@@ -428,6 +430,7 @@ public static class EvaluationHelper
                         : MathHelper.Subtract(0, result, true, context)),
             UnaryExpressionType.FromEnd => new NCalc.Domain.Index(MathHelper.ConvertToInt(result, "From End", context.CultureInfo, expression.Location), true),
             UnaryExpressionType.BitwiseNot =>
+                (result is NCalcVector vResult) ? ~vResult :
                 (result is BigInteger biResult) ? MathHelper.TryReduceToUInt64(~biResult) : ~MathHelper.ConvertToULong(result, "Bitwise Not", context.CultureInfo, expression.Location),
             UnaryExpressionType.SqRoot => MathHelper.Sqrt(result, context.CultureInfo),
 #if NET8_0_OR_GREATER

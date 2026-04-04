@@ -682,6 +682,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return null;
 
+                    if (leftValue is NCalcVector lvaAnd && rightValue is NCalcVector rvaAnd)
+                        return lvaAnd & rvaAnd;
+                    if (leftValue is NCalcVector || rightValue is NCalcVector)
+                        throw new NCalcEvaluationException("Bitwise AND between a vector and a non-vector is not supported.", expression.Location);
+
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseAnd(leftValue, rightValue);
 
@@ -694,6 +699,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return null;
 
+                    if (leftValue is NCalcVector lvaOr && rightValue is NCalcVector rvaOr)
+                        return lvaOr | rvaOr;
+                    if (leftValue is NCalcVector || rightValue is NCalcVector)
+                        throw new NCalcEvaluationException("Bitwise OR between a vector and a non-vector is not supported.", expression.Location);
+
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseOr(leftValue, rightValue);
 
@@ -705,6 +715,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         return null;
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return null;
+
+                    if (leftValue is NCalcVector lvaXOr && rightValue is NCalcVector rvaXOr)
+                        return lvaXOr ^ rvaXOr;
+                    if (leftValue is NCalcVector || rightValue is NCalcVector)
+                        throw new NCalcEvaluationException("Bitwise XOR between a vector and a non-vector is not supported.", expression.Location);
+
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseXOr(leftValue, rightValue);
 

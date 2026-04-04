@@ -1082,4 +1082,182 @@ public class MathsTests : TestBase
         var comparer = new ComplexNumberToleranceComparer(1e-10);
         Assert.False(comparer.Equals(a, b));
     }
+
+    // ── Vector modulo ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ShouldComputeVectorModuloByScalar()
+    {
+        var result = EvalVec("[7, 8, 9] % 3");
+        Assert.Equal(3, result.Dimensions);
+        Assert.Equal(new BigDecimal(1), result[0]);
+        Assert.Equal(new BigDecimal(2), result[1]);
+        Assert.Equal(new BigDecimal(0), result[2]);
+    }
+
+    [Fact]
+    public void ShouldComputeVectorModuloByVector()
+    {
+        var result = EvalVec("[10, 11, 12] % [3, 4, 5]");
+        Assert.Equal(3, result.Dimensions);
+        Assert.Equal(new BigDecimal(1), result[0]);
+        Assert.Equal(new BigDecimal(3), result[1]);
+        Assert.Equal(new BigDecimal(2), result[2]);
+    }
+
+    [Fact]
+    public void ShouldThrowOnScalarModuloVector()
+    {
+        Assert.ThrowsAny<Exception>(() => EvalVec("5 % [1, 2, 3]"));
+    }
+
+    // ── Vector bitwise AND / OR / XOR ────────────────────────────────────────
+
+    [Fact]
+    public void ShouldComputeVectorBitwiseAnd()
+    {
+        // 5=0101, 6=0110, 7=0111 AND 3=0011, 5=0101, 5=0101 = 1, 4, 5
+        var result = EvalVec("[5, 6, 7] & [3, 5, 5]");
+        Assert.Equal(3, result.Dimensions);
+        Assert.Equal(new BigDecimal(1), result[0]);
+        Assert.Equal(new BigDecimal(4), result[1]);
+        Assert.Equal(new BigDecimal(5), result[2]);
+    }
+
+    [Fact]
+    public void ShouldComputeVectorBitwiseOr()
+    {
+        // 5|3=7, 6|5=7, 7|5=7
+        var result = EvalVec("[5, 6, 7] | [3, 5, 5]");
+        Assert.Equal(3, result.Dimensions);
+        Assert.Equal(new BigDecimal(7), result[0]);
+        Assert.Equal(new BigDecimal(7), result[1]);
+        Assert.Equal(new BigDecimal(7), result[2]);
+    }
+
+    [Fact]
+    public void ShouldComputeVectorBitwiseXOr()
+    {
+        // 5^3=6, 6^5=3, 7^5=2
+        var result = EvalVec("[5, 6, 7] ^ [3, 5, 5]");
+        Assert.Equal(3, result.Dimensions);
+        Assert.Equal(new BigDecimal(6), result[0]);
+        Assert.Equal(new BigDecimal(3), result[1]);
+        Assert.Equal(new BigDecimal(2), result[2]);
+    }
+
+    [Fact]
+    public void ShouldThrowOnVectorBitwiseAndWithScalar()
+    {
+        Assert.ThrowsAny<Exception>(() => EvalVec("[1, 2, 3] & 1"));
+    }
+
+    [Fact]
+    public void ShouldThrowOnVectorBitwiseOrWithScalar()
+    {
+        Assert.ThrowsAny<Exception>(() => EvalVec("[1, 2, 3] | 1"));
+    }
+
+    [Fact]
+    public void ShouldThrowOnVectorBitwiseXOrWithScalar()
+    {
+        Assert.ThrowsAny<Exception>(() => EvalVec("[1, 2, 3] ^ 1"));
+    }
+
+    // ── Vector ones complement (~) ────────────────────────────────────────────
+
+    [Fact]
+    public void ShouldComputeVectorOnesComplement()
+    {
+        // ~5 = -6, ~6 = -7, ~7 = -8
+        var result = EvalVec("~[5, 6, 7]");
+        Assert.Equal(3, result.Dimensions);
+        Assert.Equal(new BigDecimal(-6), result[0]);
+        Assert.Equal(new BigDecimal(-7), result[1]);
+        Assert.Equal(new BigDecimal(-8), result[2]);
+    }
+
+    // ── Vector left shift / right shift ──────────────────────────────────────
+
+    [Fact]
+    public void ShouldComputeVectorLeftShift()
+    {
+        // [1, 2, 3] << 2 = [4, 8, 12]
+        var result = EvalVec("[1, 2, 3] << 2");
+        Assert.Equal(3, result.Dimensions);
+        Assert.Equal(new BigDecimal(4),  result[0]);
+        Assert.Equal(new BigDecimal(8),  result[1]);
+        Assert.Equal(new BigDecimal(12), result[2]);
+    }
+
+    [Fact]
+    public void ShouldComputeVectorRightShift()
+    {
+        // [4, 8, 12] >> 2 = [1, 2, 3]
+        var result = EvalVec("[4, 8, 12] >> 2");
+        Assert.Equal(3, result.Dimensions);
+        Assert.Equal(new BigDecimal(1), result[0]);
+        Assert.Equal(new BigDecimal(2), result[1]);
+        Assert.Equal(new BigDecimal(3), result[2]);
+    }
+
+    [Fact]
+    public void ShouldThrowOnVectorShiftedByVector()
+    {
+        Assert.ThrowsAny<Exception>(() => EvalVec("[1, 2, 3] << [1, 1, 1]"));
+    }
+
+    // ── Direct operator tests on Vector struct ───────────────────────────────
+
+    [Fact]
+    public void VectorModuloOperatorShouldWorkElementWise()
+    {
+        var v = EvalVec("[13, 14, 15]");
+        var s = new BigDecimal(4);
+        var result = v % s;
+        Assert.Equal(new BigDecimal(1), result[0]);
+        Assert.Equal(new BigDecimal(2), result[1]);
+        Assert.Equal(new BigDecimal(3), result[2]);
+    }
+
+    [Fact]
+    public void VectorBitwiseAndOperatorShouldWorkElementWise()
+    {
+        var a = EvalVec("[12, 10, 6]");  // 1100, 1010, 0110
+        var b = EvalVec("[10, 6, 5]");   // 1010, 0110, 0101
+        var result = a & b;              // 1000=8, 0010=2, 0100=4
+        Assert.Equal(new BigDecimal(8), result[0]);
+        Assert.Equal(new BigDecimal(2), result[1]);
+        Assert.Equal(new BigDecimal(4), result[2]);
+    }
+
+    [Fact]
+    public void VectorOnesComplementOperatorShouldNegateAndSubtractOne()
+    {
+        var v = EvalVec("[0, 1, 255]");
+        var result = ~v;
+        Assert.Equal(new BigDecimal(-1),   result[0]);
+        Assert.Equal(new BigDecimal(-2),   result[1]);
+        Assert.Equal(new BigDecimal(-256), result[2]);
+    }
+
+    [Fact]
+    public void VectorLeftShiftOperatorShouldDoublePerShift()
+    {
+        var v = EvalVec("[1, 2, 4]");
+        var result = v << 3;
+        Assert.Equal(new BigDecimal(8),  result[0]);
+        Assert.Equal(new BigDecimal(16), result[1]);
+        Assert.Equal(new BigDecimal(32), result[2]);
+    }
+
+    [Fact]
+    public void VectorRightShiftOperatorShouldHalvePerShift()
+    {
+        var v = EvalVec("[8, 16, 32]");
+        var result = v >> 3;
+        Assert.Equal(new BigDecimal(1), result[0]);
+        Assert.Equal(new BigDecimal(2), result[1]);
+        Assert.Equal(new BigDecimal(4), result[2]);
+    }
 }

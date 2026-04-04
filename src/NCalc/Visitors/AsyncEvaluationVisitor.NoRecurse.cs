@@ -716,6 +716,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
                         return SetTaskValue(task, null);
 
+                    if (leftValue is NCalcVector lvaAnd && rightValue is NCalcVector rvaAnd)
+                        return SetTaskValue(task, lvaAnd & rvaAnd);
+                    if (leftValue is NCalcVector || rightValue is NCalcVector)
+                        throw new NCalcEvaluationException("Bitwise AND between a vector and a non-vector is not supported.", expression.Location);
+
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, MathHelper.BitwiseAnd(leftValue, rightValue));
                     return SetTaskValue(task, MathHelper.ConvertToULong(leftValue, "Bitwise And", context.CultureInfo, expression.LeftExpression.Location) &
@@ -729,6 +734,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
                         return SetTaskValue(task, null);
 
+                    if (leftValue is NCalcVector lvaOr && rightValue is NCalcVector rvaOr)
+                        return SetTaskValue(task, lvaOr | rvaOr);
+                    if (leftValue is NCalcVector || rightValue is NCalcVector)
+                        throw new NCalcEvaluationException("Bitwise OR between a vector and a non-vector is not supported.", expression.Location);
+
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, MathHelper.BitwiseOr(leftValue, rightValue));
                     return SetTaskValue(task, MathHelper.ConvertToULong(leftValue, "Bitwise Or", context.CultureInfo, expression.LeftExpression.Location) |
@@ -741,6 +751,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         return SetTaskValue(task, null);
                     if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
                         return SetTaskValue(task, null);
+
+                    if (leftValue is NCalcVector lvaXOr && rightValue is NCalcVector rvaXOr)
+                        return SetTaskValue(task, lvaXOr ^ rvaXOr);
+                    if (leftValue is NCalcVector || rightValue is NCalcVector)
+                        throw new NCalcEvaluationException("Bitwise XOR between a vector and a non-vector is not supported.", expression.Location);
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, MathHelper.BitwiseXOr(leftValue, rightValue));

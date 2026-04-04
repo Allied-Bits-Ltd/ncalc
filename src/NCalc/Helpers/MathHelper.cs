@@ -1881,6 +1881,16 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
+        // Vector dispatch — element-wise modulo (integer semantics, consistent with scalar BigDecimal modulo)
+        if (a is NCalcVector va)
+        {
+            if (b is NCalcVector vb)
+                return va % vb;
+            return va % ConvertToBigDecimal(b);
+        }
+        if (b is NCalcVector)
+            throw new InvalidOperationException("Modulo of a scalar by a vector is not supported.");
+
         Type t = GetBroaderType(a.GetType(), b.GetType());
 
         a = ConvertIfNeeded(a, "%", options);
@@ -4176,6 +4186,15 @@ public static class MathHelper
 
     public static object? LeftShift(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
+        // Vector dispatch — element-wise left shift; b must be an integer shift amount
+        if (a is NCalcVector va)
+        {
+            int shift = ConvertToInt(b, "Left Shift", options.CultureInfo, null);
+            return va << shift;
+        }
+        if (b is NCalcVector)
+            throw new NCalcEvaluationException("The right operand of a left-shift cannot be a vector.");
+
         if (a is BigInteger ba)
         {
             return LeftShift(ba, b, options);
@@ -4231,6 +4250,15 @@ public static class MathHelper
 
     public static object? RightShift(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
+        // Vector dispatch — element-wise right shift; b must be an integer shift amount
+        if (a is NCalcVector va)
+        {
+            int shift = ConvertToInt(b, "Right Shift", options.CultureInfo, null);
+            return va >> shift;
+        }
+        if (b is NCalcVector)
+            throw new NCalcEvaluationException("The right operand of a right-shift cannot be a vector.");
+
         if (a is BigInteger ba)
         {
             return RightShift(ba, b, options);
