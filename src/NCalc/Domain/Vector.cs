@@ -178,6 +178,90 @@ namespace NCalc.Domain
             return new Vector(result, v._mathHelperOptions);
         }
 
+        // ── Modulo operators ────────────────────────────────────────────────────
+
+        /// <summary>Element-wise modulo: each component mod a scalar (integer semantics).</summary>
+        public static Vector operator %(Vector v, BigDecimal scalar)
+        {
+            BigInteger divisor = scalar.WholeValue;
+            var result = new BigDecimal[v.Dimensions];
+            for (int i = 0; i < v.Dimensions; i++)
+                result[i] = new BigDecimal(BigInteger.Remainder(v[i].WholeValue, divisor));
+            return new Vector(result, v._mathHelperOptions);
+        }
+
+        /// <summary>Element-wise modulo between two vectors of the same dimension (integer semantics).</summary>
+        public static Vector operator %(Vector a, Vector b)
+        {
+            CheckDimensions(a, b, "modulo");
+            var result = new BigDecimal[a.Dimensions];
+            for (int i = 0; i < a.Dimensions; i++)
+                result[i] = new BigDecimal(BigInteger.Remainder(a[i].WholeValue, b[i].WholeValue));
+            return new Vector(result, a._mathHelperOptions);
+        }
+
+        // ── Bitwise operators ────────────────────────────────────────────────────
+        // All bitwise operations use the integer (whole-value) part of each component.
+
+        /// <summary>Element-wise bitwise AND of two same-dimension vectors.</summary>
+        public static Vector operator &(Vector a, Vector b)
+        {
+            CheckDimensions(a, b, "bitwise AND");
+            var result = new BigDecimal[a.Dimensions];
+            for (int i = 0; i < a.Dimensions; i++)
+                result[i] = new BigDecimal(a[i].WholeValue & b[i].WholeValue);
+            return new Vector(result, a._mathHelperOptions);
+        }
+
+        /// <summary>Element-wise bitwise OR of two same-dimension vectors.</summary>
+        public static Vector operator |(Vector a, Vector b)
+        {
+            CheckDimensions(a, b, "bitwise OR");
+            var result = new BigDecimal[a.Dimensions];
+            for (int i = 0; i < a.Dimensions; i++)
+                result[i] = new BigDecimal(a[i].WholeValue | b[i].WholeValue);
+            return new Vector(result, a._mathHelperOptions);
+        }
+
+        /// <summary>Element-wise bitwise XOR of two same-dimension vectors.</summary>
+        public static Vector operator ^(Vector a, Vector b)
+        {
+            CheckDimensions(a, b, "bitwise XOR");
+            var result = new BigDecimal[a.Dimensions];
+            for (int i = 0; i < a.Dimensions; i++)
+                result[i] = new BigDecimal(a[i].WholeValue ^ b[i].WholeValue);
+            return new Vector(result, a._mathHelperOptions);
+        }
+
+        /// <summary>Element-wise bitwise NOT (ones complement) of each component.</summary>
+        public static Vector operator ~(Vector v)
+        {
+            var result = new BigDecimal[v.Dimensions];
+            for (int i = 0; i < v.Dimensions; i++)
+                result[i] = new BigDecimal(~v[i].WholeValue);
+            return new Vector(result, v._mathHelperOptions);
+        }
+
+        // ── Shift operators ──────────────────────────────────────────────────────
+
+        /// <summary>Element-wise left shift of each component by <paramref name="shift"/> bits.</summary>
+        public static Vector operator <<(Vector v, int shift)
+        {
+            var result = new BigDecimal[v.Dimensions];
+            for (int i = 0; i < v.Dimensions; i++)
+                result[i] = new BigDecimal(v[i].WholeValue << shift);
+            return new Vector(result, v._mathHelperOptions);
+        }
+
+        /// <summary>Element-wise right shift of each component by <paramref name="shift"/> bits.</summary>
+        public static Vector operator >>(Vector v, int shift)
+        {
+            var result = new BigDecimal[v.Dimensions];
+            for (int i = 0; i < v.Dimensions; i++)
+                result[i] = new BigDecimal(v[i].WholeValue >> shift);
+            return new Vector(result, v._mathHelperOptions);
+        }
+
         // ── Common vector operations ─────────────────────────────────────────────
 
         /// <summary>Dot (inner) product of two vectors.</summary>

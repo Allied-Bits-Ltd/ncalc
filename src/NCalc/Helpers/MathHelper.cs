@@ -1881,6 +1881,16 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
+        // Vector dispatch — element-wise modulo (integer semantics, consistent with scalar BigDecimal modulo)
+        if (a is NCalcVector va)
+        {
+            if (b is NCalcVector vb)
+                return va % vb;
+            return va % ConvertToBigDecimal(b);
+        }
+        if (b is NCalcVector)
+            throw new InvalidOperationException("Modulo of a scalar by a vector is not supported.");
+
         Type t = GetBroaderType(a.GetType(), b.GetType());
 
         a = ConvertIfNeeded(a, "%", options);
@@ -3062,9 +3072,9 @@ public static class MathHelper
         }
 
         if (a is ComplexNumber cnA)
-            return ComplexNumber.Log(cnA, 10, options);
+            return ComplexNumber.Log10(cnA, options);
 
-        return Math.Log10(ConvertToDouble(a, "Log2", options.CultureInfo, null));
+        return Math.Log10(ConvertToDouble(a, "Log10", options.CultureInfo, null));
     }
 
     public static object Pow(object? a, object? b, bool reduceTypes, MathHelperOptions options)
@@ -3195,20 +3205,20 @@ public static class MathHelper
 
     public static BigDecimal Hypot(BigDecimal x, BigDecimal y, MathHelperOptions options)
     {
-        BigDecimal absX = (BigDecimal)MathHelper.Abs(x, options);
-        BigDecimal absY = (BigDecimal)MathHelper.Abs(y, options);
+        BigDecimal absX = ConvertToBigDecimal(MathHelper.Abs(x, options));
+        BigDecimal absY = ConvertToBigDecimal(MathHelper.Abs(y, options));
 
         if (absX > absY)
         {
             BigDecimal ratio = absY / absX;
-            BigDecimal result = absX * (BigDecimal)Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!;
+            BigDecimal result = absX * ConvertToBigDecimal(Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!);
             return result;
         }
 
         if (absY > 0.0)
         {
             BigDecimal ratio = absX / absY;
-            BigDecimal result = absY * (BigDecimal)Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!;
+            BigDecimal result = absY * ConvertToBigDecimal(Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!);
             return result;
         }
 
@@ -4176,6 +4186,15 @@ public static class MathHelper
 
     public static object? LeftShift(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
+        // Vector dispatch — element-wise left shift; b must be an integer shift amount
+        if (a is NCalcVector va)
+        {
+            int shift = ConvertToInt(b, "Left Shift", options.CultureInfo, null);
+            return va << shift;
+        }
+        if (b is NCalcVector)
+            throw new NCalcEvaluationException("The right operand of a left-shift cannot be a vector.");
+
         if (a is BigInteger ba)
         {
             return LeftShift(ba, b, options);
@@ -4231,6 +4250,15 @@ public static class MathHelper
 
     public static object? RightShift(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
+        // Vector dispatch — element-wise right shift; b must be an integer shift amount
+        if (a is NCalcVector va)
+        {
+            int shift = ConvertToInt(b, "Right Shift", options.CultureInfo, null);
+            return va >> shift;
+        }
+        if (b is NCalcVector)
+            throw new NCalcEvaluationException("The right operand of a right-shift cannot be a vector.");
+
         if (a is BigInteger ba)
         {
             return RightShift(ba, b, options);
