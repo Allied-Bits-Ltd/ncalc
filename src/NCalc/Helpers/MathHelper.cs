@@ -3072,9 +3072,9 @@ public static class MathHelper
         }
 
         if (a is ComplexNumber cnA)
-            return ComplexNumber.Log(cnA, 10, options);
+            return ComplexNumber.Log10(cnA, options);
 
-        return Math.Log10(ConvertToDouble(a, "Log2", options.CultureInfo, null));
+        return Math.Log10(ConvertToDouble(a, "Log10", options.CultureInfo, null));
     }
 
     public static object Pow(object? a, object? b, bool reduceTypes, MathHelperOptions options)
@@ -3205,20 +3205,20 @@ public static class MathHelper
 
     public static BigDecimal Hypot(BigDecimal x, BigDecimal y, MathHelperOptions options)
     {
-        BigDecimal absX = (BigDecimal)MathHelper.Abs(x, options);
-        BigDecimal absY = (BigDecimal)MathHelper.Abs(y, options);
+        BigDecimal absX = ConvertToBigDecimal(MathHelper.Abs(x, options));
+        BigDecimal absY = ConvertToBigDecimal(MathHelper.Abs(y, options));
 
         if (absX > absY)
         {
             BigDecimal ratio = absY / absX;
-            BigDecimal result = absX * (BigDecimal)Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!;
+            BigDecimal result = absX * ConvertToBigDecimal(Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!);
             return result;
         }
 
         if (absY > 0.0)
         {
             BigDecimal ratio = absX / absY;
-            BigDecimal result = absY * (BigDecimal)Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!;
+            BigDecimal result = absY * ConvertToBigDecimal(Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!);
             return result;
         }
 

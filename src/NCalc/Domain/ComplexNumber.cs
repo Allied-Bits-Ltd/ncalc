@@ -32,8 +32,8 @@ namespace NCalc.Domain
         {
             get
             {
-                bool realZero = (BigDecimal)MathHelper.Abs(Real, _mathHelperOptions) < Tolerance;
-                bool imaginaryZero = (BigDecimal)MathHelper.Abs(Imaginary, _mathHelperOptions) < Tolerance;
+                bool realZero = MathHelper.ConvertToBigDecimal(MathHelper.Abs(Real, _mathHelperOptions)) < Tolerance;
+                bool imaginaryZero = MathHelper.ConvertToBigDecimal(MathHelper.Abs(Imaginary, _mathHelperOptions)) < Tolerance;
                 return realZero && imaginaryZero;
             }
         }
@@ -116,16 +116,7 @@ namespace NCalc.Domain
         {
             get
             {
-                object result = (BigDecimal)MathHelper.Atan2(Imaginary, Real, _mathHelperOptions);
-                switch (result)
-                {
-                    case BigDecimal bd:
-                        return bd;
-                    case double d:
-                        return new BigDecimal(d);
-                    default:
-                        return Double.NaN;
-                }
+                return MathHelper.ConvertToBigDecimal(MathHelper.Atan2(Imaginary, Real, _mathHelperOptions));
             }
         }
 
@@ -424,6 +415,10 @@ namespace NCalc.Domain
             return result;
         }
 
+        /// <summary>Returns the base-10 logarithm of a complex number.</summary>
+        public static ComplexNumber Log10(ComplexNumber value, MathHelperOptions options) =>
+            Log(value, new BigDecimal(10), options);
+
         public static ComplexNumber Pow(ComplexNumber value, ComplexNumber power, MathHelperOptions options)
         {
             if (value.Real.IsZero() && value.Imaginary.IsZero())
@@ -452,10 +447,10 @@ namespace NCalc.Domain
             BigDecimal x = value.Real;
             BigDecimal y = value.Imaginary;
 
-            BigDecimal sinX = (BigDecimal)MathHelper.Sin(x, options)!;
-            BigDecimal cosX = (BigDecimal)MathHelper.Cos(x, options)!;
-            BigDecimal sinhY = (BigDecimal)MathHelper.Sinh(y, options)!;
-            BigDecimal coshY = (BigDecimal)MathHelper.Cosh(y, options)!;
+            BigDecimal sinX = MathHelper.ConvertToBigDecimal(MathHelper.Sin(x, options)!);
+            BigDecimal cosX = MathHelper.ConvertToBigDecimal(MathHelper.Cos(x, options)!);
+            BigDecimal sinhY = MathHelper.ConvertToBigDecimal(MathHelper.Sinh(y, options)!);
+            BigDecimal coshY = MathHelper.ConvertToBigDecimal(MathHelper.Cosh(y, options)!);
 
             BigDecimal real = sinX * coshY;
             BigDecimal imaginary = cosX * sinhY;
@@ -468,10 +463,10 @@ namespace NCalc.Domain
             BigDecimal x = value.Real;
             BigDecimal y = value.Imaginary;
 
-            BigDecimal sinX = (BigDecimal)MathHelper.Sin(x, options)!;
-            BigDecimal cosX = (BigDecimal)MathHelper.Cos(x, options)!;
-            BigDecimal sinhY = (BigDecimal)MathHelper.Sinh(y, options)!;
-            BigDecimal coshY = (BigDecimal)MathHelper.Cosh(y, options)!;
+            BigDecimal sinX = MathHelper.ConvertToBigDecimal(MathHelper.Sin(x, options)!);
+            BigDecimal cosX = MathHelper.ConvertToBigDecimal(MathHelper.Cos(x, options)!);
+            BigDecimal sinhY = MathHelper.ConvertToBigDecimal(MathHelper.Sinh(y, options)!);
+            BigDecimal coshY = MathHelper.ConvertToBigDecimal(MathHelper.Cosh(y, options)!);
 
             BigDecimal real = cosX * coshY;
             BigDecimal imaginary = -sinX * sinhY;
@@ -569,10 +564,10 @@ namespace NCalc.Domain
             BigDecimal x = value.Real;
             BigDecimal y = value.Imaginary;
 
-            BigDecimal sinhX = (BigDecimal)MathHelper.Sinh(x, options)!;
-            BigDecimal coshX = (BigDecimal)MathHelper.Cosh(x, options)!;
-            BigDecimal sinY = (BigDecimal)MathHelper.Sin(y, options)!;
-            BigDecimal cosY = (BigDecimal)MathHelper.Cos(y, options)!;
+            BigDecimal sinhX = MathHelper.ConvertToBigDecimal(MathHelper.Sinh(x, options)!);
+            BigDecimal coshX = MathHelper.ConvertToBigDecimal(MathHelper.Cosh(x, options)!);
+            BigDecimal sinY = MathHelper.ConvertToBigDecimal(MathHelper.Sin(y, options)!);
+            BigDecimal cosY = MathHelper.ConvertToBigDecimal(MathHelper.Cos(y, options)!);
 
             BigDecimal real = sinhX * cosY;
             BigDecimal imaginary = coshX * sinY;
@@ -585,10 +580,10 @@ namespace NCalc.Domain
             BigDecimal x = value.Real;
             BigDecimal y = value.Imaginary;
 
-            BigDecimal sinhX = (BigDecimal)MathHelper.Sinh(x, options)!;
-            BigDecimal coshX = (BigDecimal)MathHelper.Cosh(x, options)!;
-            BigDecimal sinY = (BigDecimal)MathHelper.Sin(y, options)!;
-            BigDecimal cosY = (BigDecimal)MathHelper.Cos(y, options)!;
+            BigDecimal sinhX = MathHelper.ConvertToBigDecimal(MathHelper.Sinh(x, options)!);
+            BigDecimal coshX = MathHelper.ConvertToBigDecimal(MathHelper.Cosh(x, options)!);
+            BigDecimal sinY = MathHelper.ConvertToBigDecimal(MathHelper.Sin(y, options)!);
+            BigDecimal cosY = MathHelper.ConvertToBigDecimal(MathHelper.Cos(y, options)!);
 
             BigDecimal real = coshX * cosY;
             BigDecimal imaginary = sinhX * sinY;

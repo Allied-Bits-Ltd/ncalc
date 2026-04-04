@@ -943,6 +943,41 @@ public class MathsTests : TestBase
         Assert.True(comparer.Equals(result, new ComplexNumber(new BigDecimal(-1.0), BigDecimal.Zero)));
     }
 
+    [Fact]
+    public void ShouldComputeLog10ForComplexNumber()
+    {
+        // log10(10) = 1 + 0i
+        var z = new ComplexNumber(new BigDecimal(10.0), BigDecimal.Zero);
+        var result = ComplexNumber.Log10(z, new MathHelperOptions());
+        var comparer = new ComplexNumberToleranceComparer(1e-10);
+        Assert.True(comparer.Equals(result, new ComplexNumber(BigDecimal.One, BigDecimal.Zero)));
+    }
+
+    [Fact]
+    public void ShouldComputeLog10ForComplexNumberViaExpression()
+    {
+        // Log10(i) = iπ/(2*ln10) — pass the complex number as a parameter to avoid parse ambiguity
+        var e = new Expression("Log10(z)");
+        e.Parameters["z"] = new ComplexNumber(BigDecimal.Zero, BigDecimal.One);
+        var result = (ComplexNumber)e.Evaluate()!;
+        double expectedImaginary = Math.PI / 2.0 / Math.Log(10.0);
+        var comparer = new ComplexNumberToleranceComparer(1e-6);
+        Assert.True(comparer.Equals(result,
+            new ComplexNumber(BigDecimal.Zero, new BigDecimal(expectedImaginary))));
+    }
+
+    [Fact]
+    public void ShouldComputeLog10ForImaginaryComplexNumber()
+    {
+        // log10(i) = (π/2) / ln(10) * i ≈ 0 + 0.68219i
+        var z = new ComplexNumber(BigDecimal.Zero, BigDecimal.One);
+        var result = ComplexNumber.Log10(z, new MathHelperOptions());
+        double expectedImaginary = Math.PI / 2.0 / Math.Log(10.0);
+        var expected = new ComplexNumber(BigDecimal.Zero, new BigDecimal(expectedImaginary));
+        var comparer = new ComplexNumberToleranceComparer(1e-6);
+        Assert.True(comparer.Equals(result, expected));
+    }
+
     // ── Cosh bug fix (was calling Math.Cos instead of Math.Cosh) ─────────────
 
     [Fact]
