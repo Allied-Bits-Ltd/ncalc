@@ -44,4 +44,6 @@ This version of NCalc contains a number of advanced features compared to the ori
 * The main projects have been combined into one project.
 * The AOT-compatible version of the library.
 
+If you are interested in seeing those features in action, check our [ABCalc product](https://alliedbits.com/abcalc/).
+
 This version has its roots in the original NCalc project, which resides [here on github](https://github.com/ncalc/ncalc). Updates in the original project are brought to Allied Bits' NCalc unless they conflict with this version. 

@@ -6,6 +6,7 @@ A value is a terminal token representing a concrete element. This can be:
 - A <xref:System.Numerics.BigInteger> or <xref:ExtendedNumerics.BigDecimal>
 - Any floating point number, like <xref:System.Double>
 - A <xref:NCalc.Domain.Percent>
+- A <xref:NCalc.Domain.ComplexNumber>
 - A <xref:System.DateTime> or <xref:System.TimeSpan>
 - A <xref:System.Boolean>
 - A <xref:System.String>
@@ -68,6 +69,10 @@ You can use the scientific notation, i.e., insert a letter "e" followed by an in
 ## Percent
 
 When percent calculation is enabled in [Advanced Options](advanced_value_formats.md), the parser will recognize the '%' character and treat the parsed value as percent. Percent participates in expression evaluation. It can be the result of an operation (e.g., in operations like "5% + 2%"), in which case, an instance of <xref:NCalc.Domain.Percent> is returned. 
+
+## Complex numbers
+
+When complex numbers are enabled in [Advanced Options](advanced_value_formats.md), the parser recognizes a standalone "i" as a square root of -1 and any Xi, where X is a number (e.g., "3.5i" or "(2+3)i") as an imaginary number. The notation "3+5i" or "(2+4) + (4-1)i" or "t-5i" (here, t is a parameter/variable) produces a complex number, which can be returned as a result of an expression evaluation or can be manipulated similar to other numbers. 
 
 ## DateTime
 

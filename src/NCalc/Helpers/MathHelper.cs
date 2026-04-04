@@ -2504,9 +2504,6 @@ public static class MathHelper
 
     public static object Abs(object? a, MathHelperOptions options)
     {
-        if (a is ComplexNumber cnA)
-            return -cnA;
-
         if (options.UseBigNumbers)
         {
             if (a is BigInteger biA)
@@ -2524,6 +2521,9 @@ public static class MathHelper
                     return bdA;
             }
         }
+
+        if (a is ComplexNumber cnA)
+            return cnA.Abs;
 
         if (options.DecimalAsDefault)
             return Math.Abs(ConvertToDecimal(a, "Abs", options.CultureInfo, null));
@@ -2918,6 +2918,28 @@ public static class MathHelper
         return result;
     }
 
+    public static BigDecimal Hypot(BigDecimal x, BigDecimal y, MathHelperOptions options)
+    {
+        BigDecimal absX = (BigDecimal)MathHelper.Abs(x, options);
+        BigDecimal absY = (BigDecimal)MathHelper.Abs(y, options);
+
+        if (absX > absY)
+        {
+            BigDecimal ratio = absY / absX;
+            BigDecimal result = absX * (BigDecimal)Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!;
+            return result;
+        }
+
+        if (absY > 0.0)
+        {
+            BigDecimal ratio = absX / absY;
+            BigDecimal result = absY * (BigDecimal)Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!;
+            return result;
+        }
+
+        return 0.0;
+    }
+
     public static object Round(object? a, object? b, MidpointRounding rounding, MathHelperOptions options)
     {
         if (IsBoxedIntegerNumberOrBigNumber(a))
@@ -3064,7 +3086,7 @@ public static class MathHelper
         }
 
         if (a is ComplexNumber cnA)
-            return ComplexNumber.Pow(cnA, 1.0 / 3.0, options);
+            return ComplexNumber.Pow(cnA, (BigDecimal) 1.0 / 3.0, options);
 
         var d = ConvertToDouble(a, "Cbrt", options.CultureInfo, null);
 

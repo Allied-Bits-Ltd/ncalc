@@ -11,6 +11,7 @@ Some of the behavior and support for advanced parsing features is controlled by 
 * C-Style octal literals
 * Result Reference character
 * Percent calculations
+* Complex number calculations
 
 Advanced options are configured by assigning an instance of the <xref:NCalc.AdvancedExpressionOptions> class to the 
 `AdvancedOptions` property of <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> that you create and adjusting its properties:
@@ -231,6 +232,7 @@ expression.EvaluateFunction += (string name, NCalc.Handlers.FunctionArgs args) =
 ```
 
 ## Percent Calculations
+
 This version of NCalc supports operations with percent. To enable percent calculations, include the <xref:NCalc.AdvExpressionOptions.CalculatePercent> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class:
 
 ```c#
@@ -254,3 +256,16 @@ The following operations with percent are supported:
 * `a% - b%` : subtract the numeric value of percent b from the numeric value of percent a ( a - b ) with a result becoming a percent. E.g.: 5% - 2% = 3%
 
 Operations that produce percent as a result return an instance of the <xref:NCalc.Domain.Percent> type, whose <xref:NCalc.Domain.Percent.Value> property contains the value of a percent (e.g., 5 for 5% and so on). 
+
+## Complex Number Calculations
+
+This version of NCalc supports operations with complex numbers. Parsing of complex numbers can be enabled by including the <xref:NCalc.AdvExpressionOptions.UseComplexNumbers> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class. NCalc supports basic arithmetic operations with complex numbers as well as trigonometric functions that accept complex numbers (see MathHelper.cs for details). These operations are performed regardless of the option (i.e., the option affects only parsing and not calculations). 
+
+The notations recognized by the parser are:
+* `i`  : if recognized as a standalone character, denotes a square root from -1. Such an expression produces an instance of the <xref:NCalc.Domain.ComplexNumber> class with the zero real part and 1 (one) in an imaginary part. 
+* `Ni` (N is a number OR an expression that evaluates to a number) : denotes an imaginary number. Such an expression produces an instance of the <xref:NCalc.Domain.ComplexNumber> class with the zero real part and N in an imaginary part. 
+* `a + bi` or `a - bi` (a and b are numbers or expressions that evaluate to numbers) : produces an instance of the <xref:NCalc.Domain.ComplexNumber> class with the real part equal to the value of a (or the result of its evaluation and the value of b in an imaginary part. 
+
+The <xref:NCalc.Domain.ComplexNumber> class uses <xref:ExtendedNumerics.BigDecimal> for real and imaginary parts regardless of whether the use of big numbers is enabled. 
+
+The supported operations on complex numbers include addition, subtraction, multiplication, division of two complex numbers as well of a complex number and a real number.
