@@ -879,7 +879,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             object?[] resultArr = new object?[upperBound - lowerBound];
                             for (int i = 0; i < resultArr.Length; i++)
                             {
-                                result = resultArr[lowerBound + i];
+                                result = identList[lowerBound + i];
 
                                 if (result is LogicalExpression expr)
                                     result = await expr.Accept(this, cancellationToken).ConfigureAwait(false);
@@ -914,9 +914,18 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             throw new NCalcParameterIndexException("The index does not evaluate to a number", expression.RightExpression.Location);
 
                         int index;
+                        bool fromEnd = false;
                         try
                         {
-                            index = MathHelper.ConvertToInt(rightValue, "Index Access", context.CultureInfo, expression.RightExpression.Location);
+                            if (rightValue is NCalc.Domain.Index idx)
+                            {
+                                fromEnd = idx.IsFromEnd;
+                                index = idx.Value;
+                            }
+                            else
+                            {
+                                index = MathHelper.ConvertToInt(rightValue, "Index Access", context.CultureInfo, expression.RightExpression.Location);
+                            }
                         }
                         catch
                         {
@@ -925,8 +934,12 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                         if (identList is not null)
                         {
+                            if (fromEnd)
+                                index = identList.Count - index;
+
                             if (index < 0 || index >= identList.Count)
                                 throw new NCalcParameterIndexException($"The index is out of bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
+
                             result = identList[index];
 
                             if (result is LogicalExpression expr)
@@ -935,9 +948,13 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         else
                         if (identString is not null)
                         {
+                            if (fromEnd)
+                                index = identString.Length - index;
+
                             if (index < 0 || index >= identString.Length)
                                 throw new NCalcParameterIndexException($"The index is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
-                            result = identString[index];
+
+                                result = identString[index];
                         }
                     }
                     return result;

@@ -2094,7 +2094,21 @@ public class AdvFeatureTests : TestBase
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
-        Assert.Equal(expectedValue, result);
+        Assert.Equal(expectedValue, result.ToString());
+    }
+
+    [Fact]
+    public void ShouldHandleRangeIndexedParameters2()
+    {
+        var expression = new Expression("(1;2;3;4)[..^1]", ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        Assert.IsType<object[]>(result);
+
+        object[] resultList = (object[])result;
+        Assert.Equal(3, resultList.Length);
+        Assert.Equal(3, resultList[2]);
     }
 
     /* Waits until lambda visitor supports lists
@@ -2883,7 +2897,7 @@ public class AsyncAdvFeatureTests
 
         var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(expectedValue, result);
+        Assert.Equal(expectedValue, result.ToString());
     }
 
     [Theory]
@@ -3204,11 +3218,14 @@ public class ShouldHandleRangeIndexedParametersTestData : TheoryData<string, str
 {
     public ShouldHandleRangeIndexedParametersTestData()
     {
+        Add("a := 'abcd'; a[^1]", "d");
         Add("a := 'abcd'; a[1..2]", "b");
         Add("a := 'abcd'; a[1..^1]", "bc");
         Add("a := 'abcd'; a[^3..^1]", "bc");
+        Add("a := 'abcd'; a[^2..^1]", "c");
         Add("a := 'abcd'; a[1..]", "bcd");
         Add("a := 'abcd'; a[..3]", "abc");
+        Add("a := 'abcd'; a[..^1]", "abc");
         Add("a := 'abcd'; a[(2 / 2)..(2 * 1)]", "b");
         Add("'abcd'[1..2]", "b");
    }

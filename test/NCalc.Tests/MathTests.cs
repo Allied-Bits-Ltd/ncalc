@@ -356,6 +356,44 @@ public class MathsTests : TestBase
     }
 
     [Theory]
+    [InlineData("7.9\\2.1", 3)]
+    public void ShouldHandleBasicIntDivisionOfFloats(string input, int expected)
+    {
+        var expression = new Expression(input, ExpressionOptions.None);
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        CheckResult(expected, result);
+    }
+    [Theory]
+    [InlineData("-7//2", -4)]
+    public void ShouldHandlPythonIntDivisionOfFloats(string input, int expected)
+    {
+        var expression = new Expression(input, ExpressionOptions.None);
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        CheckResult(expected, result);
+    }
+
+    [Theory]
+    [InlineData("7.9\\2.1", 3)]
+    public void ShouldHandleBasicIntDivisionOfBigFloats(string input, int expected)
+    {
+        var expression = new Expression(input, ExpressionOptions.UseBigNumbers);
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        CheckResult(expected, result);
+    }
+    [Theory]
+    [InlineData("-7//2", -4)]
+    public void ShouldHandlPythonIntDivisionOfBigFloats(string input, int expected)
+    {
+        var expression = new Expression(input, ExpressionOptions.UseBigNumbers);
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        CheckResult(expected, result);
+    }
+
+    [Theory]
     [InlineData("750/500", 1.5)]
     [InlineData("2000/1000", 2)]
     public void ShouldHandleIntegerDivision(string input, object expected)
@@ -977,7 +1015,7 @@ public class MathsTests : TestBase
         // Log10(i) = iπ/(2*ln10) — pass the complex number as a parameter to avoid parse ambiguity
         var e = new Expression("Log10(z)");
         e.Parameters["z"] = new ComplexNumber(BigDecimal.Zero, BigDecimal.One);
-        var result = (ComplexNumber)e.Evaluate()!;
+        var result = (ComplexNumber)e.Evaluate(TestContext.Current.CancellationToken)!;
         double expectedImaginary = Math.PI / 2.0 / Math.Log(10.0);
         var comparer = new ComplexNumberToleranceComparer(1e-6);
         Assert.True(comparer.Equals(result,

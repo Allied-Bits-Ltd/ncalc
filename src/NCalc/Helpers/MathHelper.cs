@@ -1689,6 +1689,7 @@ public static class MathHelper
         if (options.UseBigNumbers && typeCode == TypeCode.Object)
         {
             BigInteger? biResult = null;
+            BigDecimal? bdResult = null;
             if (a is BigDecimal bdA)
             {
                 if (truncateFirst)
@@ -1701,7 +1702,7 @@ public static class MathHelper
                 }
                 else
                 {
-                    biResult = IntegerDivide(bdA, b);
+                    bdResult = Divide(bdA, b);
                 }
             }
             else
@@ -1717,24 +1718,35 @@ public static class MathHelper
                 }
                 else
                 {
-                    biResult = IntegerDivide(a, bdB);
+                    bdResult = Divide(a, bdB);
                 }
             }
             else
             if (a is BigInteger biA)
             {
                 if (truncateFirst)
+                {
                     b = ConvertToLong(b, "Integer Div", options.CultureInfo, null);
-
-                biResult = IntegerDivide(biA, b);
+                    biResult = IntegerDivide(biA, b);
+                }
+                else
+                {
+                    bdResult = Divide(new BigDecimal(biA), b);
+                }
             }
             else
             if (b is BigInteger biB)
             {
                 if (truncateFirst)
+                {
                     a = ConvertToLong(a, "Integer Div", options.CultureInfo, null);
 
-                biResult = IntegerDivide(a, biB);
+                    biResult = IntegerDivide(a, biB);
+                }
+                else
+                {
+                    bdResult = Divide(a, new BigDecimal(biB));
+                }
             }
             else
             if (a is long || a is ulong || b is long || b is ulong)
@@ -1746,7 +1758,10 @@ public static class MathHelper
                     else
                         biResult = new BigInteger((ulong)a);
 
-                    biResult = IntegerDivide(biResult.Value, b);
+                    if (truncateFirst)
+                        biResult = IntegerDivide(biResult.Value, b);
+                    else
+                        bdResult = Divide(new BigDecimal(biResult.Value), b);
                 }
                 else
                 {
@@ -1755,8 +1770,20 @@ public static class MathHelper
                     else
                         biResult = new BigInteger((ulong)b);
 
-                    biResult = IntegerDivide(a, biResult.Value);
+                    if (truncateFirst)
+                        biResult = IntegerDivide(a, biResult.Value);
+                    else
+                        bdResult = Divide(a, new BigDecimal(biResult.Value));
                 }
+            }
+
+            if (bdResult is not null)
+            {
+                object? reducedResult = ReduceNumericType(bdResult.Value, reduceTypes ? null : t, options);
+                if (!truncateFirst)
+                    return Floor(reducedResult, options);
+
+                return reducedResult;
             }
 
             if (biResult is not null)
@@ -1776,7 +1803,10 @@ public static class MathHelper
 
         try
         {
-            result = ExecuteOperation(a, b, '/', ArithmeticOperation.Divide, options);
+            if (!truncateFirst)
+                result = Divide(a, b, reduceTypes, options);
+            else
+                result = ExecuteOperation(a, b, '/', ArithmeticOperation.Divide, options);
         }
         catch (OverflowException)
         {
@@ -1797,7 +1827,7 @@ public static class MathHelper
         {
             if (result is decimal decResult)
             {
-                long lResult = (long)Math.Truncate(decResult);
+                long lResult = truncateFirst ? (long)Math.Truncate(decResult) : (long) Math.Floor(decResult);
                 if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
                     return (int)lResult;
 
@@ -1805,7 +1835,7 @@ public static class MathHelper
             }
             if (result is double dResult)
             {
-                long lResult = (long)Math.Truncate(dResult);
+                long lResult = truncateFirst ? (long)Math.Truncate(dResult) : (long)Math.Floor(dResult);
                 if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
                     return (int)lResult;
 
@@ -1813,7 +1843,7 @@ public static class MathHelper
             }
             if (result is float fResult)
             {
-                long lResult = (long)Math.Truncate(fResult);
+                long lResult = truncateFirst ? (long)Math.Truncate(fResult) : (long)Math.Floor(fResult);
                 if (lResult >= Int32.MinValue && lResult <= Int32.MaxValue)
                     return (int)lResult;
 
@@ -1824,7 +1854,7 @@ public static class MathHelper
         {
             if (result is decimal decResult)
             {
-                long lResult = (long)Math.Truncate(decResult);
+                long lResult = truncateFirst ? (long)Math.Truncate(decResult) : (long)Math.Floor(decResult);
                 if (t == typeof(long) || lResult < Int32.MinValue || lResult > Int32.MaxValue)
                     return lResult;
 
@@ -1832,7 +1862,7 @@ public static class MathHelper
             }
             if (result is double dResult)
             {
-                long lResult = (long)Math.Truncate(dResult);
+                long lResult = truncateFirst ? (long)Math.Truncate(dResult) : (long)Math.Floor(dResult);
                 if (t == typeof(long) || lResult < Int32.MinValue || lResult > Int32.MaxValue)
                     return lResult;
 
@@ -1840,7 +1870,7 @@ public static class MathHelper
             }
             if (result is float fResult)
             {
-                long lResult = (long)Math.Truncate(fResult);
+                long lResult = truncateFirst ? (long)Math.Truncate(fResult) : (long)Math.Floor(fResult);
                 if (t == typeof(long) || lResult < Int32.MinValue || lResult > Int32.MaxValue)
                     return lResult;
 
@@ -3620,6 +3650,9 @@ public static class MathHelper
             BigDecimal bigD => ((int)bigD),
 
             int i => i,
+            double dd => (int)Math.Truncate(dd),
+            decimal dc => (int)Math.Truncate(dc),
+            float df => (int)Math.Truncate(df),
             char ch => Convert.ToInt32(ch.ToString(), options.CultureInfo),
             _ => Convert.ToInt32(value, options.CultureInfo)
         };
@@ -3636,6 +3669,9 @@ public static class MathHelper
                 BigDecimal bigD => ((int)bigD),
 
                 int i => i,
+                double dd => (int)Math.Truncate(dd),
+                decimal dc => (int)Math.Truncate(dc),
+                float df => (int)Math.Truncate(df),
                 char ch => Convert.ToInt32(ch.ToString(), cultureInfo),
                 _ => Convert.ToInt32(value, cultureInfo)
             };
@@ -3664,6 +3700,9 @@ public static class MathHelper
             int i => i,
             short s => s,
             sbyte sb => sb,
+            double dd => (long)Math.Truncate(dd),
+            decimal dc => (long)Math.Truncate(dc),
+            float df => (long)Math.Truncate(df),
             char ch => Convert.ToInt64(ch.ToString(), options.CultureInfo),
             _ => Convert.ToInt64(value, options.CultureInfo)
         };
@@ -3687,6 +3726,9 @@ public static class MathHelper
                 short s => s,
                 sbyte sb => sb,
                 char ch => Convert.ToInt64(ch.ToString(), cultureInfo),
+                double dd => (long) Math.Truncate(dd),
+                decimal dc => (long) Math.Truncate(dc),
+                float df => (long) Math.Truncate(df),
                 _ => Convert.ToInt64(value, cultureInfo)
             };
         }
@@ -3717,6 +3759,9 @@ public static class MathHelper
             uint ui => ui,
             ushort us => us,
             byte b => b,
+            double dd => (ulong)Math.Truncate(dd),
+            decimal dc => (ulong)Math.Truncate(dc),
+            float df => (ulong)Math.Truncate(df),
             char ch => Convert.ToUInt64(ch.ToString(), options.CultureInfo),
             _ => Convert.ToUInt64(value, options.CultureInfo)
         };
@@ -3742,6 +3787,9 @@ public static class MathHelper
                 uint ui => ui,
                 ushort us => us,
                 byte b => b,
+                double dd => (ulong)Math.Truncate(dd),
+                decimal dc => (ulong)Math.Truncate(dc),
+                float df => (ulong)Math.Truncate(df),
                 char ch => Convert.ToUInt64(ch.ToString(), cultureInfo),
                 _ => Convert.ToUInt64(value, cultureInfo)
             };

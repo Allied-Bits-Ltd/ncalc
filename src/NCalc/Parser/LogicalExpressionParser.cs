@@ -1796,6 +1796,10 @@ public static class LogicalExpressionParser
 
                 if (x.Item2.Item2 is not null && x.Item2.Item3 is null && x.Item2.Item5 is null) // only the first index is available
                 {
+                    // The first and only index is from end
+                    if (x.Item2.Item1 is not null)
+                        return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, new UnaryExpression(UnaryExpressionType.FromEnd, x.Item2.Item2)).SetLocation(new ParlotExpressionLocation(ctx));
+
                     return new BinaryExpression(BinaryExpressionType.IndexAccess, x.Item1, x.Item2.Item2).SetLocation(new ParlotExpressionLocation(ctx));
                 }
                 else

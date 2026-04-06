@@ -58,7 +58,7 @@ The C# "from end" syntax using a caret (^) is also supported. Any boundary of th
 (1; 2; 3)[1..2] // produces 2
 (1; 2; 3)[0..2] // produces (1; 2)
 'abcd'[1..3] // produces "bc"
-'abcd'[^2..^1] // produces "bc"
+'abcd'[^2..^1] // produces "c"
 'abcd'[..^1] // produces "abc"
 'abcd'[2..] // produces "cd"
 'abcd'[..] // produces "abcd"
@@ -152,7 +152,7 @@ Multiplicative operators perform multiplication, division, and modulus operation
 
 * `*` : Multiplication
 * `/` : Division
-* `//` : Integer Division (Python-like - division may be performed on floating-point operands, and the result is truncated)
+* `//` : Integer Division (Python-like - division may be performed on floating-point operands, and a floating-point result is floor'ed)
 * `\\` : Integer Division (Basic-like - floating-point operands are truncated first)
 * `div` : Integer Division (Basic-like - floating-point operands are truncated first)
 * `%` : Modulus (when percent calculation is disabled)

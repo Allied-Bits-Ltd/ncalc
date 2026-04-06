@@ -1,3 +1,9 @@
+# 9.0.2 (Allied Bits)
+
+* Fixed the handling of slice access to lists (e.g., "(1; 2; 3; 4)[^2..^1]").
+* Fixed the handling of indexed access when the index was from end (e.g., "abcde"[^1]).
+* Corrected the integer division to explicitly use Truncate for Basic-like division and Floor for Python-like division.
+
 # 9.0.1 (Allied Bits)
 
 * Added JSON serialization of complex numbers and vectors.
