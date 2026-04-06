@@ -2,6 +2,7 @@
 
 * Added JSON serialization of complex numbers and vectors.
 * Complex numbers in the Ni form were not recognized by the parser when parsing of percent was enabled. Fixed.
+* Added Vector bitwise/shift/modulo ops and ComplexNumber.Log10
 
 # 9.0 (Allied Bits)
 
