@@ -760,6 +760,26 @@ namespace NCalc.Domain
 
         private readonly MathHelperOptions _mathHelperOptions;
 
+        /// <summary>
+        /// Parameterless constructor for JSON deserialization.
+        /// <see cref="MathHelperOptions"/> will be reconstructed by the visitor from <see cref="LogicalExpression.Options"/> and <see cref="LogicalExpression.CultureInfo"/>.
+        /// </summary>
+        public ImaginaryNumberExpression()
+        {
+            Expression = null!;
+        }
+
+        /// <summary>
+        /// Constructor used by the JSON deserializer to restore <see cref="Expression"/> from the AST.
+        /// </summary>
+#if NET
+        [System.Text.Json.Serialization.JsonConstructor]
+#endif
+        public ImaginaryNumberExpression(LogicalExpression expression)
+        {
+            Expression = expression;
+        }
+
         public ImaginaryNumberExpression(LogicalExpression expression, MathHelperOptions mathHelperOptions)
         {
             Expression = expression;

@@ -1,10 +1,14 @@
+using ExtendedNumerics;
+
 using NCalc.Domain;
 using NCalc.Factories;
+using NCalc.Helpers;
 using NCalc.Tests.TestData;
 
 using Newtonsoft.Json;
 
 using JsonSerializer = System.Text.Json.JsonSerializer;
+using NCalcVector = NCalc.Domain.Vector;
 
 namespace NCalc.Tests;
 
@@ -171,4 +175,74 @@ public class SerializationTests
         Assert.Equal("()", new LogicalExpressionList([]).ToString());
         Assert.Equal("((True); ('Hello'; 'World'))", new LogicalExpressionList([trueArrayExpression, helloWorldArrayExpression]).ToString());
     }
+
+#if NET
+    [Fact]
+    public void ShouldSerializeImaginaryNumberExpression()
+    {
+        // "2i" parses to an ImaginaryNumberExpression wrapping ValueExpression(2)
+        var advancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.ParseComplexNumbers);
+        var parsed = LogicalExpressionFactory.Create("2i", advancedOptions: advancedOptions,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var json = JsonSerializer.Serialize(parsed);
+        var restored = JsonSerializer.Deserialize<LogicalExpression>(json);
+
+        Assert.NotNull(restored);
+        Assert.IsType<ImaginaryNumberExpression>(restored);
+    }
+
+    [Fact]
+    public void ShouldSerializeVectorExpression()
+    {
+        // "[1; 2; 3]" parses to a VectorExpression
+        var advancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.ParseVectors);
+        var parsed = LogicalExpressionFactory.Create("[1; 2; 3]", advancedOptions: advancedOptions,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        var json = JsonSerializer.Serialize(parsed);
+        var restored = JsonSerializer.Deserialize<LogicalExpression>(json);
+
+        Assert.NotNull(restored);
+        Assert.IsType<VectorExpression>(restored);
+        var restoredVec = (VectorExpression)restored;
+        Assert.Equal(3, restoredVec.Expressions.Count);
+    }
+
+    [Fact]
+    public void ShouldSerializeComplexNumberValue()
+    {
+        // A ValueExpression whose Value is a ComplexNumber should round-trip through JSON
+        var complexNumber = new ComplexNumber(new BigDecimal(3), new BigDecimal(4));
+        var ve = new ValueExpression { Value = complexNumber };
+
+        var json = JsonSerializer.Serialize<LogicalExpression>(ve);
+        var restored = (ValueExpression)JsonSerializer.Deserialize<LogicalExpression>(json)!;
+
+        Assert.NotNull(restored.Value);
+        Assert.IsType<ComplexNumber>(restored.Value);
+        var cn = (ComplexNumber)restored.Value;
+        Assert.Equal(complexNumber.Real, cn.Real);
+        Assert.Equal(complexNumber.Imaginary, cn.Imaginary);
+    }
+
+    [Fact]
+    public void ShouldSerializeVectorValue()
+    {
+        // A ValueExpression whose Value is a Vector should round-trip through JSON
+        var vector = new NCalcVector(new BigDecimal[] { 1, 2, 3 });
+        var ve = new ValueExpression { Value = vector };
+
+        var json = JsonSerializer.Serialize<LogicalExpression>(ve);
+        var restored = (ValueExpression)JsonSerializer.Deserialize<LogicalExpression>(json)!;
+
+        Assert.NotNull(restored.Value);
+        Assert.IsType<NCalcVector>(restored.Value);
+        var v = (NCalcVector)restored.Value;
+        Assert.Equal(3, v.Dimensions);
+        Assert.Equal((BigDecimal)1, v.Components[0]);
+        Assert.Equal((BigDecimal)2, v.Components[1]);
+        Assert.Equal((BigDecimal)3, v.Components[2]);
+    }
+#endif
 }

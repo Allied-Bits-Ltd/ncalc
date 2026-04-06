@@ -657,15 +657,50 @@ namespace NCalc.Domain
     /// AST node representing a vector literal: a fixed-length list of component expressions
     /// that are each evaluated to a numeric value and combined into a <see cref="Vector"/>.
     /// </summary>
-    public sealed class VectorExpression(LogicalExpressionList expressions, MathHelperOptions mathHelperOptions) : LogicalExpression
+    public sealed class VectorExpression : LogicalExpression
     {
         /// <summary>
         /// The ordered list of component expressions.
         /// Each expression must evaluate to a numeric value; together they define the vector's dimensions.
         /// </summary>
-        public LogicalExpressionList Expressions { get; set; } = expressions;
+        public LogicalExpressionList Expressions { get; set; }
 
-        public MathHelperOptions MathHelperOptions { get; } = mathHelperOptions;
+        /// <summary>
+        /// Runtime-only options used during evaluation.
+        /// Not serialized — reconstructed by the visitor from <see cref="LogicalExpression.Options"/> and <see cref="LogicalExpression.CultureInfo"/>.
+        /// </summary>
+#if NET
+        [System.Text.Json.Serialization.JsonIgnore]
+#endif
+        public MathHelperOptions MathHelperOptions { get; private set; }
+
+        /// <summary>
+        /// Parameterless constructor for JSON deserialization.
+        /// </summary>
+        public VectorExpression()
+        {
+            Expressions = new LogicalExpressionList();
+        }
+
+        /// <summary>
+        /// Constructor used by the JSON deserializer to restore <see cref="Expressions"/> from the AST.
+        /// </summary>
+#if NET
+        [System.Text.Json.Serialization.JsonConstructor]
+#endif
+        public VectorExpression(LogicalExpressionList expressions)
+        {
+            Expressions = expressions;
+        }
+
+        /// <summary>
+        /// Full constructor used by the parser.
+        /// </summary>
+        public VectorExpression(LogicalExpressionList expressions, MathHelperOptions mathHelperOptions)
+        {
+            Expressions = expressions;
+            MathHelperOptions = mathHelperOptions;
+        }
 
         public override T Accept<T>(ILogicalExpressionVisitor<T> visitor, CancellationToken cancellationToken = default)
         {
