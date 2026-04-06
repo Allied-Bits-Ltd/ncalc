@@ -1862,24 +1862,11 @@ public static class LogicalExpressionParser
             }
         );
 
-        Parser<LogicalExpression> factorialOrPercent;
+        Parser<LogicalExpression> nextParser = factorial;
 
-        if (calculatePercent || useComplexNumbers)
+        if (useComplexNumbers)
         {
-            Parser<LogicalExpression>? numberPercent = calculatePercent ? factorial.And(ZeroOrOne(percentChar, '\0'))
-                .Then<LogicalExpression>(static (ctx, x) =>
-                {
-                    if (x.Item2 == '\0')
-                    {
-                        // there is just a primary discovered
-                        return x.Item1;
-                    }
-                    return new PercentExpression(x.Item1).SetLocation(new ParlotExpressionLocation(ctx));
-                }) : null;
-            Parser<LogicalExpression>? numberPercent2 = calculatePercent ? percentChar.And(factorial)
-                .Then<LogicalExpression>(static (ctx, x) => new PercentExpression(x.Item2).SetLocation(new ParlotExpressionLocation(ctx))) : null;
-
-            Parser<LogicalExpression>? numberComplex = useComplexNumbers ? factorial.And(ZeroOrOne(imaginaryChar, '\0'))
+            nextParser = nextParser.And(ZeroOrOne(imaginaryChar, '\0'))
                 .Then<LogicalExpression>((ctx, x) =>
                 {
                     if (x.Item2 == '\0')
@@ -1888,46 +1875,91 @@ public static class LogicalExpressionParser
                         return x.Item1;
                     }
                     return new ImaginaryNumberExpression(x.Item1, new Helpers.MathHelperOptions(cultureInfo, options)).SetLocation(new ParlotExpressionLocation(ctx));
-                }) : null;
+                });
+        }
 
-            if (calculatePercent && useComplexNumbers)
-                factorialOrPercent = OneOf(numberPercent!, numberPercent2!, numberComplex!);
-            else
-            if (calculatePercent)
-                factorialOrPercent = OneOf(numberPercent!, numberPercent2!);
-            else
-                factorialOrPercent = numberComplex!;
-        }
-        else
+        if (calculatePercent)
         {
-            factorialOrPercent = factorial;
+            Parser<LogicalExpression>? numberPercent = nextParser.And(ZeroOrOne(percentChar, '\0'))
+                .Then<LogicalExpression>(static (ctx, x) =>
+                {
+                    if (x.Item2 == '\0')
+                    {
+                        // there is just a primary discovered
+                        return x.Item1;
+                    }
+                    return new PercentExpression(x.Item1).SetLocation(new ParlotExpressionLocation(ctx));
+                });
+            Parser<LogicalExpression>? numberPercent2 = percentChar.And(nextParser)
+                .Then<LogicalExpression>(static (ctx, x) => new PercentExpression(x.Item2).SetLocation(new ParlotExpressionLocation(ctx)));
+
+            nextParser = OneOf(numberPercent!, numberPercent2!);
         }
+
+            /*if (calculatePercent || useComplexNumbers)
+            {
+                Parser<LogicalExpression>? numberPercent = calculatePercent ? factorial.And(ZeroOrOne(percentChar, '\0'))
+                    .Then<LogicalExpression>(static (ctx, x) =>
+                    {
+                        if (x.Item2 == '\0')
+                        {
+                            // there is just a primary discovered
+                            return x.Item1;
+                        }
+                        return new PercentExpression(x.Item1).SetLocation(new ParlotExpressionLocation(ctx));
+                    }) : null;
+                Parser<LogicalExpression>? numberPercent2 = calculatePercent ? percentChar.And(factorial)
+                    .Then<LogicalExpression>(static (ctx, x) => new PercentExpression(x.Item2).SetLocation(new ParlotExpressionLocation(ctx))) : null;
+
+                Parser<LogicalExpression>? numberComplex = useComplexNumbers ? factorial.And(ZeroOrOne(imaginaryChar, '\0'))
+                    .Then<LogicalExpression>((ctx, x) =>
+                    {
+                        if (x.Item2 == '\0')
+                        {
+                            // there is just a primary discovered
+                            return x.Item1;
+                        }
+                        return new ImaginaryNumberExpression(x.Item1, new Helpers.MathHelperOptions(cultureInfo, options)).SetLocation(new ParlotExpressionLocation(ctx));
+                    }) : null;
+
+                if (calculatePercent && useComplexNumbers)
+                    factorialOrPercent = OneOf(numberPercent!, numberPercent2!, numberComplex!);
+                else
+                if (calculatePercent)
+                    factorialOrPercent = OneOf(numberPercent!, numberPercent2!);
+                else
+                    factorialOrPercent = numberComplex!;
+            }
+            else
+            {
+                factorialOrPercent = factorial;
+            }*/
 
         // Either a factorial, primary, or exponential
         // exponential => factorial ( "**" factorial )* ;
-        var exponential = factorialOrPercent.And(ZeroOrMany(exponent.And(factorial)))
-            .Then(static (ctx, x) =>
+        var exponential = nextParser.And(ZeroOrMany(exponent.And(factorial)))
+        .Then(static (ctx, x) =>
+        {
+            LogicalExpression result = null!;
+
+            switch (x.Item2.Count)
             {
-                LogicalExpression result = null!;
-
-                switch (x.Item2.Count)
+                case 0:
+                    return x.Item1;
+                case 1:
+                    return new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, x.Item2[0].Item2).SetLocation(new ParlotExpressionLocation(ctx));
+                default:
                 {
-                    case 0:
-                        return x.Item1;
-                    case 1:
-                        return new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, x.Item2[0].Item2).SetLocation(new ParlotExpressionLocation(ctx));
-                    default:
+                    for (int i = x.Item2.Count - 1; i > 0; i--)
                     {
-                        for (int i = x.Item2.Count - 1; i > 0; i--)
-                        {
-                            result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item2[i - 1].Item2,
-                                x.Item2[i].Item2).SetLocation(new ParlotExpressionLocation(ctx));
-                        }
-
-                        return new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, result).SetLocation(new ParlotExpressionLocation(ctx));
+                        result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item2[i - 1].Item2,
+                            x.Item2[i].Item2).SetLocation(new ParlotExpressionLocation(ctx));
                     }
+
+                    return new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, result).SetLocation(new ParlotExpressionLocation(ctx));
                 }
-            });
+            }
+        });
 
         // ( "-" | "!" | "not" | "~" | root2 | root3 | root4 ) factorial | exponential | primary;
         List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)> unaryOps =

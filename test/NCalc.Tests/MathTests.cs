@@ -742,6 +742,24 @@ public class MathsTests : TestBase
     }
 
     [Theory]
+    [InlineData("2i", 0, 2)]
+    [InlineData("2i*2", 0, 4)]
+    [InlineData("(1+2i)*2", 2, 4)]
+    [InlineData("1 + i", 1, 1)]
+    [InlineData("1 - i", 1, -1)]
+    [InlineData("(2 + 5) + (2+2)i", 7, 4)]
+    public void ShouldHandleComplexNumbers2(string expr, double expectedReal, double expectedImaginary)
+    {
+        var expression = new NCalc.Expression(expr, ExpressionOptions.IgnoreCaseAtBuiltInFunctions | ExpressionOptions.NoCache | ExpressionOptions.AllowNullParameter | ExpressionOptions.OverflowProtection | ExpressionOptions.AllowCharValues | ExpressionOptions.NoStringTypeCoercion | ExpressionOptions.DontParseGuids | ExpressionOptions.SupportTimeOperations | ExpressionOptions.LowerCaseIdentifierLookup | ExpressionOptions.SkipLogicalAndBitwiseOpChars | ExpressionOptions.UseUnicodeCharsForOperations | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.ReduceDivResultToInteger | ExpressionOptions.UseBigNumbers | ExpressionOptions.CompareNullValues | ExpressionOptions.SupportCStyleComments | ExpressionOptions.UseLoops | ExpressionOptions.UseIfStatement);
+        expression.AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.AcceptUnderscoresInNumbers | AdvExpressionOptions.CalculatePercent | AdvExpressionOptions.UseResultReference | AdvExpressionOptions.AcceptCurrencySymbol | AdvExpressionOptions.ParseHumanePeriods | AdvExpressionOptions.ParseComplexNumbers | AdvExpressionOptions.ParseVectors);
+
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.IsType<ComplexNumber>(result);
+        Assert.True(((ComplexNumber)result).Real.Equals(expectedReal));
+        Assert.True(((ComplexNumber)result).Imaginary.Equals(expectedImaginary));
+    }
+
+    [Theory]
     [InlineData("[1; 2]", 2, 2)]
     [InlineData("[2]", 1, 2)]
     [InlineData("[1; 2; 3]", 3, 3)]

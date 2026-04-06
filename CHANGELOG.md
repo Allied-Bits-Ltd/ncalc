@@ -1,3 +1,8 @@
+# 9.0.1 (Allied Bits)
+
+* Added JSON serialization of complex numbers and vectors.
+* Complex numbers in the Ni form were not recognized by the parser when parsing of percent was enabled. Fixed.
+
 # 9.0 (Allied Bits)
 
 * Added parsing of and operations with vectors (Vector class).

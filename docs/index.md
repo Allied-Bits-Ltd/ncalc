@@ -19,7 +19,9 @@ Over the years, several variants of NCalc have evolved from the original library
 * User-defined functions with named parameters (right in the expression, yes).
 * Percent calculations.
 * Factorials (both regular and any complex factorials on integers are supported).
-* Ternary logic support in logical operations
+* Ternary logic support in logical operations.
+* Parsing of complex numbers and operations with them.
+* Parsing of vectors and operations with them.
 * The 'return' flow control keyword that lets one return a value without completely evaluating the expression (useful in complex expressions with multiple statements, conditions, or loops, as well as with user-defined functions). 
 * Advanced date and time parsing, which takes into account culture settings (current or specific culture or custom separators) and supports times with or without seconds as well as 12-hour time and ISO 8601 dates and times.
 * Parsing of humane date expressions like "3 days ago" or "in 5 weeks" (identifiers are customizable and multiple identifiers are supported).

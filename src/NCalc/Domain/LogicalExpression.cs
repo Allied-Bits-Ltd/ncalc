@@ -23,6 +23,8 @@ namespace NCalc.Domain;
 [JsonDerivedType(typeof(PercentExpression), typeDiscriminator: "percent")]
 [JsonDerivedType(typeof(ExpressionGroup), typeDiscriminator: "expressionGroup")]
 [JsonDerivedType(typeof(ValueExpression), typeDiscriminator: "value")]
+[JsonDerivedType(typeof(ImaginaryNumberExpression), typeDiscriminator: "imaginary")]
+[JsonDerivedType(typeof(VectorExpression), typeDiscriminator: "vector")]
 #endif
 public abstract class LogicalExpression
 {
