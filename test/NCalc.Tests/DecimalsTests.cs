@@ -109,7 +109,8 @@ public class DecimalsTests : TestBase
     [Fact]
     public void ShouldNotRoundDecimalValues()
     {
-        Assert.Equal(false, new Expression("0 <= -0.6").Evaluate(TestContext.Current.CancellationToken));
+        var result = new Expression("0 <= -0.6").Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(false, result);
     }
 
     [Fact]

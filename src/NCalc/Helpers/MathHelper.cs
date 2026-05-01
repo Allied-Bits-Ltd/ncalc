@@ -2174,6 +2174,54 @@ public static class MathHelper
     }
 
     /// <summary>
+    /// Flips the sign of a boxed numeric value.
+    /// For float and double, negating +0 produces -0 (IEEE 754 negative zero).
+    /// For integer types and decimal, negating 0 produces 0 (no negative zero concept).
+    /// Returns null if the input is null or an unsupported type.
+    /// </summary>
+    public static object? Negate(object? value, bool reduceType, MathHelperOptions options)
+    {
+        if (value is null)
+            return null;
+
+        object result = value switch
+        {
+            // Signed integers — negate directly
+            sbyte sb => unchecked((sbyte)(-sb)),
+            short s => unchecked((short)(-s)),
+            int i => unchecked(-i),
+            long l => unchecked(-l),
+
+            // Unsigned integers — no negation concept; return 0 for 0, overflow otherwise
+            // (wrap via signed, or throw — your choice)
+            byte b => unchecked((-((short)b))),    // wraps: Negate(1) => 255
+            ushort us => unchecked(-((int)us)),
+            uint ui => unchecked(-((long)ui)),
+            ulong ul => options.UseBigNumbers ? -(new BigInteger(ul)) : checked(-(long)ul),
+
+            // IEEE 754: -0.0f and -0.0d are distinct bit patterns from +0
+            float f => -f,   // correctly produces -0f when f == +0f
+            double d => -d,   // correctly produces -0d when d == +0d
+
+            // decimal has no negative zero — negating 0m gives 0m
+            decimal dc => -dc,
+
+            // BigInteger has no negative zero either
+            BigInteger bi => -bi,
+
+            // BigDecimal (ExtendedNumerics) — check its API; most implementations support unary minus
+            BigDecimal bd => -bd,
+
+            _ => throw new NCalcEvaluationException($"Unsupported type ${value.GetType().Name} in the negate operation"),
+        };
+
+        if (reduceType)
+            return ReduceNumericType(result, null, options);
+
+        return result;
+    }
+
+    /// <summary>
     /// The method attempts to raise the number of bits in <paramref name="a"/> and <paramref name="b"/>, update the arguments to have a new type, and return the type code of the resulting type.
     /// </summary>
     /// <param name="a">The first argument to expand.</param>

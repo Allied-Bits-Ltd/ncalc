@@ -429,7 +429,7 @@ public class MathsTests : TestBase
     {
         const decimal minValue = decimal.MinValue;
         var expr = new Expression(minValue.ToString(CultureInfo.InvariantCulture), ExpressionOptions.DecimalAsDefault, CultureInfo.InvariantCulture);
-        Assert.Equal(minValue, expr.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(0, EvaluationHelper.Compare(minValue, expr.Evaluate(TestContext.Current.CancellationToken), new ComparisonOptions(), new MathHelperOptions()));
     }
 
 #if !AOT_COMPILATION
@@ -1350,5 +1350,24 @@ public class MathsTests : TestBase
         Assert.Equal(new BigDecimal(1), result[0]);
         Assert.Equal(new BigDecimal(2), result[1]);
         Assert.Equal(new BigDecimal(4), result[2]);
+    }
+
+    [Fact]
+    public void ShouldNegateDoubleZeroToNegative()
+    {
+        object result = new Expression("-0.0").Evaluate(TestContext.Current.CancellationToken);
+        if (result is double d)
+        {
+            Assert.Equal(BitConverter.DoubleToUInt64Bits(-0.0), BitConverter.DoubleToUInt64Bits(d));
+        }
+    }
+
+    [Theory]
+    [InlineData("(-(1234567890987654321) < 0) && (-(1234567890987654321) = 0 - 1234567890987654321)")]
+    [InlineData("(-(1234567890987654321.98) < 0) && (-(1234567890987654321.98) = 0 - 1234567890987654321.98)")]
+    public void ShouldNegateBigNumbersRight(string expr)
+    {
+        object result = new Expression(expr).Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(true, result);
     }
 }

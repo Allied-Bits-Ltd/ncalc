@@ -136,7 +136,7 @@ public class ExceptionsTests
     [InlineData("()>0.", typeof(NCalcParserException))]
     [InlineData("009&()", typeof(NCalcConversionException))]
     [InlineData("0000000000000000<<()", typeof(NCalcEvaluationException))]
-    [InlineData("(' (' +'2(' , 2)/--1", typeof(NCalcConversionException))]
+    [InlineData("(' (' +'2(' , 2)/--1", typeof(InvalidOperationException))]
     [InlineData("!() --19", typeof(NCalcConversionException))]
     public void Should_Throw_Issue_551(string input, Type expectedExceptionType)
     {

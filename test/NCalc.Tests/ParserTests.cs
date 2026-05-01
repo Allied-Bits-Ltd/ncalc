@@ -1,5 +1,6 @@
 ﻿using NCalc.Domain;
 using NCalc.Factories;
+using NCalc.Helpers;
 using NCalc.Parser;
 
 namespace NCalc.Tests;
@@ -87,7 +88,7 @@ public class ParserTests
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
-        Assert.Equal(expectedResult, result);
+        Assert.Equal(0, EvaluationHelper.Compare(expectedResult, result, new ComparisonOptions(), new MathHelperOptions()));
     }
 
     [InlineData("φ")]

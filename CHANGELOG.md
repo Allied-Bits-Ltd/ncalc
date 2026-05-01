@@ -1,3 +1,8 @@
+# 9.0.3 (Allied Bits)
+
+* Fixed comparison of a BigInteger or BigDecimal with a second value of a different type.
+* The negation operation has been rewritten to not use subtraction. 
+
 # 9.0.2 (Allied Bits)
 
 * Fixed the handling of slice access to lists (e.g., "(1; 2; 3; 4)[^2..^1]").

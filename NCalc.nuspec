@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
     <id>AlliedBits.NCalc</id>
-    <version>9.0.2</version>
+    <version>9.0.3</version>
     <authors>Sebastien Ros and contributors, Eugene Mayevski</authors>
     <copyright>Sebastien Ros and contributors, Eugene Mayevski</copyright>
     <license type="expression">MIT</license>
@@ -24,8 +24,7 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
         <dependency id="ExtendedNumerics.BigDecimal" version="3003.0.0.346" exclude="Build,Analyzers" />
         <dependency id="FastExpressionCompiler" version="5.3.0" exclude="Build,Analyzers" />        
         <dependency id="Microsoft.CSharp" version="4.7.0" exclude="Build,Analyzers" />
-        <dependency id="Microsoft.Extensions.Logging.Console" version="10.0.0" exclude="Build,Analyzers" />
-        <dependency id="Microsoft.Extensions.Logging.TraceSource" version="10.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="10.0.0" exclude="Build,Analyzers" />
         <dependency id="NerdBank.GitVersioning" version="3.9.50" exclude="Build,Analyzers" />
         <dependency id="NETStandard.Library" version="2.0.3" exclude="Build,Analyzers" />
         <dependency id="PolySharp" version="1.15" exclude="Build,Analyzers" />
@@ -36,24 +35,21 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
         <dependency id="AlliedBits.Parlot" version="1.5.7" exclude="Build,Analyzers" />
         <dependency id="ExtendedNumerics.BigDecimal" version="3003.0.0.346" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Bcl.AsyncInterfaces" version="9.0.2" exclude="Build,Analyzers" />
-        <dependency id="Microsoft.Extensions.Logging.Console" version="9.0.2" exclude="Build,Analyzers" />
-        <dependency id="Microsoft.Extensions.Logging.TraceSource" version="9.0.2" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="9.0.2" exclude="Build,Analyzers" />
         <dependency id="Microsoft.Extensions.ObjectPool" version="9.0.2" exclude="Build,Analyzers" />
       </group>
       <group targetFramework="net9.0">
         <dependency id="AlliedBits.Parlot" version="1.5.7" exclude="Build,Analyzers" />
         <dependency id="ExtendedNumerics.BigDecimal" version="3003.0.0.346" exclude="Build,Analyzers" />
         <dependency id="FastExpressionCompiler" version="5.3.0" exclude="Build,Analyzers" />        
-        <dependency id="Microsoft.Extensions.Logging.Console" version="10.0.0" exclude="Build,Analyzers" />
-        <dependency id="Microsoft.Extensions.Logging.TraceSource" version="10.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="10.0.0" exclude="Build,Analyzers" />
         <dependency id="NerdBank.GitVersioning" version="3.9.50" exclude="Build,Analyzers" />
         <dependency id="System.Collections.Immutable" version="10.0.0" exclude="Build,Analyzers" />
       </group>
       <group targetFramework="net10.0">
         <dependency id="AlliedBits.Parlot" version="1.5.7" exclude="Build,Analyzers" />
         <dependency id="ExtendedNumerics.BigDecimal" version="3003.0.0.346" exclude="Build,Analyzers" />
-        <dependency id="Microsoft.Extensions.Logging.Console" version="10.0.0" exclude="Build,Analyzers" />
-        <dependency id="Microsoft.Extensions.Logging.TraceSource" version="10.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="10.0.0" exclude="Build,Analyzers" />
         <dependency id="NerdBank.GitVersioning" version="3.9.50" exclude="Build,Analyzers" />
         <dependency id="System.Collections.Immutable" version="10.0.0" exclude="Build,Analyzers" />
       </group>
@@ -61,8 +57,7 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
         <dependency id="AlliedBits.Parlot" version="1.5.7" exclude="Build,Analyzers" />
         <dependency id="ExtendedNumerics.BigDecimal" version="3003.0.0.346" exclude="Build,Analyzers" />
         <dependency id="Microsoft.CSharp" version="4.7.0" exclude="Build,Analyzers" />
-        <dependency id="Microsoft.Extensions.Logging.Console" version="10.0.0" exclude="Build,Analyzers" />
-        <dependency id="Microsoft.Extensions.Logging.TraceSource" version="10.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="10.0.0" exclude="Build,Analyzers" />
         <dependency id="NETStandard.Library" version="2.0.3" exclude="Build,Analyzers" />
         <dependency id="NerdBank.GitVersioning" version="3.9.50" exclude="Build,Analyzers" />
         <dependency id="PolySharp" version="1.15" exclude="Build,Analyzers" />

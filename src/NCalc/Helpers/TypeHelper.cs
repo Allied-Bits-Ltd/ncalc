@@ -175,7 +175,7 @@ public static class TypeHelper
                         }
                         else
                         {
-                            outcome = ((BigDecimal)bVal).CompareTo(MathHelper.ConvertToBigDecimal(aVal));
+                            outcome = MathHelper.ConvertToBigDecimal(aVal).CompareTo(((BigDecimal)bVal));
                         }
                     }
                     else
@@ -190,7 +190,7 @@ public static class TypeHelper
                         }
                         else
                         {
-                            outcome = ((BigInteger)bVal).CompareTo(MathHelper.ConvertToBigInteger(aVal));
+                                outcome = MathHelper.ConvertToBigInteger(aVal).CompareTo(((BigInteger)bVal));
                         }
                     }
                     return true;

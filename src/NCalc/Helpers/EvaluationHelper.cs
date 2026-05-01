@@ -374,7 +374,7 @@ public static class EvaluationHelper
             }
             else
             {
-                result = ((BigDecimal)b).CompareTo(MathHelper.ConvertToBigDecimal(a));
+                result = MathHelper.ConvertToBigDecimal(a).CompareTo((BigDecimal)b);
             }
         }
         else
@@ -389,7 +389,7 @@ public static class EvaluationHelper
             }
             else
             {
-                result = ((BigInteger)b).CompareTo(MathHelper.ConvertToBigInteger(a));
+                result = MathHelper.ConvertToBigInteger(a).CompareTo((BigInteger)b);
             }
         }
         else
@@ -423,11 +423,12 @@ public static class EvaluationHelper
         {
             UnaryExpressionType.Not => !MathHelper.ConvertToBoolean(result, "Not", context.CultureInfo, expression.Location),
             UnaryExpressionType.Negate =>
-                (result is BigDecimal)
+                /*(result is BigDecimal)
                     ? MathHelper.Subtract((object)(long)0, (BigDecimal)result)
                     : ((result is BigInteger)
                         ? MathHelper.TryReduceToUInt64(MathHelper.Subtract((object)(long)0, (BigInteger)result))
-                        : MathHelper.Subtract(0, result, true, context)),
+                        : MathHelper.Subtract(0, result, true, context)),*/
+                MathHelper.Negate(result, context.Options.HasFlag(ExpressionOptions.ReduceArithmeticResultType), context),
             UnaryExpressionType.FromEnd => new NCalc.Domain.Index(MathHelper.ConvertToInt(result, "From End", context.CultureInfo, expression.Location), true),
             UnaryExpressionType.BitwiseNot =>
                 (result is NCalcVector vResult) ? ~vResult :

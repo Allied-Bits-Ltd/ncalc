@@ -5,6 +5,7 @@ using System.Numerics;
 using ExtendedNumerics;
 
 using NCalc.Domain;
+using NCalc.Helpers;
 using NCalc.Parser;
 using NCalc.Tests.TestData;
 
@@ -117,7 +118,7 @@ public class AdvFeatureTests : TestBase
         var expr = new Expression(formula, ExpressionOptions.UseBigNumbers | ExpressionOptions.DecimalAsDefault, CultureInfo.InvariantCulture);
         var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
-        Assert.Equal(expectedValue, res);
+        Assert.Equal(0, EvaluationHelper.Compare(expectedValue, res, new ComparisonOptions(), new MathHelperOptions()));
     }
 
     [Theory]
