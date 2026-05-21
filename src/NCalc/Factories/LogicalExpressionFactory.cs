@@ -11,13 +11,29 @@ namespace NCalc.Factories;
 /// <summary>
 /// Class responsible to create <see cref="LogicalExpression"/> objects. Parlot is used for parsing strings.
 /// </summary>
-public sealed class LogicalExpressionFactory(ILogger<LogicalExpressionFactory> logger) : ILogicalExpressionFactory
+public sealed class LogicalExpressionFactory : ILogicalExpressionFactory
 {
     private static readonly LogicalExpressionFactory Instance;
+    private readonly ILogger<LogicalExpressionFactory>? logger;
+
+    public LogicalExpressionFactory(ILogger<LogicalExpressionFactory>? logger)
+    {
+        this.logger = logger;
+    }
 
     static LogicalExpressionFactory()
     {
-        Instance = new LogicalExpressionFactory(DefaultLoggerFactory.Value.CreateLogger<LogicalExpressionFactory>());
+        ILogger<LogicalExpressionFactory>? logger = null;
+#pragma warning disable RCS1075 // Avoid empty catch clause that catches System.Exception
+        try
+        {
+            logger = DefaultLoggerFactory.Value.CreateLogger<LogicalExpressionFactory>();
+        }
+        catch (Exception)
+        {
+        }
+#pragma warning restore RCS1075 // Avoid empty catch clause that catches System.Exception
+        Instance = new LogicalExpressionFactory(logger);
     }
 
     public static LogicalExpressionFactory GetInstance() => Instance;
@@ -30,7 +46,7 @@ public sealed class LogicalExpressionFactory(ILogger<LogicalExpressionFactory> l
         }
         catch (Exception exception)
         {
-            logger.LogErrorCreatingLogicalExpression(exception, expression);
+            logger?.LogErrorCreatingLogicalExpression(exception, expression);
             throw new NCalcParserException("Error parsing the expression.", exception);
         }
     }
@@ -43,7 +59,7 @@ public sealed class LogicalExpressionFactory(ILogger<LogicalExpressionFactory> l
         }
         catch (Exception exception)
         {
-            logger.LogErrorCreatingLogicalExpression(exception, expression);
+            logger?.LogErrorCreatingLogicalExpression(exception, expression);
             throw new NCalcParserException("Error parsing the expression.", exception);
         }
     }
