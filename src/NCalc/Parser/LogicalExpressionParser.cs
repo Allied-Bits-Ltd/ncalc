@@ -366,10 +366,9 @@ public static class LogicalExpressionParser
 
             bigDecimalNumber =
                 ZeroOrOne(bigIntNumberD)
-                .And(Terms.AnyOf(decimalSeparators.AsSpan()))
+                .And(Terms.AnyOf(decimalSeparators.AsSpan(), 1, 1))
                 .And(bigUIntNumberD)
-                .And(ZeroOrOne(Terms.AnyOf("Ee".AsSpan())))
-                .And(ZeroOrOne(bigIntNumberD))
+                .And(ZeroOrOne(Terms.AnyOf("Ee".AsSpan(), 1, 1).And(bigIntNumberD)))
                 .When((_, val) => TryParseDecimal(val, acceptUnderscores) is not null)
                 .Then<LogicalExpression>(static (ctx, val) =>
                 {
@@ -2280,7 +2279,7 @@ public static class LogicalExpressionParser
         return enableParserCompilation ? expressionParser.Compile() : expressionParser;
     }
 
-    private static BigDecimal? TryParseDecimal((LogicalExpression, TextSpan, LogicalExpression, TextSpan, LogicalExpression) val, bool useUnderscores)
+    private static BigDecimal? TryParseDecimal((LogicalExpression, TextSpan, LogicalExpression, (TextSpan, LogicalExpression)) val, bool useUnderscores)
     {
         StringBuilder sb = new();
         if (val.Item1 is not null)
@@ -2296,18 +2295,16 @@ public static class LogicalExpressionParser
         if (useUnderscores)
             fracPart = fracPart.Replace("_", "");
         sb.Append(fracPart);
-        if (val.Item4.Length == 0)
+        /*if (val.Item4.Item1.Length == 0)
         {
-            if (val.Item5 is not null)
+            if (val.Item4.Item2 is not null)
                 return null;
         }
-
-        if (val.Item4.Length != 0)
+*/
+        if (val.Item4.Item1.Length != 0 && val.Item4.Item2 is not null)
         {
-            if (val.Item5 is null)
-                return null;
             sb.Append('E');
-            sb.Append(val.Item5.ToString()); // fractional part
+            sb.Append(val.Item4.Item2.ToString()); // fractional part
         }
         if (BigDecimal.TryParse(sb.ToString(), out BigDecimal result))
             return result;

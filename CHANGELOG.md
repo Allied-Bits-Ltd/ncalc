@@ -1,3 +1,7 @@
+# 9.0.4.1 (Allied Bits)
+
+* Improved parsing of big decimals so that they don't get in the way of other expressions. 
+
 # 9.0.3 (Allied Bits)
 
 * Fixed comparison of a BigInteger or BigDecimal with a second value of a different type.

@@ -5,6 +5,7 @@ using System.Numerics;
 using ExtendedNumerics;
 
 using NCalc.Domain;
+using NCalc.Exceptions;
 using NCalc.Helpers;
 using NCalc.Parser;
 using NCalc.Tests.TestData;
@@ -81,6 +82,18 @@ public class AdvFeatureTests : TestBase
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
         Assert.True(result is BigDecimal);
+    }
+
+    [Theory]
+    [InlineData("123456789012345678901234567890.123456789012345678901234567ee890")]
+    [InlineData("123456789012345678901234567890.-E2890")]
+    [InlineData("-123456789012345678901234567890.12345678901E")]
+    [InlineData(".123456789011234567890E28.90")]
+    [InlineData(".1234567890112345678901234567890.e-29")]
+    public void ShouldNotParseBrokenBigDecimal(string input)
+    {
+        var expression = new Expression(input, ExpressionOptions.UseBigNumbers | ExpressionOptions.DecimalAsDefault);
+        Assert.Throws<NCalcParserException>(() => expression.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Theory]
