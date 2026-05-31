@@ -971,14 +971,22 @@ public class AdvFeatureTests : TestBase
     [InlineData("100-5%", 95)]
     [InlineData("20 * %5", 1)]
     [InlineData("100 - %5", 95)]
+    [InlineData("1+7%", 1.07)]
+    [InlineData("10+5%", 10.5)]
     public void ShouldCalculatePercentAsNumber(string input, int expectedValue)
     {
-        var expression = new Expression(input, ExpressionOptions.NoCache);
+        var expression = new Expression(input, ExpressionOptions.IgnoreCaseAtBuiltInFunctions | ExpressionOptions.NoCache | ExpressionOptions.DecimalAsDefault | ExpressionOptions.AllowNullParameter | ExpressionOptions.OverflowProtection | ExpressionOptions.AllowCharValues | ExpressionOptions.NoStringTypeCoercion | ExpressionOptions.DontParseGuids | ExpressionOptions.SupportTimeOperations | ExpressionOptions.LowerCaseIdentifierLookup | ExpressionOptions.SkipLogicalAndBitwiseOpChars | ExpressionOptions.UseUnicodeCharsForOperations | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.ReduceDivResultToInteger | ExpressionOptions.UseBigNumbers | ExpressionOptions.CompareNullValues | ExpressionOptions.SupportCStyleComments | ExpressionOptions.UseLoops | ExpressionOptions.UseIfStatement);
         expression.AdvancedOptions = new AdvancedExpressionOptions();
-        expression.AdvancedOptions.Flags |= AdvExpressionOptions.CalculatePercent;
+        expression.AdvancedOptions.Flags = AdvExpressionOptions.AcceptUnderscoresInNumbers | AdvExpressionOptions.CalculatePercent | AdvExpressionOptions.UseResultReference | AdvExpressionOptions.AcceptCurrencySymbol | AdvExpressionOptions.ParseHumanePeriods | AdvExpressionOptions.ParseComplexNumbers | AdvExpressionOptions.ParseVectors;
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
+        if (result?.GetType() == typeof(System.Decimal))
+        {
+            decimal dResult = (decimal)result;
+            Assert.Equal(expectedValue, (int)dResult);
+        }
+        else
         if (result?.GetType() == typeof(System.Double))
         {
             double dResult = (double)result;

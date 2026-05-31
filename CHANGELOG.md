@@ -1,3 +1,7 @@
+# 9.0.4.2 (Allied Bits)
+
+* In rare cases, operations with an integer number and an integer percent did not work right due to integer division taking place.
+
 # 9.0.4.1 (Allied Bits)
 
 * Improved parsing of big decimals so that they don't get in the way of other expressions. 

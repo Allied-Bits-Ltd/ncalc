@@ -37,10 +37,15 @@ public static class MathHelper
     private static object DynamicDivideFunc(dynamic a, dynamic b) => unchecked(a / b);
     private static object DynamicModuloFunc(dynamic a, dynamic b) => unchecked(a % b);
 
-    private static object DynamicAddPercentFunc(dynamic a, dynamic b) => unchecked(a * (100 + b) / 100); // a / (a * b/100);
-    private static object DynamicSubtractPercentFunc(dynamic a, dynamic b) => unchecked(a * (100 - b) / 100); //a - (a * b / 100);
-    private static object DynamicMultiplyPercentFunc(dynamic a, dynamic b) => unchecked(a * b / 100);
-    private static object DynamicDividePercentFunc(dynamic a, dynamic b) => unchecked(a * 100 / b);
+    private static object DynamicAddPercentDecFunc(dynamic a, dynamic b) => unchecked(a * (100m + b) / 100m); // a / (a * b/100);
+    private static object DynamicSubtractPercentDecFunc(dynamic a, dynamic b) => unchecked(a * (100m - b) / 100m); //a - (a * b / 100);
+    private static object DynamicMultiplyPercentDecFunc(dynamic a, dynamic b) => unchecked(a * b / 100m);
+    private static object DynamicDividePercentDecFunc(dynamic a, dynamic b) => unchecked(100m * a / b);
+
+    private static object DynamicAddPercentDoubleFunc(dynamic a, dynamic b) => unchecked(a * (100.0 + b) / 100.0); // a / (a * b/100);
+    private static object DynamicSubtractPercentDoubleFunc(dynamic a, dynamic b) => unchecked(a * (100.0 - b) / 100.0); //a - (a * b / 100);
+    private static object DynamicMultiplyPercentDoubleFunc(dynamic a, dynamic b) => unchecked(a * b / 100.0);
+    private static object DynamicDividePercentDoubleFunc(dynamic a, dynamic b) => unchecked(100.0 * a / b);
 #endif
 
 #if AOT_COMPILATION
@@ -202,10 +207,13 @@ public static class MathHelper
 #if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
-            return options.OverflowProtection ? AddPercentFuncChecked(a, b) : DynamicAddPercentFunc(a, b);
+            if ((options.DecimalAsDefault && !(a is double && b is double)) || (a is decimal && b is decimal))
+                return options.OverflowProtection ? AddPercentDecFuncChecked(a, b) : DynamicAddPercentDecFunc(a, b);
+            else
+                return options.OverflowProtection ? AddPercentDoubleFuncChecked(a, b) : DynamicAddPercentDoubleFunc(a, b);
         }
 #endif
-        object? im1 = Add(100, b, false, options);
+        object? im1 = Add(100m, b, false, options);
         if (im1 is null)
             throw new InvalidOperationException($"No addition was possible for a number and an object of type '{b.GetType()}'");
 
@@ -213,7 +221,7 @@ public static class MathHelper
         if (im2 is null)
             throw new InvalidOperationException($"No multiplication was possible for objects of types '{a.GetType()}' and '{im1.GetType()}'");
 
-        object? result = Divide(im2, 100, true, options);
+        object? result = Divide(im2, 100m, true, options);
         if (result is null)
             throw new InvalidOperationException($"No division was possible for an object of type '{im2.GetType()}' and a number");
 
@@ -221,9 +229,17 @@ public static class MathHelper
     }
 
 #if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> AddPercentFuncChecked = (a, b) =>
+    private static readonly Func<dynamic, dynamic, object> AddPercentDecFuncChecked = (a, b) =>
     {
-        var res = checked(a * (100 + b) / 100); //checked(a + (a * b / 100));
+        var res = checked(a * (100m + b) / 100m); //checked(a + (a * b / 100));
+        CheckOverflow(res);
+
+        return res;
+    };
+
+    private static readonly Func<dynamic, dynamic, object> AddPercentDoubleFuncChecked = (a, b) =>
+    {
+        var res = checked(a * (100.0 + b) / 100.0); //checked(a + (a * b / 100));
         CheckOverflow(res);
 
         return res;
@@ -236,10 +252,7 @@ public static class MathHelper
 #if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
-            if (options.OverflowProtection)
-                result = SubtractFuncChecked(a, b);
-            else
-                result = DynamicSubtractFunc(a, b);
+            result =  options.OverflowProtection ? SubtractFuncChecked(a, b) : DynamicSubtractFunc(a, b);
         }
         else
 #endif
@@ -382,10 +395,13 @@ public static class MathHelper
 #if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
-            return options.OverflowProtection ? SubtractPercentFuncChecked(a, b) : DynamicSubtractPercentFunc(a, b);
+            if ((options.DecimalAsDefault && !(a is double && b is double)) || (a is decimal && b is decimal))
+                return options.OverflowProtection ? SubtractPercentDecFuncChecked(a, b) : DynamicSubtractPercentDecFunc(a, b);
+            else
+                return options.OverflowProtection ? SubtractPercentDoubleFuncChecked(a, b) : DynamicSubtractPercentDoubleFunc(a, b);
         }
 #endif
-        object? im1 = Subtract(100, b, false, options);
+        object? im1 = Subtract(100m, b, false, options);
         if (im1 is null)
             throw new InvalidOperationException($"No subtraction was possible for a number and an '{b.GetType()}' object");
 
@@ -393,7 +409,7 @@ public static class MathHelper
         if (im2 is null)
             throw new InvalidOperationException($"No multiplication was possible for objects of types '{a.GetType()}' and '{im1.GetType()}'");
 
-        object? result = Divide(im2, 100, true, options);
+        object? result = Divide(im2, 100m, true, options);
         if (result is null)
             throw new InvalidOperationException($"No division was possible for an '{im2.GetType()}' object and a number");
 
@@ -401,9 +417,17 @@ public static class MathHelper
     }
 
 #if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> SubtractPercentFuncChecked = (a, b) =>
+    private static readonly Func<dynamic, dynamic, object> SubtractPercentDecFuncChecked = (a, b) =>
     {
-        var res = checked(a * (100 - b) / 100);
+        var res = checked(a * (100m - b) / 100m);
+        CheckOverflow(res);
+
+        return res;
+    };
+
+    private static readonly Func<dynamic, dynamic, object> SubtractPercentDoubleFuncChecked = (a, b) =>
+    {
+        var res = checked(a * (100.0 - b) / 100.0);
         CheckOverflow(res);
 
         return res;
@@ -560,14 +584,17 @@ public static class MathHelper
 #if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
-            return options.OverflowProtection ? MultiplyPercentFuncChecked(a, b) : DynamicMultiplyPercentFunc(a, b);
+            if ((options.DecimalAsDefault && !(a is double && b is double)) || (a is decimal && b is decimal))
+                return options.OverflowProtection ? MultiplyPercentDecFuncChecked(a, b) : DynamicMultiplyPercentDecFunc(a, b);
+            else
+                return options.OverflowProtection ? MultiplyPercentDoubleFuncChecked(a, b) : DynamicMultiplyPercentDoubleFunc(a, b);
         }
 #endif
         object? im2 = Multiply(a, b, false, options);
         if (im2 is null)
             throw new InvalidOperationException($"No multiplication was possible for objects of types '{a.GetType()}' and '{b.GetType()}'");
 
-        object? result = Divide(im2, 100, true, options);
+        object? result = Divide(im2, 100m, true, options);
         if (result is null)
             throw new InvalidOperationException($"No division was possible for an '{im2.GetType()}' object and a number");
 
@@ -575,9 +602,17 @@ public static class MathHelper
     }
 
 #if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> MultiplyPercentFuncChecked = (a, b) =>
+    private static readonly Func<dynamic, dynamic, object> MultiplyPercentDecFuncChecked = (a, b) =>
     {
-        var res = checked(a * b / 100);
+        var res = checked(a * b / 100m);
+        CheckOverflow(res);
+
+        return res;
+    };
+
+    private static readonly Func<dynamic, dynamic, object> MultiplyPercentDoubleFuncChecked = (a, b) =>
+    {
+        var res = checked(a * b / 100m);
         CheckOverflow(res);
 
         return res;
@@ -590,10 +625,7 @@ public static class MathHelper
 #if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
-            if (options.OverflowProtection)
-                result = DivideFuncChecked(a, b);
-            else
-                result = DynamicDivideFunc(a, b);
+            result = options.OverflowProtection ? DivideFuncChecked(a, b) : DynamicDivideFunc(a, b);
         }
         else
 #endif
@@ -735,10 +767,13 @@ public static class MathHelper
 #if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
-            return options.OverflowProtection ? DividePercentFuncChecked(a, b) : DynamicDividePercentFunc(a, b);
+            if ((options.DecimalAsDefault && !(a is double && b is double)) || (a is decimal && b is decimal))
+                return options.OverflowProtection ? DividePercentDecFuncChecked(a, b) : DynamicDividePercentDecFunc(a, b);
+            else
+                return options.OverflowProtection ? DividePercentDoubleFuncChecked(a, b) : DynamicDividePercentDoubleFunc(a, b);
         }
 #endif
-        object? im2 = Multiply(a, 100, false, options);
+        object? im2 = Multiply(a, 100m, false, options);
         if (im2 is null)
             throw new InvalidOperationException($"No multiplication was possible for an '{a.GetType()}' object and a number");
 
@@ -750,9 +785,17 @@ public static class MathHelper
     }
 
 #if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> DividePercentFuncChecked = (a, b) =>
+    private static readonly Func<dynamic, dynamic, object> DividePercentDecFuncChecked = (a, b) =>
     {
-        var res = checked(a * 100 / b);
+        var res = checked(100m * a / b);
+        CheckOverflow(res);
+
+        return res;
+    };
+
+    private static readonly Func<dynamic, dynamic, object> DividePercentDoubleFuncChecked = (a, b) =>
+    {
+        var res = checked(100.0 * a / b);
         CheckOverflow(res);
 
         return res;
