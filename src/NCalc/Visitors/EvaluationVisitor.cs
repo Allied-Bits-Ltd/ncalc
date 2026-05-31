@@ -966,6 +966,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                             else
                             if (fc.Type == NCalcFlowControl.FlowControlType.Continue)
                                 continue;
+                            else
+                                throw;
                         }
                     }
                     return result;
@@ -1091,6 +1093,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         {
             if (identifierName.Equals("break", StringComparison.InvariantCultureIgnoreCase))
                 throw new NCalcFlowControl(NCalcFlowControl.FlowControlType.Break, identifier.Location);
+
             if (identifierName.Equals("continue", StringComparison.InvariantCultureIgnoreCase))
                 throw new NCalcFlowControl(NCalcFlowControl.FlowControlType.Continue, identifier.Location);
         }

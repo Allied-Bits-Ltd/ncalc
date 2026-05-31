@@ -1016,9 +1016,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         {
                             if (fc.Type == NCalcFlowControl.FlowControlType.Break)
                                 break;
-                            /*else
+                            else
                             if (fc.Type == NCalcFlowControl.FlowControlType.Continue)
-                                continue;*/
+                                continue;
+                            else
+                                throw;
                         }
                     }
                     return SetTaskValue(task, result);

@@ -1028,9 +1028,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         {
                             if (fc.Type == NCalcFlowControl.FlowControlType.Break)
                                 break;
-                            /*else
+                            else
                             if (fc.Type == NCalcFlowControl.FlowControlType.Continue)
-                                continue;*/
+                                continue;
+                            else
+                                throw;
                         }
                     }
                     return SetTaskValue(task, result);

@@ -987,6 +987,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             else
                             if (fc.Type == NCalcFlowControl.FlowControlType.Continue)
                                 continue;
+                            else
+                                throw;
                         }
                     }
                     return result;
