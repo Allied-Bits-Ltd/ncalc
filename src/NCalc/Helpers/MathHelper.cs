@@ -4,6 +4,8 @@ using System.Reflection;
 
 using ExtendedNumerics;
 
+using Microsoft.CSharp.RuntimeBinder;
+
 using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Parser;
@@ -207,7 +209,7 @@ public static class MathHelper
 #if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
-            if ((options.DecimalAsDefault && !(a is double && b is double)) || (a is decimal && b is decimal))
+            if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
                 return options.OverflowProtection ? AddPercentDecFuncChecked(a, b) : DynamicAddPercentDecFunc(a, b);
             else
                 return options.OverflowProtection ? AddPercentDoubleFuncChecked(a, b) : DynamicAddPercentDoubleFunc(a, b);
@@ -395,7 +397,7 @@ public static class MathHelper
 #if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
-            if ((options.DecimalAsDefault && !(a is double && b is double)) || (a is decimal && b is decimal))
+            if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
                 return options.OverflowProtection ? SubtractPercentDecFuncChecked(a, b) : DynamicSubtractPercentDecFunc(a, b);
             else
                 return options.OverflowProtection ? SubtractPercentDoubleFuncChecked(a, b) : DynamicSubtractPercentDoubleFunc(a, b);
@@ -584,7 +586,7 @@ public static class MathHelper
 #if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
-            if ((options.DecimalAsDefault && !(a is double && b is double)) || (a is decimal && b is decimal))
+            if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
                 return options.OverflowProtection ? MultiplyPercentDecFuncChecked(a, b) : DynamicMultiplyPercentDecFunc(a, b);
             else
                 return options.OverflowProtection ? MultiplyPercentDoubleFuncChecked(a, b) : DynamicMultiplyPercentDoubleFunc(a, b);
@@ -767,7 +769,7 @@ public static class MathHelper
 #if !AOT_COMPILATION
         if (!options.AvoidDynamicFunctions)
         {
-            if ((options.DecimalAsDefault && !(a is double && b is double)) || (a is decimal && b is decimal))
+            if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
                 return options.OverflowProtection ? DividePercentDecFuncChecked(a, b) : DynamicDividePercentDecFunc(a, b);
             else
                 return options.OverflowProtection ? DividePercentDoubleFuncChecked(a, b) : DynamicDividePercentDoubleFunc(a, b);
@@ -3970,7 +3972,10 @@ public static class MathHelper
         }
         catch(Exception ex) when (ex is not OverflowException)
         {
-            throw new InvalidOperationException($"Operator '{operatorName}' is not implemented for operands of types {origA.GetType()} and {origB.GetType()}", ex);
+            if (ex is RuntimeBinderException && (operation == ArithmeticOperation.AddPercent || operation == ArithmeticOperation.SubtractPercent || operation == ArithmeticOperation.MultiplyPercent || operation == ArithmeticOperation.DividePercent))
+                throw new InvalidOperationException($"The operation '{operation}' contained double or decimal operands which conflicted with the UseDecimalAsDefault setting and with each other", ex);
+            else
+                throw new InvalidOperationException($"Operator '{operatorName}' is not implemented for operands of types {origA.GetType()} and {origB.GetType()}", ex);
         }
     }
 

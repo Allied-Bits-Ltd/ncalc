@@ -1,6 +1,7 @@
 # 9.0.4.3 (Allied Bits)
 
 * "return X" did not work from inside the while loop (did not break the loop).
+* Slightly improved error reporting in the case of a conflict between the operand types in the percent operations.
 
 # 9.0.4.2 (Allied Bits)
 
