@@ -141,10 +141,15 @@ if (true, a := 2, a := 4); a + Max(2; 4)
 a := if (true; 2; 4); a + Max(2; 4)
 ```
 
-Assignment can be combined with an operator (such as "+=" for addition with assignment); please, see the [Operators](operators.md) topic for the list of supported operators with assignment.
+An assignment can be combined with an arithmetic operator (such as "+=" for addition with assignment); please, see the [Operators](operators.md) topic for the list of supported operators with assignment.
 
-Assignment may be combined with indexed access:
+An assignment may be combined with indexed access:
 
 ```
 a := (1; 2; 3); a[1] := -2;
 ```
+
+### Accessing and Updating Parameters in Functions
+
+If a function is a part of an expression, a new context is allocated for executing it. When an expression in the body of this function accesses some parameter, it operates within the local function context, and global static or dynamic parameters are inaccessible. 
+The <xref:NCalc.Expression.EvaluateParameter> and <xref:NCalc.Expression.UpdateParameter> events are still fired; so, if the application needs to have a global list of parameters / variables, it can make use of these events to provide and update the global values.

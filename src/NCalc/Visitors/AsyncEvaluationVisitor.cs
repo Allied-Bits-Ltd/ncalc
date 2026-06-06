@@ -1316,64 +1316,62 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         bool ignoreCase = context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);
 
         expression.EvaluateParameterAsync += async (name, args, cancellationToken) =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            string paramName = ignoreCase ? name.ToLowerInvariant() : name;
-            if (argumentStates.TryGetValue(paramName, out var state))
             {
-                args.Result = await ((AsyncArgumentState)state).GetValueAsync(cancellationToken).ConfigureAwait(false);
-                return;
-            }
-            if (context.AsyncEvaluateParameterHandler != null)
-                await context.AsyncEvaluateParameterHandler.Invoke(name, args, cancellationToken).ConfigureAwait(false);
-        };
+                cancellationToken.ThrowIfCancellationRequested();
 
-        expression.UpdateParameterAsync +=
-            (name, args, cancellationToken) =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
+                string paramName = ignoreCase ? name.ToLowerInvariant() : name;
+                if (argumentStates.TryGetValue(paramName, out var state))
+                {
+                    args.Result = await ((AsyncArgumentState)state).GetValueAsync(cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+                if (context.AsyncEvaluateParameterHandler != null)
+                    await context.AsyncEvaluateParameterHandler.Invoke(name, args, cancellationToken).ConfigureAwait(false);
+            };
 
-            string paramName = ignoreCase ? name.ToLowerInvariant() : name;
-            if (argumentStates.TryGetValue(paramName, out var state))
+        expression.UpdateParameterAsync += async (name, args, cancellationToken) =>
             {
-                ((AsyncArgumentState)state).SetValue(args.Value);
-                args.UpdateParameterLists = false;
-            }
-#if NET8_0_OR_GREATER
-            return ValueTask.CompletedTask;
-#else
-            return new ValueTask(Task.CompletedTask);
-#endif
-        };
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string paramName = ignoreCase ? name.ToLowerInvariant() : name;
+                if (argumentStates.TryGetValue(paramName, out var state))
+                {
+                    ((AsyncArgumentState)state).SetValue(args.Value);
+                    args.UpdateParameterLists = false;
+                    return;
+                }
+
+                if (context.AsyncUpdateParameterHandler != null)
+                    await context.AsyncUpdateParameterHandler(name, args, cancellationToken).ConfigureAwait(false);
+            };
 
         expression.EvaluateFunctionAsync += (name, args, cancellationToken) =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
+            {
+                cancellationToken.ThrowIfCancellationRequested();
 
-            if (context.AsyncEvaluateFunctionHandler != null)
-                return context.AsyncEvaluateFunctionHandler.Invoke(name, args, cancellationToken);
-            else
+                if (context.AsyncEvaluateFunctionHandler != null)
+                    return context.AsyncEvaluateFunctionHandler.Invoke(name, args, cancellationToken);
+                else
 #if NET8_0_OR_GREATER
-                return ValueTask.CompletedTask;
+                    return ValueTask.CompletedTask;
 #else
-                return new ValueTask(Task.CompletedTask);
+                    return new ValueTask(Task.CompletedTask);
 #endif
-        };
+            };
 
         expression.MatchStringAsync += (args, cancellationToken) =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
+            {
+                cancellationToken.ThrowIfCancellationRequested();
 
-            if (context.AsyncMatchStringHandler != null)
-                return context.AsyncMatchStringHandler.Invoke(args, cancellationToken);
-            else
+                if (context.AsyncMatchStringHandler != null)
+                    return context.AsyncMatchStringHandler.Invoke(args, cancellationToken);
+                else
 #if NET8_0_OR_GREATER
-                return ValueTask.CompletedTask;
+                    return ValueTask.CompletedTask;
 #else
-                return new ValueTask(Task.CompletedTask);
+                 return new ValueTask(Task.CompletedTask);
 #endif
-        };
+            };
 
         try
         {

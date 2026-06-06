@@ -1,3 +1,7 @@
+# 9.0.4.4 (Allied Bits)
+
+* Setting a variable in a function body did not fire the `UpdateParameter` event of the expression.
+
 # 9.0.4.3 (Allied Bits)
 
 * "return X" did not work from inside the while loop (did not break the loop).

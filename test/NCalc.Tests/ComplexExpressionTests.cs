@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Text;
 
+using NCalc.Helpers;
+
 namespace NCalc.Tests
 {
     [Trait("Category", "ComplexExpressions")]
@@ -150,6 +152,43 @@ null
 
             object result = expr.Evaluate(TestContext.Current.CancellationToken);
             Assert.Equal(99, result);
+        }
+
+        [Fact]
+        public void ShouldEvaluateLocalVarsInFunctions()
+        {
+            var expr = new Expression("""
+fn ratio(a; b)
+{
+  x := a / b;
+  return x;
+};
+
+ratio(28;14)
+""",
+            ExpressionOptions.NoCache |
+            ExpressionOptions.OverflowProtection |
+            ExpressionOptions.IgnoreCaseAtBuiltInFunctions |
+            ExpressionOptions.AllowCharValues |
+            ExpressionOptions.NoStringTypeCoercion |
+            ExpressionOptions.LowerCaseIdentifierLookup |
+            ExpressionOptions.SupportTimeOperations |
+            ExpressionOptions.UseUnicodeCharsForOperations |
+            ExpressionOptions.UseAssignments |
+            ExpressionOptions.UseStatementSequences |
+            ExpressionOptions.ReduceDivResultToInteger |
+            ExpressionOptions.UseBigNumbers |
+            ExpressionOptions.AllowNullParameter |
+            ExpressionOptions.CompareNullValues |
+            ExpressionOptions.SupportCStyleComments |
+            ExpressionOptions.UseIfStatement |
+            ExpressionOptions.UseLoops);
+
+            expr.AdvancedOptions = new AdvancedExpressionOptions();
+            expr.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+
+            object result = expr.Evaluate(TestContext.Current.CancellationToken);
+            Assert.Equal(2, MathHelper.ConvertToLong(result, new MathHelperOptions()));
         }
     }
 }

@@ -1314,6 +1314,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     args.Result = ((ArgumentState)state).Value;
                     return;
                 }
+
                 context.EvaluateParameterHandler?.Invoke(name, args);
             };
 
@@ -1326,7 +1327,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 {
                     ((ArgumentState)state).Value = args.Value;
                     args.UpdateParameterLists = false;
+                    return;
                 }
+
+                context.UpdateParameterHandler?.Invoke(name, args);
             };
 
         expression.EvaluateFunction += (name, args) =>
