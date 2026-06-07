@@ -190,5 +190,46 @@ ratio(28;14)
             object result = expr.Evaluate(TestContext.Current.CancellationToken);
             Assert.Equal(2, MathHelper.ConvertToLong(result, new MathHelperOptions()));
         }
+
+        [Fact]
+        public void ShouldReturnEarly1()
+        {
+            var expr = new Expression("""
+fn ratio(a; b)
+{
+  x := a / b;
+  while(true)
+  {
+    return x;
+  };
+  return a * b;
+};
+
+ratio(28;14)
+""",
+            ExpressionOptions.NoCache |
+            ExpressionOptions.OverflowProtection |
+            ExpressionOptions.IgnoreCaseAtBuiltInFunctions |
+            ExpressionOptions.AllowCharValues |
+            ExpressionOptions.NoStringTypeCoercion |
+            ExpressionOptions.LowerCaseIdentifierLookup |
+            ExpressionOptions.SupportTimeOperations |
+            ExpressionOptions.UseUnicodeCharsForOperations |
+            ExpressionOptions.UseAssignments |
+            ExpressionOptions.UseStatementSequences |
+            ExpressionOptions.ReduceDivResultToInteger |
+            ExpressionOptions.UseBigNumbers |
+            ExpressionOptions.AllowNullParameter |
+            ExpressionOptions.CompareNullValues |
+            ExpressionOptions.SupportCStyleComments |
+            ExpressionOptions.UseIfStatement |
+            ExpressionOptions.UseLoops);
+
+            expr.AdvancedOptions = new AdvancedExpressionOptions();
+            expr.AdvancedOptions.Flags = AdvExpressionOptions.ParseHumanePeriods;
+
+            object result = expr.Evaluate(TestContext.Current.CancellationToken);
+            Assert.Equal(2, MathHelper.ConvertToLong(result, new MathHelperOptions()));
+        }
     }
 }
