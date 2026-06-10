@@ -8,6 +8,14 @@ namespace NCalc.Tests;
 [Trait("Category", "Parser")]
 public class ParserTests
 {
+    [Fact]
+    public void ShouldParseMinInt()
+    {
+        var expression = new Expression("-2147483648");
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal((long)-2147483648, (long)result);
+    }
+
     [Theory]
     [InlineData("11+33 ", 44)]
     [InlineData(" 11+33", 44)]
