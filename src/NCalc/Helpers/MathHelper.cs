@@ -1131,7 +1131,7 @@ public static class MathHelper
 
                 if (bdResult is not null)
                 {
-                    if (bdResult.Value.GetFractionalPart().IsZero())
+                    if (bdResult.Value.DecimalPlaces == 0)
                     {
                         result = bdResult.Value.WholeValue;
                         return ReduceNumericType(result, reduceTypes ? null : t, options);
@@ -1484,7 +1484,7 @@ public static class MathHelper
             {
                 if (reduceTypes)
                 {
-                    if ((IsBoxedIntegerNumberOrBigNumber(typeA) || options.ReduceDivResultToInteger) && bdResult.Value.GetFractionalPart().IsZero())
+                    if ((IsBoxedIntegerNumberOrBigNumber(typeA) || options.ReduceDivResultToInteger) && bdResult.Value.DecimalPlaces == 0)
                     {
                         BigInteger biResult = bdResult.Value.WholeValue;
 
@@ -1519,7 +1519,7 @@ public static class MathHelper
                 }
                 else // try to keep the original type of a
                 {
-                    if (IsBoxedIntegerNumberOrBigNumber(typeA) && bdResult.Value.GetFractionalPart().IsZero())
+                    if (IsBoxedIntegerNumberOrBigNumber(typeA) && bdResult.Value.DecimalPlaces == 0)
                     {
                         BigInteger biResult = bdResult.Value.WholeValue;
 
@@ -3362,10 +3362,147 @@ public static class MathHelper
         if (a is NCalcVector vA)
             return NCalcVector.Round(vA);
 
-        if (options.DecimalAsDefault)
-            return Math.Round(ConvertToDecimal(a, "Round", options.CultureInfo, null), ConvertToInt(b, "Round", options.CultureInfo, null), rounding);
+        int precision = ConvertToInt(b, "Round", options.CultureInfo, null);
 
-        return Math.Round(ConvertToDouble(a, "Round", options.CultureInfo, null), ConvertToInt(b, "Round", options.CultureInfo, null), rounding);
+        if (options.DecimalAsDefault)
+        {
+            decimal decimal_a = ConvertToDecimal(a, "Round", options.CultureInfo, null);
+            // RoundToPrecision applies MidpointRounding only to exact midpoints; the legacy System.Math.Round
+            // behavior (which applies it to every value) remains available via the UseSystemMathRound option.
+            return options.UseSystemMathRound
+                ? Math.Round(decimal_a, precision, rounding)
+                : RoundToPrecision(decimal_a, precision, rounding);
+        }
+
+        double double_a = ConvertToDouble(a, "Round", options.CultureInfo, null);
+        return options.UseSystemMathRound
+            ? Math.Round(double_a, precision, rounding)
+            : RoundToPrecision(double_a, precision, rounding);
+    }
+
+    // Doubles at or above this magnitude have no fractional precision left (and may exceed the decimal range),
+    // so rounding them to any number of decimal digits is a no-op.
+    private const double DecimalRoundLimit = 1e28;
+
+    /// <summary>
+    /// Rounds <paramref name="value"/> to <paramref name="digits"/> fractional decimal digits, always choosing the
+    /// nearest representable value. <paramref name="mode"/> is consulted <b>only</b> when <paramref name="value"/>
+    /// lies exactly halfway between the two candidates; for every other value the nearest candidate is chosen
+    /// regardless of <paramref name="mode"/>.
+    /// </summary>
+    /// <remarks>
+    /// The midpoint test is performed in exact <see cref="decimal"/> arithmetic. A binary <see cref="double"/> such
+    /// as <c>1.55</c> cannot be stored exactly, so the value is first reinterpreted as its nearest decimal using the
+    /// ~15 significant digits a <see cref="double"/> actually carries, and the decimal rounding is then applied to
+    /// that. This is the cleanest practical way to honor decimal midpoints (e.g. <c>1.55</c> rounds to <c>1.5</c> or
+    /// <c>1.6</c> depending on the mode) for doubles. The unavoidable limitation is that a <see cref="double"/>
+    /// requiring more than ~15 significant digits is rounded according to that reinterpretation rather than its full
+    /// binary value. Non-finite values, and magnitudes too large to carry any fractional part, are returned unchanged,
+    /// exactly as <see cref="Math.Round(double, int, MidpointRounding)"/> would.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="digits"/> is less than 0 or greater than 15.</exception>
+    /// <exception cref="ArgumentException"><paramref name="mode"/> is not a defined <see cref="MidpointRounding"/> value.</exception>
+    public static double RoundToPrecision(double value, int digits, MidpointRounding mode)
+    {
+        if (digits < 0 || digits > 15)
+            throw new ArgumentOutOfRangeException(nameof(digits), "Rounding digits must be between 0 and 15, inclusive.");
+
+        if (!IsDefinedMidpointMode(mode))
+            throw new ArgumentException($"The value '{mode}' is not a defined MidpointRounding value.", nameof(mode));
+
+        // Non-finite values and magnitudes that cannot be represented as a decimal have no fractional part to round
+        // at this precision; return them unchanged.
+        if (double.IsNaN(value) || double.IsInfinity(value) || Math.Abs(value) >= DecimalRoundLimit)
+            return value;
+
+        return (double)RoundToPrecision((decimal)value, digits, mode);
+    }
+
+    /// <summary>
+    /// Rounds <paramref name="value"/> to <paramref name="digits"/> fractional decimal digits, always choosing the
+    /// nearest representable value. <paramref name="mode"/> is consulted <b>only</b> when <paramref name="value"/>
+    /// lies exactly halfway between the two candidates; for every other value the nearest candidate is chosen
+    /// regardless of <paramref name="mode"/>.
+    /// </summary>
+    /// <remarks>
+    /// This is a deliberate, self-contained reimplementation that does not delegate to
+    /// <see cref="Math.Round(decimal, int, MidpointRounding)"/> or <see cref="decimal.Round(decimal, int, MidpointRounding)"/>.
+    /// All arithmetic is performed in exact <see cref="decimal"/> precision so that the midpoint detection is exact.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="digits"/> is less than 0 or greater than 28.</exception>
+    /// <exception cref="ArgumentException"><paramref name="mode"/> is not a defined <see cref="MidpointRounding"/> value.</exception>
+    public static decimal RoundToPrecision(decimal value, int digits, MidpointRounding mode)
+    {
+        if (digits < 0 || digits > 28)
+            throw new ArgumentOutOfRangeException(nameof(digits), "Rounding digits must be between 0 and 28, inclusive.");
+
+        if (!IsDefinedMidpointMode(mode))
+            throw new ArgumentException($"The value '{mode}' is not a defined MidpointRounding value.", nameof(mode));
+
+        // If the value already carries no more fractional digits than requested there is nothing to round.
+        // Short-circuiting here also keeps the subsequent scaling well within the decimal range.
+        int scaleOfValue = (decimal.GetBits(value)[3] >> 16) & 0xFF;
+        if (scaleOfValue <= digits)
+            return value;
+
+        decimal factor = 1m;
+        for (int i = 0; i < digits; i++)
+            factor *= 10m;
+
+        decimal scaled = value * factor;        // moves the rounding position onto the integer boundary
+        decimal lower = Math.Floor(scaled);     // largest integer <= scaled (toward negative infinity)
+        decimal fraction = scaled - lower;      // always in the range [0, 1)
+
+        decimal chosen;
+        if (fraction < 0.5m)
+        {
+            chosen = lower;                     // nearest is the lower candidate
+        }
+        else
+        if (fraction > 0.5m)
+        {
+            chosen = lower + 1m;                // nearest is the higher candidate
+        }
+        else
+        {
+            // Exact midpoint: the only case in which the rounding mode is consulted.
+            decimal higher = lower + 1m;
+            chosen = mode switch
+            {
+                MidpointRounding.ToEven => (lower % 2m == 0m) ? lower : higher,
+                MidpointRounding.AwayFromZero => (scaled >= 0m) ? higher : lower,
+#if NET
+                MidpointRounding.ToZero => (scaled >= 0m) ? lower : higher,
+                MidpointRounding.ToNegativeInfinity => lower,
+                MidpointRounding.ToPositiveInfinity => higher,
+#endif
+                _ => throw new ArgumentException($"The value '{mode}' is not a defined MidpointRounding value.", nameof(mode)),
+            };
+        }
+
+        return chosen / factor;
+    }
+
+    /// <summary>
+    /// Determines whether <paramref name="mode"/> is a <see cref="MidpointRounding"/> value defined by the target
+    /// framework. Explicit cases (rather than reflection) keep this AOT friendly and ensure unknown values are
+    /// rejected instead of silently ignored.
+    /// </summary>
+    private static bool IsDefinedMidpointMode(MidpointRounding mode)
+    {
+        switch (mode)
+        {
+            case MidpointRounding.ToEven:
+            case MidpointRounding.AwayFromZero:
+#if NET
+            case MidpointRounding.ToZero:
+            case MidpointRounding.ToNegativeInfinity:
+            case MidpointRounding.ToPositiveInfinity:
+#endif
+                return true;
+            default:
+                return false;
+        }
     }
 
     public static object Sign(object? a, MathHelperOptions options)
@@ -4255,7 +4392,7 @@ public static class MathHelper
             case ulong value: return value;
             case BigInteger value: return value;
             case ComplexNumber cn:
-                return cn.IsReal && cn.Real.GetFractionalPart().IsZero()
+                return cn.IsReal && cn.Real.DecimalPlaces == 0
                     ? cn.Real.GetWholePart()
                     : throw new NCalcConversionException("A complex number cannot be converted to BigInteger", cn.ToString() ?? string.Empty, typeof(ComplexNumber), typeof(BigInteger));
             default:
@@ -4685,7 +4822,7 @@ public static class MathHelper
         else
         if (t == typeof(BigDecimal))
         {
-            if (((BigDecimal)obj).GetFractionalPart() == 0)
+            if (((BigDecimal)obj).DecimalPlaces == 0)
             {
                 return true;
             }
@@ -5017,7 +5154,7 @@ public static class MathHelper
 
         BigInteger? biResult = null;
 
-        if (forceInteger || value.GetFractionalPart().IsZero())
+        if (forceInteger || value.DecimalPlaces == 0)
         {
             biResult = value.WholeValue;
 

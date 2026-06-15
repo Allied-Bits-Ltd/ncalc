@@ -1,3 +1,8 @@
+# 9.0.5 (Allied Bits)
+
+* The `Round` function was re-implemented to apply the `MidpointRounding` mode only to midpoint values and not to everything as it is implemented in the System.Math namespace. This behavior is optional - you can use System.Math implementation by setting the 'UseSystemMathRound' option in the expression options.
+* Added a workaround of a bug in `BigDecimal.GetFractionalPart` method that returns zero ([the issue is reported here](https://github.com/AdamWhiteHat/BigDecimal/issues/92)).
+
 # 9.0.4.4 (Allied Bits)
 
 * Setting a variable in a function body did not fire the `UpdateParameter` event of the expression.

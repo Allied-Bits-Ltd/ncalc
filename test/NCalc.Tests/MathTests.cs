@@ -383,6 +383,7 @@ public class MathsTests : TestBase
 
         CheckResult(expected, result);
     }
+
     [Theory]
     [InlineData("-7//2", -4)]
     public void ShouldHandlPythonIntDivisionOfBigFloats(string input, int expected)
@@ -1369,5 +1370,261 @@ public class MathsTests : TestBase
     {
         object result = new Expression(expr).Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(true, result);
+    }
+
+    [Fact]
+    public void ShouldRoundUpCorrectly()
+    {
+        object result = MathHelper.Round(1.7, 0, MidpointRounding.AwayFromZero, new MathHelperOptions());
+        Assert.Equal(2.0, result);
+    }
+
+    // ---- MathHelper.RoundToPrecision: midpoint-aware rounding (MidpointRounding affects ONLY exact midpoints) ----
+
+    // net10.0 (the test target) defines all five MidpointRounding modes.
+    private static readonly MidpointRounding[] AllMidpointModes =
+    {
+        MidpointRounding.ToEven,
+        MidpointRounding.AwayFromZero,
+        MidpointRounding.ToZero,
+        MidpointRounding.ToNegativeInfinity,
+        MidpointRounding.ToPositiveInfinity,
+    };
+
+    // A value that is NOT an exact midpoint must round to the nearest candidate for EVERY mode: no mode may
+    // truncate or push a non-midpoint value directionally.
+    [Theory]
+    [InlineData(1.44, 1, 1.4)]   // below the midpoint
+    [InlineData(1.46, 1, 1.5)]   // above the midpoint
+    [InlineData(-1.44, 1, -1.4)]
+    [InlineData(-1.46, 1, -1.5)]
+    [InlineData(2.4, 0, 2.0)]
+    [InlineData(2.6, 0, 3.0)]
+    [InlineData(-2.4, 0, -2.0)]
+    [InlineData(-2.6, 0, -3.0)]
+    [InlineData(1.114, 2, 1.11)]
+    [InlineData(1.116, 2, 1.12)]
+    [InlineData(-1.114, 2, -1.11)]
+    [InlineData(-1.116, 2, -1.12)]
+    public void RoundToPrecision_Double_NonMidpoint_IgnoresMode(double value, int digits, double expected)
+    {
+        foreach (var mode in AllMidpointModes)
+        {
+            Assert.Equal(expected, MathHelper.RoundToPrecision(value, digits, mode), precision: 10);
+        }
+    }
+
+    [Theory]
+    [InlineData("1.44", 1, "1.4")]   // below the midpoint
+    [InlineData("1.46", 1, "1.5")]   // above the midpoint
+    [InlineData("-1.44", 1, "-1.4")]
+    [InlineData("-1.46", 1, "-1.5")]
+    [InlineData("2.4", 0, "2")]
+    [InlineData("2.6", 0, "3")]
+    [InlineData("-2.4", 0, "-2")]
+    [InlineData("-2.6", 0, "-3")]
+    [InlineData("1.114", 2, "1.11")]
+    [InlineData("1.116", 2, "1.12")]
+    [InlineData("-1.114", 2, "-1.11")]
+    [InlineData("-1.116", 2, "-1.12")]
+    public void RoundToPrecision_Decimal_NonMidpoint_IgnoresMode(string value, int digits, string expected)
+    {
+        decimal v = decimal.Parse(value, CultureInfo.InvariantCulture);
+        decimal e = decimal.Parse(expected, CultureInfo.InvariantCulture);
+        foreach (var mode in AllMidpointModes)
+        {
+            Assert.Equal(e, MathHelper.RoundToPrecision(v, digits, mode));
+        }
+    }
+
+    // Exact midpoints: the supplied MidpointRounding mode decides which neighbor is chosen.
+    [Theory]
+    // 1.55 -> exactly between 1.5 and 1.6
+    [InlineData(1.55, 1, MidpointRounding.ToEven, 1.6)]
+    [InlineData(1.55, 1, MidpointRounding.AwayFromZero, 1.6)]
+    [InlineData(1.55, 1, MidpointRounding.ToZero, 1.5)]
+    [InlineData(1.55, 1, MidpointRounding.ToNegativeInfinity, 1.5)]
+    [InlineData(1.55, 1, MidpointRounding.ToPositiveInfinity, 1.6)]
+    // 1.45 -> exactly between 1.4 and 1.5
+    [InlineData(1.45, 1, MidpointRounding.ToEven, 1.4)]
+    [InlineData(1.45, 1, MidpointRounding.AwayFromZero, 1.5)]
+    [InlineData(1.45, 1, MidpointRounding.ToZero, 1.4)]
+    [InlineData(1.45, 1, MidpointRounding.ToNegativeInfinity, 1.4)]
+    [InlineData(1.45, 1, MidpointRounding.ToPositiveInfinity, 1.5)]
+    // -1.55 -> exactly between -1.5 and -1.6
+    [InlineData(-1.55, 1, MidpointRounding.ToEven, -1.6)]
+    [InlineData(-1.55, 1, MidpointRounding.AwayFromZero, -1.6)]
+    [InlineData(-1.55, 1, MidpointRounding.ToZero, -1.5)]
+    [InlineData(-1.55, 1, MidpointRounding.ToNegativeInfinity, -1.6)]
+    [InlineData(-1.55, 1, MidpointRounding.ToPositiveInfinity, -1.5)]
+    // -1.45 -> exactly between -1.4 and -1.5
+    [InlineData(-1.45, 1, MidpointRounding.ToEven, -1.4)]
+    [InlineData(-1.45, 1, MidpointRounding.AwayFromZero, -1.5)]
+    [InlineData(-1.45, 1, MidpointRounding.ToZero, -1.4)]
+    [InlineData(-1.45, 1, MidpointRounding.ToNegativeInfinity, -1.5)]
+    [InlineData(-1.45, 1, MidpointRounding.ToPositiveInfinity, -1.4)]
+    // precision 0 midpoints
+    [InlineData(2.5, 0, MidpointRounding.ToEven, 2.0)]
+    [InlineData(2.5, 0, MidpointRounding.AwayFromZero, 3.0)]
+    [InlineData(2.5, 0, MidpointRounding.ToZero, 2.0)]
+    [InlineData(2.5, 0, MidpointRounding.ToNegativeInfinity, 2.0)]
+    [InlineData(2.5, 0, MidpointRounding.ToPositiveInfinity, 3.0)]
+    [InlineData(3.5, 0, MidpointRounding.ToEven, 4.0)]
+    [InlineData(-2.5, 0, MidpointRounding.ToEven, -2.0)]
+    [InlineData(-2.5, 0, MidpointRounding.AwayFromZero, -3.0)]
+    [InlineData(-2.5, 0, MidpointRounding.ToZero, -2.0)]
+    [InlineData(-2.5, 0, MidpointRounding.ToNegativeInfinity, -3.0)]
+    [InlineData(-2.5, 0, MidpointRounding.ToPositiveInfinity, -2.0)]
+    // precision 2 midpoint (1.125 is exactly representable in binary, so the double path is clean too)
+    [InlineData(1.125, 2, MidpointRounding.ToEven, 1.12)]
+    [InlineData(1.125, 2, MidpointRounding.AwayFromZero, 1.13)]
+    [InlineData(1.125, 2, MidpointRounding.ToZero, 1.12)]
+    [InlineData(1.125, 2, MidpointRounding.ToNegativeInfinity, 1.12)]
+    [InlineData(1.125, 2, MidpointRounding.ToPositiveInfinity, 1.13)]
+    public void RoundToPrecision_Double_Midpoint_UsesMode(double value, int digits, MidpointRounding mode, double expected)
+    {
+        Assert.Equal(expected, MathHelper.RoundToPrecision(value, digits, mode), precision: 10);
+    }
+
+    [Theory]
+    // 1.55 -> exactly between 1.5 and 1.6
+    [InlineData("1.55", 1, MidpointRounding.ToEven, "1.6")]
+    [InlineData("1.55", 1, MidpointRounding.AwayFromZero, "1.6")]
+    [InlineData("1.55", 1, MidpointRounding.ToZero, "1.5")]
+    [InlineData("1.55", 1, MidpointRounding.ToNegativeInfinity, "1.5")]
+    [InlineData("1.55", 1, MidpointRounding.ToPositiveInfinity, "1.6")]
+    // 1.45 -> exactly between 1.4 and 1.5
+    [InlineData("1.45", 1, MidpointRounding.ToEven, "1.4")]
+    [InlineData("1.45", 1, MidpointRounding.AwayFromZero, "1.5")]
+    [InlineData("1.45", 1, MidpointRounding.ToZero, "1.4")]
+    [InlineData("1.45", 1, MidpointRounding.ToNegativeInfinity, "1.4")]
+    [InlineData("1.45", 1, MidpointRounding.ToPositiveInfinity, "1.5")]
+    // -1.55 -> exactly between -1.5 and -1.6
+    [InlineData("-1.55", 1, MidpointRounding.ToEven, "-1.6")]
+    [InlineData("-1.55", 1, MidpointRounding.AwayFromZero, "-1.6")]
+    [InlineData("-1.55", 1, MidpointRounding.ToZero, "-1.5")]
+    [InlineData("-1.55", 1, MidpointRounding.ToNegativeInfinity, "-1.6")]
+    [InlineData("-1.55", 1, MidpointRounding.ToPositiveInfinity, "-1.5")]
+    // -1.45 -> exactly between -1.4 and -1.5
+    [InlineData("-1.45", 1, MidpointRounding.ToEven, "-1.4")]
+    [InlineData("-1.45", 1, MidpointRounding.AwayFromZero, "-1.5")]
+    [InlineData("-1.45", 1, MidpointRounding.ToZero, "-1.4")]
+    [InlineData("-1.45", 1, MidpointRounding.ToNegativeInfinity, "-1.5")]
+    [InlineData("-1.45", 1, MidpointRounding.ToPositiveInfinity, "-1.4")]
+    // precision 0 midpoints
+    [InlineData("2.5", 0, MidpointRounding.ToEven, "2")]
+    [InlineData("2.5", 0, MidpointRounding.AwayFromZero, "3")]
+    [InlineData("2.5", 0, MidpointRounding.ToZero, "2")]
+    [InlineData("2.5", 0, MidpointRounding.ToNegativeInfinity, "2")]
+    [InlineData("2.5", 0, MidpointRounding.ToPositiveInfinity, "3")]
+    [InlineData("3.5", 0, MidpointRounding.ToEven, "4")]
+    [InlineData("-2.5", 0, MidpointRounding.ToEven, "-2")]
+    [InlineData("-2.5", 0, MidpointRounding.AwayFromZero, "-3")]
+    [InlineData("-2.5", 0, MidpointRounding.ToZero, "-2")]
+    [InlineData("-2.5", 0, MidpointRounding.ToNegativeInfinity, "-3")]
+    [InlineData("-2.5", 0, MidpointRounding.ToPositiveInfinity, "-2")]
+    // precision 2 midpoint
+    [InlineData("1.125", 2, MidpointRounding.ToEven, "1.12")]
+    [InlineData("1.125", 2, MidpointRounding.AwayFromZero, "1.13")]
+    [InlineData("1.125", 2, MidpointRounding.ToZero, "1.12")]
+    [InlineData("1.125", 2, MidpointRounding.ToNegativeInfinity, "1.12")]
+    [InlineData("1.125", 2, MidpointRounding.ToPositiveInfinity, "1.13")]
+    public void RoundToPrecision_Decimal_Midpoint_UsesMode(string value, int digits, MidpointRounding mode, string expected)
+    {
+        decimal v = decimal.Parse(value, CultureInfo.InvariantCulture);
+        decimal e = decimal.Parse(expected, CultureInfo.InvariantCulture);
+        Assert.Equal(e, MathHelper.RoundToPrecision(v, digits, mode));
+    }
+
+    [Fact]
+    public void RoundToPrecision_Double_InvalidDigits_Throws()
+    {
+        // Mirrors Math.Round(double, int, MidpointRounding): digits must be in [0, 15].
+        Assert.Throws<ArgumentOutOfRangeException>(() => MathHelper.RoundToPrecision(1.55, -1, MidpointRounding.ToEven));
+        Assert.Throws<ArgumentOutOfRangeException>(() => MathHelper.RoundToPrecision(1.55, 16, MidpointRounding.ToEven));
+    }
+
+    [Fact]
+    public void RoundToPrecision_Decimal_InvalidDigits_Throws()
+    {
+        // Mirrors Math.Round(decimal, int, MidpointRounding): digits must be in [0, 28].
+        Assert.Throws<ArgumentOutOfRangeException>(() => MathHelper.RoundToPrecision(1.55m, -1, MidpointRounding.ToEven));
+        Assert.Throws<ArgumentOutOfRangeException>(() => MathHelper.RoundToPrecision(1.55m, 29, MidpointRounding.ToEven));
+    }
+
+    [Fact]
+    public void RoundToPrecision_UnknownMode_Throws()
+    {
+        // Unknown enum values are rejected (not silently ignored), even for non-midpoint values.
+        Assert.Throws<ArgumentException>(() => MathHelper.RoundToPrecision(1.44, 1, (MidpointRounding)999));
+        Assert.Throws<ArgumentException>(() => MathHelper.RoundToPrecision(1.44m, 1, (MidpointRounding)999));
+    }
+
+    // The public Round entry point (modified to call RoundToPrecision) must honor the midpoint mode on both paths.
+    [Theory]
+    [InlineData(MidpointRounding.ToEven, 1.6)]
+    [InlineData(MidpointRounding.AwayFromZero, 1.6)]
+    [InlineData(MidpointRounding.ToZero, 1.5)]
+    [InlineData(MidpointRounding.ToNegativeInfinity, 1.5)]
+    [InlineData(MidpointRounding.ToPositiveInfinity, 1.6)]
+    public void Round_DoublePath_AppliesMidpointMode(MidpointRounding mode, double expected)
+    {
+        object result = MathHelper.Round(1.55, 1, mode, new MathHelperOptions());
+        Assert.Equal(expected, Assert.IsType<double>(result), precision: 10);
+    }
+
+    [Theory]
+    [InlineData(MidpointRounding.ToEven, "1.6")]
+    [InlineData(MidpointRounding.AwayFromZero, "1.6")]
+    [InlineData(MidpointRounding.ToZero, "1.5")]
+    [InlineData(MidpointRounding.ToNegativeInfinity, "1.5")]
+    [InlineData(MidpointRounding.ToPositiveInfinity, "1.6")]
+    public void Round_DecimalPath_AppliesMidpointMode(MidpointRounding mode, string expected)
+    {
+        var options = new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.DecimalAsDefault);
+        object result = MathHelper.Round(1.55m, 1, mode, options);
+        Assert.Equal(decimal.Parse(expected, CultureInfo.InvariantCulture), Assert.IsType<decimal>(result));
+    }
+
+    // The UseSystemMathRound option opts back into the legacy System.Math.Round behavior on both numeric paths.
+    [Fact]
+    public void Round_UseSystemMathRound_DelegatesToSystemMath()
+    {
+        var doubleOptions = new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.UseSystemMathRound);
+        var decimalOptions = new MathHelperOptions(CultureInfo.InvariantCulture,
+            ExpressionOptions.UseSystemMathRound | ExpressionOptions.DecimalAsDefault);
+
+        foreach (var mode in AllMidpointModes)
+        {
+            foreach (var digits in new[] { 0, 1, 2 })
+            {
+                foreach (var value in new[] { 0.15, 1.55, 2.5, 2.675, -1.55, 1.45, -2.675 })
+                {
+                    object viaDouble = MathHelper.Round(value, digits, mode, doubleOptions);
+                    Assert.Equal(Math.Round(value, digits, mode), Assert.IsType<double>(viaDouble), precision: 12);
+
+                    decimal decimalValue = (decimal)value;
+                    object viaDecimal = MathHelper.Round(decimalValue, digits, mode, decimalOptions);
+                    Assert.Equal(Math.Round(decimalValue, digits, mode), Assert.IsType<decimal>(viaDecimal));
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void Round_DefaultVsSystemMathRound_DifferOnDecimalMidpoint()
+    {
+        // 1.005 is an exact decimal midpoint at 2 digits (rounds away-from-zero to 1.01), but the binary double
+        // for 1.005 is slightly below 1.005, so System.Math.Round(double) rounds it down to 1.00. The flag selects
+        // between the midpoint-aware (decimal) semantics and the legacy System.Math.Round behavior.
+        var defaultOptions = new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.None);
+        var systemOptions = new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.UseSystemMathRound);
+
+        object viaDefault = MathHelper.Round(1.005, 2, MidpointRounding.AwayFromZero, defaultOptions);
+        object viaSystem = MathHelper.Round(1.005, 2, MidpointRounding.AwayFromZero, systemOptions);
+
+        Assert.Equal(1.01, Assert.IsType<double>(viaDefault), precision: 12);  // midpoint-aware (decimal) semantics
+        Assert.Equal(1.00, Assert.IsType<double>(viaSystem), precision: 12);   // legacy System.Math.Round(double) result
+        Assert.NotEqual(viaDefault, viaSystem);                                // the option genuinely changes behavior
     }
 }

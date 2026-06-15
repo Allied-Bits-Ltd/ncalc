@@ -32,6 +32,12 @@ public readonly struct MathHelperOptions(CultureInfo cultureInfo, ExpressionOpti
         get => options.HasFlag(ExpressionOptions.DecimalAsDefault);
     }
 
+    public bool UseSystemMathRound
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => options.HasFlag(ExpressionOptions.UseSystemMathRound);
+    }
+
     public bool OverflowProtection
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -203,4 +203,9 @@ public enum ExpressionOptions : long
     /// <para>Enabling this option also enables <seealso cref="AllowNullParameter"/>.</para>
     /// </summary>
     UseTernaryLogic = ((long)1) << 38,
+
+    /// <summary>
+    /// Specifies that the Round function must use the Round function of System.Math which erroneously applies MidpointRounding to any passed value.
+    /// </summary>
+    UseSystemMathRound = ((long)1) << 39,
 }

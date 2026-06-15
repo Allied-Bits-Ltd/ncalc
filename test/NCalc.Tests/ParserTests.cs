@@ -1,4 +1,6 @@
-﻿using NCalc.Domain;
+﻿using ExtendedNumerics;
+
+using NCalc.Domain;
 using NCalc.Factories;
 using NCalc.Helpers;
 using NCalc.Parser;
@@ -13,7 +15,15 @@ public class ParserTests
     {
         var expression = new Expression("-2147483648");
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
-        Assert.Equal((long)-2147483648, (long)result);
+        if (result is BigDecimal bd)
+        {
+            Assert.True(bd.DecimalPlaces == 0);
+            Assert.Equal((long)-2147483648, (long)bd.WholeValue);
+        }
+        else
+        {
+            Assert.Equal((long)-2147483648, (long)result);
+        }
     }
 
     [Theory]
