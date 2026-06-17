@@ -1,3 +1,7 @@
+# 9.0.6 (Allied Bits)
+
+* Fixed the `Pow` function and the exponentiation operation so that they are not limited by bitness of the `double` type. 
+
 # 9.0.5 (Allied Bits)
 
 * The `Round` function was re-implemented to apply the `MidpointRounding` mode only to midpoint values and not to everything as it is implemented in the System.Math namespace. This behavior is optional - you can use System.Math implementation by setting the 'UseSystemMathRound' option in the expression options.

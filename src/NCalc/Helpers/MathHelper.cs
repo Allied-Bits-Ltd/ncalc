@@ -3217,19 +3217,109 @@ public static class MathHelper
         }
 
         Type typeA = a.GetType();
-        if ((options.DecimalAsDefault || options.UseBigNumbers) && (IsBoxedFloatingNumberInteger(b) == true))
-        {
-            var @base = new BigDecimal(ConvertToDecimal(a, "Pow", options.CultureInfo, null));
-            var exponent = new BigInteger(ConvertToDecimal(b, "Pow", options.CultureInfo, null));
 
-            BigDecimal bdResult = BigDecimal.Pow(@base, exponent);
-            return ReduceNumericType(bdResult, reduceTypes ? null : typeA, options) ?? throw new NCalcEvaluationException("Pow result could not be reduced to a smaller type");
+        // Use BigDecimal arithmetic when the base is already a BigDecimal or BigInteger (avoids
+        // the decimal-range overflow that ConvertToDecimal would cause for large values), or when
+        // options request big-number arithmetic.  Non-integer exponents always fall back to
+        // Math.Pow — exact fractional-exponent support via BigDecimal is not feasible with the
+        // ExtendedNumerics library.
+        bool tryBigDecimalPath = a is BigDecimal || a is BigInteger
+            || options.DecimalAsDefault || options.UseBigNumbers;
+
+        if (tryBigDecimalPath && TryGetBigIntegerExponent(b, out BigInteger bigExp))
+        {
+            BigDecimal @base = ConvertToBigDecimal(a);
+            BigDecimal bdResult = BigDecimalPow(@base, bigExp);
+            return ReduceNumericType(bdResult, reduceTypes ? null : typeA, options)
+                ?? throw new NCalcEvaluationException("Pow result could not be reduced to a smaller type");
         }
 
-        double result = Math.Pow(ConvertToDouble(a, "Pow", options.CultureInfo, null), ConvertToDouble(b, "Pow", options.CultureInfo, null));
+        double result = Math.Pow(
+            ConvertToDouble(a, "Pow", options.CultureInfo, null),
+            ConvertToDouble(b, "Pow", options.CultureInfo, null));
         if (typeA == typeof(decimal))
             return (decimal)result;
 
+        return result;
+    }
+
+    // Returns true and sets exponent when b represents an integer value that can serve as a
+    // BigDecimal exponent.  Handles all boxed numeric types including BigDecimal and BigInteger.
+    private static bool TryGetBigIntegerExponent(object b, out BigInteger exponent)
+    {
+        exponent = BigInteger.Zero;
+        switch (b)
+        {
+            case BigInteger bi:
+                exponent = bi;
+                return true;
+            case BigDecimal bd:
+                if (bd.DecimalPlaces != 0) return false;
+                exponent = bd.WholeValue;
+                return true;
+            case byte byt: exponent = new BigInteger(byt); return true;
+            case sbyte sb: exponent = new BigInteger(sb); return true;
+            case short s: exponent = new BigInteger(s); return true;
+            case ushort us: exponent = new BigInteger(us); return true;
+            case int i: exponent = new BigInteger(i); return true;
+            case uint ui: exponent = new BigInteger(ui); return true;
+            case long l: exponent = new BigInteger(l); return true;
+            case ulong ul: exponent = new BigInteger(ul); return true;
+            case float f:
+                if (f != Math.Truncate(f)) return false;
+                exponent = new BigDecimal(f).WholeValue;
+                return true;
+            case double d:
+                if (d != Math.Truncate(d)) return false;
+                if (d >= long.MinValue && d <= long.MaxValue)
+                    exponent = new BigInteger((long)d);
+                else
+                    exponent = new BigDecimal(d).WholeValue;
+                return true;
+            case decimal m:
+                if (m != Math.Truncate(m)) return false;
+                exponent = new BigDecimal(m).WholeValue;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    // Raises baseValue to an integer power using exponentiation by squaring.
+    // Handles zero, one, negative exponents, and a zero base.
+    private static BigDecimal BigDecimalPow(BigDecimal baseValue, BigInteger exponent)
+    {
+        if (exponent.IsZero)
+            return BigDecimal.One;
+
+        if (exponent.IsOne)
+            return baseValue;
+
+        if (baseValue.IsZero())
+        {
+            if (exponent > BigInteger.Zero)
+                return BigDecimal.Zero;
+            throw new DivideByZeroException("Zero cannot be raised to a negative power.");
+        }
+
+        if (exponent < BigInteger.Zero)
+            return BigDecimal.One / BigDecimalPowPositive(baseValue, BigInteger.Negate(exponent));
+
+        return BigDecimalPowPositive(baseValue, exponent);
+    }
+
+    // Exponentiation by squaring for positive exponents (O(log n) multiplications).
+    private static BigDecimal BigDecimalPowPositive(BigDecimal baseValue, BigInteger exponent)
+    {
+        BigDecimal result = BigDecimal.One;
+        BigDecimal current = baseValue;
+        while (exponent > BigInteger.Zero)
+        {
+            if (!exponent.IsEven)
+                result *= current;
+            current *= current;
+            exponent >>= 1;
+        }
         return result;
     }
 

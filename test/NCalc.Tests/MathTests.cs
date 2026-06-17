@@ -1627,4 +1627,98 @@ public class MathsTests : TestBase
         Assert.Equal(1.00, Assert.IsType<double>(viaSystem), precision: 12);   // legacy System.Math.Round(double) result
         Assert.NotEqual(viaDefault, viaSystem);                                // the option genuinely changes behavior
     }
+
+    // ── BigDecimal exponentiation ─────────────────────────────────────────────
+
+    [Fact]
+    public void BigDecimalPow_ExponentZero_ReturnsOne()
+    {
+        var e = new Expression("x**0", ExpressionOptions.UseBigNumbers);
+        e.Parameters["x"] = new BigDecimal(42);
+        var result = e.Evaluate(TestContext.Current.CancellationToken);
+        CheckResult(1, result);
+    }
+
+    [Fact]
+    public void BigDecimalPow_ExponentOne_ReturnsBase()
+    {
+        // Use a base > double.MaxValue (~1.8e308) so the result cannot be reduced to a
+        // floating-point type and stays as BigInteger, enabling an exact string comparison.
+        var bigBase = new BigDecimal(BigInteger.Parse("1" + new string('0', 400))); // 10^400
+        var e = new Expression("x**1", ExpressionOptions.UseBigNumbers);
+        e.Parameters["x"] = bigBase;
+        var result = e.Evaluate(TestContext.Current.CancellationToken);
+        string expected = "1" + new string('0', 400);
+        Assert.Equal(expected, result!.ToString());
+    }
+
+    [Fact]
+    public void BigDecimalPow_LargeExponent_DoesNotOverflowDouble()
+    {
+        // 10^400 > double.MaxValue (~1.8e308); the double path would return Infinity.
+        var e = new Expression("10**400", ExpressionOptions.UseBigNumbers);
+        var result = e.Evaluate(TestContext.Current.CancellationToken);
+        string expected = "1" + new string('0', 400);
+        Assert.Equal(expected, result!.ToString());
+    }
+
+    [Fact]
+    public void BigDecimalPow_BaseExceedsDecimalRange_NoOverflow()
+    {
+        // The old code called ConvertToDecimal on the base, which throws for values > decimal.MaxValue
+        // (~7.9e28).  The new code uses ConvertToBigDecimal and avoids that overflow.
+        // Using exponent 11 so that result (10^29)^11 = 10^319 > double.MaxValue, preserving exact BigInteger.
+        var bigBase = new BigDecimal(BigInteger.Parse("1" + new string('0', 29))); // 10^29 > decimal.MaxValue
+        var e = new Expression("x**11", ExpressionOptions.UseBigNumbers);
+        e.Parameters["x"] = bigBase;
+        var result = e.Evaluate(TestContext.Current.CancellationToken);
+        string expected = "1" + new string('0', 319); // (10^29)^11 = 10^319
+        Assert.Equal(expected, result!.ToString());
+    }
+
+    [Fact]
+    public void BigDecimalPow_NegativeBaseOddExponent_ReturnsNegative()
+    {
+        // (-3)^3 = -27
+        var e = new Expression("x**3", ExpressionOptions.UseBigNumbers);
+        e.Parameters["x"] = new BigDecimal(-3);
+        var result = e.Evaluate(TestContext.Current.CancellationToken);
+        CheckResult(-27, result);
+    }
+
+    [Fact]
+    public void BigDecimalPow_NegativeBaseEvenExponent_ReturnsPositive()
+    {
+        // (-3)^4 = 81
+        var e = new Expression("x**4", ExpressionOptions.UseBigNumbers);
+        e.Parameters["x"] = new BigDecimal(-3);
+        var result = e.Evaluate(TestContext.Current.CancellationToken);
+        CheckResult(81, result);
+    }
+
+    [Fact]
+    public void BigDecimalPow_NegativeIntegerExponent()
+    {
+        // 2^(-3) = 0.125 via the BigDecimal path when the base is a BigDecimal
+        var e = new Expression("x**(-3)", ExpressionOptions.UseBigNumbers);
+        e.Parameters["x"] = new BigDecimal(2);
+        var result = e.Evaluate(TestContext.Current.CancellationToken);
+        CheckResult(0.125, result);
+    }
+
+    [Fact]
+    public void BigDecimalPow_DoublePath_NoRegression()
+    {
+        // Ordinary double exponentiation must still work when no big-number options are set.
+        var result = new Expression("2.0**3.0").Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(8.0, result);
+    }
+
+    [Fact]
+    public void BigDecimalPow_NonIntegerExponent_UsesMathPow()
+    {
+        // Non-integer exponent falls back to Math.Pow (no exact BigDecimal support for fractional exponents).
+        var result = new Expression("4**0.5").Evaluate(TestContext.Current.CancellationToken);
+        CheckResult(2.0, result);
+    }
 }
