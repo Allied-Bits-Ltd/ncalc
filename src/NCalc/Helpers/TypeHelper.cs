@@ -209,55 +209,65 @@ public static class TypeHelper
                     compareStrings = true;
                 }
                 else
-                if (a is string)
+                if (a is string sa)
                 {
                     bool aConverted = false;
                     if (!comparisonOptions.AllOptions.HasFlag(ExpressionOptions.NoStringTypeCoercion))
                     {
                         try
                         {
-                            a = (new Expression((string)a, mathHelperOptions.AllOptions, mathHelperOptions.CultureInfo)).Evaluate();
+                            a = (new Expression(sa, mathHelperOptions.AllOptions, mathHelperOptions.CultureInfo)).Evaluate();
                             aConverted = true;
                         }
                         catch
                         {
                         }
+
+                        if (!aConverted)
+                        {
+                            aValue = sa;
+                            if (b is string stb)
+                                bValue = stb;
+                            else
+                                bValue = b?.ToString() ?? "null";
+
+                            compareStrings = true;
+                        }
                     }
-
-                    if (!aConverted)
+                    else
                     {
-                        aValue = a;
-                        if (b is string)
-                            bValue = (string)b;
-                        else
-                            bValue = b?.ToString() ?? "null";
-
-                        compareStrings = true;
+                        outcome = -1;
+                        return false;
                     }
                 }
-                if (b is string)
+                if (b is string sb)
                 {
                     bool bConverted = false;
                     if (!comparisonOptions.AllOptions.HasFlag(ExpressionOptions.NoStringTypeCoercion))
                     {
                         try
                         {
-                            b = (new Expression((string)b, mathHelperOptions.AllOptions, mathHelperOptions.CultureInfo)).Evaluate();
+                            b = (new Expression(sb, mathHelperOptions.AllOptions, mathHelperOptions.CultureInfo)).Evaluate();
                             bConverted = true;
                         }
                         catch
                         {
                         }
-                    }
-                    if (!bConverted)
-                    {
-                        bValue = b;
-                        if (a is string)
-                            aValue = (string)a;
-                        else
-                            aValue = a?.ToString() ?? "null";
+                        if (!bConverted)
+                        {
+                            bValue = sb;
+                            if (a is string sta)
+                                aValue = sta;
+                            else
+                                aValue = a?.ToString() ?? "null";
 
-                        compareStrings = true;
+                            compareStrings = true;
+                        }
+                    }
+                    else
+                    {
+                        outcome = -1;
+                        return false;
                     }
                 }
 

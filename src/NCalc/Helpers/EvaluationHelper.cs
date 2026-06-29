@@ -255,8 +255,7 @@ public static class EvaluationHelper
                 TypeHelper.GetStringComparer(context));
         }
 
-        return rightArray.Contains(leftValue,
-            noStringTypeCoercion ? EqualityComparer<object?>.Default : StringCoercionComparer.Default);
+        return rightArray.Contains(leftValue, new ObjectEqualityComparer(context));
     }
 
     private static bool Contains(object? leftValue, IEnumerable rightValue, ExpressionContextBase context)
@@ -723,6 +722,63 @@ public static class EvaluationHelper
             dictionary[paramKey] = value;
         else
             dictionary[parameterName] = value;
+    }
+
+    internal sealed class ObjectEqualityComparer : IEqualityComparer<object?>
+    {
+        private readonly ComparisonOptions _comparisonOptions;
+        private readonly MathHelperOptions _mathHelperOptions;
+        private readonly bool _noStringTypeCoercion;
+
+        public ObjectEqualityComparer(ExpressionContextBase context)
+        {
+            _comparisonOptions = context;
+            _mathHelperOptions = context;
+            _noStringTypeCoercion = context.Options.HasFlag(ExpressionOptions.NoStringTypeCoercion);
+        }
+
+        public new bool Equals(object? x, object? y)
+        {
+            if (x is null || y is null)
+                return x == y;
+
+            if (_noStringTypeCoercion)
+                return Compare(x, y, ComparisonType.Equal, _comparisonOptions, _mathHelperOptions);
+
+            return x switch
+            {
+                byte intX when y is string strY => intX.ToString() == strY,
+                sbyte intX when y is string strY => intX.ToString() == strY,
+                short intX when y is string strY => intX.ToString() == strY,
+                ushort intX when y is string strY => intX.ToString() == strY,
+                int intX when y is string strY => intX.ToString() == strY,
+                uint intX when y is string strY => intX.ToString() == strY,
+                long intX when y is string strY => intX.ToString() == strY,
+                ulong intX when y is string strY => intX.ToString() == strY,
+                float intX when y is string strY => intX.ToString() == strY,
+                double intX when y is string strY => intX.ToString() == strY,
+                decimal intX when y is string strY => intX.ToString() == strY,
+                BigInteger intX when y is string strY => intX.ToString() == strY,
+                BigDecimal intX when y is string strY => intX.ToString() == strY,
+                string strX when y is byte intY => strX == intY.ToString(),
+                string strX when y is sbyte intY => strX == intY.ToString(),
+                string strX when y is short intY => strX == intY.ToString(),
+                string strX when y is ushort intY => strX == intY.ToString(),
+                string strX when y is int intY => strX == intY.ToString(),
+                string strX when y is uint intY => strX == intY.ToString(),
+                string strX when y is long intY => strX == intY.ToString(),
+                string strX when y is ulong intY => strX == intY.ToString(),
+                string strX when y is float intY => strX == intY.ToString(),
+                string strX when y is double intY => strX == intY.ToString(),
+                string strX when y is decimal intY => strX == intY.ToString(),
+                string strX when y is BigInteger intY => strX == intY.ToString(),
+                string strX when y is BigDecimal intY => strX == intY.ToString(),
+                _ => Compare(x, y, ComparisonType.Equal, _comparisonOptions, _mathHelperOptions)
+            };
+        }
+
+        public int GetHashCode(object? obj)
+            => obj?.GetHashCode() ?? 0;
     }
 }
 

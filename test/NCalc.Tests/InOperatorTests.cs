@@ -53,4 +53,22 @@ public class InOperatorTests
             Parameters = { { "PageState", "Insert" } }
         }.Evaluate(TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public void ShouldEvaluateTrueInOperatorWithNonIntegers()
+    {
+        Assert.Equal(true, new Expression("{short_value} in (1; 2; 3; 4; 5)")
+        {
+            Parameters = { { "short_value", (short) 5 } }
+        }.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void ShouldEvaluateTrueNotInOperatorWithNonIntegers()
+    {
+        Assert.Equal(true, new Expression("{short_value} not in (1; 2; 3; 4; 5)")
+        {
+            Parameters = { { "short_value", (short) 7 } }
+        }.Evaluate(TestContext.Current.CancellationToken));
+    }
 }

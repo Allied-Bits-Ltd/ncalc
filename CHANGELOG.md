@@ -1,3 +1,7 @@
+# 9.0.6.1 (Allied Bits)
+
+* Improved the comparison mechanism behind the "in" and "not in" operations when an object is checked against an array of objects. Now, this mechanism accounts for all numeric types and properly handles string coercion.
+
 # 9.0.6 (Allied Bits)
 
 * Fixed the `Pow` function and the exponentiation operation so that they are not limited by bitness of the `double` type. 

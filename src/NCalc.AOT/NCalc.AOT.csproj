@@ -93,7 +93,6 @@
       <Compile Include="..\NCalc\Helpers\MathHelperOptions.cs" Link="Helpers\MathHelperOptions.cs" />
       <Compile Include="..\NCalc\Helpers\MathMethodInfo.cs" Link="Helpers\MathMethodInfo.cs" />
       <Compile Include="..\NCalc\Helpers\ParametersHelper.cs" Link="Helpers\ParametersHelper.cs" />
-      <Compile Include="..\NCalc\Helpers\StringCoercionComparer.cs" Link="Helpers\StringCoercionComparer.cs" />
       <Compile Include="..\NCalc\Helpers\TypeHelper.cs" Link="Helpers\TypeHelper.cs" />
       <Compile Include="..\NCalc\Logging\DefaultLoggerFactory.cs" Link="Logging\DefaultLoggerFactory.cs" />
       <Compile Include="..\NCalc\Logging\LogMessages.cs" Link="Logging\LogMessages.cs" />
