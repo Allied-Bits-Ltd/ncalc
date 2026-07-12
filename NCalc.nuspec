@@ -10,7 +10,7 @@
     <icon>NCalc.png</icon>
     <title>The mathematical expression evaluator for .NET</title>
     <tags>ncalc math expression evaluation</tags>
-    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="22b60c37247780747234cfdb9f4b5481fb1223d1" />
+    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="9686112275a174a0a44a237cffe7ad6911fc44af" />
     <projectUrl>https://alliedbits.com/ncalc</projectUrl>
     <readme>README.nuget.md</readme>
     <description>This package by Allied Bits offers a number of advanced features compared to the original NCalc project.
