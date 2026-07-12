@@ -204,8 +204,10 @@ public static class TypeHelper
                 Type? mpt = null;
                 bool compareStrings = false;
 
-                if (a is string && b is string)
+                if (a is string aa && b is string bb)
                 {
+                    aValue = aa;
+                    bValue = bb;
                     compareStrings = true;
                 }
                 else
@@ -240,6 +242,7 @@ public static class TypeHelper
                         return false;
                     }
                 }
+                else
                 if (b is string sb)
                 {
                     bool bConverted = false;

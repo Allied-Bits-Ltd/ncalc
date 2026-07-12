@@ -8,6 +8,7 @@
         <AssemblyOriginatorKeyFile>../../NCalc.snk</AssemblyOriginatorKeyFile>
         <RootNamespace>NCalc</RootNamespace>
         <IsAotCompatible>false</IsAotCompatible>
+        <RepositoryUrl>https://github.com/Allied-Bits-ltd/ncalc.git</RepositoryUrl> 
     </PropertyGroup>
 
     <ItemGroup>

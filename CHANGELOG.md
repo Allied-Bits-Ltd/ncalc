@@ -1,3 +1,7 @@
+# 9.0.6.2 (Allied Bits)
+
+* Fixed a regression, where two string values were not compared properly.
+
 # 9.0.6.1 (Allied Bits)
 
 * Improved the comparison mechanism behind the "in" and "not in" operations when an object is checked against an array of objects. Now, this mechanism accounts for all numeric types and properly handles string coercion.

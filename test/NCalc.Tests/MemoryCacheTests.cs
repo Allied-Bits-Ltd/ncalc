@@ -13,11 +13,15 @@ public class MemoryCacheTests(FactoriesWithMemoryCacheFixture fixture) : IClassF
     {
         var expression = _expressionFactory.Create("'Sergio' != 'Bella'");
 
-        Assert.Equal(true, expression.Evaluate(TestContext.Current.CancellationToken));
+        var result = expression.Evaluate(TestContext.Current.CancellationToken);
+
+        Assert.Equal(true, result);
 
         var anotherExpression = _expressionFactory.Create("'Sergio' != 'Bella'", ExpressionOptions.NoCache);
 
-        Assert.Equal(true, anotherExpression.Evaluate(TestContext.Current.CancellationToken));
+        result = anotherExpression.Evaluate(TestContext.Current.CancellationToken);
+
+        Assert.Equal(true, result);
 
         Assert.NotEqual(expression.LogicalExpression, anotherExpression.LogicalExpression);
     }

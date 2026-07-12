@@ -9,6 +9,7 @@
         <AssemblyOriginatorKeyFile>../../NCalc.snk</AssemblyOriginatorKeyFile>
         <RootNamespace>NCalc</RootNamespace>
         <IsAotCompatible>true</IsAotCompatible>
+        <RepositoryUrl>https://github.com/Allied-Bits-ltd/ncalc.git</RepositoryUrl> 
     </PropertyGroup>
     <PropertyGroup>
         <DefineConstants>$(DefineConstants);AOT_COMPILATION</DefineConstants>

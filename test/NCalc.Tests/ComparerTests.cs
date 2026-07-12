@@ -32,17 +32,39 @@ public class ComparerTests
         Assert.Equal(expectedResult, (bool)issueExp.Evaluate(TestContext.Current.CancellationToken));
     }
 
-    [Fact]
-    public void ExpressionShouldHandleNullRightParameters()
+    [Theory]
+    [InlineData("'abc' == 'abc'")]
+    [InlineData("'abc' < 'abd'")]
+    [InlineData("'abd' > 'abc'")]
+    [InlineData("'abd' != 'abc'")]
+    public void ExpressionShouldHandleStringComparison(string expression)
     {
-        var e = new Expression("'a string' == null", ExpressionOptions.AllowNullParameter);
-        Assert.False((bool)e.Evaluate(TestContext.Current.CancellationToken));
+        var e = new Expression(expression, ExpressionOptions.NoStringTypeCoercion);
+        Assert.True((bool)e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("'abc' == 'abc'")]
+    [InlineData("'abc' < 'abd'")]
+    [InlineData("'abd' > 'abc'")]
+    [InlineData("'abd' != 'abc'")]
+    public void ExpressionShouldHandleStringComparison2(string expression)
+    {
+        var e = new Expression(expression, ExpressionOptions.None);
+        Assert.True((bool)e.Evaluate(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public void ExpressionShouldHandleNullLeftParameters()
     {
         var e = new Expression("null == 'a string'", ExpressionOptions.AllowNullParameter);
+        Assert.False((bool)e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void ExpressionShouldHandleNullRightParameters()
+    {
+        var e = new Expression("'a string' == null", ExpressionOptions.AllowNullParameter);
         Assert.False((bool)e.Evaluate(TestContext.Current.CancellationToken));
     }
 
