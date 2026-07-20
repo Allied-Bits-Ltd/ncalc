@@ -7,9 +7,9 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <Version>9.0.6.2</Version>
-    <FileVersion>9.0.6.2</FileVersion>
-    <AssemblyVersion>9.0.6.2</AssemblyVersion>
+    <Version>9.0.6.3</Version>
+    <FileVersion>9.0.6.3</FileVersion>
+    <AssemblyVersion>9.0.6.3</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Roslynator.Analyzers" Version="4.14.1" PrivateAssets="all"/>
