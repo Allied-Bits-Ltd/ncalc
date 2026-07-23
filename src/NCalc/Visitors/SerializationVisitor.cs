@@ -1,4 +1,7 @@
-﻿using NCalc.Domain;
+﻿using ExtendedNumerics;
+
+using NCalc.Domain;
+using NCalc.Helpers;
 
 using ValueType = NCalc.Domain.ValueType;
 
@@ -11,7 +14,8 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 {
     private readonly NumberFormatInfo _numberFormatInfo = new()
     {
-        NumberDecimalSeparator = (context.AdvancedOptions is null) ? "." : context.AdvancedOptions.GetDecimalSeparatorChar().ToString()
+        NumberDecimalSeparator = (context.AdvancedOptions is null) ? context.CultureInfo.NumberFormat.NumberDecimalSeparator : context.AdvancedOptions.GetDecimalSeparator(),
+        NumberGroupSeparator = (context.AdvancedOptions is null) ? context.CultureInfo.NumberFormat.NumberGroupSeparator : context.AdvancedOptions.GetNumberGroupSeparator(),
     };
 
     public string Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
@@ -238,7 +242,14 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         {
             ValueType.Boolean or ValueType.Integer => $"{value} ",
             ValueType.DateTime or ValueType.TimeSpan => $"#{value}# ",
-            ValueType.Float => $"{decimal.Parse(value?.ToString() ?? string.Empty).ToString(_numberFormatInfo)} ",
+            ValueType.Float =>
+                value is null
+                    ? string.Empty
+                    : ((value is decimal dcValue)
+                        ? dcValue.ToString(_numberFormatInfo)
+                        : value is BigDecimal bdValue
+                            ? bdValue.ToString(_numberFormatInfo)
+                            : MathHelper.ConvertToDouble(value, context).ToString("0.############################", _numberFormatInfo)) + " ",
             ValueType.Char => $"'{value}' ",
             ValueType.String =>
                 (value is Parlot.TextSpan)
@@ -251,7 +262,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                     StringKind.BackQuote => $"`{value}` ",
                     _ => string.IsNullOrEmpty(expression.OriginalString) ? $"'{value}' " : $"'{expression.OriginalString}' ",
                 },
-            _ => "",
+            _ => string.Empty,
         };
     }
 

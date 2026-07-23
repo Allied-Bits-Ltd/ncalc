@@ -245,4 +245,24 @@ public class SerializationTests
         Assert.Equal((BigDecimal)3, v.Components[2]);
     }
 #endif
+
+    [Fact]
+    public void ShouldSerializeDouble()
+    {
+        var ve = new ValueExpression { Value = 0.00001d };
+
+        var json = JsonSerializer.Serialize<LogicalExpression>(ve);
+        var restored = (ValueExpression)JsonSerializer.Deserialize<LogicalExpression>(json)!;
+
+        Assert.NotNull(restored.Value);
+        Assert.Equal(0.00001d, restored.Value);
+
+        var expr = new Expression("0.00001", ExpressionOptions.DecimalAsDefault);
+        string s = expr.GetLogicalExpression().ToString();
+        Assert.Equal( 0 + CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator + "00001", s);
+
+        expr = new Expression("0.00001", ExpressionOptions.None);
+        s = expr.GetLogicalExpression().ToString();
+        Assert.Equal( 0 + CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator + "00001", s);
+    }
 }

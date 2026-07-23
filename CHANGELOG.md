@@ -1,3 +1,7 @@
+# 9.0.6.4 (Allied Bits)
+
+* Fixed the leftover issue of the old NCalc - serialization of a float or double value did not work properly due to some quirky code. The code has been rewritten to operate properly.
+
 # 9.0.6.3 (Allied Bits)
 
 * Fixed an `ExecutionEngineException` on full-AOT platforms (e.g. iOS): the default logger factory no longer builds a `Microsoft.Extensions.Logging` `LoggerFactory` at startup unless a logging switch (`NCalc.Logging.EnableConsole`/`NCalc.Logging.EnableTrace`) is enabled. When no switch is set it returns `NullLoggerFactory.Instance`, avoiding the DI/lambda machinery that Mono full-AOT cannot compile and tries to JIT. This affects both the regular and the AOT assemblies.
