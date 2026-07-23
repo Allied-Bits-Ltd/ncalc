@@ -159,7 +159,7 @@ public class SerializationTests
         Assert.Equal("True", new ValueExpression(true).ToString());
         Assert.Equal("False", new ValueExpression(false).ToString());
         Assert.Equal("1", new ValueExpression(1).ToString());
-        Assert.Equal("1.234", new ValueExpression(1.234).ToString());
+        Assert.Equal("1" + CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator + "234", new ValueExpression(1.234).ToString());
         Assert.Equal("'hello'", new ValueExpression("hello").ToString());
         Assert.Equal("'c'", new ValueExpression('c').ToString());
         Assert.Equal("#" + new DateTime(2009, 1, 1) + "#", new ValueExpression(new DateTime(2009, 1, 1)).ToString());
@@ -259,10 +259,10 @@ public class SerializationTests
 
         var expr = new Expression("0.00001", ExpressionOptions.DecimalAsDefault);
         string s = expr.GetLogicalExpression().ToString();
-        Assert.Equal( 0 + CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator + "00001", s);
+        Assert.Equal("0" + CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator + "00001", s);
 
         expr = new Expression("0.00001", ExpressionOptions.None);
         s = expr.GetLogicalExpression().ToString();
-        Assert.Equal( 0 + CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator + "00001", s);
+        Assert.Equal("0" + CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator + "00001", s);
     }
 }
