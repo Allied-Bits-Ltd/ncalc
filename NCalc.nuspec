@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
   <metadata>
     <id>AlliedBits.NCalc</id>
-    <version>9.0.6.4</version>
+    <version>9.0.6.5</version>
     <authors>Sebastien Ros and contributors, Eugene Mayevski</authors>
     <copyright>Sebastien Ros and contributors, Eugene Mayevski</copyright>
     <license type="expression">MIT</license>
@@ -10,7 +10,7 @@
     <icon>NCalc.png</icon>
     <title>The mathematical expression evaluator for .NET</title>
     <tags>ncalc math expression evaluation</tags>
-    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="65858de6abb96263d61aba40c6e22e916b31eb28" />
+    <repository type="git" url="https://github.com/Allied-Bits-Ltd/ncalc" commit="7ce1e9a97ee25b59e5978b290ebebb7fa3630fba" />
     <projectUrl>https://alliedbits.com/ncalc</projectUrl>
     <readme>README.nuget.md</readme>
     <description>This package by Allied Bits offers a number of advanced features compared to the original NCalc project.
@@ -19,7 +19,7 @@ NCalc is a fast and lightweight expression evaluator library for .NET, designed 
 including static or dynamic parameters and custom functions. NCalc targets .NET 10, .NET 9, .NET 8, .NET Standard 2.0, and NET Framework 4.6.2 and later.
     </description>
     <dependencies>
-      <group targetFramework=".NETFramework4.6.2">
+      <group targetFramework=".NETFramework4.7.2">
         <dependency id="AlliedBits.Parlot" version="1.5.7" exclude="Build,Analyzers" />
         <dependency id="ExtendedNumerics.BigDecimal" version="3003.0.0.346" exclude="Build,Analyzers" />
         <dependency id="FastExpressionCompiler" version="5.3.0" exclude="Build,Analyzers" />        
@@ -68,7 +68,7 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
     <file src="_._" target="lib\net9.0" />
     <file src="_._" target="lib\net10.0" />
 
-    <file src="src\NCalc\bin\Release\net462\NCalc.dll" target="lib\net462" />
+    <file src="src\NCalc\bin\Release\net472\NCalc.dll" target="lib\net472" />
     <file src="src\NCalc\bin\Release\netstandard2.0\NCalc.dll" target="lib\netstandard2.0" />
     <file src="src\NCalc\bin\Release\net8.0\NCalc.dll" target="lib\net8.0" />
 
@@ -80,7 +80,7 @@ including static or dynamic parameters and custom functions. NCalc targets .NET 
     <file src="targets\net9.0\AlliedBits.NCalc.targets" target="build\net9.0" />
     <file src="targets\net10.0\AlliedBits.NCalc.targets" target="build\net10.0" />
 
-    <file src="src\NCalc\bin\Release\net462\NCalc.xml" target="lib\net462" />
+    <file src="src\NCalc\bin\Release\net472\NCalc.xml" target="lib\net472" />
     <file src="src\NCalc\bin\Release\netstandard2.0\NCalc.xml" target="lib\netstandard2.0" />
     <file src="src\NCalc\bin\Release\net8.0\NCalc.xml" target="lib\net8.0" />
     
