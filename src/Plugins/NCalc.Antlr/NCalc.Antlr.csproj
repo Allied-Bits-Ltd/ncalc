@@ -13,11 +13,11 @@
     <ItemGroup>
         <None Include="../../../NCalc.png" Pack="true" PackagePath="/" />
     </ItemGroup>
-    
+
     <ItemGroup>
         <PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
     </ItemGroup>
-    
+
     <ItemGroup>
       <PackageReference Update="Roslynator.Analyzers" Version="4.14.1" />
       <PackageReference Update="Roslynator.CodeAnalysis.Analyzers" Version="4.14.1" />

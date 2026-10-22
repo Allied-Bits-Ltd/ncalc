@@ -538,8 +538,11 @@ public static class LogicalExpressionParser
         string extraIdentChars = "_";
         if (extOptions is not null)
             extraIdentChars += extOptions.ExtraIdentifierChars;
+
         string extraStartIdentChar = supportCurrency ? "" : "$";
-        var letterIdentifier = Terms.Identifier(SearchValues.Create(extraStartIdentChar + extraIdentChars + Character.AZ), SearchValues.Create(extraIdentChars + Character.AlphaNumeric));
+        string startChars = extraStartIdentChar + extraIdentChars + Character.AZ;
+        string partChars = extraIdentChars + Character.AlphaNumeric;
+        var letterIdentifier = Terms.Identifier((c) => startChars.Contains(c), (c) => partChars.Contains(c));
 #else
         var letterIdentifier = Terms.Identifier();
 #endif
@@ -2274,9 +2277,9 @@ public static class LogicalExpressionParser
         var expressionParser = OneOf(topLevel, curlyBracedTopLevel).AndSkip(ZeroOrMany(whitespaceParser)).Eof()
                 .ElseError(InvalidTokenMessage);
 
-        AppContext.TryGetSwitch("NCalc.EnableParlotParserCompilation", out var enableParserCompilation);
+        //AppContext.TryGetSwitch("NCalc.EnableParlotParserCompilation", out var enableParserCompilation);
 
-        return enableParserCompilation ? expressionParser.Compile() : expressionParser;
+        return /*enableParserCompilation ? expressionParser.Compile() : */expressionParser;
     }
 
     private static BigDecimal? TryParseDecimal((LogicalExpression, TextSpan, LogicalExpression, (TextSpan, LogicalExpression)) val, bool useUnderscores)

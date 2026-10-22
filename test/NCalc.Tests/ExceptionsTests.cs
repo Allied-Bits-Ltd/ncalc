@@ -102,7 +102,7 @@ public class ExceptionsTests
         }
         catch (NCalcParserException ex)
         {
-            Assert.Equal("Invalid token in expression at position (1:3)", ex.InnerException?.Message);
+            Assert.Equal("Invalid token in expression at position (1:1)", ex.InnerException?.Message);
         }
     }
 

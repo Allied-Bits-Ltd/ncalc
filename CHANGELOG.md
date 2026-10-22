@@ -1,3 +1,8 @@
+# 9.0.6.5  (Allied Bits)
+
+* Updated Parlot references.
+* The .NET 4.6.2 target was replaced by .NET 4.7.2 to follow Parlot target update.
+
 # 9.0.6.4 (Allied Bits)
 
 * Fixed the leftover issue of the old NCalc - serialization of a float or double value did not work properly due to some quirky code. The code has been rewritten to operate properly.
