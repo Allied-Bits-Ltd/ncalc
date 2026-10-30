@@ -1343,6 +1343,7 @@ public static class MathHelper
             return null;
 
         Type typeA = a.GetType(); //Type t = GetBroaderType(a.GetType(), b.GetType());
+        bool bigOperand = IsBigNumber(a) || IsBigNumber(b);
 
         a = ConvertIfNeeded(a, "/", options);
         b = ConvertIfNeeded(b, "/", options);
@@ -1479,6 +1480,10 @@ public static class MathHelper
 
             if (bdResult is not null)
             {
+                // With a big-number operand, a fractional result is narrowed only as far as no digits are lost
+                if (bigOperand && bdResult.Value.DecimalPlaces != 0)
+                    return ReduceNumericType(bdResult.Value, null, options);
+
                 if (reduceTypes)
                 {
                     if ((IsBoxedIntegerNumberOrBigNumber(typeA) || options.ReduceDivResultToInteger) && bdResult.Value.DecimalPlaces == 0)
@@ -1951,7 +1956,7 @@ public static class MathHelper
         if (a is null || b is null)
             return null;
 
-        // Vector dispatch — element-wise modulo (integer semantics, consistent with scalar BigDecimal modulo)
+        // Vector dispatch — element-wise modulo (remainder of a truncated division, consistent with scalar BigDecimal modulo)
         if (a is NCalcVector va)
         {
             if (b is NCalcVector vb)
@@ -2003,31 +2008,11 @@ public static class MathHelper
 
         if ((options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b)) && typeCode == TypeCode.Object)
         {
+            // A BigDecimal operand keeps its fractional part, like the remainder of double and decimal operands
+            if (a is BigDecimal || b is BigDecimal)
+                return ReduceNumericType(Remainder(ConvertToBigDecimal(a), ConvertToBigDecimal(b)), reduceTypes ? null : t, options);
+
             BigInteger? biResult = null;
-            if (a is BigDecimal bdA)
-            {
-                BigInteger biA = bdA.WholeValue;
-                if (b is BigDecimal bdB)
-                    b = bdB.WholeValue;
-                else
-                if (!(b is BigInteger))
-                    b = ConvertToBigInteger(b);
-
-                biResult = BigInteger.Remainder(biA, (BigInteger) b);
-            }
-            else
-            if (b is BigDecimal bdB)
-            {
-                BigInteger biB = bdB.WholeValue;
-                if (a is BigDecimal)
-                    a = ((BigDecimal)a).WholeValue;
-                else
-                if (!(a is BigInteger))
-                    a = ConvertToBigInteger(a);
-
-                biResult = BigInteger.Remainder((BigInteger)a, biB);
-            }
-            else
             if (a is BigInteger biA)
             {
                 if (!(b is BigInteger))
@@ -2046,24 +2031,7 @@ public static class MathHelper
             else
             if (a is long || a is ulong || b is long || b is ulong)
             {
-                if (a is long || a is ulong)
-                {
-                    if (a is long la)
-                        biResult = new BigInteger(la);
-                    else
-                        biResult = new BigInteger((ulong)a);
-
-                    biResult = IntegerDivide(biResult.Value, b);
-                }
-                else
-                {
-                    if (b is long lb)
-                        biResult = new BigInteger(lb);
-                    else
-                        biResult = new BigInteger((ulong)b);
-
-                    biResult = IntegerDivide(a, biResult.Value);
-                }
+                biResult = BigInteger.Remainder(ConvertToBigInteger(a), ConvertToBigInteger(b));
             }
             if (biResult is not null)
                 return ReduceNumericType(biResult, reduceTypes ? null : t, options);
@@ -3096,16 +3064,14 @@ public static class MathHelper
 
     public static object Floor(object? a, MathHelperOptions options)
     {
-        if (options.UseBigNumbers)
+        // A big number is floored exactly even when UseBigNumbers is not set
+        if (a is BigInteger biA)
         {
-            if (a is BigInteger biA)
-            {
-                return BigDecimal.Floor(new BigDecimal(biA));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return BigDecimal.Floor(bdA);
-            }
+            return BigDecimal.Floor(new BigDecimal(biA));
+        }
+        if (a is BigDecimal bdA)
+        {
+            return BigDecimal.Floor(bdA);
         }
 
         if (a is ComplexNumber cnA)
@@ -4357,6 +4323,16 @@ public static class MathHelper
         }
     }
 
+    /// <summary>
+    /// Returns the remainder of a truncated division; the result has the sign of the dividend, as with the % operator of .NET.
+    /// </summary>
+    public static BigDecimal Remainder(BigDecimal a, BigDecimal b)
+    {
+        if (b.IsZero())
+            throw new DivideByZeroException();
+        return a - b * BigDecimal.Truncate(BigDecimal.Divide(a, b));
+    }
+
     public static BigInteger IntegerDivide(BigInteger a, object b)
     {
         switch (b)
@@ -5267,7 +5243,9 @@ public static class MathHelper
             if ((restrictToType is null || restrictToType == typeof(ulong) || restrictToType == typeof(uint) || restrictToType == typeof(ushort)) && biResult >= ulong.MinValue && biResult <= ulong.MaxValue)
                 return (ulong)biResult;
 
-            //return biResult;
+            // An integer beyond the 64-bit range stays a BigInteger unless a floating-point type was requested
+            if (restrictToType != typeof(float) && restrictToType != typeof(double) && restrictToType != typeof(decimal))
+                return biResult;
         }
 
         if (((restrictToType is null && (options.Value.DecimalAsDefault)) || restrictToType == typeof(decimal)) && (value >= decimal.MinValue && value <= decimal.MaxValue))
@@ -5275,19 +5253,22 @@ public static class MathHelper
             return (decimal)value;
         }
 
-        if (((/*restrictToType is null && */(options.Value.DecimalAsDefault != true)) || restrictToType == typeof(float)) && (value >= float.MinValue && value <= float.MaxValue))
+        if (restrictToType == typeof(float) && (value >= float.MinValue && value <= float.MaxValue))
         {
             return (float)value;
         }
 
-        if (((restrictToType is null && (options.Value.DecimalAsDefault != true)) || restrictToType == typeof(double)) && value >= double.MinValue && value <= double.MaxValue)
+        if (restrictToType == typeof(double) && value >= double.MinValue && value <= double.MaxValue)
         {
             return (double)value;
         }
 
-        if (((restrictToType is null && (options.Value.DecimalAsDefault != true)) || restrictToType == typeof(decimal)) && value >= decimal.MinValue && value <= decimal.MaxValue)
+        // Otherwise, the value is narrowed to double only if no digits are lost
+        if (options.Value.DecimalAsDefault != true && value >= double.MinValue && value <= double.MaxValue)
         {
-            return (decimal)value;
+            double dValue = (double)value;
+            if (new BigDecimal(dValue) == value)
+                return dValue;
         }
 
         if (biResult is not null)

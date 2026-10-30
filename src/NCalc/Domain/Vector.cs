@@ -180,23 +180,22 @@ namespace NCalc.Domain
 
         // ── Modulo operators ────────────────────────────────────────────────────
 
-        /// <summary>Element-wise modulo: each component mod a scalar (integer semantics).</summary>
+        /// <summary>Element-wise modulo: each component mod a scalar (remainder of a truncated division, as with the scalar % operator).</summary>
         public static Vector operator %(Vector v, BigDecimal scalar)
         {
-            BigInteger divisor = scalar.WholeValue;
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
-                result[i] = new BigDecimal(BigInteger.Remainder(v[i].WholeValue, divisor));
+                result[i] = MathHelper.Remainder(v[i], scalar);
             return new Vector(result, v._mathHelperOptions);
         }
 
-        /// <summary>Element-wise modulo between two vectors of the same dimension (integer semantics).</summary>
+        /// <summary>Element-wise modulo between two vectors of the same dimension (remainder of a truncated division, as with the scalar % operator).</summary>
         public static Vector operator %(Vector a, Vector b)
         {
             CheckDimensions(a, b, "modulo");
             var result = new BigDecimal[a.Dimensions];
             for (int i = 0; i < a.Dimensions; i++)
-                result[i] = new BigDecimal(BigInteger.Remainder(a[i].WholeValue, b[i].WholeValue));
+                result[i] = MathHelper.Remainder(a[i], b[i]);
             return new Vector(result, a._mathHelperOptions);
         }
 

@@ -1198,6 +1198,15 @@ public class MathsTests : TestBase
     }
 
     [Fact]
+    public void VectorModuloShouldKeepFractionalPart()
+    {
+        var result = EvalVec("[7.5, -7.5, 9] % 2");
+        Assert.Equal(BigDecimal.Parse("1.5", CultureInfo.InvariantCulture), result[0]);
+        Assert.Equal(BigDecimal.Parse("-1.5", CultureInfo.InvariantCulture), result[1]);
+        Assert.Equal(new BigDecimal(1), result[2]);
+    }
+
+    [Fact]
     public void ShouldThrowOnScalarModuloVector()
     {
         Assert.ThrowsAny<Exception>(() => EvalVec("5 % [1, 2, 3]"));
@@ -1405,6 +1414,12 @@ public class MathsTests : TestBase
         { new BigDecimal(-36), "%", ulong.MaxValue, "-36" },
         { new BigInteger(-36), "%", ulong.MaxValue, "-36" },
         { 360UL, "//", new BigDecimal(-36), "-10" },
+        { ulong.MaxValue, "//", new BigDecimal(-36), "-512409557603043101" },
+        { new BigDecimal(-36), "*", ulong.MaxValue, "-664082786653543858140" },
+        { new BigDecimal(-36), "%", 2.5, "-1" },
+        { 2.5m, "%", new BigInteger(-36), "2.5" },
+        { BigDecimal.Parse("7.5", CultureInfo.InvariantCulture), "%", 2, "1.5" },
+        { 2.5, "/", new BigDecimal(-36), "-0.06944444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444" },
         { new BigDecimal(-36), "*", 5, "-180" },
         { 2.5, "*", new BigInteger(-36), "-90" },
         { new BigDecimal(-36), "*", new BigDecimal(5), "-180" },
@@ -1414,6 +1429,17 @@ public class MathsTests : TestBase
         { new BigDecimal(-36), "-", 2.5m, "-38.5" },
         { new BigDecimal(-36), "/", 4f, "-9" },
     };
+
+    [Theory]
+    [InlineData("1.23456789012345678901 * 1", "1.23456789012345678901")]
+    [InlineData("Pow(7.6319, 5)", "25891.86632016877607037599")]
+    [InlineData("1.5 * 2.25", "3.375")]
+    public void BigDecimalResultShouldNotBeNarrowedToFloat(string expression, string expected)
+    {
+        var result = new Expression(expression, ExpressionOptions.NoCache | ExpressionOptions.UseBigNumbers, CultureInfo.InvariantCulture).Evaluate(TestContext.Current.CancellationToken);
+        Assert.IsNotType<float>(result);
+        Assert.Equal(BigDecimal.Parse(expected, CultureInfo.InvariantCulture), MathHelper.ConvertToBigDecimal(result));
+    }
 
     [Theory]
     [MemberData(nameof(MixedBigNumberOperations))]
