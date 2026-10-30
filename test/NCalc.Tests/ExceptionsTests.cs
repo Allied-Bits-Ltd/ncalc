@@ -151,6 +151,55 @@ public class ExceptionsTests
         Assert.Throws<NCalcParserException>(() => expression.Evaluate(TestContext.Current.CancellationToken));
     }
 
+    private const int ExcessiveDepth = 20000;
+
+    public static TheoryData<string> DeeplyNestedExpressions => new()
+    {
+        new string('(', ExcessiveDepth) + "1" + new string(')', ExcessiveDepth),
+        string.Concat(Enumerable.Repeat("Abs(", ExcessiveDepth)) + "1" + new string(')', ExcessiveDepth),
+        string.Concat(Enumerable.Repeat("Max(1, ", ExcessiveDepth)) + "1" + new string(')', ExcessiveDepth),
+        string.Concat(Enumerable.Repeat("(true ? ", ExcessiveDepth)) + "1" + string.Concat(Enumerable.Repeat(" : 0)", ExcessiveDepth)),
+        new string('-', ExcessiveDepth) + "1",
+        string.Concat(Enumerable.Repeat("not ", ExcessiveDepth)) + "true",
+    };
+
+    [Theory]
+    [MemberData(nameof(DeeplyNestedExpressions))]
+    public void DeeplyNestedExpressionShouldThrowParserExceptionInsteadOfStackOverflow(string expression)
+    {
+        // Parsing is recursive regardless of the evaluator in use
+        Assert.Throws<NCalcParserException>(() => new Expression(expression, ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void LongChainShouldThrowEvaluationExceptionInRecursiveEvaluator()
+    {
+        var expression = string.Join("+", Enumerable.Repeat("1", ExcessiveDepth));
+        Assert.Throws<NCalcEvaluationException>(() => new Expression(expression, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task LongChainShouldThrowEvaluationExceptionInRecursiveAsyncEvaluator()
+    {
+        var expression = string.Join("+", Enumerable.Repeat("1", ExcessiveDepth));
+        await Assert.ThrowsAsync<NCalcEvaluationException>(async () => await new AsyncExpression(expression, ExpressionOptions.NoCache).EvaluateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void LongChainShouldBeEvaluatedByNonRecursiveEvaluator()
+    {
+        var expression = string.Join("+", Enumerable.Repeat("1", 5000));
+        Assert.Equal(5000, new Expression(expression, ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void SelfReferencingParameterShouldThrowEvaluationException()
+    {
+        var expression = new Expression("x + 1", ExpressionOptions.NoCache);
+        expression.Parameters["x"] = expression;
+        Assert.Throws<NCalcEvaluationException>(() => expression.Evaluate(TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public void ShouldThrowExceptionWhenNullOrEmpty()
     {

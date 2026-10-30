@@ -1,3 +1,7 @@
+# 9.1.0 (Allied Bits)
+
+* Deeply nested or very long expressions no longer crash the process with an uncatchable `StackOverflowException`. When the stack runs low, the parser throws `NCalcParserException` and the recursive evaluators (sync and async) throw `NCalcEvaluationException`; use `ExpressionOptions.UseNonRecursiveEvaluator` to evaluate very long expressions. The evaluator check can be turned off with `Expression.CheckExecutionStack`/`AsyncExpression.CheckExecutionStack` when all expressions are known to be small.
+
 # 9.0.6.5  (Allied Bits)
 
 * Updated Parlot references.

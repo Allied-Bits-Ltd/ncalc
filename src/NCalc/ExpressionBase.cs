@@ -76,6 +76,15 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
     public static int MaxLoopIterations = 65536;
     public static bool UseNonRecursiveEvaluator = false;
 
+    /// <summary>
+    /// When set (the default), the recursive evaluator checks the remaining stack space before evaluating each node
+    /// and throws an <see cref="NCalcEvaluationException"/> when an expression is nested too deeply,
+    /// instead of letting the process terminate with an uncatchable StackOverflowException.
+    /// Clear it only if all evaluated expressions are known to be small.
+    /// The setting does not affect parsing or the non-recursive evaluator.
+    /// </summary>
+    public static bool CheckExecutionStack = true;
+
     private ILogicalExpressionCache LogicalExpressionCache { get; }
     private ILogicalExpressionFactory LogicalExpressionFactory { get; }
 

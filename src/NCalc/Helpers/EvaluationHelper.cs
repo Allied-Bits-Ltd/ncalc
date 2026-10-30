@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using ExtendedNumerics;
 using NCalc.Domain;
@@ -14,6 +15,30 @@ namespace NCalc.Helpers;
 /// </summary>
 public static class EvaluationHelper
 {
+    private const string ExpressionTooDeepMessage = "The expression is nested too deeply to be evaluated recursively. Use ExpressionOptions.UseNonRecursiveEvaluator to evaluate deeply nested or very long expressions.";
+
+    /// <summary>
+    /// Throws an <see cref="NCalcEvaluationException"/> when the remaining stack space is too small to evaluate the given node recursively,
+    /// instead of letting the process terminate with an uncatchable StackOverflowException.
+    /// </summary>
+    /// <param name="expression">The node about to be evaluated.</param>
+    internal static void EnsureSufficientExecutionStack(LogicalExpression expression)
+    {
+#if NET
+        if (!RuntimeHelpers.TryEnsureSufficientExecutionStack())
+            throw new NCalcEvaluationException(ExpressionTooDeepMessage, expression.Location);
+#else
+        try
+        {
+            RuntimeHelpers.EnsureSufficientExecutionStack();
+        }
+        catch (InsufficientExecutionStackException ex)
+        {
+            throw new NCalcEvaluationException(ExpressionTooDeepMessage, expression.Location, ex);
+        }
+#endif
+    }
+
     /// <summary>
     /// Adds two values, with special handling for string concatenation based on the context options.
     /// </summary>

@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 using ExtendedNumerics;
 
@@ -8,6 +9,7 @@ using NCalc.Exceptions;
 
 using Parlot;
 using Parlot.Fluent;
+using Parlot.Rewriting;
 
 using static Parlot.Fluent.Parsers;
 
@@ -55,6 +57,47 @@ public static class LogicalExpressionParser
     }
 
     private static IFormatProvider _currentCultureFormatProvider = new CurrentCultureDateTimeFormatProvider();
+
+    private const string ExpressionTooDeepMessage = "The expression is nested too deeply to be parsed";
+
+    /// <summary>
+    /// Wraps a parser that the grammar enters recursively (nested sub-expressions, unary operators)
+    /// and throws an <see cref="NCalcParserException"/> when the remaining stack space is too small,
+    /// instead of letting the process terminate with an uncatchable StackOverflowException.
+    /// </summary>
+    private sealed class StackGuardParser<T>(Parser<T> parser) : Parser<T>, ISeekable
+    {
+        public bool CanSeek => parser is ISeekable seekable && seekable.CanSeek;
+
+        public char[] ExpectedChars => parser is ISeekable seekable ? seekable.ExpectedChars : [];
+
+        public bool SkipWhitespace => parser is ISeekable seekable && seekable.SkipWhitespace;
+
+        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        {
+#if NET
+            if (!RuntimeHelpers.TryEnsureSufficientExecutionStack())
+                throw new NCalcParserException($"{ExpressionTooDeepMessage} at position {context.Scanner.Cursor.Position}", context.Scanner.Cursor.Position);
+#else
+            try
+            {
+                RuntimeHelpers.EnsureSufficientExecutionStack();
+            }
+            catch (InsufficientExecutionStackException ex)
+            {
+                throw new NCalcParserException($"{ExpressionTooDeepMessage} at position {context.Scanner.Cursor.Position}", ex, context.Scanner.Cursor.Position);
+            }
+#endif
+            return parser.Parse(context, ref result);
+        }
+
+        public override string ToString() => parser.ToString() ?? nameof(StackGuardParser<T>);
+    }
+
+    private static Parser<T> StackGuarded<T>(Parser<T> parser) => new StackGuardParser<T>(parser);
+
+    private static (Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)[] StackGuarded(List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)> ops)
+        => ops.Select(op => (StackGuarded(op.Item1), op.Item2)).ToArray();
 
     /// <summary>
     /// Creates the parser with the options that exist at the moment of call
@@ -1983,7 +2026,8 @@ public static class LogicalExpressionParser
 #endif
         if (root4 is not null)
             unaryOps.Add((root4, static (ctx, value) => new UnaryExpression(UnaryExpressionType.FourthRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
-        var unary = exponential.Unary(unaryOps.ToArray());
+        // The operators are guarded because Parlot's Unary parser recurses once per prefix operator
+        var unary = exponential.Unary(StackGuarded(unaryOps));
 
         List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression, LogicalExpression>)>  multiplicativeList = [
             (intDivB, static (ctx, a, b) => new BinaryExpression(BinaryExpressionType.IntDivB, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
@@ -2100,7 +2144,7 @@ public static class LogicalExpressionParser
         [
             (returnParser, static (ctx, value) => new UnaryExpression(UnaryExpressionType.Return, value).SetLocation(new ParlotExpressionLocation(ctx))),
         ];
-        var @return = ternary.Unary(returnOps.ToArray());
+        var @return = ternary.Unary(StackGuarded(returnOps));
 
         List<Parser<string>> operatorSequenceElements = [
             intDivB, divided, times, modulo, plus,
@@ -2267,10 +2311,11 @@ public static class LogicalExpressionParser
             .Then<LogicalExpression>(static (ctx, x) =>
               new ExpressionGroup(x).SetLocation(new ParlotExpressionLocation(ctx)));
 
-        expression.Parser = expressionOrAssignment;
+        // Every nesting level (groups, function arguments, lists, braces) re-enters these parsers, so they are stack-guarded
+        expression.Parser = StackGuarded(expressionOrAssignment);
 
-        expressionOrBracedStatementSequence.Parser = OneOf(curlyBracedTopLevel, expressionOrAssignment);
-        bracedExpressionOrStatementSequence.Parser = curlyBracedTopLevel;
+        expressionOrBracedStatementSequence.Parser = StackGuarded(OneOf(curlyBracedTopLevel, expressionOrAssignment));
+        bracedExpressionOrStatementSequence.Parser = StackGuarded(curlyBracedTopLevel);
 
         var whitespaceParser = new WhiteSpaceParser(options);
 

@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using System.Runtime.CompilerServices;
 using ExtendedNumerics;
 using NCalc.Domain;
 using NCalc.Exceptions;
@@ -28,6 +29,37 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         this.context = parentExpression.Context;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void EnsureSufficientExecutionStack(LogicalExpression expression)
+    {
+        if (Expression.CheckExecutionStack)
+            EvaluationHelper.EnsureSufficientExecutionStack(expression);
+    }
+
+    /// <summary>
+    /// A single-threaded lazily computed operand value. Unlike <see cref="Lazy{T}"/>, it does not catch and rethrow
+    /// exceptions of the factory; a catch-and-rethrow at every nesting level would exhaust the stack
+    /// while the exception thrown by <see cref="EvaluationHelper.EnsureSufficientExecutionStack"/> propagates.
+    /// </summary>
+    private sealed class DeferredValue(Func<object?> factory)
+    {
+        private Func<object?>? _factory = factory;
+        private object? _value;
+
+        public object? Value
+        {
+            get
+            {
+                if (_factory is not null)
+                {
+                    _value = _factory();
+                    _factory = null;
+                }
+                return _value;
+            }
+        }
+    }
+
     private bool TryGetValueOrNull(object? candidate, out object? value)
     {
         if (candidate is null)
@@ -52,6 +84,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(expression);
         if (!TryGetValueOrNull(expression.LeftExpression.Accept(this, cancellationToken), out object? value))
             return null;
 
@@ -167,8 +200,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
-        var left = new Lazy<object?>(() => Evaluate(expression.LeftExpression, cancellationToken), LazyThreadSafetyMode.None);
-        var right = new Lazy<object?>(() => Evaluate(expression.RightExpression, cancellationToken), LazyThreadSafetyMode.None);
+        EnsureSufficientExecutionStack(expression);
+        var left = new DeferredValue(() => Evaluate(expression.LeftExpression, cancellationToken));
+        var right = new DeferredValue(() => Evaluate(expression.RightExpression, cancellationToken));
 
         var handlePercent = context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true;
 
@@ -974,10 +1008,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 }
             }
         }
-        catch (NCalcEvaluationException ex)
+        // A filter rather than catch-and-rethrow: rethrowing at every nesting level would itself exhaust the stack
+        // when the exception comes from EnsureSufficientExecutionStack in a deeply nested expression
+        catch (NCalcEvaluationException ex) when (ex.Location == Parser.ExpressionLocation.Empty)
         {
-            if (ex.Location == Parser.ExpressionLocation.Empty)
-                ex.Location = expression.Location;
+            ex.Location = expression.Location;
             throw;
         }
         return null;
@@ -985,6 +1020,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(expression);
         if (expression.Type == UnaryExpressionType.Not && context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
         {
             object? value = expression.Expression.Accept(this, cancellationToken);
@@ -1001,6 +1037,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(expression);
         // Recursively evaluates the underlying expression
         if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out object? result))
             return null;
@@ -1010,6 +1047,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(expression);
         // Recursively evaluates the underlying expression
         if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out object? result))
             return null;
@@ -1019,6 +1057,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(VectorExpression expression, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(expression);
         var options = new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options);
         var components = new List<BigDecimal>(expression.Expressions.Count);
 
@@ -1039,6 +1078,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(FunctionCall functionCall, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(functionCall);
         var argsCount = functionCall.Parameters.Count;
 
         var functionName = functionCall.Identifier.Name;
@@ -1086,6 +1126,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(identifier);
         object? result = null;
         var identifierName = identifier.Name;
 
@@ -1183,6 +1224,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(list);
         List<object?> result = [];
 
         result.AddRange(list.Select(Evaluate));
@@ -1192,11 +1234,13 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public object? Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(group);
         return group.Expression.Accept(this, cancellationToken);
     }
 
     public object? Visit(StatementSequence seq, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(seq);
         object? result = null;
         foreach (var expr in seq)
             result = Evaluate(expr, cancellationToken);

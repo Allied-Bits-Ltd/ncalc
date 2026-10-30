@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using System.Runtime.CompilerServices;
 using ExtendedNumerics;
 using NCalc.Domain;
 using NCalc.Exceptions;
@@ -28,6 +29,13 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         this.context = parentExpression.Context;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void EnsureSufficientExecutionStack(LogicalExpression expression)
+    {
+        if (AsyncExpression.CheckExecutionStack)
+            EvaluationHelper.EnsureSufficientExecutionStack(expression);
+    }
+
     private bool TryGetValueOrNull(object? candidate, out object? value)
     {
         if (candidate is null)
@@ -52,6 +60,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(expression);
         if (!TryGetValueOrNull(await expression.LeftExpression.Accept(this, cancellationToken).ConfigureAwait(false), out object? value))
             return null;
 
@@ -164,6 +173,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(expression);
         cancellationToken.ThrowIfCancellationRequested();
         var left = new Lazy<ValueTask<object?>>(() => EvaluateAsync(expression.LeftExpression, cancellationToken),
             LazyThreadSafetyMode.None);
@@ -995,10 +1005,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 }
             }
         }
-        catch (NCalcEvaluationException ex)
+        // A filter rather than catch-and-rethrow: rethrowing at every nesting level would itself exhaust the stack
+        // when the exception comes from EnsureSufficientExecutionStack in a deeply nested expression
+        catch (NCalcEvaluationException ex) when (ex.Location == Parser.ExpressionLocation.Empty)
         {
-            if (ex.Location == Parser.ExpressionLocation.Empty)
-                ex.Location = expression.Location;
+            ex.Location = expression.Location;
             throw;
         }
         return null;
@@ -1006,6 +1017,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(expression);
         if (expression.Type == UnaryExpressionType.Not && context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
         {
             object? value = await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false);
@@ -1021,6 +1033,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(expression);
         object? result = await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false);
         if (result is null)
             return result;
@@ -1029,6 +1042,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(expression);
         object? result = await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false);
         if (result is null)
             return result;
@@ -1037,6 +1051,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(VectorExpression expression, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(expression);
         var options = new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options);
         var components = new List<BigDecimal>(expression.Expressions.Count);
 
@@ -1054,6 +1069,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(FunctionCall functionCall, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(functionCall);
         var argsCount = functionCall.Parameters.Count;
 
         var functionName = functionCall.Identifier.Name;
@@ -1103,6 +1119,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(identifier);
         object? result = null;
         var identifierName = identifier.Name;
 
@@ -1202,6 +1219,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(list);
         List<object?> result = [];
 
         foreach (var expr in list)
@@ -1215,11 +1233,13 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public ValueTask<object?> Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(group);
         return group.Expression.Accept(this, cancellationToken);
     }
 
     public virtual async ValueTask<object?> Visit(StatementSequence seq, CancellationToken cancellationToken = default)
     {
+        EnsureSufficientExecutionStack(seq);
         object? result = null;
 
         foreach (var expr in seq)
