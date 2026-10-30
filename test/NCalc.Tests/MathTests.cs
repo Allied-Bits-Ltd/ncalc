@@ -1372,6 +1372,34 @@ public class MathsTests : TestBase
         Assert.Equal(true, result);
     }
 
+    [Theory]
+    [InlineData("-2 * 3", -6)]
+    [InlineData("-2 + 3", 1)]
+    [InlineData("-7 % 3", -1)]
+    [InlineData("-(1)", -1)]
+    [InlineData("-x * 2", -10)]
+    public void NegationShouldKeepIntegerType(string expr, int expected)
+    {
+        var expression = new Expression(expr, ExpressionOptions.NoCache);
+        expression.Parameters["x"] = 5;
+        Assert.Equal(expected, expression.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void NegationShouldKeepFloatingPointAndDecimalTypes()
+    {
+        Assert.Equal(-2.5, new Expression("-x", ExpressionOptions.NoCache) { Parameters = { ["x"] = 2.5 } }.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(-2.5f, new Expression("-x", ExpressionOptions.NoCache) { Parameters = { ["x"] = 2.5f } }.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(-2.5m, new Expression("-x", ExpressionOptions.NoCache) { Parameters = { ["x"] = 2.5m } }.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void NegationOfMinValueShouldPromoteToWiderType()
+    {
+        Assert.Equal(-(long)int.MinValue, new Expression("-x", ExpressionOptions.NoCache) { Parameters = { ["x"] = int.MinValue } }.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(9223372036854775808UL, new Expression("-x", ExpressionOptions.NoCache) { Parameters = { ["x"] = long.MinValue } }.Evaluate(TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public void ShouldRoundUpCorrectly()
     {

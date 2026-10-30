@@ -1,6 +1,7 @@
 # 9.1.0 (Allied Bits)
 
 * Deeply nested or very long expressions no longer crash the process with an uncatchable `StackOverflowException`. When the stack runs low, the parser throws `NCalcParserException` and the recursive evaluators (sync and async) throw `NCalcEvaluationException`; use `ExpressionOptions.UseNonRecursiveEvaluator` to evaluate very long expressions. The evaluator check can be turned off with `Expression.CheckExecutionStack`/`AsyncExpression.CheckExecutionStack` when all expressions are known to be small.
+* Fixed a regression in the negation operation: the result of a unary minus was always converted to `BigDecimal`, so expressions like `-2 * 3` failed and `-2 + 3` produced a `float`. Negation now keeps the operand's type; negating the minimum value of a signed integer type produces the next wider type.
 
 # 9.0.6.5  (Allied Bits)
 
