@@ -1955,6 +1955,38 @@ public class AdvFeatureTests : TestBase
         Assert.Equal(42, result);
     }
 
+    [Fact]
+    public void EmbeddedFunctionShouldWorkWhenParsedExpressionIsTakenFromCache()
+    {
+        // The text is used only here, so the first evaluation parses it and the second one takes it from the cache
+        const string text = "fn CubeOfCached(a) => a * a * a; CubeOfCached(3)";
+        var first = new Expression(text, ExpressionOptions.UseStatementSequences);
+        Assert.Equal(27, first.Evaluate(TestContext.Current.CancellationToken));
+
+        var second = new Expression(text, ExpressionOptions.UseStatementSequences);
+        Assert.Equal(27, second.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Same(first.LogicalExpression, second.LogicalExpression);
+        Assert.True(second.UserFunctions.ContainsKey("CubeOfCached"));
+    }
+
+    [Fact]
+    public async Task EmbeddedFunctionShouldWorkWhenParsedExpressionIsTakenFromCacheAsync()
+    {
+        const string text = "fn CubeOfCachedAsync(a) => a * a * a; CubeOfCachedAsync(4)";
+        Assert.Equal(64, await new AsyncExpression(text, ExpressionOptions.UseStatementSequences).EvaluateAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(64, await new AsyncExpression(text, ExpressionOptions.UseStatementSequences).EvaluateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void ExpressionWithEmbeddedFunctionMayBeParsedMoreThanOnce()
+    {
+        var expression = new Expression("fn Twice(a) => a * 2; Twice(21)", ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
+        Assert.False(expression.HasErrors(TestContext.Current.CancellationToken), expression.Error?.Message);
+        Assert.False(expression.HasErrors(TestContext.Current.CancellationToken), expression.Error?.Message);
+        Assert.Equal(42, expression.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Single(expression.UserFunctions);
+    }
+
     [Theory]
     [InlineData("2 + 2; 3 + 3", 6)]
     [InlineData("(2 + 2); 3 + 3", 6)]
@@ -2596,6 +2628,15 @@ public class AdvFeatureTests : TestBase
         parserContext = new LogicalExpressionParserContext("2*3", ExpressionOptions.None, CultureInfo.CurrentCulture);
         result = expression.Evaluate(parser, parserContext, TestContext.Current.CancellationToken);
         Assert.Equal(6, result);
+    }
+
+    [Fact]
+    public void EmbeddedFunctionShouldWorkWithPrecreatedParser()
+    {
+        var expression = new Expression(string.Empty, ExpressionOptions.UseStatementSequences);
+        Parser<LogicalExpression> parser = LogicalExpressionParser.CreateExpressionParser(CultureInfo.CurrentCulture, ExpressionOptions.UseStatementSequences, null);
+        var parserContext = new LogicalExpressionParserContext("fn Halve(a) => a / 2; Halve(10)", ExpressionOptions.UseStatementSequences, CultureInfo.CurrentCulture);
+        Assert.Equal(5, Convert.ToInt32(expression.Evaluate(parser, parserContext, TestContext.Current.CancellationToken)));
     }
 
     [Theory]

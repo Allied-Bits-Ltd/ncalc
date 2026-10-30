@@ -70,11 +70,25 @@ public sealed class LogicalExpressionFactory : ILogicalExpressionFactory
         parserContext.AdvancedOptions = advancedOptions;
         LogicalExpression result = LogicalExpressionParser.Parse(parserContext);
 
-        if (expressionContext is not null)
-            foreach (var function in parserContext.UserFunctions)
-                expressionContext.UserFunctions.Add(function);
+        if (parserContext.UserFunctions.Count > 0)
+            result.DeclaredFunctions = parserContext.UserFunctions.Values.ToList();
+
+        RegisterDeclaredFunctions(result, expressionContext);
 
        return result;
+    }
+
+    /// <summary>
+    /// Registers the functions declared in the expression in the context. A function that is already registered under the same name is replaced,
+    /// so the expression may be parsed into the same context more than once.
+    /// </summary>
+    internal static void RegisterDeclaredFunctions(LogicalExpression logicalExpression, ExpressionContextBase? expressionContext)
+    {
+        if (expressionContext is null || logicalExpression.DeclaredFunctions is null)
+            return;
+
+        foreach (var function in logicalExpression.DeclaredFunctions)
+            expressionContext.UserFunctions[function.Name] = function;
     }
 
     public static LogicalExpression Create(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext)

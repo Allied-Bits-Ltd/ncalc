@@ -202,7 +202,11 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         var cacheKey = isCacheEnabled ? GetCacheKey(ExpressionString) : null;
 
         if (cacheKey is not null && LogicalExpressionCache.TryGetValue(cacheKey, out logicalExpression))
+        {
+            // No parsing happens on a cache hit, so the functions declared in the expression are registered here
+            NCalc.Factories.LogicalExpressionFactory.RegisterDeclaredFunctions(logicalExpression!, Context);
             return logicalExpression!;
+        }
 
         try
         {
@@ -232,7 +236,10 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
 
         try
         {
-            return NCalc.Factories.LogicalExpressionFactory.Create(parser, parserContext);
+            var logicalExpression = NCalc.Factories.LogicalExpressionFactory.Create(parser, parserContext);
+            foreach (var function in parserContext.UserFunctions.Values)
+                Context.UserFunctions[function.Name] = function;
+            return logicalExpression;
         }
         catch (Exception exception)
         {

@@ -40,6 +40,12 @@ public abstract class LogicalExpression
 
     public ExpressionOptions Options => _options;
 
+    /// <summary>
+    /// The functions declared with "fn" in the expression (set on the root expression only).
+    /// They are kept so that they can be registered in a context again when the parsed expression is taken from the cache.
+    /// </summary>
+    internal IReadOnlyList<Function>? DeclaredFunctions { get; set; }
+
     public LogicalExpression()
     {
         _options = ExpressionOptions.None;
