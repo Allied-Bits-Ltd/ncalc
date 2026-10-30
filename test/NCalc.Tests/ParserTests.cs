@@ -259,4 +259,41 @@ public class ParserTests
 
         Assert.False(exceptionThrown);
     }
+
+    // The cache tests use texts that no other test evaluates, so the first parse happens here
+
+    [Fact]
+    public void CachedExpressionShouldNotBeReusedWithDifferentOptions()
+    {
+        Assert.Equal(0.30000000000000004, new Expression("0.1 + 0.2 + 0", CultureInfo.InvariantCulture).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(0.3m, new Expression("0.1 + 0.2 + 0", ExpressionOptions.DecimalAsDefault, CultureInfo.InvariantCulture).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void CachedExpressionShouldNotBeReusedWithDifferentAdvancedOptions()
+    {
+        Assert.Equal(10, new Expression("010 + 0", CultureInfo.InvariantCulture) { AdvancedOptions = new AdvancedExpressionOptions(CultureInfo.InvariantCulture) }.Evaluate(TestContext.Current.CancellationToken));
+        var octal = new Expression("010 + 0", CultureInfo.InvariantCulture) { AdvancedOptions = new AdvancedExpressionOptions(CultureInfo.InvariantCulture) };
+        octal.AdvancedOptions.Flags = AdvExpressionOptions.AcceptCStyleOctals;
+        Assert.Equal(8, octal.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void CachedExpressionShouldNotBeReusedWithDifferentCulture()
+    {
+        var us = (DateTime)new Expression("(#01/02/2024#)", CultureInfo.GetCultureInfo("en-US")).Evaluate(TestContext.Current.CancellationToken)!;
+        var gb = (DateTime)new Expression("(#01/02/2024#)", CultureInfo.GetCultureInfo("en-GB")).Evaluate(TestContext.Current.CancellationToken)!;
+        Assert.Equal(new DateTime(2024, 1, 2), us);
+        Assert.Equal(new DateTime(2024, 2, 1), gb);
+    }
+
+    [Fact]
+    public void CachedExpressionShouldBeReusedWithSameOptions()
+    {
+        var first = new Expression("17 * 3 + 0", ExpressionOptions.DecimalAsDefault, CultureInfo.InvariantCulture);
+        var second = new Expression("17 * 3 + 0", ExpressionOptions.DecimalAsDefault, CultureInfo.InvariantCulture);
+        first.Evaluate(TestContext.Current.CancellationToken);
+        second.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Same(first.LogicalExpression, second.LogicalExpression);
+    }
 }

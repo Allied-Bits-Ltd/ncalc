@@ -5,6 +5,7 @@
 * Arithmetic with a `BigInteger` or `BigDecimal` operand and an operand of another numeric type no longer requires `ExpressionOptions.UseBigNumbers`: the other operand is promoted and the result is computed. Previously, such operations could fail with "not implemented", return a wrong value (e.g. `5UL + BigDecimal(-36)` gave 0), or loop forever retrying after an overflow (e.g. `BigDecimal % ulong.MaxValue`).
 * The `%` operator with a `BigDecimal` operand (and the element-wise `%` of vectors) now keeps the fractional part of the remainder, like `double` and `decimal` do: `7.5 % 2` is 1.5 instead of 1.
 * `BigDecimal` results are no longer narrowed to `float`. A fractional result is converted to `double` only when no digits are lost and stays `BigDecimal` otherwise; an integer result beyond the 64-bit range stays `BigInteger`. `Floor()` of a big number is now exact without `UseBigNumbers` too, so `//` with a big operand no longer loses precision.
+* The parsed-expression cache no longer returns an expression parsed under different settings. The cache key now includes the expression options, the culture and the advanced options in addition to the expression text; previously, the same text evaluated with, e.g., `DecimalAsDefault` or another date order received the result parsed with the settings of the first evaluation. Custom `ILogicalExpressionCache` implementations receive the composite key as the `expression` string.
 
 # 9.0.6.5  (Allied Bits)
 

@@ -282,6 +282,57 @@
             }
         }
 
+        /// <summary>
+        /// Returns a string that describes the current settings, used to tell apart the cached parse results of the same expression text.
+        /// The options are mutable, so the string is built on every call.
+        /// </summary>
+        internal string GetCacheKey()
+        {
+            const string separator = "\u001F";
+            return string.Join(separator,
+            [
+                _cultureInfo?.Name ?? string.Empty,
+                ((int)Flags).ToString(CultureInfo.InvariantCulture),
+                ((int)DateSeparatorType).ToString(CultureInfo.InvariantCulture),
+                ((int)TimeSeparatorType).ToString(CultureInfo.InvariantCulture),
+                ((int)DecimalSeparatorType).ToString(CultureInfo.InvariantCulture),
+                ((int)NumberGroupSeparatorType).ToString(CultureInfo.InvariantCulture),
+                ((int)CurrencyDecimalSeparatorType).ToString(CultureInfo.InvariantCulture),
+                ((int)CurrencyNumberGroupSeparatorType).ToString(CultureInfo.InvariantCulture),
+                ((int)CurrencySymbolsType).ToString(CultureInfo.InvariantCulture),
+                ((int)DateOrder).ToString(CultureInfo.InvariantCulture),
+                ((int)HoursFormat).ToString(CultureInfo.InvariantCulture),
+                ((int)ListItemSeparator).ToString(CultureInfo.InvariantCulture),
+#if NET8_0_OR_GREATER
+                ExtraIdentifierChars ?? string.Empty,
+#endif
+                _dateSeparator,
+                _timeSeparator,
+                _decimalSeparator,
+                _secondaryDecimalSeparator,
+                _numberGroupSeparator ?? string.Empty,
+                _currencyDecimalSeparator,
+                _currencyNumberGroupSeparator ?? string.Empty,
+                _currencySymbol ?? string.Empty,
+                _currencySymbol2 ?? string.Empty,
+                _currencySymbol3 ?? string.Empty,
+                string.Join(",", _periodYearIndicators),
+                string.Join(",", _periodMonthIndicators),
+                string.Join(",", _periodWeekIndicators),
+                string.Join(",", _periodDayIndicators),
+                string.Join(",", _periodHourIndicators),
+                string.Join(",", _periodMinuteIndicators),
+                string.Join(",", _periodSecondIndicators),
+                string.Join(",", _periodMSecIndicators),
+                string.Join(",", _periodNowIndicators),
+                string.Join(",", _periodTodayIndicators),
+                string.Join(",", _periodYesterdayIndicators),
+                string.Join(",", _periodTomorrowIndicators),
+                string.Join(",", _periodPastIndicators),
+                string.Join(",", _periodFutureIndicators),
+            ]);
+        }
+
         public AdvancedExpressionOptions() : this(CultureInfo.CurrentCulture)
         {
         }

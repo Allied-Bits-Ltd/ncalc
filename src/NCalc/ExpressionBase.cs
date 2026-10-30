@@ -175,6 +175,15 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         return false;
     }
 
+    private string GetCacheKey(string expression)
+    {
+        const string separator = "\u001F";
+        return string.Concat(expression,
+            separator, ((long)(Context.Options & ~ExpressionOptions.NoCache)).ToString(CultureInfo.InvariantCulture),
+            separator, CultureInfo.Name,
+            separator, Context.AdvancedOptions?.GetCacheKey() ?? string.Empty);
+    }
+
     public LogicalExpression? GetLogicalExpression(CancellationToken cancellationToken = default)
     {
         if (!(ExpressionString?.Length > 0))
@@ -189,14 +198,17 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
 
         LogicalExpression? logicalExpression = null;
 
-        if (isCacheEnabled && LogicalExpressionCache.TryGetValue(ExpressionString, out logicalExpression))
+        // The parse result depends on the options and the culture, so they are a part of the key
+        var cacheKey = isCacheEnabled ? GetCacheKey(ExpressionString) : null;
+
+        if (cacheKey is not null && LogicalExpressionCache.TryGetValue(cacheKey, out logicalExpression))
             return logicalExpression!;
 
         try
         {
             logicalExpression = LogicalExpressionFactory.Create(ExpressionString, Context, CultureInfo, Context.Options, Context.AdvancedOptions, cancellationToken);
-            if (isCacheEnabled)
-                LogicalExpressionCache.Set(ExpressionString!, logicalExpression);
+            if (cacheKey is not null)
+                LogicalExpressionCache.Set(cacheKey, logicalExpression);
         }
         catch (Exception exception)
         {
