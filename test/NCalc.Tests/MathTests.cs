@@ -1400,6 +1400,32 @@ public class MathsTests : TestBase
         Assert.Equal(9223372036854775808UL, new Expression("-x", ExpressionOptions.NoCache) { Parameters = { ["x"] = long.MinValue } }.Evaluate(TestContext.Current.CancellationToken));
     }
 
+    public static TheoryData<object, string, object, string> MixedBigNumberOperations => new()
+    {
+        { new BigDecimal(-36), "%", ulong.MaxValue, "-36" },
+        { new BigInteger(-36), "%", ulong.MaxValue, "-36" },
+        { 360UL, "//", new BigDecimal(-36), "-10" },
+        { new BigDecimal(-36), "*", 5, "-180" },
+        { 2.5, "*", new BigInteger(-36), "-90" },
+        { new BigDecimal(-36), "*", new BigDecimal(5), "-180" },
+        { new BigDecimal(-36), "*", 5UL, "-180" },
+        { 5UL, "+", new BigDecimal(-36), "-31" },
+        { (byte)5, "*", new BigInteger(-36), "-180" },
+        { new BigDecimal(-36), "-", 2.5m, "-38.5" },
+        { new BigDecimal(-36), "/", 4f, "-9" },
+    };
+
+    [Theory]
+    [MemberData(nameof(MixedBigNumberOperations))]
+    public void BigNumberMixedWithOtherTypeShouldBeComputedWithoutUseBigNumbers(object a, string op, object b, string expected)
+    {
+        foreach (var options in new[] { ExpressionOptions.NoCache, ExpressionOptions.NoCache | ExpressionOptions.UseBigNumbers })
+        {
+            var result = new Expression($"a {op} b", options, CultureInfo.InvariantCulture) { Parameters = { ["a"] = a, ["b"] = b } }.Evaluate(TestContext.Current.CancellationToken);
+            Assert.Equal(BigDecimal.Parse(expected, CultureInfo.InvariantCulture), MathHelper.ConvertToBigDecimal(result));
+        }
+    }
+
     [Fact]
     public void ShouldRoundUpCorrectly()
     {

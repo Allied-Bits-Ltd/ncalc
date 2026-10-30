@@ -989,7 +989,7 @@ public static class MathHelper
             if (b is NCalcVector)
                 throw new InvalidOperationException("Addition of a scalar and a vector is not supported.");
 
-            if (options.UseBigNumbers)
+            if (options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b))
             {
                 if (a is BigDecimal bdA)
                 {
@@ -1044,8 +1044,7 @@ public static class MathHelper
         }
         catch (OverflowException)
         {
-            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
-            if (newTypeCode == TypeCode.Empty)
+            if (!TryExpandAfterOverflow(ref a, ref b, options))
                 throw;
             object? result = Add(a, b, reduceTypes, options);
             if (result is null)
@@ -1109,7 +1108,7 @@ public static class MathHelper
             if (b is NCalcVector)
                 throw new InvalidOperationException("Subtraction of a vector from a scalar is not supported.");
 
-            if (options.UseBigNumbers)
+            if (options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b))
             {
                 BigInteger? result = null;
                 BigDecimal? bdResult = null;
@@ -1190,8 +1189,7 @@ public static class MathHelper
         }
         catch (OverflowException)
         {
-            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
-            if (newTypeCode == TypeCode.Empty)
+            if (!TryExpandAfterOverflow(ref a, ref b, options))
                 throw;
             object? result = Subtract(a, b, reduceTypes, options);
             if (result is null)
@@ -1257,7 +1255,7 @@ public static class MathHelper
             if (b is NCalcVector vb)
                 return vb * (BigDecimal)a;
 
-            if (options.UseBigNumbers)
+            if (options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b))
             {
                 if (a is BigDecimal bdA)
                 {
@@ -1313,8 +1311,7 @@ public static class MathHelper
         }
         catch (OverflowException)
         {
-            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
-            if (newTypeCode == TypeCode.Empty)
+            if (!TryExpandAfterOverflow(ref a, ref b, options))
                 throw;
             object? result = Multiply(a, b, reduceTypes, options);
             if (result is null)
@@ -1434,7 +1431,7 @@ public static class MathHelper
             }
         }
 
-        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        if ((options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b)) && typeCode == TypeCode.Object)
         {
             BigDecimal? bdResult = null;
 
@@ -1573,8 +1570,7 @@ public static class MathHelper
         }
         catch (OverflowException)
         {
-            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
-            if (newTypeCode == TypeCode.Empty)
+            if (!TryExpandAfterOverflow(ref a, ref b, options))
                 throw;
             result = Divide(a, b, reduceTypes, options);
         }
@@ -1731,7 +1727,7 @@ public static class MathHelper
             }
         }
 
-        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        if ((options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b)) && typeCode == TypeCode.Object)
         {
             BigInteger? biResult = null;
             BigDecimal? bdResult = null;
@@ -1855,8 +1851,7 @@ public static class MathHelper
         }
         catch (OverflowException)
         {
-            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
-            if (newTypeCode == TypeCode.Empty)
+            if (!TryExpandAfterOverflow(ref a, ref b, options))
                 throw;
 
             result = Divide(a, b, reduceTypes, options);
@@ -2006,7 +2001,7 @@ public static class MathHelper
             }
         }
 
-        if (options.UseBigNumbers && typeCode == TypeCode.Object)
+        if ((options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b)) && typeCode == TypeCode.Object)
         {
             BigInteger? biResult = null;
             if (a is BigDecimal bdA)
@@ -2081,8 +2076,7 @@ public static class MathHelper
         }
         catch (OverflowException)
         {
-            TypeCode newTypeCode = ConvertToHighestPrecision(ref a, ref b, true, options);
-            if (newTypeCode == TypeCode.Empty)
+            if (!TryExpandAfterOverflow(ref a, ref b, options))
                 throw;
 
             object? result = Modulo(a, b, reduceTypes, options);
@@ -2280,6 +2274,20 @@ public static class MathHelper
         return ConvertToHighestPrecision(ref a, ref b, forceExpandBits, options, out _);
     }
 
+    /// <summary>
+    /// Widens the operands of an operation that has overflowed, so that the operation can be retried with the wider types.
+    /// </summary>
+    /// <returns><see langword="true"/> if the type of at least one operand has changed; <see langword="false"/> if there is nowhere to widen the operands.
+    /// In the latter case, the caller must rethrow the overflow instead of retrying: a retry with the same operand types fails the same way and would recurse infinitely.</returns>
+    private static bool TryExpandAfterOverflow(ref object a, ref object b, MathHelperOptions options)
+    {
+        Type typeA = a.GetType();
+        Type typeB = b.GetType();
+        if (ConvertToHighestPrecision(ref a, ref b, true, options) == TypeCode.Empty)
+            return false;
+        return a.GetType() != typeA || b.GetType() != typeB;
+    }
+
     public static TypeCode ConvertToHighestPrecision(ref object a, ref object b, bool forceExpandBits, MathHelperOptions options, out bool typesWereExpanded)
     {
         typesWereExpanded = false;
@@ -2362,7 +2370,9 @@ public static class MathHelper
             return TypeCode.Object;
         }
 
-        if (options.UseBigNumbers && (typeCodeA == TypeCode.Object || typeCodeB == TypeCode.Object))
+        // A big-number operand promotes the other operand to a big number even when UseBigNumbers is not set;
+        // otherwise, the pair stays as it is and the operation cannot be carried out (or overflows)
+        if (IsBigNumber(a) || IsBigNumber(b))
         {
             if (a is BigInteger)
             {
@@ -2537,7 +2547,7 @@ public static class MathHelper
                 }
                 break;
             case TypeCode.Object:
-                return options.UseBigNumbers || a is ComplexNumber || b is ComplexNumber || a is NCalcVector || b is NCalcVector ? TypeCode.Object : TypeCode.Empty;
+                return options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b) || a is ComplexNumber || b is ComplexNumber || a is NCalcVector || b is NCalcVector ? TypeCode.Object : TypeCode.Empty;
             default:
                 return TypeCode.Empty;
         }
@@ -2614,7 +2624,7 @@ public static class MathHelper
             return typeA;
 
         if (typeB == typeof(BigDecimal))
-            return typeA;
+            return typeB;
 
         if (typeA == typeof(BigInteger))
             return typeA;
@@ -4992,6 +5002,8 @@ public static class MathHelper
 
         return null;
     }
+
+    private static bool IsBigNumber(object? obj) => obj is BigInteger || obj is BigDecimal;
 
     public static bool IsBoxedNumberOrBigNumber(object? obj)
     {
