@@ -1,27 +1,67 @@
-﻿using NCalc.Helpers;
+﻿#if NET
+using System.Text.Json.Serialization;
+#endif
+
+using NCalc.Helpers;
 using NCalc.Visitors;
 
 namespace NCalc.Domain
 {
     public class FunctionParameter(string name, bool optional, LogicalExpression? defaultValue)
     {
+#if NET
+        // Used by the JSON deserializer, which then sets the properties
+        [JsonConstructor]
+        private FunctionParameter() : this(string.Empty, false, null)
+        {
+        }
+
+        [JsonInclude]
+#endif
         public string Name { get; internal set; } = name;
 
+#if NET
+        [JsonInclude]
+#endif
         public bool IsOptional { get; internal set; } = optional;
 
+#if NET
+        [JsonInclude]
+#endif
         public LogicalExpression? DefaultValue { get; internal set; } = defaultValue;
     }
 
     public class Function(string name, LogicalExpression body)
     {
+#if NET
+        // Used by the JSON deserializer, which then sets the properties
+        [JsonConstructor]
+        private Function() : this(string.Empty, null!)
+        {
+        }
+
+        [JsonInclude]
+#endif
         public string Name { get; internal set; } = name;
 
+#if NET
+        [JsonObjectCreationHandling(JsonObjectCreationHandling.Populate)]
+#endif
         public IList<FunctionParameter> Parameters { get; } = new List<FunctionParameter>();
 
-        public LogicalExpression Body { get; } = body;
+#if NET
+        [JsonInclude]
+#endif
+        public LogicalExpression Body { get; private set; } = body;
 
+#if NET
+        [JsonInclude]
+#endif
         public string? Description { get; internal set; } = string.Empty;
 
+#if NET
+        [JsonInclude]
+#endif
         internal int MandatoryParamCount { get; set; }
     }
 

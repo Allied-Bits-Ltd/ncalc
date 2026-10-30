@@ -4,6 +4,7 @@ using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Logging;
 using NCalc.Parser;
+using NCalc.Visitors;
 using Parlot.Fluent;
 
 namespace NCalc.Factories;
@@ -70,8 +71,8 @@ public sealed class LogicalExpressionFactory : ILogicalExpressionFactory
         parserContext.AdvancedOptions = advancedOptions;
         LogicalExpression result = LogicalExpressionParser.Parse(parserContext);
 
-        if (parserContext.UserFunctions.Count > 0)
-            result.DeclaredFunctions = parserContext.UserFunctions.Values.ToList();
+        // An empty list tells that the tree was parsed and has no declarations, so it does not have to be searched for them
+        result.DeclaredFunctions = parserContext.UserFunctions.Count > 0 ? parserContext.UserFunctions.Values.ToList() : [];
 
         RegisterDeclaredFunctions(result, expressionContext);
 
@@ -84,8 +85,16 @@ public sealed class LogicalExpressionFactory : ILogicalExpressionFactory
     /// </summary>
     internal static void RegisterDeclaredFunctions(LogicalExpression logicalExpression, ExpressionContextBase? expressionContext)
     {
-        if (expressionContext is null || logicalExpression.DeclaredFunctions is null)
+        if (expressionContext is null)
             return;
+
+        // A tree that was not parsed by this factory (e.g. one deserialized from JSON or built in code) is searched for declarations once
+        if (logicalExpression.DeclaredFunctions is null)
+        {
+            var visitor = new FunctionDeclarationExtractionVisitor();
+            logicalExpression.Accept(visitor);
+            logicalExpression.DeclaredFunctions = visitor.Functions;
+        }
 
         foreach (var function in logicalExpression.DeclaredFunctions)
             expressionContext.UserFunctions[function.Name] = function;

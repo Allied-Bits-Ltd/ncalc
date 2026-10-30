@@ -192,6 +192,41 @@ public class SerializationTests
         Assert.IsType<ImaginaryNumberExpression>(restored);
     }
 
+    private const ExpressionOptions StatementOptions = ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseAssignments | ExpressionOptions.UseIfStatement;
+
+    [Theory]
+    [InlineData("a := 2; a + 1", 3, "")]
+    [InlineData("if (1 > 0) { 2 } else { 3 }", 2, "")]
+    [InlineData("fn sq(a, b = 2) => a * a + b; sq(3)", 11, "sq")]
+    [InlineData("fn outer(x) { fn inner(y) => y + 1; inner(x) * 2 }; outer(4)", 10, "inner,outer")]
+    public async Task StatementsAndFunctionDeclarationsShouldSurviveJsonRoundTrip(string text, int expected, string expectedFunctions)
+    {
+        var parsed = LogicalExpressionFactory.Create(text, options: StatementOptions, cancellationToken: TestContext.Current.CancellationToken);
+        var restored = JsonSerializer.Deserialize<LogicalExpression>(JsonSerializer.Serialize(parsed))!;
+
+        var expression = new Expression(restored, StatementOptions);
+        Assert.Equal(expected, expression.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(expectedFunctions, string.Join(",", expression.UserFunctions.Keys.OrderBy(k => k, StringComparer.Ordinal)));
+
+        Assert.Equal(expected, await new AsyncExpression(restored, StatementOptions).EvaluateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void FunctionDeclarationShouldKeepItsDetailsInJsonRoundTrip()
+    {
+        var parsed = LogicalExpressionFactory.Create("/// Adds b to the square of a\nfn sq(a, b = 2) => a * a + b", options: StatementOptions, cancellationToken: TestContext.Current.CancellationToken);
+        var restored = Assert.IsType<FunctionExpression>(JsonSerializer.Deserialize<LogicalExpression>(JsonSerializer.Serialize(parsed)));
+
+        Assert.Equal("sq", restored.Function.Name);
+        Assert.Equal("Adds b to the square of a", restored.Function.Description);
+        Assert.Equal(2, restored.Function.Parameters.Count);
+        Assert.Equal("a", restored.Function.Parameters[0].Name);
+        Assert.False(restored.Function.Parameters[0].IsOptional);
+        Assert.Equal("b", restored.Function.Parameters[1].Name);
+        Assert.True(restored.Function.Parameters[1].IsOptional);
+        Assert.Equal(2, Assert.IsType<ValueExpression>(restored.Function.Parameters[1].DefaultValue).Value);
+    }
+
     [Fact]
     public void ShouldSerializeVectorExpression()
     {

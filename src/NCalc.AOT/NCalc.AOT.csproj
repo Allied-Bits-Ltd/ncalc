@@ -110,6 +110,7 @@
       <Compile Include="..\NCalc\Visitors\FunctionCallExtractionVisitor.cs" Link="Visitors\FunctionCallExtractionVisitor.cs" />
       <Compile Include="..\NCalc\Visitors\ILogicalExpressionNoRecurseVisitor.cs" Link="Visitors\ILogicalExpressionNoRecurseVisitor.cs" />
       <Compile Include="..\NCalc\Visitors\ILogicalExpressionVisitor.cs" Link="Visitors\ILogicalExpressionVisitor.cs" />
+      <Compile Include="..\NCalc\Visitors\FunctionDeclarationExtractionVisitor.cs" Link="Visitors\FunctionDeclarationExtractionVisitor.cs" />
       <Compile Include="..\NCalc\Visitors\ParameterExtractionVisitor.cs" Link="Visitors\ParameterExtractionVisitor.cs" />
       <Compile Include="..\NCalc\Visitors\SerializationContext.cs" Link="Visitors\SerializationContext.cs" />
       <Compile Include="..\NCalc\Visitors\SerializationVisitor.cs" Link="Visitors\SerializationVisitor.cs" />

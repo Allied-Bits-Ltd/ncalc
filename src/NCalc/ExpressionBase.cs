@@ -69,7 +69,19 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
     /// </summary>
     public string? ExpressionString { get; protected init; }
 
-    public LogicalExpression? LogicalExpression { get; protected set; }
+    private LogicalExpression? _logicalExpression;
+
+    public LogicalExpression? LogicalExpression
+    {
+        get => _logicalExpression;
+        protected set
+        {
+            _logicalExpression = value;
+            // A tree that was not parsed here (e.g. one deserialized from JSON) brings its declared functions along
+            if (value is not null && Context is not null)
+                NCalc.Factories.LogicalExpressionFactory.RegisterDeclaredFunctions(value, Context);
+        }
+    }
 
     public Exception? Error { get; private set; }
 
@@ -113,10 +125,10 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         ILogicalExpressionFactory logicalExpressionFactory,
         ILogicalExpressionCache logicalExpressionCache)
     {
+        Context = context;
         LogicalExpression = logicalExpression;
         LogicalExpressionCache = logicalExpressionCache;
         LogicalExpressionFactory = logicalExpressionFactory;
-        Context = context;
     }
 
     /// <summary>

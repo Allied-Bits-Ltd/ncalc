@@ -25,6 +25,9 @@ namespace NCalc.Domain;
 [JsonDerivedType(typeof(ValueExpression), typeDiscriminator: "value")]
 [JsonDerivedType(typeof(ImaginaryNumberExpression), typeDiscriminator: "imaginary")]
 [JsonDerivedType(typeof(VectorExpression), typeDiscriminator: "vector")]
+[JsonDerivedType(typeof(StatementSequence), typeDiscriminator: "statements")]
+[JsonDerivedType(typeof(FunctionExpression), typeDiscriminator: "functionDeclaration")]
+[JsonDerivedType(typeof(IfStatementExpression), typeDiscriminator: "if")]
 #endif
 public abstract class LogicalExpression
 {
@@ -34,6 +37,10 @@ public abstract class LogicalExpression
 
     protected ExpressionLocation _location;
 
+#if NET
+    // A CultureInfo cannot be serialized (its Parent chain is cyclic), and the property is not restored on deserialization anyway
+    [JsonIgnore]
+#endif
     public CultureInfo? CultureInfo => _cultureInfo;
 
     public ExpressionLocation Location => _location;
