@@ -781,6 +781,24 @@ public class MathsTests : TestBase
     }
 
     [Theory]
+    [InlineData("1 / 0.0", ExpressionOptions.None, double.PositiveInfinity)]
+    [InlineData("-1 / 0.0", ExpressionOptions.None, double.NegativeInfinity)]
+    [InlineData("1 / 0.0", ExpressionOptions.ReduceDivResultToInteger, double.PositiveInfinity)]
+    [InlineData("1e20 % 3e20", ExpressionOptions.None, 1e20)]
+    [InlineData("1e30 // 1", ExpressionOptions.None, 1e30)]
+    [InlineData("-1e30 // 1", ExpressionOptions.None, -1e30)]
+    [InlineData("1e20 + 1", ExpressionOptions.ReduceArithmeticResultType, 1e20)]
+    [InlineData("1e19 * 1", ExpressionOptions.ReduceArithmeticResultType, 1e19)]
+    [InlineData("4 / 2.0", ExpressionOptions.None, 2)]
+    [InlineData("7 // 2.0", ExpressionOptions.None, 3)]
+    [InlineData("1e18 // 1", ExpressionOptions.None, 1000000000000000000L)]
+    [InlineData("4.0 + 2", ExpressionOptions.ReduceArithmeticResultType, 6)]
+    public void InfiniteAndLargeDoublesShouldNotBeClampedToLong(string expr, ExpressionOptions options, object expected)
+    {
+        Assert.Equal(expected, new NCalc.Expression(expr, options | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
     [InlineData("2 in (1, 2)", true)]
     [InlineData("2 in (1, 2) and index = 3", true)]
     [InlineData("index * 2", 6)]

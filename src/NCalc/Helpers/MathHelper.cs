@@ -1868,6 +1868,17 @@ public static class MathHelper
         if (IsBoxedIntegerNumber(result))
             return ReduceNumericType(result, reduceTypes ? null : t, options);
 
+        // A quotient beyond the range of long (or an infinite one) stays a floating-point number instead of being clamped
+        switch (result)
+        {
+            case double dq when !FitsInLong(truncateFirst ? Math.Truncate(dq) : Math.Floor(dq)):
+                return truncateFirst ? Math.Truncate(dq) : Math.Floor(dq);
+            case float fq when !FitsInLong(truncateFirst ? Math.Truncate(fq) : Math.Floor(fq)):
+                return (float)(truncateFirst ? Math.Truncate(fq) : Math.Floor(fq));
+            case decimal mq when (truncateFirst ? Math.Truncate(mq) : Math.Floor(mq)) is var fm && (fm < long.MinValue || fm > long.MaxValue):
+                return fm;
+        }
+
         if (reduceTypes)
         {
             if (result is decimal decResult)
@@ -4752,6 +4763,12 @@ public static class MathHelper
         return result;
     }
 
+    // A cast of a double outside the target range does not fail but clamps (or is undefined on older runtimes),
+    // so infinity, NaN and values beyond ±2^63 (2^64 for ulong) are checked before casting.
+    internal static bool FitsInLong(double value) => value >= -9.2233720368547758E18 && value < 9.2233720368547758E18;
+
+    internal static bool FitsInULong(double value) => value >= 0 && value < 1.8446744073709552E19;
+
     public static long? GetBoxedIntegerNumberAsLong(object? obj)
     {
         if (obj is null)
@@ -4768,9 +4785,9 @@ public static class MathHelper
                 case int i: return (long)i;
                 case uint ui: return (long)ui;
                 case long l: return l;
-                case ulong ul: if (ul < Int64.MaxValue) return (long)ul; else return null;
-                case float fl: if (fl == Math.Truncate(fl)) return (long)fl; else return null;
-                case double db: if (db == Math.Truncate(db)) return (long)db; else return null;
+                case ulong ul: if (ul <= Int64.MaxValue) return (long)ul; else return null;
+                case float fl: if (fl == Math.Truncate(fl) && FitsInLong(fl)) return (long)fl; else return null;
+                case double db: if (db == Math.Truncate(db) && FitsInLong(db)) return (long)db; else return null;
                 case decimal dd: if (dd == Math.Truncate(dd)) return (long)dd; else return null;
                 case BigInteger bi: return (long)bi;
                 case BigDecimal bd: if (bd.DecimalPlaces == 0) return (long)(bd.GetWholePart()); else return null;
@@ -4805,8 +4822,8 @@ public static class MathHelper
                 case uint ui: return (ulong)ui;
                 case long l: if (l > 0) return (ulong)l; else return null;
                 case ulong ul: return ul;
-                case float fl: if (fl == Math.Truncate(fl)) return (ulong)fl; else return null;
-                case double db: if (db == Math.Truncate(db)) return (ulong)db; else return null;
+                case float fl: if (fl == Math.Truncate(fl) && FitsInULong(fl)) return (ulong)fl; else return null;
+                case double db: if (db == Math.Truncate(db) && FitsInULong(db)) return (ulong)db; else return null;
                 case decimal dd: if (dd == Math.Truncate(dd)) return (ulong)dd; else return null;
                 case BigInteger bi: return (ulong)bi;
                 case BigDecimal bd: if (bd.DecimalPlaces == 0) return (ulong)(bd.GetWholePart()); else return null;
@@ -4956,14 +4973,15 @@ public static class MathHelper
         if (obj is null)
             return null;
 
+        // Infinity equals its truncated value, but it is not an integer number
         if (obj is float ft)
         {
-            return ft == Math.Truncate(ft);
+            return !float.IsInfinity(ft) && ft == Math.Truncate(ft);
         }
 
         if (obj is double dt)
         {
-            return dt == Math.Truncate(dt);
+            return !double.IsInfinity(dt) && dt == Math.Truncate(dt);
         }
 
         if (obj is decimal dct)
