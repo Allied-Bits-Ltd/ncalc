@@ -1179,12 +1179,26 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                             expression.DynamicParameters[p.Key] = p.Value;
                     }
 
-                    expression.EvaluateFunction += context.EvaluateFunctionHandler;
-                    expression.EvaluateParameter += context.EvaluateParameterHandler;
-                    expression.UpdateParameter += context.UpdateParameterHandler;
-                    expression.MatchString += context.MatchStringHandler;
-
-                    result = expression.Evaluate(cancellationToken);
+                    // The handlers of this expression are attached only for this evaluation; attaching them for good would call
+                    // each handler once more on every evaluation of this expression
+                    using (EvaluationHelper.EnterNestedExpression(expression))
+                    {
+                        expression.EvaluateFunction += context.EvaluateFunctionHandler;
+                        expression.EvaluateParameter += context.EvaluateParameterHandler;
+                        expression.UpdateParameter += context.UpdateParameterHandler;
+                        expression.MatchString += context.MatchStringHandler;
+                        try
+                        {
+                            result = expression.Evaluate(cancellationToken);
+                        }
+                        finally
+                        {
+                            expression.EvaluateFunction -= context.EvaluateFunctionHandler;
+                            expression.EvaluateParameter -= context.EvaluateParameterHandler;
+                            expression.UpdateParameter -= context.UpdateParameterHandler;
+                            expression.MatchString -= context.MatchStringHandler;
+                        }
+                    }
                     if (result is null)
                     {
                         return result;
@@ -1218,6 +1232,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
         if (result != null)
             return result;
+
+        // With AllowNullParameter or UseTernaryLogic, "null" is the null value unless a parameter of that name is defined
+        if ((context.Options.HasFlag(ExpressionOptions.AllowNullParameter) || context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+            && identifierName.Equals("null", context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            return null;
 
         throw new NCalcParameterNotDefinedException(identifierName, identifier.Location);
     }

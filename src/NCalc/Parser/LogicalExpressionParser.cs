@@ -260,6 +260,24 @@ public static class LogicalExpressionParser
         => CreateParser(cultureInfo, options, extOptions, literalsOnly: false);
 
     private static readonly ConcurrentDictionary<string, Parser<LogicalExpression>> LiteralParsers = new();
+    private static readonly ConcurrentDictionary<string, Parser<LogicalExpression>> ExpressionParsers = new();
+
+    // The grammar depends on the options, the culture of the expression, the advanced options and, where those options refer to it,
+    // the culture of the current thread. A parser is built from a copy of the advanced options, so that later changes to the caller's
+    // instance do not affect a parser shared under the old settings.
+    private static string GetParserCacheKey(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions)
+    {
+        const string separator = "\u001F";
+        return string.Concat(((long)options).ToString(CultureInfo.InvariantCulture), separator, cultureInfo.Name, separator,
+            CultureInfo.CurrentCulture.Name, separator, extOptions?.GetCacheKey() ?? string.Empty);
+    }
+
+    /// <summary>
+    /// Returns the expression parser for the given settings. Building the grammar takes about a millisecond, so the parser is
+    /// built once per combination of settings and reused (parsers keep no state between parses).
+    /// </summary>
+    internal static Parser<LogicalExpression> GetExpressionParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions)
+        => ExpressionParsers.GetOrAdd(GetParserCacheKey(cultureInfo, options, extOptions), _ => CreateParser(cultureInfo, options, extOptions?.Clone(), literalsOnly: false));
 
     /// <summary>
     /// Returns the parser that accepts only a single literal (a number, a date or time, a boolean or a GUID), optionally with a sign,
@@ -267,9 +285,7 @@ public static class LogicalExpressionParser
     /// </summary>
     internal static Parser<LogicalExpression> GetLiteralParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions)
     {
-        const string separator = "\u001F";
-        var key = string.Concat(((long)options).ToString(CultureInfo.InvariantCulture), separator, cultureInfo.Name, separator, extOptions?.GetCacheKey() ?? string.Empty);
-        return LiteralParsers.GetOrAdd(key, _ => CreateParser(cultureInfo, options, extOptions, literalsOnly: true));
+        return LiteralParsers.GetOrAdd(GetParserCacheKey(cultureInfo, options, extOptions), _ => CreateParser(cultureInfo, options, extOptions?.Clone(), literalsOnly: true));
     }
 
     private static Parser<LogicalExpression> CreateParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions, bool literalsOnly)
@@ -2145,34 +2161,6 @@ public static class LogicalExpressionParser
                 factorialOrPercent = factorial;
             }*/
 
-        // Either a factorial, primary, or exponential
-        // exponential => factorial ( "**" factorial )* ;
-        var exponential = nextParser.And(ZeroOrMany(exponent.And(factorial)))
-        .Then(static (ctx, x) =>
-        {
-            LogicalExpression result = null!;
-
-            switch (x.Item2.Count)
-            {
-                case 0:
-                    return x.Item1;
-                case 1:
-                    return new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, x.Item2[0].Item2).SetLocation(new ParlotExpressionLocation(ctx));
-                default:
-                {
-                    // Exponentiation is right-associative: a ** b ** c ** d = a ** (b ** (c ** d))
-                    result = x.Item2[x.Item2.Count - 1].Item2;
-                    for (int i = x.Item2.Count - 2; i >= 0; i--)
-                    {
-                        result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item2[i].Item2,
-                            result).SetLocation(new ParlotExpressionLocation(ctx));
-                    }
-
-                    return new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, result).SetLocation(new ParlotExpressionLocation(ctx));
-                }
-            }
-        });
-
         // ( "-" | "!" | "not" | "~" | root2 | root3 | root4 ) factorial | exponential | primary;
         List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)> unaryOps =
         [
@@ -2189,6 +2177,33 @@ public static class LogicalExpressionParser
 #endif
         if (root4 is not null)
             unaryOps.Add((root4, static (ctx, value) => new UnaryExpression(UnaryExpressionType.FourthRoot, value).SetLocation(new ParlotExpressionLocation(ctx))));
+        // A prefix operator may also precede an exponent ("2 ** -x"); like the operands of a binary operator, the exponent may also be a percent or an imaginary number
+        var exponentPrefix = OneOf(unaryOps.Select(op => StackGuarded(op.Item1).Then(_ => op.Item2)).ToArray());
+
+        // Either a factorial, primary, or exponential
+        // exponential => factorial ( "**" prefix* factorial )* ;
+        var exponential = nextParser.And(ZeroOrMany(exponent.SkipAnd(ZeroOrMany(exponentPrefix).And(nextParser))))
+        .Then(static (ctx, x) =>
+        {
+            if (x.Item2.Count == 0)
+                return x.Item1;
+
+            // Exponentiation is right-associative, and a prefix operator of an exponent applies to the rest of the chain, as in Python:
+            // a ** b ** c = a ** (b ** c), and a ** -b ** c = a ** -(b ** c)
+            LogicalExpression? result = null;
+            for (int i = x.Item2.Count - 1; i >= 0; i--)
+            {
+                var (prefixes, operand) = x.Item2[i];
+                result = result is null
+                    ? operand
+                    : new BinaryExpression(BinaryExpressionType.Exponentiation, operand, result).SetLocation(new ParlotExpressionLocation(ctx));
+                for (int p = prefixes.Count - 1; p >= 0; p--)
+                    result = prefixes[p](ctx, result);
+            }
+
+            return new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, result!).SetLocation(new ParlotExpressionLocation(ctx));
+        });
+
         // The operators are guarded because Parlot's Unary parser recurses once per prefix operator
         var unary = exponential.Unary(StackGuarded(unaryOps));
 
@@ -2510,7 +2525,7 @@ public static class LogicalExpressionParser
 
     public static LogicalExpression Parse(LogicalExpressionParserContext context)
     {
-        Parser<LogicalExpression> parserToUse = CreateExpressionParser(context.CultureInfo, context.Options, context.AdvancedOptions);
+        Parser<LogicalExpression> parserToUse = GetExpressionParser(context.CultureInfo, context.Options, context.AdvancedOptions);
 
         return Parse(parserToUse, context);
     }

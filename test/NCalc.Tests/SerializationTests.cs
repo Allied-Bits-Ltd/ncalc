@@ -1,4 +1,4 @@
-using ExtendedNumerics;
+﻿using ExtendedNumerics;
 
 using NCalc.Domain;
 using NCalc.Factories;
@@ -264,10 +264,11 @@ public class SerializationTests
         Assert.Equal("True", new ValueExpression(true).ToString());
         Assert.Equal("False", new ValueExpression(false).ToString());
         Assert.Equal("1", new ValueExpression(1).ToString());
-        Assert.Equal("1" + CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator + "234", new ValueExpression(1.234).ToString());
+        // Numbers and dates are written in the syntax of the parser, not in the format of the current culture
+        Assert.Equal("1.234", new ValueExpression(1.234).ToString());
         Assert.Equal("'hello'", new ValueExpression("hello").ToString());
         Assert.Equal("'c'", new ValueExpression('c').ToString());
-        Assert.Equal("#" + new DateTime(2009, 1, 1) + "#", new ValueExpression(new DateTime(2009, 1, 1)).ToString());
+        Assert.Equal("#2009-01-01#", new ValueExpression(new DateTime(2009, 1, 1)).ToString());
     }
 
     [Fact]
@@ -399,10 +400,49 @@ public class SerializationTests
 
         var expr = new Expression("0.00001", ExpressionOptions.DecimalAsDefault);
         string s = expr.GetLogicalExpression().ToString();
-        Assert.Equal("0" + CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator + "00001", s);
+        Assert.Equal("0.00001", s);
 
         expr = new Expression("0.00001", ExpressionOptions.None);
         s = expr.GetLogicalExpression().ToString();
-        Assert.Equal("0" + CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator + "00001", s);
+        Assert.Equal("0.00001", s);
+    }
+
+    [Theory]
+    [InlineData("2.5 + 1e-30 + 0.30000000000000004 + 1.5e10", ExpressionOptions.None, AdvExpressionOptions.None)]
+    [InlineData("#2024-01-02# + #2024-01-02T10:20:30.5#", ExpressionOptions.None, AdvExpressionOptions.None)]
+    [InlineData("x == 5", ExpressionOptions.UseCStyleAssignments, AdvExpressionOptions.None)]
+    [InlineData("fn sq(a) => a * a; sq(3)", ExpressionOptions.UseStatementSequences, AdvExpressionOptions.None)]
+    [InlineData("6 bit_and 3 + bit_not 3", ExpressionOptions.SkipLogicalAndBitwiseOpChars, AdvExpressionOptions.None)]
+    [InlineData("7 mod 3", ExpressionOptions.None, AdvExpressionOptions.CalculatePercent)]
+    public void ToStringShouldRoundTripUnderAnyCulture(string expression, ExpressionOptions options, AdvExpressionOptions advancedOptions)
+    {
+        var oldCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            foreach (var culture in new[] { "sk-SK", "sv-SE", "en-US" })
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
+                Expression Create(string text) => new(text, options | ExpressionOptions.NoCache) { AdvancedOptions = advancedOptions == AdvExpressionOptions.None ? null : new AdvancedExpressionOptions(advancedOptions) };
+                string text = Create(expression).GetLogicalExpression().ToString();
+                var reparsed = Create(text);
+                Assert.False(reparsed.HasErrors(), $"{text} does not parse under {culture}");
+                Assert.Equal(text, reparsed.GetLogicalExpression().ToString());
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = oldCulture;
+        }
+    }
+
+    [Theory]
+    [InlineData("[my var] + 1")]
+    [InlineData("'it\\'s'")]
+    [InlineData("deadbeef-cafe-babe-face-0123456789ab")]
+    public void JsonShouldKeepIdentifiersStringsAndGuids(string expression)
+    {
+        var logicalExpression = new Expression(expression, ExpressionOptions.NoCache).GetLogicalExpression();
+        var restored = JsonSerializer.Deserialize<LogicalExpression>(JsonSerializer.Serialize(logicalExpression))!;
+        Assert.Equal(logicalExpression.ToString(), restored.ToString());
     }
 }

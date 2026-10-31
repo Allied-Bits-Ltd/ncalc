@@ -44,7 +44,10 @@ public partial class Expression
         var body = LogicalExpression.Accept(visitor);
         if (!IsSameType(body, typeof(TResult)))
         {
-            body = LinqExpression.Convert(body, typeof(TResult));
+            // With OverflowProtection, a result that does not fit in TResult throws instead of being truncated
+            body = Options.HasFlag(ExpressionOptions.OverflowProtection)
+                ? LinqExpression.ConvertChecked(body, typeof(TResult))
+                : LinqExpression.Convert(body, typeof(TResult));
         }
 
         return new() { Expression = body, Parameter = parameter };

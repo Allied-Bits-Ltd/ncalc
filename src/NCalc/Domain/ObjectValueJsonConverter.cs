@@ -1,4 +1,4 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Numerics;
 using System.Text;
 using System.Text.Json;
@@ -352,10 +352,10 @@ public sealed class ObjectValueJsonConverter : JsonConverter<object?>
                     CultureInfo.InvariantCulture);
 
             case nameof(BigDecimal):
-                return BigInteger.Parse(
-                    RequireString(typeName, text),
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture);
+                return BigDecimal.Parse(RequireString(typeName, text), CultureInfo.InvariantCulture);
+
+            case nameof(Guid):
+                return Guid.Parse(RequireString(typeName, text));
 
             default:
                 throw new JsonException($"Unsupported tagged scalar type '{typeName}'.");
@@ -457,6 +457,10 @@ public sealed class ObjectValueJsonConverter : JsonConverter<object?>
 
             case BigInteger bi:
                 WriteTaggedString(writer, nameof(BigInteger), bi.ToString(CultureInfo.InvariantCulture));
+                return;
+
+            case Guid guid:
+                WriteTaggedString(writer, nameof(Guid), guid.ToString("D", CultureInfo.InvariantCulture));
                 return;
 
             case BigDecimal bd:

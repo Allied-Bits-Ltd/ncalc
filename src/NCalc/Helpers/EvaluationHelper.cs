@@ -557,9 +557,7 @@ public static class EvaluationHelper
             {
                 MatchStringArgs args = new MatchStringArgs(value, pattern, context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer));
 
-                ValueTask? task = actualCtx.AsyncMatchStringHandler?.Invoke(args, cancellationToken);
-                if (task.HasValue)
-                    await task.Value;
+                await InvokeAllAsync(actualCtx.AsyncMatchStringHandler, args, cancellationToken).ConfigureAwait(false);
 
                 outcome = args.Matches;
             }
@@ -658,9 +656,7 @@ public static class EvaluationHelper
             {
                 MatchStringArgs args = new MatchStringArgs(lValue, lPattern, context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer));
 
-                ValueTask? task = actualCtx.AsyncMatchStringHandler?.Invoke(args, cancellationToken);
-                if (task.HasValue)
-                    await task.Value;
+                await InvokeAllAsync(actualCtx.AsyncMatchStringHandler, args, cancellationToken).ConfigureAwait(false);
 
                 outcome = args.Matches;
             }
@@ -714,6 +710,71 @@ public static class EvaluationHelper
         while (patternIndex < pattern.Length && pattern[patternIndex] == '%')
             patternIndex++;
         return patternIndex == pattern.Length;
+    }
+
+    // A multicast delegate returns only the ValueTask of its last handler, so the other handlers would not be awaited
+    // (their results lost and their exceptions unobserved); these methods await every handler in order.
+    internal static async ValueTask InvokeAllAsync(AsyncEvaluateFunctionHandler? handler, string name, AsyncFunctionArgs args, CancellationToken cancellationToken)
+    {
+        if (handler is null)
+            return;
+        foreach (AsyncEvaluateFunctionHandler single in handler.GetInvocationList())
+            await single(name, args, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async ValueTask InvokeAllAsync(AsyncEvaluateParameterHandler? handler, string name, ParameterArgs args, CancellationToken cancellationToken)
+    {
+        if (handler is null)
+            return;
+        foreach (AsyncEvaluateParameterHandler single in handler.GetInvocationList())
+            await single(name, args, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async ValueTask InvokeAllAsync(AsyncUpdateParameterHandler? handler, string name, UpdateParameterArgs args, CancellationToken cancellationToken)
+    {
+        if (handler is null)
+            return;
+        foreach (AsyncUpdateParameterHandler single in handler.GetInvocationList())
+            await single(name, args, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async ValueTask InvokeAllAsync(AsyncMatchStringHandler? handler, MatchStringArgs args, CancellationToken cancellationToken)
+    {
+        if (handler is null)
+            return;
+        foreach (AsyncMatchStringHandler single in handler.GetInvocationList())
+            await single(args, cancellationToken).ConfigureAwait(false);
+    }
+
+    private sealed class NestedExpressionLink(object expression, NestedExpressionLink? parent)
+    {
+        public object Expression { get; } = expression;
+        public NestedExpressionLink? Parent { get; } = parent;
+    }
+
+    private sealed class NestedExpressionScope(NestedExpressionLink? previous) : IDisposable
+    {
+        public void Dispose() => NestedExpressions.Value = previous;
+    }
+
+    // The expressions that are being evaluated as values of parameters, innermost first (per thread and async flow)
+    private static readonly AsyncLocal<NestedExpressionLink?> NestedExpressions = new();
+
+    /// <summary>
+    /// Marks the start of the evaluation of an expression that is the value of a parameter. An expression that is already being
+    /// evaluated this way refers to itself through its parameters, which would otherwise recurse until the process crashes.
+    /// </summary>
+    internal static IDisposable EnterNestedExpression(object expression)
+    {
+        var current = NestedExpressions.Value;
+        for (var link = current; link is not null; link = link.Parent)
+        {
+            if (ReferenceEquals(link.Expression, expression))
+                throw new NCalcEvaluationException("An expression used as the value of a parameter refers to itself through its parameters.");
+        }
+
+        NestedExpressions.Value = new NestedExpressionLink(expression, current);
+        return new NestedExpressionScope(current);
     }
 
     internal static void EnsureProperParamNumInFunctionCall(Function userFunction, FunctionCall functionCall)

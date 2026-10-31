@@ -53,7 +53,8 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         var ifTrue = expression.MiddleExpression.Accept(this, cancellationToken);
         var ifFalse = expression.RightExpression.Accept(this, cancellationToken);
 
-        return LinqExpression.Condition(conditional, ifTrue, ifFalse);
+        UnifyBranchTypes(ref ifTrue, ref ifFalse);
+        return LinqExpression.Condition(ToBoolean(conditional), ifTrue, ifFalse);
     }
 
     public LinqExpression Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
@@ -133,7 +134,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             BinaryExpressionType.Plus => _checked ? WithCommonNumericType(left, right, LinqExpression.AddChecked, BinaryExpressionType.Plus) : WithCommonNumericType(left, right, LinqExpression.Add, BinaryExpressionType.Plus),
             BinaryExpressionType.Modulo => WithCommonNumericType(left, right, LinqExpression.Modulo),
             BinaryExpressionType.Div => ConvertDoubleIfNoFraction(WithCommonNumericType(left, right, LinqExpression.Divide, BinaryExpressionType.Div)),
-            BinaryExpressionType.Times => _checked ? WithCommonNumericType(left, right, LinqExpression.MultiplyChecked) : WithCommonNumericType(left, right, LinqExpression.Multiply),
+            BinaryExpressionType.Times => Multiply(left, right),
             BinaryExpressionType.BitwiseOr => LinqExpression.Or(left, right),
             BinaryExpressionType.BitwiseAnd => LinqExpression.And(left, right),
             BinaryExpressionType.BitwiseXOr => LinqExpression.ExclusiveOr(left, right),
@@ -158,7 +159,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
         return expression.Type switch
         {
-            UnaryExpressionType.Not => LinqExpression.Not(operand),
+            UnaryExpressionType.Not => LinqExpression.Not(ToBoolean(operand)),
             UnaryExpressionType.Negate => LinqExpression.Negate(operand),
             UnaryExpressionType.BitwiseNot => LinqExpression.Not(operand),
             UnaryExpressionType.SqRoot => Sqrt(operand),
@@ -220,18 +221,14 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         }
 
         var functionName = function.Identifier.Name.ToUpperInvariant();
-        if (functionName == "IF")
+        if (functionName is "IF" or "IFF")
         {
-            var numberTypePriority = new[] { typeof(double), typeof(float), typeof(long), typeof(int), typeof(short) };
-            var index1 = Array.IndexOf(numberTypePriority, args[1].Type);
-            var index2 = Array.IndexOf(numberTypePriority, args[2].Type);
-            if (index1 >= 0 && index2 >= 0 && index1 != index2)
-            {
-                args[1] = LinqExpression.Convert(args[1], numberTypePriority[Math.Min(index1, index2)]);
-                args[2] = LinqExpression.Convert(args[2], numberTypePriority[Math.Min(index1, index2)]);
-            }
-
-            return LinqExpression.Condition(args[0], args[1], args[2]);
+            // As in the evaluators, the third argument is optional, and the result is null when the condition is false
+            if (args.Length is < 2 or > 3)
+                throw new ArgumentException($"{functionName} takes 2 or 3 arguments");
+            var ifFalse = args.Length == 3 ? args[2] : LinqExpression.Constant(null, typeof(object));
+            UnifyBranchTypes(ref args[1], ref ifFalse);
+            return LinqExpression.Condition(ToBoolean(args[0]), args[1], ifFalse);
         }
 
         if (functionName == "IN")
@@ -270,7 +267,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             case "POW":
                 CheckArgumentsLengthForFunction(functionName, function.Parameters.Count, 2);
 
-                if (_options == ExpressionOptions.DecimalAsDefault)
+                if (_options.HasFlag(ExpressionOptions.DecimalAsDefault))
                 {
                     arg0 = LinqExpression.Convert(args[0], typeof(decimal));
                     arg1 = LinqExpression.Convert(args[1], typeof(decimal));
@@ -293,17 +290,15 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             case "ROUND":
                 CheckArgumentsLengthForFunction(functionName, function.Parameters.Count, 2);
 
-                if (_options == ExpressionOptions.DecimalAsDefault)
-                    arg0 = LinqExpression.Convert(args[0], typeof(decimal));
-                else
-                    arg0 = LinqExpression.Convert(args[0], typeof(double));
-
+                // The overload must match the type of the value: Math.Round(decimal, ...) with DecimalAsDefault, Math.Round(double, ...) otherwise
+                Type roundType = _options.HasFlag(ExpressionOptions.DecimalAsDefault) ? typeof(decimal) : typeof(double);
+                arg0 = LinqExpression.Convert(args[0], roundType);
                 arg1 = LinqExpression.Convert(args[1], typeof(int));
 
                 var rounding = (_options & ExpressionOptions.RoundAwayFromZero) == ExpressionOptions.RoundAwayFromZero
                     ? MidpointRounding.AwayFromZero
                     : MidpointRounding.ToEven;
-                return LinqExpression.Call(MathFunctionHelper.Functions["ROUND"].First().MethodInfo, arg0, arg1,
+                return LinqExpression.Call(typeof(Math).GetMethod(nameof(Math.Round), [roundType, typeof(int), typeof(MidpointRounding)])!, arg0, arg1,
                     LinqExpression.Constant(rounding));
 
             default:
@@ -312,7 +307,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 {
                     MathMethodInfo func;
 
-                    if (_options == ExpressionOptions.DecimalAsDefault && f.Any(_ => _.DecimalSupport))
+                    if (_options.HasFlag(ExpressionOptions.DecimalAsDefault) && f.Any(_ => _.DecimalSupport))
                         func = f.First(_ => _.DecimalSupport);
                     else
                         func = f.First(_ => !_.DecimalSupport);
@@ -350,6 +345,11 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                     ? EvaluationHelper.GetParameterValueFromListNoCase(_parameters, identifier.Name, out param)
                     : _parameters.TryGetValue(identifier.Name, out param)))
                 result = LinqExpression.Constant(param);
+            else
+            // As in the evaluators, "null" is the null value with AllowNullParameter or UseTernaryLogic unless a parameter of that name is defined
+            if ((_options.HasFlag(ExpressionOptions.AllowNullParameter) || _options.HasFlag(ExpressionOptions.UseTernaryLogic))
+                && identifier.Name.Equals("null", _options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                result = LinqExpression.Constant(null, typeof(object));
             else
                 throw new NCalcParameterNotDefinedException(identifier.Name);
         }
@@ -1168,6 +1168,15 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
     {
         if (arr is null) return LinqExpression.Constant(false);
 
+        // A value in a string is a substring, as in the evaluators
+        if (arr.Type == typeof(string))
+        {
+            var leftString = left.Type == typeof(string)
+                ? left
+                : LinqExpression.Call(typeof(Convert).GetMethod(nameof(Convert.ToString), [typeof(object)])!, LinqExpression.Convert(left, typeof(object)));
+            return LinqExpression.Call(arr, typeof(string).GetMethod(nameof(string.Contains), [typeof(string)])!, leftString);
+        }
+
         if (!typeof(IEnumerable).IsAssignableFrom(arr.Type))
             return LinqExpression.Constant(false);
 
@@ -1198,6 +1207,46 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         }
 
         return LinqExpression.Call(null, containsMi, source, left);
+    }
+
+    // A condition or the operand of "not" that is not a boolean is converted as the evaluators convert it (1 is true)
+    private static LinqExpression ToBoolean(LinqExpression value)
+        => value.Type == typeof(bool)
+            ? value
+            : LinqExpression.Call(typeof(Convert).GetMethod(nameof(Convert.ToBoolean), [typeof(object)])!, LinqExpression.Convert(value, typeof(object)));
+
+    // The branches of a condition must have one type: numbers are converted to the wider type, other values to object
+    private static void UnifyBranchTypes(ref LinqExpression first, ref LinqExpression second)
+    {
+        if (first.Type == second.Type)
+            return;
+
+        Type[] numberTypePriority = [typeof(double), typeof(decimal), typeof(float), typeof(ulong), typeof(long), typeof(uint), typeof(int), typeof(ushort), typeof(short), typeof(byte), typeof(sbyte)];
+        int index1 = Array.IndexOf(numberTypePriority, first.Type);
+        int index2 = Array.IndexOf(numberTypePriority, second.Type);
+        Type target = index1 >= 0 && index2 >= 0 ? numberTypePriority[Math.Min(index1, index2)] : typeof(object);
+        first = LinqExpression.Convert(first, target);
+        second = LinqExpression.Convert(second, target);
+    }
+
+    // As in the evaluators, the product of two 32-bit (or smaller) integers is computed in 64 bits, so 2147483647 * 2 does not wrap around
+    private LinqExpression Multiply(LinqExpression left, LinqExpression right)
+    {
+        Type[] small = [typeof(int), typeof(short), typeof(sbyte), typeof(byte), typeof(ushort)];
+        bool leftSmall = Array.IndexOf(small, left.Type) >= 0, rightSmall = Array.IndexOf(small, right.Type) >= 0;
+        if (left.Type == typeof(uint) && right.Type == typeof(uint))
+        {
+            left = LinqExpression.Convert(left, typeof(ulong));
+            right = LinqExpression.Convert(right, typeof(ulong));
+        }
+        else
+        if ((leftSmall || left.Type == typeof(uint)) && (rightSmall || right.Type == typeof(uint)))
+        {
+            left = LinqExpression.Convert(left, typeof(long));
+            right = LinqExpression.Convert(right, typeof(long));
+        }
+
+        return _checked ? WithCommonNumericType(left, right, LinqExpression.MultiplyChecked) : WithCommonNumericType(left, right, LinqExpression.Multiply);
     }
 
     public LinqExpression LikeOperator(LinqExpression leftValue, LinqExpression? rightValue)

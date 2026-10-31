@@ -176,24 +176,22 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         if (LogicalExpression is null)
             return null;
 
-        if (UseNonRecursiveEvaluator)
-            Options |= ExpressionOptions.UseNonRecursiveEvaluator;
-
-        if (Options.HasFlag(ExpressionOptions.AllowNullParameter) || Options.HasFlag(ExpressionOptions.UseTernaryLogic))
-            Parameters["null"] = null;
-
         // If array evaluation, execute the same expression multiple times
         if (Options.HasFlag(ExpressionOptions.IterateParameters))
-            return IterateParameters();
+            return IterateParameters(cancellationToken);
 
-        var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
+        return EvaluateOnce(EvaluationVisitorFactory.Create(Context), cancellationToken);
+    }
 
+    // The static UseNonRecursiveEvaluator setting selects the evaluator for this evaluation without changing Options
+    private object? EvaluateOnce(Visitors.EvaluationVisitor evaluationVisitor, CancellationToken cancellationToken)
+    {
         try
         {
-            if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
-                return evaluationVisitor.EvaluateNoRecurse(LogicalExpression, cancellationToken);
+            if (UseNonRecursiveEvaluator || Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+                return evaluationVisitor.EvaluateNoRecurse(LogicalExpression!, cancellationToken);
             else
-                return LogicalExpression.Accept(evaluationVisitor, cancellationToken);
+                return LogicalExpression!.Accept(evaluationVisitor, cancellationToken);
         }
         catch (NCalcFlowControl flex)
         {
@@ -204,7 +202,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         }
     }
 
-    private object? IterateParameters()
+    private object? IterateParameters(CancellationToken cancellationToken)
     {
         var parameterEnumerators = ParametersHelper.GetEnumerators(Parameters, out var size);
 
@@ -214,25 +212,32 @@ public partial class Expression : ExpressionBase<ExpressionContext>
             return null;
 
         if (size is null)
-        {
-            if (Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
-                return evaluationVisitor.EvaluateNoRecurse(LogicalExpression);
-            else
-                return LogicalExpression.Accept(evaluationVisitor);
-        }
-        var results = new List<object?>();
+            return EvaluateOnce(evaluationVisitor, cancellationToken);
 
-        for (int i = 0; i < size; i++)
+        // Each element is put into Parameters for one evaluation; the lists are put back afterwards,
+        // so that the next evaluation iterates them again
+        var originalValues = parameterEnumerators.Keys.ToDictionary(key => key, key => Parameters[key]);
+        try
         {
-            foreach (var kvp in parameterEnumerators)
+            var results = new List<object?>();
+            for (int i = 0; i < size; i++)
             {
-                kvp.Value.MoveNext();
-                Parameters[kvp.Key] = kvp.Value.Current;
+                cancellationToken.ThrowIfCancellationRequested();
+                foreach (var kvp in parameterEnumerators)
+                {
+                    kvp.Value.MoveNext();
+                    Parameters[kvp.Key] = kvp.Value.Current;
+                }
+
+                results.Add(EvaluateOnce(evaluationVisitor, cancellationToken));
             }
 
-            results.Add((Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator)) ? evaluationVisitor.EvaluateNoRecurse(LogicalExpression!) : LogicalExpression?.Accept(evaluationVisitor));
+            return results;
         }
-
-        return results;
+        finally
+        {
+            foreach (var original in originalValues)
+                Parameters[original.Key] = original.Value;
+        }
     }
 }

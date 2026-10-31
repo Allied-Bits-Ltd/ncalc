@@ -486,11 +486,19 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             return null;
 
                         rightValue = await right.Value.ConfigureAwait(false);
+                        bool? rightBool = rightValue is bool rb ? rb : null;
+                        if (rightBool is null)
+                            return null;
 
                         return K3LogicHelper.Xor(leftValue, rightValue);
                     }
-                    return MathHelper.ConvertToBoolean(await left.Value.ConfigureAwait(false), "XOr", context.CultureInfo, expression.LeftExpression.Location) ^
-                           MathHelper.ConvertToBoolean(await right.Value.ConfigureAwait(false), "XOr", context.CultureInfo, expression.RightExpression.Location);
+                    // As in the synchronous evaluator, a null operand gives null
+                    if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
+                        return null;
+                    if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
+                        return null;
+                    return MathHelper.ConvertToBoolean(leftValue, "XOr", context.CultureInfo, expression.LeftExpression.Location) ^
+                           MathHelper.ConvertToBoolean(rightValue, "XOr", context.CultureInfo, expression.RightExpression.Location);
 
                 case BinaryExpressionType.Div:
                 {
@@ -1169,12 +1177,26 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             expression.DynamicParameters[p.Key] = p.Value;
                     }
 
-                    expression.EvaluateFunctionAsync += context.AsyncEvaluateFunctionHandler;
-                    expression.EvaluateParameterAsync += context.AsyncEvaluateParameterHandler;
-                    expression.UpdateParameterAsync += context.AsyncUpdateParameterHandler;
-                    expression.MatchStringAsync += context.AsyncMatchStringHandler;
-
-                    result = await expression.EvaluateAsync(cancellationToken).ConfigureAwait(false);
+                    // The handlers of this expression are attached only for this evaluation; attaching them for good would call
+                    // each handler once more on every evaluation of this expression
+                    using (EvaluationHelper.EnterNestedExpression(expression))
+                    {
+                        expression.EvaluateFunctionAsync += context.AsyncEvaluateFunctionHandler;
+                        expression.EvaluateParameterAsync += context.AsyncEvaluateParameterHandler;
+                        expression.UpdateParameterAsync += context.AsyncUpdateParameterHandler;
+                        expression.MatchStringAsync += context.AsyncMatchStringHandler;
+                        try
+                        {
+                            result = await expression.EvaluateAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            expression.EvaluateFunctionAsync -= context.AsyncEvaluateFunctionHandler;
+                            expression.EvaluateParameterAsync -= context.AsyncEvaluateParameterHandler;
+                            expression.UpdateParameterAsync -= context.AsyncUpdateParameterHandler;
+                            expression.MatchStringAsync -= context.AsyncMatchStringHandler;
+                        }
+                    }
                     if (result is null)
                     {
                         return result;
@@ -1206,9 +1228,12 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         }
 
         if (result != null)
-        {
             return result;
-        }
+
+        // With AllowNullParameter or UseTernaryLogic, "null" is the null value unless a parameter of that name is defined
+        if ((context.Options.HasFlag(ExpressionOptions.AllowNullParameter) || context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
+            && identifierName.Equals("null", context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            return null;
 
         throw new NCalcParameterNotDefinedException(identifierName, identifier.Location);
     }
@@ -1270,16 +1295,16 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     protected ValueTask OnEvaluateFunctionAsync(string name, AsyncFunctionArgs args, CancellationToken cancellationToken = default)
     {
-        return context.AsyncEvaluateFunctionHandler?.Invoke(name, args, cancellationToken) ?? default;
+        return EvaluationHelper.InvokeAllAsync(context.AsyncEvaluateFunctionHandler, name, args, cancellationToken);
     }
 
     protected ValueTask OnEvaluateParameterAsync(string name, ParameterArgs args, CancellationToken cancellationToken = default)
     {
-        return context.AsyncEvaluateParameterHandler?.Invoke(name, args, cancellationToken) ?? default;
+        return EvaluationHelper.InvokeAllAsync(context.AsyncEvaluateParameterHandler, name, args, cancellationToken);
     }
     protected ValueTask OnUpdateParameterAsync(string name, UpdateParameterArgs args, CancellationToken cancellationToken = default)
     {
-        return context.AsyncUpdateParameterHandler?.Invoke(name, args, cancellationToken) ?? default;
+        return EvaluationHelper.InvokeAllAsync(context.AsyncUpdateParameterHandler, name, args, cancellationToken);
     }
 
     protected ValueTask<object?> EvaluateAsync(LogicalExpression expression, CancellationToken cancellationToken = default)
@@ -1350,7 +1375,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return;
                 }
                 if (context.AsyncEvaluateParameterHandler != null)
-                    await context.AsyncEvaluateParameterHandler.Invoke(name, args, cancellationToken).ConfigureAwait(false);
+                    await EvaluationHelper.InvokeAllAsync(context.AsyncEvaluateParameterHandler, name, args, cancellationToken).ConfigureAwait(false);
             };
 
         expression.UpdateParameterAsync += async (name, args, cancellationToken) =>
@@ -1366,7 +1391,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 }
 
                 if (context.AsyncUpdateParameterHandler != null)
-                    await context.AsyncUpdateParameterHandler(name, args, cancellationToken).ConfigureAwait(false);
+                    await EvaluationHelper.InvokeAllAsync(context.AsyncUpdateParameterHandler, name, args, cancellationToken).ConfigureAwait(false);
             };
 
         expression.EvaluateFunctionAsync += (name, args, cancellationToken) =>
@@ -1374,7 +1399,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 cancellationToken.ThrowIfCancellationRequested();
 
                 if (context.AsyncEvaluateFunctionHandler != null)
-                    return context.AsyncEvaluateFunctionHandler.Invoke(name, args, cancellationToken);
+                    return EvaluationHelper.InvokeAllAsync(context.AsyncEvaluateFunctionHandler, name, args, cancellationToken);
                 else
 #if NET8_0_OR_GREATER
                     return ValueTask.CompletedTask;
@@ -1388,7 +1413,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 cancellationToken.ThrowIfCancellationRequested();
 
                 if (context.AsyncMatchStringHandler != null)
-                    return context.AsyncMatchStringHandler.Invoke(args, cancellationToken);
+                    return EvaluationHelper.InvokeAllAsync(context.AsyncMatchStringHandler, args, cancellationToken);
                 else
 #if NET8_0_OR_GREATER
                     return ValueTask.CompletedTask;

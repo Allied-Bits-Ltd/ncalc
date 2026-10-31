@@ -122,21 +122,21 @@
         string _currencySymbol2 = string.Empty;
         string _currencySymbol3 = string.Empty;
 
-        readonly List<string> _periodYearIndicators = ["years", "year", "yrs", "yr", "y"];
-        readonly List<string> _periodMonthIndicators = ["months", "month", "mon", "mos", "mo"];
-        readonly List<string> _periodWeekIndicators = ["weeks", "week", "wks", "wk", "w"];
-        readonly List<string> _periodDayIndicators = ["days", "day", "d"];
-        readonly List<string> _periodHourIndicators = ["hours", "hour", "hrs", "hr", "h"];
-        readonly List<string> _periodMinuteIndicators = ["minutes", "minute", "mins", "min", "m"];
-        readonly List<string> _periodSecondIndicators = ["seconds", "second", "secs", "sec", "s"];
-        readonly List<string> _periodMSecIndicators = ["msec", "ms"];
+        List<string> _periodYearIndicators = ["years", "year", "yrs", "yr", "y"];
+        List<string> _periodMonthIndicators = ["months", "month", "mon", "mos", "mo"];
+        List<string> _periodWeekIndicators = ["weeks", "week", "wks", "wk", "w"];
+        List<string> _periodDayIndicators = ["days", "day", "d"];
+        List<string> _periodHourIndicators = ["hours", "hour", "hrs", "hr", "h"];
+        List<string> _periodMinuteIndicators = ["minutes", "minute", "mins", "min", "m"];
+        List<string> _periodSecondIndicators = ["seconds", "second", "secs", "sec", "s"];
+        List<string> _periodMSecIndicators = ["msec", "ms"];
 
-        readonly List<string> _periodNowIndicators = ["now"];
-        readonly List<string> _periodTodayIndicators = ["today"];
-        readonly List<string> _periodYesterdayIndicators = ["yesterday"];
-        readonly List<string> _periodTomorrowIndicators = ["tomorrow"];
-        readonly List<string> _periodPastIndicators = ["ago", "before", "earlier"];
-        readonly List<string> _periodFutureIndicators = ["after", "in", "later"];
+        List<string> _periodNowIndicators = ["now"];
+        List<string> _periodTodayIndicators = ["today"];
+        List<string> _periodYesterdayIndicators = ["yesterday"];
+        List<string> _periodTomorrowIndicators = ["tomorrow"];
+        List<string> _periodPastIndicators = ["ago", "before", "earlier"];
+        List<string> _periodFutureIndicators = ["after", "in", "later"];
 
         //
         // Period*Indicators contain the lists of literals recognized as a period indicator for a certain type of period
@@ -286,6 +286,29 @@
         /// Returns a string that describes the current settings, used to tell apart the cached parse results of the same expression text.
         /// The options are mutable, so the string is built on every call.
         /// </summary>
+        /// <summary>
+        /// Creates an independent copy of the options, including the lists of period indicators.
+        /// </summary>
+        public AdvancedExpressionOptions Clone()
+        {
+            var clone = (AdvancedExpressionOptions)MemberwiseClone();
+            clone._periodYearIndicators = [.. _periodYearIndicators];
+            clone._periodMonthIndicators = [.. _periodMonthIndicators];
+            clone._periodWeekIndicators = [.. _periodWeekIndicators];
+            clone._periodDayIndicators = [.. _periodDayIndicators];
+            clone._periodHourIndicators = [.. _periodHourIndicators];
+            clone._periodMinuteIndicators = [.. _periodMinuteIndicators];
+            clone._periodSecondIndicators = [.. _periodSecondIndicators];
+            clone._periodMSecIndicators = [.. _periodMSecIndicators];
+            clone._periodNowIndicators = [.. _periodNowIndicators];
+            clone._periodTodayIndicators = [.. _periodTodayIndicators];
+            clone._periodYesterdayIndicators = [.. _periodYesterdayIndicators];
+            clone._periodTomorrowIndicators = [.. _periodTomorrowIndicators];
+            clone._periodPastIndicators = [.. _periodPastIndicators];
+            clone._periodFutureIndicators = [.. _periodFutureIndicators];
+            return clone;
+        }
+
         internal string GetCacheKey()
         {
             const string separator = "\u001F";
@@ -393,16 +416,18 @@
                 _dateSeparator = CultureInfo.CurrentCulture.DateTimeFormat.DateSeparator;
             if (string.IsNullOrEmpty(_dateSeparator))
                 _dateSeparator = "/";
-            _decimalSeparator = CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator;
+            // The separators come from the configured culture, not from the culture of the current thread
+            var numberFormat = ((_cultureInfo is not null) ? _cultureInfo : CultureInfo.CurrentCulture).NumberFormat;
+            _decimalSeparator = numberFormat.NumberDecimalSeparator;
             if (string.IsNullOrEmpty(_decimalSeparator))
                 _decimalSeparator = Parlot.Fluent.NumberLiterals.DefaultDecimalSeparator.ToString();
 
-            _numberGroupSeparator = CultureInfo.CurrentCulture.NumberFormat.NumberGroupSeparator;
+            _numberGroupSeparator = numberFormat.NumberGroupSeparator;
             if (string.IsNullOrEmpty(_numberGroupSeparator))
                 _numberGroupSeparator = Parlot.Fluent.NumberLiterals.DefaultGroupSeparator.ToString();
 
-            _currencyDecimalSeparator = CultureInfo.CurrentCulture.NumberFormat.CurrencyDecimalSeparator;
-            _currencyNumberGroupSeparator = CultureInfo.CurrentCulture.NumberFormat.CurrencyGroupSeparator;
+            _currencyDecimalSeparator = numberFormat.CurrencyDecimalSeparator;
+            _currencyNumberGroupSeparator = numberFormat.CurrencyGroupSeparator;
         }
 
         public string GetDateSeparator()
@@ -529,7 +554,7 @@
                 else
                     culture = CultureInfo.CurrentCulture;
 
-                currencySymbol = CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol;
+                currencySymbol = culture.NumberFormat.CurrencySymbol;
 
                 try
                 {
@@ -607,7 +632,7 @@
             else
             if (formatType == typeof(NumberFormatInfo))
             {
-                NumberFormatInfo? formatInfo = CultureInfo.CurrentCulture.NumberFormat.Clone() as NumberFormatInfo ?? new NumberFormatInfo();
+                NumberFormatInfo? formatInfo = ((_cultureInfo is not null) ? _cultureInfo : CultureInfo.CurrentCulture).NumberFormat.Clone() as NumberFormatInfo ?? new NumberFormatInfo();
                 formatInfo.NumberDecimalSeparator = GetDecimalSeparator();
                 formatInfo.NumberGroupSeparator = GetNumberGroupSeparator();
                 formatInfo.CurrencyDecimalSeparator = GetCurrencyDecimalSeparator();

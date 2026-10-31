@@ -28,6 +28,11 @@ public static class MathFunctionHelper
         return methodInfo;
     }
 
+    /// <summary>
+    /// The base-2 logarithm, which Math.Log2 provides only on newer frameworks.
+    /// </summary>
+    public static double Log2(double value) => Math.Log(value, 2);
+
     public static readonly FrozenDictionary<string, List<MathMethodInfo>> Functions =
         new Dictionary<string, List<MathMethodInfo>>
         {
@@ -44,6 +49,8 @@ public static class MathFunctionHelper
             { "IEEEREMAINDER", GetMathMethodInfo(nameof(Math.IEEERemainder), 2) },
             { "LOG", GetMathMethodInfo(nameof(Math.Log), 2) },
             { "LOG10", GetMathMethodInfo(nameof(Math.Log10), 1) },
+            { "LN", GetMathMethodInfo(nameof(Math.Log), 1) },
+            { "LOG2", [new MathMethodInfo { MethodInfo = typeof(MathFunctionHelper).GetMethod(nameof(Log2), [typeof(double)])!, ArgumentCount = 1, DecimalSupport = false }] },
             { "SIGN", GetMathMethodInfo(nameof(Math.Sign), 1, true) },
             { "SIN", GetMathMethodInfo(nameof(Math.Sin), 1) },
             { "SINH", GetMathMethodInfo(nameof(Math.Sinh), 1) },
@@ -51,6 +58,7 @@ public static class MathFunctionHelper
             { "TAN", GetMathMethodInfo(nameof(Math.Tan), 1) },
             { "TANH", GetMathMethodInfo(nameof(Math.Tanh), 1) },
             { "TRUNCATE", GetMathMethodInfo(nameof(Math.Truncate), 1, true) },
+            { "TRUNC", GetMathMethodInfo(nameof(Math.Truncate), 1, true) },
 
             // Exceptional handling
             {

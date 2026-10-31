@@ -1,4 +1,4 @@
-namespace NCalc.Tests;
+﻿namespace NCalc.Tests;
 
 using NCalc.Tests.TestData;
 using Xunit;
@@ -316,5 +316,48 @@ public class ParametersAndFunctions
         var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public async Task IterateParametersShouldNotChangeTheParameters()
+    {
+        var sync = new Expression("x * 1", ExpressionOptions.IterateParameters | ExpressionOptions.NoCache);
+        sync.Parameters["x"] = new[] { 11, 22, 33 };
+        sync.Parameters["s"] = "abc";
+        var asyncExpression = new AsyncExpression("x * 1", ExpressionOptions.IterateParameters | ExpressionOptions.NoCache);
+        asyncExpression.Parameters["x"] = new[] { 11, 22, 33 };
+
+        for (int i = 0; i < 2; i++)
+        {
+            // The second evaluation used to see the last element instead of the list; a string is one value, not a list of characters
+            Assert.Equal(new object?[] { 11, 22, 33 }, ((IEnumerable<object?>)sync.Evaluate(TestContext.Current.CancellationToken)!).ToArray());
+            Assert.Equal(new object?[] { 11, 22, 33 }, ((IEnumerable<object?>)(await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken))!).ToArray());
+        }
+
+        var withReturn = new Expression("return x * 2", ExpressionOptions.IterateParameters | ExpressionOptions.NoCache);
+        withReturn.Parameters["x"] = new[] { 1, 2 };
+        Assert.Equal(new object?[] { 2, 4 }, ((IEnumerable<object?>)withReturn.Evaluate(TestContext.Current.CancellationToken)!).ToArray());
+    }
+
+    [Fact]
+    public void EvaluateShouldNotWriteIntoTheParameters()
+    {
+        var parameters = new System.Collections.ObjectModel.ReadOnlyDictionary<string, object?>(new Dictionary<string, object?> { ["x"] = 1 });
+        var expression = new Expression("x + 1 == 2 and null == null", ExpressionOptions.AllowNullParameter | ExpressionOptions.NoCache) { Parameters = parameters };
+        Assert.Equal(true, expression.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Single(parameters);
+
+        var oldStatic = Expression.UseNonRecursiveEvaluator;
+        try
+        {
+            Expression.UseNonRecursiveEvaluator = true;
+            var options = new Expression("1 + 1", ExpressionOptions.NoCache);
+            Assert.Equal(2, options.Evaluate(TestContext.Current.CancellationToken));
+            Assert.False(options.Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator));
+        }
+        finally
+        {
+            Expression.UseNonRecursiveEvaluator = oldStatic;
+        }
     }
 }

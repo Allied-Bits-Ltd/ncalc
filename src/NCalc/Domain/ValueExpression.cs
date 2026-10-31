@@ -20,7 +20,10 @@ internal enum StringKind
 
 public sealed class ValueExpression : LogicalExpression
 {
+    // Included in JSON, so that a deserialized string literal is written back with its quotes and escapes
+    [JsonInclude]
     internal StringKind StringKind { get; private set; }
+    [JsonInclude]
     internal string? OriginalString { get; private set; }
 
     private object? _value;

@@ -41,6 +41,26 @@
 * The non-recursive evaluators no longer hang on a list or statement sequence that contains the same node twice, and evaluate long expressions in linear time (100,000 terms took about 100 seconds).
 * The evaluators give the same results: the non-recursive ones no longer evaluate the right operand when the left one is null, `not` with `UseTernaryLogic` returns its result, `TreatNullAsZero` applies to the result of a statement sequence, and list slices evaluate their expression elements; the asynchronous ones treat a null value as unequal to another value and apply `TreatNullAsZero` to unary operators, percents and statement sequences.
 * `ComplexNumber.ToString()` and `Vector.ToString()` format their parts with the requested culture (the invariant culture by default) instead of the culture that was current at the first use of `BigDecimal`.
+* An exponent may have a prefix operator, a percent or an imaginary unit: `2 ** -x`, `2 ** 10%` and `2 ** 3i` are parsed (`2 ** -3 ** 2` is `2 ** -(3 ** 2)`, as in Python).
+* With `CurrencySymbolType.FromCulture` and the separators of the advanced options, the configured culture is used instead of the culture of the current thread.
+* Parsers are built once per combination of settings and reused, so parsing an expression that is not cached takes microseconds instead of about a millisecond.
+* The asynchronous evaluator returns null for `xor` with a null operand, as the synchronous one does.
+* An `Expression` used as the value of a parameter gets the handlers of the parent expression only for its evaluation (they were added again on every evaluation), and an expression that refers to itself through its parameters throws `NCalcEvaluationException` instead of crashing the process.
+* All handlers of the asynchronous events are awaited; only the last one was, so the results of the others were lost.
+* Compiled lambdas (`ToLambda`) give the same results as `Evaluate` in more cases: `not` converts its operand to a boolean, the branches of `?:` and `if` may have different numeric types, `if` takes 2 or 3 arguments, the product of two 32-bit integers does not wrap around, `'a' in 'abc'` is a substring test, `Ln`, `Log2` and `Trunc` are available, `Round` works with `DecimalAsDefault`, options combined with other options are recognized, and `null` is the null value with `AllowNullParameter`.
+* `Log2()` takes one argument (it required two); `Trunc`, `Log2`, `MakeStr`/`MakeString` and `MakeList` with a value are available in `AsyncExpression` too.
+* `MakeStr()` accepts only a string, a character or a character code, and `MakeList()`/`MakeStr()` throw `NCalcEvaluationException` for sizes beyond `BuiltInFunctionHelper.MaxMakeResultLength` (10,000,000 by default) instead of `OverflowException` or an attempt to allocate gigabytes.
+* `Round()` of a complex number or a vector keeps the number of decimal places and the rounding mode.
+* `Log(x, b)` with a big-number argument no longer truncates a fractional base to an integer.
+* `decimal` and `BigDecimal` arguments of `Abs`, `Ceiling`, `Floor`, `Round`, `Sign`, `Truncate` and `Pow` keep their precision instead of going through `double`, also when `DecimalAsDefault` and `UseBigNumbers` are not set.
+* `Pow()` with a `decimal` base returns a `double` instead of throwing `OverflowException` when the result does not fit in `decimal` (or is NaN); a complex base can be raised to any power, and a real base to a complex power.
+* Unary minus works for vectors, complex numbers and percents (`-[1;2]`, `-10%`), and `Abs()` for percents.
+* `LogicalExpression.ToString()` writes the text in the dialect of the options the expression was parsed with (`==`, `bit_and`, `mod`) and with the function name of an `fn` declaration; numbers are written with the decimal separator of the parser and in a form that is read back exactly (`1e-30` was written as `0`), and dates in ISO form, whatever the culture of the current thread.
+* JSON serialization of the expression tree keeps bracketed identifiers, quoted strings and GUID values.
+* Setting `CultureInfo` or `AdvancedOptions` of an expression no longer changes the culture of an `AdvancedExpressionOptions` instance shared with other expressions; `AdvancedExpressionOptions.Clone()` creates a copy.
+* `IterateParameters` no longer replaces the list parameters with their last elements (a second evaluation returned a single value), does not iterate the characters of a string, handles `return`, and observes the cancellation token.
+* `Evaluate` no longer writes a `null` entry into the parameters (a read-only dictionary threw) or the static `UseNonRecursiveEvaluator` setting into `Options`.
+* Percent operations without dynamic code (as in NCalc.AOT) return the same types as with it.
 
 # 9.0.6.5  (Allied Bits)
 

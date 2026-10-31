@@ -430,4 +430,29 @@ public class ParserTests
         Assert.Equal(guid, new Expression("deadbeef-cafe-babe-face-0123456789ab", ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
         Assert.Equal(guid, new Expression("deadbeefcafebabeface0123456789ab", ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
     }
+
+    [Theory]
+    [InlineData("2 ** -x", 0.5)]
+    [InlineData("2 ** -3 ** 2", 0.001953125)]
+    [InlineData("2 ** - - 1", 2.0)]
+    [InlineData("2 ** 3 ** 2", 512.0)]
+    public void ExponentMayHaveAPrefixOperator(string expression, double expected)
+    {
+        var e = new Expression(expression, ExpressionOptions.NoCache);
+        e.Parameters["x"] = 1;
+        Assert.Equal(expected, Convert.ToDouble(e.Evaluate(TestContext.Current.CancellationToken), CultureInfo.InvariantCulture), 12);
+    }
+
+    [Fact]
+    public void ExponentMayBeAPercentOrAnImaginaryNumber()
+    {
+        var percent = new Expression("2 ** 10%", ExpressionOptions.NoCache) { AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.CalculatePercent) };
+        Assert.Equal(Math.Pow(2, 0.1), Convert.ToDouble(percent.Evaluate(TestContext.Current.CancellationToken), CultureInfo.InvariantCulture), 12);
+
+        var complex = new Expression("2 ** 3i", ExpressionOptions.NoCache) { AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.ParseComplexNumbers) };
+        var result = ((ComplexNumber)complex.Evaluate(TestContext.Current.CancellationToken)!).ToComplex();
+        var expected = System.Numerics.Complex.Pow(2, new System.Numerics.Complex(0, 3));
+        Assert.Equal(expected.Real, result.Real, 12);
+        Assert.Equal(expected.Imaginary, result.Imaginary, 12);
+    }
 }

@@ -1,4 +1,4 @@
-using NCalc.Exceptions;
+﻿using NCalc.Exceptions;
 
 namespace NCalc.Tests;
 
@@ -121,5 +121,55 @@ public class CustomCultureTests : TestBase
         {
             Thread.CurrentThread.CurrentCulture = originalCulture;
         }
+    }
+
+    [Fact]
+    public void CurrencyFromCultureShouldUseTheConfiguredCulture()
+    {
+        // The symbol was read from the culture of the current thread
+        var oldCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            foreach (var threadCulture in new[] { "sk-SK", "en-US" })
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(threadCulture);
+                var options = new AdvancedExpressionOptions(CultureInfo.GetCultureInfo("en-US"), AdvExpressionOptions.AcceptCurrencySymbol)
+                {
+                    CurrencySymbolsType = AdvancedExpressionOptions.CurrencySymbolType.FromCulture
+                };
+                var expression = new Expression("$5.50", ExpressionOptions.NoCache, CultureInfo.GetCultureInfo("en-US")) { AdvancedOptions = options };
+                Assert.Equal(5.5m, Convert.ToDecimal(expression.Evaluate(TestContext.Current.CancellationToken), CultureInfo.InvariantCulture));
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = oldCulture;
+        }
+    }
+
+    [Fact]
+    public void CachedParsersShouldKeepTheirSettingsApart()
+    {
+        // Parsers are reused per combination of settings; different decimal separators must not get each other's parser
+        var comma = new AdvancedExpressionOptions(CultureInfo.InvariantCulture) { DecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom, DecimalSeparator = "," };
+        var dot = new AdvancedExpressionOptions(CultureInfo.InvariantCulture);
+        for (int i = 0; i < 2; i++)
+        {
+            Assert.Equal(1.5, Convert.ToDouble(new Expression("1,5 + 0", ExpressionOptions.NoCache) { AdvancedOptions = comma }.Evaluate(TestContext.Current.CancellationToken), CultureInfo.InvariantCulture));
+            Assert.Equal(1.5, Convert.ToDouble(new Expression("1.5 + 0", ExpressionOptions.NoCache) { AdvancedOptions = dot }.Evaluate(TestContext.Current.CancellationToken), CultureInfo.InvariantCulture));
+        }
+    }
+
+    [Fact]
+    public void SettingTheCultureShouldNotChangeSharedAdvancedOptions()
+    {
+        var shared = new AdvancedExpressionOptions(CultureInfo.GetCultureInfo("en-US"));
+        var first = new Expression("1", ExpressionOptions.NoCache, CultureInfo.GetCultureInfo("en-US")) { AdvancedOptions = shared };
+        var second = new Expression("1", ExpressionOptions.NoCache) { AdvancedOptions = shared };
+        second.CultureInfo = CultureInfo.GetCultureInfo("de-DE");
+
+        Assert.Equal("en-US", shared.CultureInfo!.Name);
+        Assert.Equal("en-US", first.AdvancedOptions!.CultureInfo!.Name);
+        Assert.Equal("de-DE", second.AdvancedOptions!.CultureInfo!.Name);
     }
 }

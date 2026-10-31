@@ -1,4 +1,4 @@
-using NCalc.Exceptions;
+﻿using NCalc.Exceptions;
 
 namespace NCalc.Helpers;
 
@@ -21,7 +21,8 @@ public static class ParametersHelper
 
         foreach (var parameter in parameters)
         {
-            if (parameter.Value is not IEnumerable enumerable)
+            // A string is one value, not a list of characters
+            if (parameter.Value is string || parameter.Value is not IEnumerable enumerable)
                 continue;
 
             var list = enumerable as List<object> ?? enumerable.Cast<object>().ToList();

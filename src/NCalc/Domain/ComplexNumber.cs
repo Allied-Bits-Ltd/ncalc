@@ -341,11 +341,14 @@ namespace NCalc.Domain
                 MathHelper.ConvertToBigDecimal(MathHelper.Ceiling(value.Imaginary, MathHelperOptions.Empty)));
         }
 
-        public static ComplexNumber Round(ComplexNumber value)
+        public static ComplexNumber Round(ComplexNumber value) => Round(value, 0, MidpointRounding.AwayFromZero);
+
+        /// <summary>Rounds the real and the imaginary parts to the given number of decimal places.</summary>
+        public static ComplexNumber Round(ComplexNumber value, int digits, MidpointRounding rounding)
         {
             return new ComplexNumber(
-                MathHelper.ConvertToBigDecimal(MathHelper.Round(value.Real, 0, MidpointRounding.AwayFromZero, MathHelperOptions.Empty)),
-                MathHelper.ConvertToBigDecimal(MathHelper.Round(value.Imaginary, 0, MidpointRounding.AwayFromZero, MathHelperOptions.Empty)));
+                MathHelper.ConvertToBigDecimal(MathHelper.Round(value.Real, digits, rounding, MathHelperOptions.Empty)),
+                MathHelper.ConvertToBigDecimal(MathHelper.Round(value.Imaginary, digits, rounding, MathHelperOptions.Empty)));
         }
 
         public static ComplexNumber Truncate(ComplexNumber value)

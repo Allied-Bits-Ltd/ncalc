@@ -1,4 +1,4 @@
-using NCalc.Handlers;
+﻿using NCalc.Handlers;
 
 namespace NCalc.Tests;
 
@@ -273,5 +273,45 @@ public class EventHandlersTests
         e.Parameters["value"] = 13;
         Assert.Equal(true, e.Evaluate(TestContext.Current.CancellationToken));
         Assert.Single(times);
+    }
+
+    [Fact]
+    public void ExpressionParameterShouldNotAccumulateHandlers()
+    {
+        int calls = 0;
+        var parent = new Expression("f() + x", ExpressionOptions.NoCache);
+        parent.Parameters["x"] = new Expression("f()", ExpressionOptions.NoCache);
+        parent.EvaluateFunction += (name, args) => { calls++; args.Result = 1; };
+
+        for (int i = 1; i <= 5; i++)
+        {
+            calls = 0;
+            Assert.Equal(2, parent.Evaluate(TestContext.Current.CancellationToken));
+            Assert.Equal(2, calls);
+        }
+    }
+
+    [Fact]
+    public void ExpressionParameterReferringToItselfShouldThrow()
+    {
+        var child = new Expression("x + 1", ExpressionOptions.NoCache);
+        var parent = new Expression("x", ExpressionOptions.NoCache);
+        parent.Parameters["x"] = child;
+        child.Parameters["x"] = child;
+        Assert.Throws<NCalc.Exceptions.NCalcEvaluationException>(() => parent.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AllAsyncHandlersShouldBeAwaited()
+    {
+        var expression = new AsyncExpression("f()", ExpressionOptions.NoCache);
+        expression.EvaluateFunctionAsync += async (name, args, ct) =>
+        {
+            await Task.Delay(50, ct);
+            args.Result = 1;
+        };
+        expression.EvaluateFunctionAsync += (name, args, ct) => ValueTask.CompletedTask;
+
+        Assert.Equal(1, await expression.EvaluateAsync(TestContext.Current.CancellationToken));
     }
 }

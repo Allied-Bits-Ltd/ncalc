@@ -204,6 +204,17 @@ public static class MathHelper
     };
 #endif
 
+    // The result type of a percent operation without dynamic code is the same as with it: decimal when DecimalAsDefault is set
+    // or an operand is a decimal, double otherwise (big numbers stay as they are)
+    private static object ToPercentResultType(object result, object a, object b, MathHelperOptions options)
+    {
+        if (IsBigNumber(result) || result is ComplexNumber || result is NCalcVector)
+            return result;
+        if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
+            return ConvertToDecimal(result, options);
+        return ConvertToDouble(result, options);
+    }
+
     private static object AddPercentFunc(object a, object b, MathHelperOptions options)
     {
 #if !AOT_COMPILATION
@@ -227,7 +238,7 @@ public static class MathHelper
         if (result is null)
             throw new InvalidOperationException($"No division was possible for an object of type '{im2.GetType()}' and a number");
 
-        return result;
+        return ToPercentResultType(result, a, b, options);
     }
 
 #if !AOT_COMPILATION
@@ -415,7 +426,7 @@ public static class MathHelper
         if (result is null)
             throw new InvalidOperationException($"No division was possible for an '{im2.GetType()}' object and a number");
 
-        return result;
+        return ToPercentResultType(result, a, b, options);
     }
 
 #if !AOT_COMPILATION
@@ -600,7 +611,7 @@ public static class MathHelper
         if (result is null)
             throw new InvalidOperationException($"No division was possible for an '{im2.GetType()}' object and a number");
 
-        return result;
+        return ToPercentResultType(result, a, b, options);
     }
 
 #if !AOT_COMPILATION
@@ -614,7 +625,7 @@ public static class MathHelper
 
     private static readonly Func<dynamic, dynamic, object> MultiplyPercentDoubleFuncChecked = (a, b) =>
     {
-        var res = checked(a * b / 100m);
+        var res = checked(a * b / 100.0);
         CheckOverflow(res);
 
         return res;
@@ -783,7 +794,7 @@ public static class MathHelper
         if (result is null)
             throw new InvalidOperationException($"No division was possible for objects of types '{im2.GetType()}' and '{b.GetType()}'");
 
-        return result;
+        return ToPercentResultType(result, a, b, options);
     }
 
 #if !AOT_COMPILATION
@@ -2243,8 +2254,16 @@ public static class MathHelper
 
             BigDecimal bd => (object)(-bd),
 
+            // Vectors and complex numbers are negated by their operators; a percent keeps being a percent
+            NCalcVector vector => (object)(-vector),
+            ComplexNumber complex => (object)(-complex),
+            Percent percent when percent.Value is not null => (object)new Percent(Negate(percent.Value, reduceType, options)!),
+
             _ => throw new NCalcEvaluationException($"Unsupported type ${value.GetType().Name} in the negate operation"),
         };
+
+        if (result is NCalcVector or ComplexNumber or Percent)
+            return result;
 
         if (reduceType)
             return ReduceNumericType(result, null, options);
@@ -2728,23 +2747,14 @@ public static class MathHelper
 
     public static object Abs(object? a, MathHelperOptions options)
     {
-        if (options.UseBigNumbers)
-        {
-            if (a is BigInteger biA)
-            {
-                if (biA.Sign < 0)
-                    return -biA;
-                else
-                    return biA;
-            }
-            if (a is BigDecimal bdA)
-            {
-                if (bdA.Sign < 0)
-                    return -bdA;
-                else
-                    return bdA;
-            }
-        }
+        if (a is Percent percent && percent.Value is not null)
+            return new Percent(Abs(percent.Value, options));
+
+        // A big number keeps its type even when UseBigNumbers is not set
+        if (a is BigInteger biA)
+            return BigInteger.Abs(biA);
+        if (a is BigDecimal bdA)
+            return bdA.Sign < 0 ? -bdA : bdA;
 
         if (a is ComplexNumber cnA)
             return cnA.Abs;
@@ -2752,7 +2762,7 @@ public static class MathHelper
         if (a is NCalcVector vA)
             return NCalcVector.Abs(vA);
 
-        if (options.DecimalAsDefault)
+        if (options.DecimalAsDefault || a is decimal)
             return Math.Abs(ConvertToDecimal(a, "Abs", options.CultureInfo, null));
 
         return Math.Abs(ConvertToDouble(a, "Abs", options.CultureInfo, null));
@@ -2907,17 +2917,11 @@ public static class MathHelper
 
     public static object Ceiling(object? a, MathHelperOptions options)
     {
-        if (options.UseBigNumbers)
-        {
-            if (a is BigInteger biA)
-            {
-                return biA;
-            }
-            if (a is BigDecimal bdA)
-            {
-                return BigDecimal.Ceiling(bdA);
-            }
-        }
+        // A big number is rounded up exactly even when UseBigNumbers is not set
+        if (a is BigInteger biA)
+            return biA;
+        if (a is BigDecimal bdA)
+            return CeilingBigDecimal(bdA);
 
         if (a is ComplexNumber cnA)
             return ComplexNumber.Ceiling(cnA);
@@ -2925,7 +2929,7 @@ public static class MathHelper
         if (a is NCalcVector vA)
             return NCalcVector.Ceiling(vA);
 
-        if (options.DecimalAsDefault)
+        if (options.DecimalAsDefault || a is decimal)
             return Math.Ceiling(ConvertToDecimal(a, "Ceiling", options.CultureInfo, null));
 
         return Math.Ceiling(ConvertToDouble(a, "Ceiling", options.CultureInfo, null));
@@ -3118,11 +3122,11 @@ public static class MathHelper
         // A big number is floored exactly even when UseBigNumbers is not set
         if (a is BigInteger biA)
         {
-            return BigDecimal.Floor(new BigDecimal(biA));
+            return biA;
         }
         if (a is BigDecimal bdA)
         {
-            return BigDecimal.Floor(bdA);
+            return FloorBigDecimal(bdA);
         }
 
         if (a is ComplexNumber cnA)
@@ -3131,7 +3135,7 @@ public static class MathHelper
         if (a is NCalcVector vA)
             return NCalcVector.Floor(vA);
 
-        if (options.DecimalAsDefault)
+        if (options.DecimalAsDefault || a is decimal)
             return Math.Floor(ConvertToDecimal(a, "Floor", options.CultureInfo, null));
 
         return Math.Floor(ConvertToDouble(a, "Floor", options.CultureInfo, null));
@@ -3168,7 +3172,9 @@ public static class MathHelper
 
     public static object Log(object? a, object? b, MathHelperOptions options)
     {
-        if (options.UseBigNumbers)
+        // BigDecimal.Log takes an integer base; a fractional base (Log(x, 2.5)) is computed in double instead of being truncated to 2
+        bool integralBase = b is not null && (IsBoxedIntegerNumber(b) || b is BigInteger || (b is BigDecimal bdB && IsWholeNumber(bdB)) || IsBoxedFloatingNumberInteger(b) == true);
+        if (options.UseBigNumbers && integralBase)
         {
             if (a is BigInteger biA)
             {
@@ -3235,14 +3241,22 @@ public static class MathHelper
         if (b is null)
             throw new ArgumentNullException(nameof(b));
 
+        // A percent exponent is its fraction: 2 ** 10% is 2 ** 0.1
+        if (b is Percent percentB && percentB.Value is not null)
+            b = Divide(percentB.Value, 100m, true, options) ?? b;
+
+        // A complex base or exponent is raised through ComplexNumber.Pow, which also handles fractional exponents
         if (a is ComplexNumber cnA)
         {
             if (b is ComplexNumber cnB)
                 return ComplexNumber.Pow(cnA, cnB, options);
             else
-            if (MathHelper.IsBoxedIntegerNumberOrBigNumber(b))
+            if (MathHelper.IsBoxedNumberOrBigNumber(b))
                 return ComplexNumber.Pow(cnA, MathHelper.ConvertToBigDecimal(b), options);
         }
+        else
+        if (b is ComplexNumber complexExponent && MathHelper.IsBoxedNumberOrBigNumber(a))
+            return ComplexNumber.Pow(new ComplexNumber(MathHelper.ConvertToBigDecimal(a), BigDecimal.Zero, options), complexExponent, options);
 
         Type typeA = a.GetType();
 
@@ -3251,13 +3265,18 @@ public static class MathHelper
         // options request big-number arithmetic.  Non-integer exponents always fall back to
         // Math.Pow — exact fractional-exponent support via BigDecimal is not feasible with the
         // ExtendedNumerics library.
-        bool tryBigDecimalPath = a is BigDecimal || a is BigInteger
+        bool tryBigDecimalPath = a is BigDecimal || a is BigInteger || a is decimal
             || options.DecimalAsDefault || options.UseBigNumbers;
 
         if (tryBigDecimalPath && TryGetBigIntegerExponent(b, out BigInteger bigExp))
         {
             BigDecimal @base = ConvertToBigDecimal(a);
             BigDecimal bdResult = BigDecimalPow(@base, bigExp);
+
+            // A decimal base gives a decimal (rounded to the precision of decimal) when the result fits in it
+            if (a is decimal && !options.UseBigNumbers && bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
+                return BigDecimalToDecimal(bdResult);
+
             return ReduceNumericType(bdResult, reduceTypes ? null : typeA, options)
                 ?? throw new NCalcEvaluationException("Pow result could not be reduced to a smaller type");
         }
@@ -3265,7 +3284,8 @@ public static class MathHelper
         double result = Math.Pow(
             ConvertToDouble(a, "Pow", options.CultureInfo, null),
             ConvertToDouble(b, "Pow", options.CultureInfo, null));
-        if (typeA == typeof(decimal))
+        // A decimal base keeps its type only when the result fits in decimal; NaN, infinity and huge results stay double
+        if (typeA == typeof(decimal) && !double.IsNaN(result) && !double.IsInfinity(result) && Math.Abs(result) < (double)decimal.MaxValue)
             return (decimal)result;
 
         return result;
@@ -3317,6 +3337,14 @@ public static class MathHelper
     // with tens of thousands of digits; these helpers compute the same from the mantissa and the exponent.
     internal static bool IsWholeNumber(BigDecimal value)
         => value.Exponent >= 0 || (value.Mantissa % BigInteger.Pow(10, -value.Exponent)).IsZero;
+
+    // BigDecimal.Floor and BigDecimal.Ceiling go through the string form; Ceiling also compares the whole part with the mantissa,
+    // so that Ceiling(30) is 31 when 30 is stored as 3E1
+    internal static BigDecimal FloorBigDecimal(BigDecimal value)
+        => new(GetWholeValue(value) - (value.Sign < 0 && !IsWholeNumber(value) ? 1 : 0));
+
+    internal static BigDecimal CeilingBigDecimal(BigDecimal value)
+        => new(GetWholeValue(value) + (value.Sign > 0 && !IsWholeNumber(value) ? 1 : 0));
 
     internal static BigInteger GetWholeValue(BigDecimal value)
         => value.Exponent >= 0 ? value.Mantissa * BigInteger.Pow(10, value.Exponent) : BigInteger.Divide(value.Mantissa, BigInteger.Pow(10, -value.Exponent));
@@ -3501,14 +3529,15 @@ public static class MathHelper
             return BigDecimal.Round(bdA, ConvertToInt(b, "Round", options.CultureInfo, null), (rounding == MidpointRounding.AwayFromZero) ? RoundingStrategy.AwayFromZero : RoundingStrategy.ToEven);
 
         if (a is ComplexNumber cnA)
-            return ComplexNumber.Round(cnA);
+            return ComplexNumber.Round(cnA, ConvertToInt(b, "Round", options.CultureInfo, null), rounding);
 
         if (a is NCalcVector vA)
-            return NCalcVector.Round(vA);
+            return NCalcVector.Round(vA, ConvertToInt(b, "Round", options.CultureInfo, null), rounding);
 
         int precision = ConvertToInt(b, "Round", options.CultureInfo, null);
 
-        if (options.DecimalAsDefault)
+        // A decimal argument is rounded as a decimal, so that it does not lose digits through double
+        if (options.DecimalAsDefault || a is decimal)
         {
             decimal decimal_a = ConvertToDecimal(a, "Round", options.CultureInfo, null);
             // RoundToPrecision applies MidpointRounding only to exact midpoints; the legacy System.Math.Round
@@ -3664,7 +3693,7 @@ public static class MathHelper
         if (a is ComplexNumber)
             throw new InvalidOperationException($"The Sign function is not defined for complex numbers");
 
-        if (options.DecimalAsDefault)
+        if (options.DecimalAsDefault || a is decimal)
             return Math.Sign(ConvertToDecimal(a, "Sign", options.CultureInfo, null));
 
         return Math.Sign(ConvertToDouble(a, "Sign", options.CultureInfo, null));
@@ -3903,7 +3932,7 @@ public static class MathHelper
         if (a is ComplexNumber cnA)
             return ComplexNumber.Truncate(cnA);
 
-        if (options.DecimalAsDefault)
+        if (options.DecimalAsDefault || a is decimal)
             return Math.Truncate(ConvertToDecimal(a, "Truncate", options.CultureInfo, null));
 
         return Math.Truncate(ConvertToDouble(a, "Truncate", options.CultureInfo, null));

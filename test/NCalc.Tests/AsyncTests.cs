@@ -226,4 +226,28 @@ public class AsyncTests
         await new AsyncExpression("Exp(-Ln(2)/0.00016346 * 52185600)*13860").EvaluateAsync(TestContext.Current.CancellationToken);
         Assert.True(true);
     }
+
+    [Theory]
+    [InlineData("true xor n")]
+    [InlineData("n xor true")]
+    [InlineData("!n")]
+    public async Task AsyncNullHandlingShouldMatchSync(string expression)
+    {
+        var sync = new Expression(expression, ExpressionOptions.AllowNullParameter | ExpressionOptions.NoCache);
+        sync.Parameters["n"] = null;
+        var asyncExpression = new AsyncExpression(expression, ExpressionOptions.AllowNullParameter | ExpressionOptions.NoCache);
+        asyncExpression.Parameters["n"] = null;
+        Assert.Equal(sync.Evaluate(TestContext.Current.CancellationToken), await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("Log2(8)", 3.0)]
+    [InlineData("Trunc(1.7)", 1.0)]
+    [InlineData("MakeStr(2, 65) == 'AA'", 1.0)]
+    [InlineData("MakeStr(3, 'c') == 'ccc'", 1.0)]
+    public async Task AsyncBuiltInFunctionsShouldMatchSync(string expression, double expected)
+    {
+        foreach (var result in new[] { new Expression(expression, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken), await new AsyncExpression(expression, ExpressionOptions.NoCache).EvaluateAsync(TestContext.Current.CancellationToken) })
+            Assert.Equal(expected, result is bool b ? (b ? 1.0 : 0.0) : Convert.ToDouble(result, CultureInfo.InvariantCulture));
+    }
 }

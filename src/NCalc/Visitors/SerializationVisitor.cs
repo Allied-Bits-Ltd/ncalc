@@ -12,11 +12,44 @@ namespace NCalc.Visitors;
 /// </summary>
 public class SerializationVisitor(SerializationContext context) : ILogicalExpressionVisitor<string>
 {
-    private readonly NumberFormatInfo _numberFormatInfo = new()
+    // Numbers are written with the decimal separator that the parser accepts ("." unless the advanced options define another one),
+    // not with the separator or the minus sign of the culture of the current thread
+    private readonly NumberFormatInfo _numberFormatInfo = CreateNumberFormat(context.AdvancedOptions);
+
+    private static NumberFormatInfo CreateNumberFormat(AdvancedExpressionOptions? advancedOptions)
     {
-        NumberDecimalSeparator = (context.AdvancedOptions is null) ? context.CultureInfo.NumberFormat.NumberDecimalSeparator : context.AdvancedOptions.GetDecimalSeparator(),
-        NumberGroupSeparator = (context.AdvancedOptions is null) ? context.CultureInfo.NumberFormat.NumberGroupSeparator : context.AdvancedOptions.GetNumberGroupSeparator(),
-    };
+        var numberFormat = (NumberFormatInfo)CultureInfo.InvariantCulture.NumberFormat.Clone();
+        if (advancedOptions is not null)
+            numberFormat.NumberDecimalSeparator = advancedOptions.GetDecimalSeparator();
+        numberFormat.NumberGroupSeparator = string.Empty;
+        return numberFormat;
+    }
+
+    // A double is written so that it is read back exactly: in plain notation when that is exact (0.00001), otherwise in the round-trip format (1E-30)
+    private string FormatDouble(double value)
+    {
+        string roundTrip = value.ToString("R", _numberFormatInfo);
+        if (roundTrip.IndexOf('E') < 0)
+            return roundTrip;
+
+        string plain = value.ToString("0.############################", _numberFormatInfo);
+        return double.TryParse(plain, NumberStyles.Float, _numberFormatInfo, out double parsed) && parsed.Equals(value) ? plain : roundTrip;
+    }
+
+    // Set while an index or a range boundary is written: those are integers, even when they are stored as floating-point values
+    private bool _inIndex;
+
+    // A fractional value is written with a decimal separator or an exponent, so that it is not read back as an integer
+    private string AsFraction(string text)
+        => _inIndex || text.Contains(_numberFormatInfo.NumberDecimalSeparator) || text.IndexOfAny(['E', 'e']) >= 0 || text is "NaN" or "Infinity" or "-Infinity"
+            ? text
+            : text + _numberFormatInfo.NumberDecimalSeparator + "0";
+
+    // Dates and times are written in the ISO form, which does not depend on the culture: #2024-01-02# or #2024-01-02T10:20:30.5#
+    private static string FormatDateTime(DateTime value)
+        => value.TimeOfDay == TimeSpan.Zero
+            ? value.ToString("yyyy'-'MM'-'dd", CultureInfo.InvariantCulture)
+            : value.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss.FFFFFFF", CultureInfo.InvariantCulture).TrimEnd('.');
 
     public string Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
@@ -117,6 +150,23 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         => value.Type is ValueType.Integer or ValueType.Float && value.Accept(this).StartsWith("-", StringComparison.Ordinal);
 
     public string Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
+    {
+        if (expression.Type != BinaryExpressionType.RangeIndex || _inIndex)
+            return VisitBinary(expression, cancellationToken);
+
+        // The boundaries of a range are positions, written as integers
+        _inIndex = true;
+        try
+        {
+            return VisitBinary(expression, cancellationToken);
+        }
+        finally
+        {
+            _inIndex = false;
+        }
+    }
+
+    private string VisitBinary(BinaryExpression expression, CancellationToken cancellationToken)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         cancellationToken.ThrowIfCancellationRequested();
@@ -258,7 +308,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             UnaryExpressionType.Not => "!",
             UnaryExpressionType.Negate => "-",
             UnaryExpressionType.FromEnd => "^",
-            UnaryExpressionType.BitwiseNot => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_xor " : "~",
+            UnaryExpressionType.BitwiseNot => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_not " : "~",
             UnaryExpressionType.SqRoot => "\u221a",
 #if NET8_0_OR_GREATER
             UnaryExpressionType.CbRoot => "\u221b",
@@ -269,7 +319,16 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         };
 
         bool parensNeeded = !(expression.Expression is Identifier || (expression.Expression is ValueExpression value && !IsNegativeNumber(value)));
-        result += EncapsulateNoValue(expression.Expression, parensNeeded: parensNeeded);
+        bool wasInIndex = _inIndex;
+        _inIndex |= expression.Type == UnaryExpressionType.FromEnd;
+        try
+        {
+            result += EncapsulateNoValue(expression.Expression, parensNeeded: parensNeeded);
+        }
+        finally
+        {
+            _inIndex = wasInIndex;
+        }
         return result;
     }
 
@@ -319,16 +378,17 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
         return expression.Type switch
         {
-            ValueType.Boolean or ValueType.Integer => $"{value} ",
-            ValueType.DateTime or ValueType.TimeSpan => $"#{value}# ",
+            ValueType.Boolean or ValueType.Integer => $"{Convert.ToString(value, CultureInfo.InvariantCulture)} ",
+            ValueType.DateTime => value is DateTime dateTime ? $"#{FormatDateTime(dateTime)}# " : $"#{value}# ",
+            ValueType.TimeSpan => $"#{Convert.ToString(value, CultureInfo.InvariantCulture)}# ",
             ValueType.Float =>
                 value is null
                     ? string.Empty
-                    : ((value is decimal dcValue)
+                    : AsFraction((value is decimal dcValue)
                         ? dcValue.ToString(_numberFormatInfo)
                         : value is BigDecimal bdValue
-                            ? bdValue.ToString(_numberFormatInfo)
-                            : MathHelper.ConvertToDouble(value, context).ToString("0.############################", _numberFormatInfo)) + " ",
+                            ? MathHelper.FormatBigDecimal(bdValue, _numberFormatInfo)
+                            : FormatDouble(MathHelper.ConvertToDouble(value, context))) + " ",
             ValueType.Char => $"'{value}' ",
             ValueType.String =>
                 (value is Parlot.TextSpan)
@@ -436,7 +496,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                 }
             }
         }
-        resultBuilder.Append("fn (");
+        resultBuilder.Append("fn ");
+        resultBuilder.Append(function.Name);
+        resultBuilder.Append('(');
         string fnSep = GetListItemSeparator(context.AdvancedOptions);
         bool paramAdded = false;
         foreach (var param in function.Parameters)
@@ -450,7 +512,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             if (param.IsOptional)
             {
                 resultBuilder.Append(" = ");
-                resultBuilder.Append(param.DefaultValue?.ToString() ?? "null");
+                resultBuilder.Append(FormatDefaultValue(param.DefaultValue));
             }
         }
         resultBuilder.Append(')');
@@ -527,6 +589,21 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         }
 
         return resultBuilder.ToString();
+    }
+
+    // A default value of a parameter is written as a literal (a string in quotes, a number with the separator of the parser)
+    private string FormatDefaultValue(object? value)
+    {
+        if (value is null)
+            return "null";
+        try
+        {
+            return new ValueExpression(value).Accept(this).TrimEnd();
+        }
+        catch (NCalc.Exceptions.NCalcException)
+        {
+            return Convert.ToString(value, CultureInfo.InvariantCulture) ?? "null";
+        }
     }
 
     private string GetListItemSeparator(AdvancedExpressionOptions? options)

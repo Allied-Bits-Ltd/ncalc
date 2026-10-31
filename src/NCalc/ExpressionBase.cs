@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using NCalc.Cache;
 using NCalc.Domain;
 using NCalc.Exceptions;
@@ -33,12 +33,19 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
     public AdvancedExpressionOptions? AdvancedOptions
     {
         get => Context.AdvancedOptions;
-        set
-        {
-            Context.AdvancedOptions = value;
-            if (Context.AdvancedOptions != null)
-                Context.AdvancedOptions.CultureInfo = CultureInfo;
-        }
+        set => Context.AdvancedOptions = WithCulture(value, CultureInfo);
+    }
+
+    // The advanced options get the culture of the expression. An instance with another culture may be shared with other expressions,
+    // so it is copied instead of being changed: setting the culture of one expression must not change the culture of another.
+    private static AdvancedExpressionOptions? WithCulture(AdvancedExpressionOptions? options, CultureInfo cultureInfo)
+    {
+        if (options is null || Equals(options.CultureInfo, cultureInfo))
+            return options;
+
+        var copy = options.Clone();
+        copy.CultureInfo = cultureInfo;
+        return copy;
     }
 
     /// <summary>
@@ -50,8 +57,7 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         set
         {
             Context.CultureInfo = value;
-            if (Context.AdvancedOptions != null)
-                Context.AdvancedOptions.CultureInfo = value;
+            Context.AdvancedOptions = WithCulture(Context.AdvancedOptions, value);
         }
     }
 

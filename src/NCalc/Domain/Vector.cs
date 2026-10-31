@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -389,11 +389,14 @@ namespace NCalc.Domain
         }
 
         /// <summary>Element-wise rounding (away from zero at midpoint).</summary>
-        public static Vector Round(Vector v)
+        public static Vector Round(Vector v) => Round(v, 0, MidpointRounding.AwayFromZero);
+
+        /// <summary>Element-wise rounding to the given number of decimal places.</summary>
+        public static Vector Round(Vector v, int digits, MidpointRounding rounding)
         {
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
-                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Round(v[i], 0, MidpointRounding.AwayFromZero, v._mathHelperOptions));
+                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Round(v[i], digits, rounding, v._mathHelperOptions));
             return new Vector(result, v._mathHelperOptions);
         }
 

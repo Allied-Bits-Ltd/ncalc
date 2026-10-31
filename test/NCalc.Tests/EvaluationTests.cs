@@ -1,3 +1,4 @@
+﻿using System.Globalization;
 #nullable enable
 using NCalc.Exceptions;
 using NCalc.Tests.TestData;
@@ -266,5 +267,84 @@ public class EvaluationTests : TestBase
     public void ShouldUseStrictTypeMatching(string expression)
     {
         Assert.False(new Expression(expression, ExpressionOptions.StrictTypeMatching).Evaluate(TestContext.Current.CancellationToken) as bool?);
+    }
+
+    [Theory]
+    [InlineData("MakeStr(2, l)")]
+    [InlineData("MakeStr(2, 1.5)")]
+    [InlineData("MakeStr(1500000000, 'ab')")]
+    [InlineData("MakeList(3000000000)")]
+    public void MakeStrAndMakeListShouldValidateTheirArguments(string expression)
+    {
+        var e = new Expression(expression, ExpressionOptions.NoCache);
+        e.Parameters["l"] = new List<object?> { 1, 2 };
+        Assert.Throws<NCalcEvaluationException>(() => e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void MakeStrShouldAcceptBigIntegerCharacterCodes()
+    {
+        var e = new Expression("MakeStr(3, x)", ExpressionOptions.NoCache);
+        e.Parameters["x"] = new System.Numerics.BigInteger(65);
+        Assert.Equal("AAA", e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("Round(1.2345 + 2.5678i, 2)", AdvExpressionOptions.ParseComplexNumbers, "1.23 + 2.57i")]
+    [InlineData("Round([1.2345; 2.5678], 2)", AdvExpressionOptions.ParseVectors, "[1.23, 2.57]")]
+    [InlineData("-[1;2]", AdvExpressionOptions.ParseVectors, "[-1, -2]")]
+    [InlineData("-(1+2i)", AdvExpressionOptions.ParseComplexNumbers, "-1 - 2i")]
+    [InlineData("-10%", AdvExpressionOptions.CalculatePercent, "-10%")]
+    [InlineData("Abs(-10%)", AdvExpressionOptions.CalculatePercent, "10%")]
+    [InlineData("Pow(i, 0.5)", AdvExpressionOptions.ParseComplexNumbers, "0.7071067811865476 + 0.7071067811865476i")]
+    public void ComplexVectorAndPercentOperationsShouldWork(string expression, AdvExpressionOptions advancedOptions, string expected)
+    {
+        var e = new Expression(expression, ExpressionOptions.NoCache) { AdvancedOptions = new AdvancedExpressionOptions(advancedOptions) };
+        Assert.Equal(expected, Convert.ToString(e.Evaluate(TestContext.Current.CancellationToken), CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void LogWithFractionalBaseShouldNotTruncateTheBase()
+    {
+        var e = new Expression("Log(x, 2.5)", ExpressionOptions.UseBigNumbers | ExpressionOptions.NoCache);
+        e.Parameters["x"] = new ExtendedNumerics.BigDecimal(8);
+        Assert.Equal(Math.Log(8, 2.5), Convert.ToDouble(e.Evaluate(TestContext.Current.CancellationToken), CultureInfo.InvariantCulture), 12);
+    }
+
+    [Theory]
+    [InlineData("20*5%")]
+    [InlineData("100+5%")]
+    [InlineData("100-5%")]
+    [InlineData("20/5%")]
+    public void PercentResultTypeShouldNotDependOnDynamicCode(string expression)
+    {
+        // The non-dynamic path (used by NCalc.AOT) returned integers where the dynamic one returns a decimal or a double
+        object? Evaluate(ExpressionOptions extra)
+            => new Expression(expression, ExpressionOptions.DecimalAsDefault | ExpressionOptions.NoCache | extra) { AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.CalculatePercent) }.Evaluate(TestContext.Current.CancellationToken);
+        var dynamicResult = Evaluate(ExpressionOptions.None);
+        var staticResult = Evaluate(ExpressionOptions.AvoidDynamicFunctions);
+        Assert.Equal(dynamicResult, staticResult);
+        Assert.Equal(dynamicResult?.GetType(), staticResult?.GetType());
+    }
+
+    [Theory]
+    [InlineData("not 1", false)]
+    [InlineData("'a' in 'abc'", true)]
+    [InlineData("Ln(1.0) == 0", true)]
+    [InlineData("Log2(8) == 3", true)]
+    [InlineData("Trunc(1.7) == 1", true)]
+    [InlineData("2147483647 * 2 == 4294967294", true)]
+    [InlineData("if(false, 1) == null", true)]
+    public void LambdaShouldMatchEvaluate(string expression, bool expected)
+    {
+        Assert.Equal(expected, new Expression(expression, ExpressionOptions.AllowNullParameter | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(expected, new Expression(expression, ExpressionOptions.AllowNullParameter | ExpressionOptions.NoCache).ToLambda<bool>()());
+    }
+
+    [Fact]
+    public void LambdaShouldHandleConditionsWithDifferentBranchTypes()
+    {
+        Assert.Equal(1.0, new Expression("true ? 1 : 2.5", ExpressionOptions.NoCache).ToLambda<double>()());
+        Assert.Equal(2.35m, new Expression("Round(2.345, 2)", ExpressionOptions.DecimalAsDefault | ExpressionOptions.RoundAwayFromZero | ExpressionOptions.NoCache).ToLambda<decimal>()());
     }
 }

@@ -1,4 +1,4 @@
-namespace NCalc.Tests;
+﻿namespace NCalc.Tests;
 
 [Trait("Category", "Decimals")]
 public class DecimalsTests : TestBase
@@ -163,4 +163,35 @@ public class DecimalsTests : TestBase
         var res = expr.Evaluate(TestContext.Current.CancellationToken);
         Assert.Equal(double.PositiveInfinity, res);
     }*/
+
+    public static TheoryData<string, decimal, object> DecimalArgumentData => new()
+    {
+        { "Floor(x)", 12345678901234567.5m, 12345678901234567m },
+        { "Ceiling(x)", 12345678901234566.5m, 12345678901234567m },
+        { "Truncate(x)", 12345678901234567.9m, 12345678901234567m },
+        { "Abs(x)", -12345678901234567.5m, 12345678901234567.5m },
+        { "Round(x, 1)", 12345678901234567.25m, 12345678901234567.2m },
+        { "Pow(x, 3)", 1.23456789m, 1.881676371789154860897069m },
+    };
+
+    [Theory]
+    [MemberData(nameof(DecimalArgumentData))]
+    public void DecimalArgumentsShouldKeepTheirPrecision(string expression, decimal x, object expected)
+    {
+        var e = new Expression(expression, ExpressionOptions.NoCache);
+        e.Parameters["x"] = x;
+        Assert.Equal(expected, e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void PowWithDecimalBaseShouldNotOverflow()
+    {
+        var e = new Expression("Pow(x, 0.5)", ExpressionOptions.NoCache);
+        e.Parameters["x"] = -2m;
+        Assert.True(double.IsNaN((double)e.Evaluate(TestContext.Current.CancellationToken)!));
+
+        e = new Expression("Pow(x, 30.5)", ExpressionOptions.NoCache);
+        e.Parameters["x"] = 10m;
+        Assert.IsType<double>(e.Evaluate(TestContext.Current.CancellationToken));
+    }
 }

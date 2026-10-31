@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 
 using NCalc.Domain;
 using NCalc.Exceptions;
@@ -70,6 +70,9 @@ public sealed class LogicalExpressionFactory : ILogicalExpressionFactory
         var parserContext = new LogicalExpressionParserContext(expression, options, cultureInfo, cancellationToken);
         parserContext.AdvancedOptions = advancedOptions;
         LogicalExpression result = LogicalExpressionParser.Parse(parserContext);
+
+        // The root keeps the settings it was parsed with, so that ToString() writes the text in the same dialect
+        result.SetOptions(options, cultureInfo, advancedOptions);
 
         // An empty list tells that the tree was parsed and has no declarations, so it does not have to be searched for them
         result.DeclaredFunctions = parserContext.UserFunctions.Count > 0 ? parserContext.UserFunctions.Values.ToList() : [];

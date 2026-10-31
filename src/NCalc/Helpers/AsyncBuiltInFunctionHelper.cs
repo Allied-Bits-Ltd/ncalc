@@ -1,4 +1,4 @@
-using NCalc.Domain;
+﻿using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Parser;
 
@@ -115,6 +115,14 @@ public static class AsyncBuiltInFunctionHelper
                 throw new NCalcEvaluationException("Log() takes exactly 2 arguments", location);
             return MathHelper.Log(await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false), await arguments[1].EvaluateAsync(cancellationToken).ConfigureAwait(false), context);
         }
+#if NET8_0_OR_GREATER
+        if (functionName.Equals("Log2", comparison))
+        {
+            if (arguments.Length != 1)
+                throw new NCalcEvaluationException("Log2() takes exactly 1 argument", location);
+            return MathHelper.Log2(await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false), context);
+        }
+#endif
         if (functionName.Equals("Log10", comparison))
         {
             if (arguments.Length != 1)
@@ -160,7 +168,7 @@ public static class AsyncBuiltInFunctionHelper
                 throw new NCalcEvaluationException("Tan() takes exactly 1 argument", location);
             return MathHelper.Tan(await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false), context);
         }
-        if (functionName.Equals("Truncate", comparison))
+        if (functionName.Equals("Trunc", comparison) || functionName.Equals("Truncate", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Truncate() takes exactly 1 argument", location);
@@ -180,18 +188,20 @@ public static class AsyncBuiltInFunctionHelper
         }
         if (functionName.Equals("MakeList", comparison))
         {
-            if (arguments.Length != 1)
-                throw new NCalcEvaluationException("MakeList() takes exactly 1 argument", location);
-            var sizeObj = await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false);
-            if (sizeObj is null)
-                throw new NCalcEvaluationException("List size is evaluated to null in a call to MakeList()", location);
-            if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(sizeObj))
-                throw new NCalcEvaluationException("List size is not evaluated to an integer number in a call to MakeList()", location);
-            int size = MathHelper.ConvertToInt(sizeObj, "MakeList", context.CultureInfo, location);
-            if (size <= 0)
-                throw new NCalcEvaluationException($"List size is {size}, and it must be positive in a call to MakeList()", location);
-
-            return new object?[size];
+            if (arguments.Length != 1 && arguments.Length != 2)
+                throw new NCalcEvaluationException("MakeList() takes 1 or 2 arguments", location);
+            // The size is checked before the value is evaluated
+            long size = BuiltInFunctionHelper.GetMakeSize(await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false), "List size", "MakeList", location);
+            var value = arguments.Length == 2 ? await arguments[1].EvaluateAsync(cancellationToken).ConfigureAwait(false) : null;
+            return BuiltInFunctionHelper.MakeList(size, value);
+        }
+        if ((functionName.Equals("MakeStr", comparison)) || (functionName.Equals("MakeString", comparison)))
+        {
+            if (arguments.Length != 2)
+                throw new NCalcEvaluationException("MakeStr() takes exactly 2 arguments", location);
+            long size = BuiltInFunctionHelper.GetMakeSize(await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false), "String length", "MakeStr", location);
+            var value = await arguments[1].EvaluateAsync(cancellationToken).ConfigureAwait(false);
+            return BuiltInFunctionHelper.MakeString(size, value, location);
         }
         if (functionName.Equals("ifs", comparison))
         {
@@ -235,7 +245,19 @@ public static class AsyncBuiltInFunctionHelper
             for (var i = 1; i < arguments.Length; i++)
             {
                 int compareResult;
-                if (!TypeHelper.CompareUsingMostPreciseType(parameter, await arguments[i].EvaluateAsync(cancellationToken).ConfigureAwait(false), context, out compareResult) || compareResult != 0) continue;
+                try
+                {
+                    if (!TypeHelper.CompareUsingMostPreciseType(parameter, await arguments[i].EvaluateAsync(cancellationToken).ConfigureAwait(false), context, out compareResult) || compareResult != 0)
+                        continue;
+                }
+                catch (NCalcConversionException cex)
+                {
+                    LogicalExpression? lex = arguments[i].LogicalExpression;
+                    if (lex is not null)
+                        cex.Location = lex.Location;
+
+                    throw;
+                }
                 evaluation = true;
                 break;
             }
