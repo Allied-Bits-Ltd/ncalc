@@ -3,12 +3,15 @@
         <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
         <Nullable>enable</Nullable>
         <PackageId>AlliedBits.NCalc</PackageId>
-        <AssemblyName>NCalc.AOT</AssemblyName>
+        <!-- Same identity as the regular build, so that assemblies compiled against NCalc run on this build in AOT mode -->
+        <AssemblyName>NCalc</AssemblyName>
         <Description>Assembly with the core logic of NCalc (AOT-compatible variant).</Description>
         <SignAssembly>true</SignAssembly>
         <AssemblyOriginatorKeyFile>../../NCalc.snk</AssemblyOriginatorKeyFile>
         <RootNamespace>NCalc</RootNamespace>
         <IsAotCompatible>true</IsAotCompatible>
+        <!-- Makes the AlliedBits.Parlot package targets use the AOT-compatible build of Parlot -->
+        <UseAotMode>true</UseAotMode>
         <RepositoryUrl>https://github.com/Allied-Bits-ltd/ncalc.git</RepositoryUrl> 
     </PropertyGroup>
     <PropertyGroup>
@@ -114,6 +117,13 @@
       <Compile Include="..\NCalc\Visitors\ParameterExtractionVisitor.cs" Link="Visitors\ParameterExtractionVisitor.cs" />
       <Compile Include="..\NCalc\Visitors\SerializationContext.cs" Link="Visitors\SerializationContext.cs" />
       <Compile Include="..\NCalc\Visitors\SerializationVisitor.cs" Link="Visitors\SerializationVisitor.cs" />
+    </ItemGroup>
+    <ItemGroup>
+      <Compile Include="..\NCalc\Helpers\BoxedNumberComparer.cs" Link="Helpers\BoxedNumberComparer.cs" />
+      <Compile Include="..\NCalc\Reflection\ExtendedMethodInfo.cs" Link="Reflection\ExtendedMethodInfo.cs" />
+      <Compile Include="..\NCalc\NCalcServiceBuilder.cs" Link="NCalcServiceBuilder.cs" />
+      <Compile Include="..\NCalc\ServiceCollectionExtensions.cs" Link="ServiceCollectionExtensions.cs" />
+      <!-- Expression.Lambda.cs, Reflection\LinqUtils.cs and Visitors\LambdaExpressionVisitor.cs are replaced by the stubs in AotUnsupported -->
     </ItemGroup>
 
     <ItemGroup>

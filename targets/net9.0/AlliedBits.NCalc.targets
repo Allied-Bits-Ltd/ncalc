@@ -1,18 +1,31 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Choose>
-    <When Condition="'$(UseAotMode)' == 'true'">
-      <ItemGroup>
-        <Reference Include="NCalc">
-          <HintPath>$(MSBuildThisFileDirectory)..\..\assemblies\net9.0\NCalc.AOT.dll</HintPath>
-        </Reference>
-      </ItemGroup>
-    </When>
-    <Otherwise>
-      <ItemGroup>
-        <Reference Include="NCalc">
-          <HintPath>$(MSBuildThisFileDirectory)..\..\assemblies\net9.0\NCalc.dll</HintPath>
-        </Reference>
-      </ItemGroup>
-    </Otherwise>
-  </Choose>
+  <!--
+    NCalc.dll is shipped in lib\net9.0 and reaches direct and transitive consumers through regular NuGet asset resolution.
+    The AOT-compatible build in assemblies\net9.0 has the same assembly identity. When UseAotMode is true, it replaces
+    the regular build both for compilation and in the output, so that libraries compiled against NCalc also run on it.
+  -->
+  <Target Name="_AlliedBitsNCalcUseAotAssembly"
+          AfterTargets="ResolvePackageAssets"
+          Condition="'$(UseAotMode)' == 'true'">
+    <PropertyGroup>
+      <_AlliedBitsNCalcAotDirectory>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', 'assemblies', 'net9.0'))</_AlliedBitsNCalcAotDirectory>
+    </PropertyGroup>
+    <ItemGroup>
+      <_AlliedBitsNCalcCompileItem Include="@(ResolvedCompileFileDefinitions)" Condition="'%(ResolvedCompileFileDefinitions.NuGetPackageId)' == 'AlliedBits.NCalc' and '%(Filename)%(Extension)' == 'NCalc.dll'" />
+      <ResolvedCompileFileDefinitions Remove="@(_AlliedBitsNCalcCompileItem)" />
+      <_AlliedBitsNCalcAotCompileItem Include="@(_AlliedBitsNCalcCompileItem->'$(_AlliedBitsNCalcAotDirectory)%(Filename)%(Extension)')" />
+      <_AlliedBitsNCalcAotCompileItem>
+        <HintPath>%(FullPath)</HintPath>
+      </_AlliedBitsNCalcAotCompileItem>
+      <ResolvedCompileFileDefinitions Include="@(_AlliedBitsNCalcAotCompileItem)" />
+
+      <_AlliedBitsNCalcRuntimeItem Include="@(RuntimeCopyLocalItems)" Condition="'%(RuntimeCopyLocalItems.NuGetPackageId)' == 'AlliedBits.NCalc' and '%(Filename)%(Extension)' == 'NCalc.dll'" />
+      <RuntimeCopyLocalItems Remove="@(_AlliedBitsNCalcRuntimeItem)" />
+      <RuntimeCopyLocalItems Include="@(_AlliedBitsNCalcRuntimeItem->'$(_AlliedBitsNCalcAotDirectory)%(Filename)%(Extension)')" />
+
+      <_AlliedBitsNCalcCompileItem Remove="@(_AlliedBitsNCalcCompileItem)" />
+      <_AlliedBitsNCalcAotCompileItem Remove="@(_AlliedBitsNCalcAotCompileItem)" />
+      <_AlliedBitsNCalcRuntimeItem Remove="@(_AlliedBitsNCalcRuntimeItem)" />
+    </ItemGroup>
+  </Target>
 </Project>

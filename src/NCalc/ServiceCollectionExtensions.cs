@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using System.Diagnostics.CodeAnalysis;
+
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NCalc.Cache;
 using NCalc.Factories;
@@ -8,17 +10,17 @@ namespace NCalc.DependencyInjection;
 
 public static class ServiceCollectionExtensions
 {
-    internal static void ReplaceScoped<TService, TImplementation>(this IServiceCollection services) where TService : class where TImplementation : class, TService
+    internal static void ReplaceScoped<TService, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TImplementation>(this IServiceCollection services) where TService : class where TImplementation : class, TService
     {
         services.Replace(ServiceDescriptor.Scoped<TService, TImplementation>());
     }
 
-    internal static void ReplaceTransient<TService, TImplementation>(this IServiceCollection services) where TService : class where TImplementation : class, TService
+    internal static void ReplaceTransient<TService, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TImplementation>(this IServiceCollection services) where TService : class where TImplementation : class, TService
     {
         services.Replace(ServiceDescriptor.Transient<TService, TImplementation>());
     }
 
-    internal static void ReplaceSingleton<TService, TImplementation>(this IServiceCollection services) where TService : class where TImplementation : class, TService
+    internal static void ReplaceSingleton<TService, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TImplementation>(this IServiceCollection services) where TService : class where TImplementation : class, TService
     {
         services.Replace(ServiceDescriptor.Singleton<TService, TImplementation>());
     }

@@ -15,6 +15,7 @@
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
+    <UseAotMode>true</UseAotMode>
   </PropertyGroup>
   <PropertyGroup>
     <DefineConstants>$(DefineConstants);AOT_COMPILATION</DefineConstants>
@@ -37,7 +38,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AlliedBits.Parlot" Version="1.5.7.*" />
+    <PackageReference Include="AlliedBits.Parlot" Version="1.6.*" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.*" />

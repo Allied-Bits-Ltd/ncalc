@@ -8,6 +8,8 @@
         <AssemblyOriginatorKeyFile>../../NCalc.snk</AssemblyOriginatorKeyFile>
         <RootNamespace>NCalc</RootNamespace>
         <IsAotCompatible>false</IsAotCompatible>
+        <!-- PolySharp: also generate the trimming attributes ([DynamicallyAccessedMembers]) for net472 and netstandard2.0 -->
+        <PolySharpIncludeRuntimeSupportedAttributes>true</PolySharpIncludeRuntimeSupportedAttributes>
         <RepositoryUrl>https://github.com/Allied-Bits-ltd/ncalc.git</RepositoryUrl> 
     </PropertyGroup>
 
