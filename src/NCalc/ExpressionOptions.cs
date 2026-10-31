@@ -164,7 +164,7 @@ public enum ExpressionOptions : long
     /// <summary>
     /// When set, the parser will recognize Python comments in expressions.
     /// </summary>
-    SupportPythonComments = 1 << 31,
+    SupportPythonComments = ((long)1) << 31,
 
     /// <summary>
     /// When set, while() loop statement is supported.

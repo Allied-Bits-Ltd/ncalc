@@ -323,6 +323,28 @@ public class ParserTests
         Assert.Equal(expected, e.Evaluate(TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public void EveryExpressionOptionShouldBeASingleBit()
+    {
+        Assert.Equal(1L << 31, (long)ExpressionOptions.SupportPythonComments);
+
+        foreach (ExpressionOptions option in Enum.GetValues(typeof(ExpressionOptions)))
+        {
+            var value = (long)option;
+            if (value != 0)
+                Assert.True((value & (value - 1)) == 0, $"{option} = 0x{value:X} is not a single bit");
+        }
+    }
+
+    [Fact]
+    public void PythonCommentsShouldNotEnableOtherOptions()
+    {
+        // Before the fix, the option switched on e.g. UseTernaryLogic, which made the result null
+        var e = new Expression("'true' and true # comment", ExpressionOptions.SupportPythonComments);
+        Assert.Equal(true, e.Evaluate(TestContext.Current.CancellationToken));
+        Assert.False(e.Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator));
+    }
+
     [Theory]
     [InlineData("2 mod3")]
     [InlineData("2 div3")]
