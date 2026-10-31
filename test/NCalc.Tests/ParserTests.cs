@@ -1,6 +1,7 @@
 ﻿using ExtendedNumerics;
 
 using NCalc.Domain;
+using NCalc.Exceptions;
 using NCalc.Factories;
 using NCalc.Helpers;
 using NCalc.Parser;
@@ -295,5 +296,45 @@ public class ParserTests
         first.Evaluate(TestContext.Current.CancellationToken);
         second.Evaluate(TestContext.Current.CancellationToken);
         Assert.Same(first.LogicalExpression, second.LogicalExpression);
+    }
+
+    [Theory]
+    [InlineData("trueValue", 5)]
+    [InlineData("falsehood", 6)]
+    [InlineData("nullable", 7)]
+    [InlineData("notValue", 8)]
+    [InlineData("true_flag", 9)]
+    [InlineData("returnValue * 2", 14)]
+    [InlineData("2 mod 3", 2)]
+    [InlineData("7 div 2", 3)]
+    [InlineData("not false", true)]
+    [InlineData("true and not(false)", true)]
+    [InlineData("2 in (1, 2)", true)]
+    public void IdentifiersStartingWithKeywordsShouldBeIdentifiers(string expression, object expected)
+    {
+        var e = new Expression(expression, ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        e.Parameters["trueValue"] = 5;
+        e.Parameters["falsehood"] = 6;
+        e.Parameters["nullable"] = 7;
+        e.Parameters["notValue"] = 8;
+        e.Parameters["true_flag"] = 9;
+        e.Parameters["returnValue"] = 7;
+        e.Parameters["Value"] = 1;
+        Assert.Equal(expected, e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("2 mod3")]
+    [InlineData("2 div3")]
+    [InlineData("true andValue")]
+    public void KeywordsFollowedByIdentifierCharsShouldNotBeOperators(string expression)
+    {
+        var e = new Expression(expression);
+        e.Parameters["mod3"] = 1;
+        e.Parameters["div3"] = 1;
+        e.Parameters["andValue"] = true;
+        e.Parameters["Value"] = true;
+        e.Parameters["3"] = 1;
+        Assert.ThrowsAny<NCalcException>(() => e.Evaluate(TestContext.Current.CancellationToken));
     }
 }
