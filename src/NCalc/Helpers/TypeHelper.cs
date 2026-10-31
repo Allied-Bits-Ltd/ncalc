@@ -6,7 +6,9 @@ using ExtendedNumerics;
 
 using Microsoft.Extensions.Options;
 
+using NCalc.Domain;
 using NCalc.Exceptions;
+using NCalc.Parser;
 
 namespace NCalc.Helpers;
 
@@ -134,6 +136,39 @@ public static class TypeHelper
         };
     }
 
+    /// <summary>
+    /// Converts a string that is compared with a value of another type. The string is accepted only when it is a single literal
+    /// in NCalc syntax, optionally with a sign, so a value that comes from the outside is never evaluated as an expression.
+    /// A dedicated literal-only parser is used, and the parsed-expression cache is bypassed, as such strings are data.
+    /// </summary>
+    private static bool TryConvertLiteral(string value, MathHelperOptions options, out object? result)
+    {
+        result = null;
+        try
+        {
+            var parser = LogicalExpressionParser.GetLiteralParser(options.CultureInfo, options.AllOptions, null);
+            var context = new LogicalExpressionParserContext(value, options.AllOptions, options.CultureInfo);
+            if (!parser.TryParse(context, out var parsed, out _))
+                return false;
+
+            switch (parsed)
+            {
+                case ValueExpression literal:
+                    result = literal.Value;
+                    return true;
+                case UnaryExpression { Type: UnaryExpressionType.Negate, Expression: ValueExpression negated }:
+                    result = MathHelper.Negate(negated.Value, options.AllOptions.HasFlag(ExpressionOptions.ReduceArithmeticResultType), options);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static bool CompareUsingMostPreciseType(object? a, object? b, ExpressionContextBase context, out int outcome)
     {
         ComparisonOptions cmpOptions = context;
@@ -216,13 +251,10 @@ public static class TypeHelper
                     bool aConverted = false;
                     if (!comparisonOptions.AllOptions.HasFlag(ExpressionOptions.NoStringTypeCoercion))
                     {
-                        try
+                        if (TryConvertLiteral(sa, mathHelperOptions, out var aLiteral))
                         {
-                            a = (new Expression(sa, mathHelperOptions.AllOptions, mathHelperOptions.CultureInfo)).Evaluate();
+                            a = aLiteral;
                             aConverted = true;
-                        }
-                        catch
-                        {
                         }
 
                         if (!aConverted)
@@ -248,14 +280,12 @@ public static class TypeHelper
                     bool bConverted = false;
                     if (!comparisonOptions.AllOptions.HasFlag(ExpressionOptions.NoStringTypeCoercion))
                     {
-                        try
+                        if (TryConvertLiteral(sb, mathHelperOptions, out var bLiteral))
                         {
-                            b = (new Expression(sb, mathHelperOptions.AllOptions, mathHelperOptions.CultureInfo)).Evaluate();
+                            b = bLiteral;
                             bConverted = true;
                         }
-                        catch
-                        {
-                        }
+
                         if (!bConverted)
                         {
                             bValue = sb;

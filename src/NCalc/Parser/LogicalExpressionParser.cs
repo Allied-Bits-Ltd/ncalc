@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
@@ -109,6 +110,22 @@ public static class LogicalExpressionParser
     }
 
     public static Parser<LogicalExpression> CreateExpressionParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions)
+        => CreateParser(cultureInfo, options, extOptions, literalsOnly: false);
+
+    private static readonly ConcurrentDictionary<string, Parser<LogicalExpression>> LiteralParsers = new();
+
+    /// <summary>
+    /// Returns the parser that accepts only a single literal (a number, a date or time, a boolean or a GUID), optionally with a sign,
+    /// as written in an expression with the given settings. The parser is created once per combination of settings.
+    /// </summary>
+    internal static Parser<LogicalExpression> GetLiteralParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions)
+    {
+        const string separator = "\u001F";
+        var key = string.Concat(((long)options).ToString(CultureInfo.InvariantCulture), separator, cultureInfo.Name, separator, extOptions?.GetCacheKey() ?? string.Empty);
+        return LiteralParsers.GetOrAdd(key, _ => CreateParser(cultureInfo, options, extOptions, literalsOnly: true));
+    }
+
+    private static Parser<LogicalExpression> CreateParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions, bool literalsOnly)
     {
         /*
          * Grammar:
@@ -1795,6 +1812,35 @@ public static class LogicalExpressionParser
                 .Then<LogicalExpression>(static (ctx, g) => new ValueExpression(Guid.Parse(g.ToString()!)).SetLocation(new ParlotExpressionLocation(ctx)));
 
             guid = OneOf(guidWithHyphens, guidWithoutHyphens);
+        }
+
+        if (literalsOnly)
+        {
+            List<Parser<LogicalExpression>> literalParsers = [];
+            if (guid is not null)
+                literalParsers.Add(guid);
+            literalParsers.Add(hexOctBinNumber);
+            if (currency is not null)
+                literalParsers.Add(currency);
+            literalParsers.Add(intNumber);
+            literalParsers.Add(longNumber);
+            if (bigIntNumber is not null)
+                literalParsers.Add(bigIntNumber);
+            literalParsers.Add(decimalOrDoubleNumber);
+            literalParsers.Add(booleanTrue);
+            literalParsers.Add(booleanFalse);
+            if (dateTime is not null)
+                literalParsers.Add(dateTime);
+
+            // Number parsers accept a sign themselves; the explicit one serves the other literals (e.g. hex numbers), and only one sign is allowed
+            var literal = OneOf(literalParsers.ToArray());
+            var noSecondSign = Not(OneOf(minus, plus));
+            var signedLiteral = OneOf(
+                minus.AndSkip(noSecondSign).SkipAnd(literal).Then<LogicalExpression>(static x => new UnaryExpression(UnaryExpressionType.Negate, x)),
+                plus.AndSkip(noSecondSign).SkipAnd(literal),
+                literal);
+
+            return signedLiteral.AndSkip(ZeroOrMany(new WhiteSpaceParser(options))).Eof();
         }
 
         // primary => GUID | Percent | NUMBER | identifier | DateTime | string | resultReference | function | boolean | groupExpression | identifier | list ;

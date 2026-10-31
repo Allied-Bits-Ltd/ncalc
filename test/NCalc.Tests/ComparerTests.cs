@@ -157,4 +157,31 @@ public class ComparerTests
 
         Assert.Equal((bool)e.Evaluate(TestContext.Current.CancellationToken), expected);
     }
+
+    [Theory]
+    [InlineData("1.7", "x < 2.0", true)]
+    [InlineData("5", "x == 5", true)]
+    [InlineData("-5", "x < 0", true)]
+    [InlineData("+5", "x == 5", true)]
+    [InlineData(" 5 ", "x == 5", true)]
+    [InlineData("0x10", "x == 16", true)]
+    [InlineData("true", "x == true", true)]
+    [InlineData("#2024-01-01#", "x == #2024-01-01#", true)]
+    [InlineData("(8)", "x == 8", false)]
+    [InlineData("--5", "x == 5", false)]
+    [InlineData("5", "in(x, 1, 5)", true)]
+    [InlineData("2020-01-02", "x == 2017", false)]
+    [InlineData("2020-01-02", "in(x, 2017, 1)", false)]
+    [InlineData("Pow(2, 3)", "x == 8", false)]
+    [InlineData("1 == 1", "x == true", false)]
+    public async Task StringComparedWithNumberShouldBeConvertedOnlyWhenItIsLiteral(string value, string expression, bool expected)
+    {
+        var e = new Expression(expression);
+        e.Parameters["x"] = value;
+        Assert.Equal(expected, e.Evaluate(TestContext.Current.CancellationToken));
+
+        var asyncExpression = new AsyncExpression(expression);
+        asyncExpression.Parameters["x"] = value;
+        Assert.Equal(expected, await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken));
+    }
 }
