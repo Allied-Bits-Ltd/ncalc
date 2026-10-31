@@ -23,6 +23,9 @@ public sealed class LogicalExpressionParserContext : ParseContext
 
     public CultureInfo CultureInfo { get; }
 
+    // Outcomes of memoized parsers, keyed by the parser and the input offset
+    internal Dictionary<(object Parser, int Offset), object> ParseMemo { get; } = [];
+
     public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo? cultureInfo, CancellationToken cancellationToken)
         : base(new Scanner(text), cancellationToken)
     {

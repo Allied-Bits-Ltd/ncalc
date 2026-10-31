@@ -359,4 +359,34 @@ public class ParserTests
         e.Parameters["3"] = 1;
         Assert.ThrowsAny<NCalcException>(() => e.Evaluate(TestContext.Current.CancellationToken));
     }
+
+    public static TheoryData<string> NestedExpressionsWithAssignments => new()
+    {
+        new string('(', 1000) + "84" + new string(')', 1000),
+        string.Concat(Enumerable.Repeat("Abs(", 200)) + "84" + new string(')', 200),
+        string.Concat(Enumerable.Repeat("a[", 200)) + "0" + new string(']', 200),
+        "b = " + string.Concat(Enumerable.Repeat("Abs(", 200)) + "84" + new string(')', 200),
+    };
+
+    [Theory]
+    [MemberData(nameof(NestedExpressionsWithAssignments))]
+    public void NestedExpressionsWithAssignmentsShouldParseInLinearTime(string expression)
+    {
+        // The assignment target used to be parsed again as an ordinary operand at every nesting level, which took exponential time.
+        // A large stack keeps the parser's depth guard out of the way, so only the parsing time is measured.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        Expression e = null!;
+        bool hasErrors = true;
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var thread = new Thread(() =>
+        {
+            e = new Expression(expression, ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+            hasErrors = e.HasErrors(cancellationToken);
+        }, 64 * 1024 * 1024);
+        thread.Start();
+        thread.Join();
+        stopwatch.Stop();
+        Assert.False(hasErrors, e.Error?.InnerException?.Message ?? e.Error?.Message);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1), $"Parsing took {stopwatch.Elapsed}");
+    }
 }

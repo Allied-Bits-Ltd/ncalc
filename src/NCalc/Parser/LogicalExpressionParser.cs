@@ -100,6 +100,48 @@ public static class LogicalExpressionParser
     private static (Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)[] StackGuarded(List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)> ops)
         => ops.Select(op => (StackGuarded(op.Item1), op.Item2)).ToArray();
 
+    private sealed record MemoEntry<T>(bool Success, int Start, int End, T Value, TextPosition EndPosition);
+
+    /// <summary>
+    /// Remembers, per parse and per input position, the outcome of the wrapped parser.
+    /// An ordered choice whose alternatives start with the same parser (e.g. an assignment target and an ordinary operand)
+    /// would otherwise parse the same text once per alternative at every nesting level, which takes exponential time.
+    /// </summary>
+    private sealed class MemoizedParser<T>(Parser<T> parser) : Parser<T>, ISeekable
+    {
+        public bool CanSeek => parser is ISeekable seekable && seekable.CanSeek;
+
+        public char[] ExpectedChars => parser is ISeekable seekable ? seekable.ExpectedChars : [];
+
+        public bool SkipWhitespace => parser is ISeekable seekable && seekable.SkipWhitespace;
+
+        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        {
+            if (context is not LogicalExpressionParserContext parserContext)
+                return parser.Parse(context, ref result);
+
+            var key = (this, context.Scanner.Cursor.Position.Offset);
+            if (parserContext.ParseMemo.TryGetValue(key, out var cached))
+            {
+                var entry = (MemoEntry<T>)cached;
+                if (entry.Success)
+                {
+                    result.Set(entry.Start, entry.End, entry.Value);
+                    context.Scanner.Cursor.ResetPosition(entry.EndPosition);
+                }
+                return entry.Success;
+            }
+
+            var success = parser.Parse(context, ref result);
+            parserContext.ParseMemo[key] = new MemoEntry<T>(success, result.Start, result.End, result.Value, context.Scanner.Cursor.Position);
+            return success;
+        }
+
+        public override string ToString() => parser.ToString() ?? nameof(MemoizedParser<T>);
+    }
+
+    private static Parser<T> Memoized<T>(Parser<T> parser) => new MemoizedParser<T>(parser);
+
     /// <summary>
     /// Creates the parser with the options that exist at the moment of call
     /// </summary>
@@ -1887,7 +1929,7 @@ public static class LogicalExpressionParser
 
         var primary = OneOf(enabledParsers.ToArray());
 
-        var indexedAccess = primary.And(ZeroOrOne(rangedIndex))
+        Parser<LogicalExpression> indexedAccess = primary.And(ZeroOrOne(rangedIndex))
             .Then((ctx, x) =>
             {
                 // x.Item2 contains [^][lowerBound][..][^][upperBound]
@@ -1953,6 +1995,11 @@ public static class LogicalExpressionParser
                     throw new NCalcParserException("Ranged index could not be parsed", ctx.Scanner.Cursor.Position);
                 }
             });
+
+        // The assignment target and the leftmost operand of an ordinary expression both start with indexedAccess,
+        // so each position is parsed once rather than once per alternative at every nesting level
+        if (useAssignments)
+            indexedAccess = Memoized(indexedAccess);
 
         // factorial => primary ("!")* ;
         // A factorial includes any primary
