@@ -2045,10 +2045,12 @@ public static class LogicalExpressionParser
                     return new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, x.Item2[0].Item2).SetLocation(new ParlotExpressionLocation(ctx));
                 default:
                 {
-                    for (int i = x.Item2.Count - 1; i > 0; i--)
+                    // Exponentiation is right-associative: a ** b ** c ** d = a ** (b ** (c ** d))
+                    result = x.Item2[x.Item2.Count - 1].Item2;
+                    for (int i = x.Item2.Count - 2; i >= 0; i--)
                     {
-                        result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item2[i - 1].Item2,
-                            x.Item2[i].Item2).SetLocation(new ParlotExpressionLocation(ctx));
+                        result = new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item2[i].Item2,
+                            result).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
                     return new BinaryExpression(BinaryExpressionType.Exponentiation, x.Item1, result).SetLocation(new ParlotExpressionLocation(ctx));

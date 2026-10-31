@@ -73,6 +73,10 @@ public class OperatorsTests : TestBase
     [InlineData("(-1) ** 2", 1d)]
     [InlineData("2 ** 3 ** 2", 512d)]
     [InlineData("(2 ** 3) ** 2", 64d)]
+    [InlineData("2**2**2**2", 65536d)]
+    [InlineData("3 ** 2 ** 2 ** 0", 9d)]
+    [InlineData("2 ** 2 ** 2 ** 0 ** 5", 4d)]
+    [InlineData("((2 ** 2) ** 2) ** 2", 256d)]
     [InlineData("2 * 3 ** 2", 18d)]
     [InlineData("2 ** 4 / 2", 8d)]
     public void ShouldHandleOperatorsPriority(string expression, object expected)
