@@ -84,6 +84,23 @@ public class OperatorsTests : TestBase
         CheckResult(expected, new Expression(expression).Evaluate(TestContext.Current.CancellationToken));
     }
 
+    [Theory]
+    [InlineData("2 in (1, 2, 3)", true)]
+    [InlineData("4 in (1, 2, 3)", false)]
+    [InlineData("2 not in (1, 2, 3)", false)]
+    [InlineData("4 not in (1, 2, 3)", true)]
+    [InlineData("'a' in 'abc'", true)]
+    [InlineData("'d' in 'abc'", false)]
+    [InlineData("'b' not in 'abc'", false)]
+    public async Task InOperatorShouldGiveTheSameResultInAllEvaluators(string expression, bool expected)
+    {
+        foreach (var options in new[] { ExpressionOptions.NoCache, ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator })
+        {
+            Assert.Equal(expected, new Expression(expression, options).Evaluate(TestContext.Current.CancellationToken));
+            Assert.Equal(expected, await new AsyncExpression(expression, options).EvaluateAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
     [Fact]
     public void Should_Compare_Bool_Issue_122()
     {

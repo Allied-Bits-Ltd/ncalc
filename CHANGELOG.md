@@ -14,6 +14,7 @@
 * With `ParseComplexNumbers`, the imaginary unit `i` is now recognized only as a whole word or a number suffix (`i`, `2i`). Previously, it took the first letter of identifiers and of the `in` operator, so `2 in (1, 2)`, `index * 2` or `info` failed to parse.
 * The non-recursive evaluator (`UseNonRecursiveEvaluator`) no longer loops forever when the condition of a ternary operator is null; the result is null, as with the recursive evaluator.
 * `ExpressionOptions.SupportPythonComments` no longer switches on other options. Its value was `1 << 31` evaluated as a 32-bit integer, which became `0xFFFFFFFF80000000` in the 64-bit enum and also set `UseLoops`, `UseIfStatement`, `UseNonRecursiveEvaluator`, `CompareIncompatibleTypes`, `AvoidDynamicFunctions`, `ReduceArithmeticResultType`, `UseTernaryLogic` and `UseSystemMathRound`. The value is now `0x80000000`. **Breaking:** the value of a public constant changed; code compiled against an earlier version keeps the old value until it is recompiled.
+* `AsyncExpression` evaluates `in` and `not in` correctly. The asynchronous evaluator passed the operands in the wrong order, so `2 in (1, 2, 3)` threw "Comparison of incomparable types" and `'a' in 'abc'` was false.
 
 # 9.0.6.5  (Allied Bits)
 

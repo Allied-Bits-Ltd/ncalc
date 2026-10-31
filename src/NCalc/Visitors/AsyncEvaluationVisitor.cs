@@ -791,7 +791,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
                         return null;
 
-                    return EvaluationHelper.In(leftValue, rightValue, context);
+                    return EvaluationHelper.In(rightValue, leftValue, context);
 
                 case BinaryExpressionType.NotIn:
                     if (!TryGetValueOrNull(await left.Value.ConfigureAwait(false), out leftValue))
@@ -799,7 +799,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (!TryGetValueOrNull(await right.Value.ConfigureAwait(false), out rightValue))
                         return null;
 
-                    return !EvaluationHelper.In(leftValue, rightValue, context);
+                    return !EvaluationHelper.In(rightValue, leftValue, context);
 
                 case BinaryExpressionType.Like:
                 {

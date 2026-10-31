@@ -170,6 +170,7 @@ public class ComparerTests
     [InlineData("(8)", "x == 8", false)]
     [InlineData("--5", "x == 5", false)]
     [InlineData("5", "in(x, 1, 5)", true)]
+    [InlineData("5", "x in (1, 5)", true)]
     [InlineData("2020-01-02", "x == 2017", false)]
     [InlineData("2020-01-02", "in(x, 2017, 1)", false)]
     [InlineData("Pow(2, 3)", "x == 8", false)]
