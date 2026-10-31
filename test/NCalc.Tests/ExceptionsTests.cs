@@ -1,5 +1,6 @@
 using NCalc.Exceptions;
 using NCalc.Factories;
+using NCalc.Parser;
 
 namespace NCalc.Tests;
 
@@ -153,14 +154,20 @@ public class ExceptionsTests
 
     private const int ExcessiveDepth = 20000;
 
+    // Too deep to be parsed even on the thread with the larger stack
+    private const int UnparseableDepth = 200000;
+
+    // Too deep to be parsed on a thread with the default stack, but not on the thread with the larger stack
+    private const int LargeStackDepth = 1000;
+
     public static TheoryData<string> DeeplyNestedExpressions => new()
     {
-        new string('(', ExcessiveDepth) + "1" + new string(')', ExcessiveDepth),
-        string.Concat(Enumerable.Repeat("Abs(", ExcessiveDepth)) + "1" + new string(')', ExcessiveDepth),
-        string.Concat(Enumerable.Repeat("Max(1, ", ExcessiveDepth)) + "1" + new string(')', ExcessiveDepth),
-        string.Concat(Enumerable.Repeat("(true ? ", ExcessiveDepth)) + "1" + string.Concat(Enumerable.Repeat(" : 0)", ExcessiveDepth)),
-        new string('-', ExcessiveDepth) + "1",
-        string.Concat(Enumerable.Repeat("not ", ExcessiveDepth)) + "true",
+        new string('(', UnparseableDepth) + "1" + new string(')', UnparseableDepth),
+        string.Concat(Enumerable.Repeat("Abs(", UnparseableDepth)) + "1" + new string(')', UnparseableDepth),
+        string.Concat(Enumerable.Repeat("Max(1, ", UnparseableDepth)) + "1" + new string(')', UnparseableDepth),
+        string.Concat(Enumerable.Repeat("(true ? ", UnparseableDepth)) + "1" + string.Concat(Enumerable.Repeat(" : 0)", UnparseableDepth)),
+        new string('-', UnparseableDepth) + "1",
+        string.Concat(Enumerable.Repeat("not ", UnparseableDepth)) + "true",
     };
 
     [Theory]
@@ -169,6 +176,70 @@ public class ExceptionsTests
     {
         // Parsing is recursive regardless of the evaluator in use
         Assert.Throws<NCalcParserException>(() => new Expression(expression, ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    public static TheoryData<string, object> LargeStackExpressions => new()
+    {
+        { new string('(', LargeStackDepth) + "1" + new string(')', LargeStackDepth), 1 },
+        { string.Concat(Enumerable.Repeat("1 + (", LargeStackDepth)) + "1" + new string(')', LargeStackDepth), LargeStackDepth + 1 },
+        { string.Concat(Enumerable.Repeat("(true ? ", LargeStackDepth)) + "1" + string.Concat(Enumerable.Repeat(" : 0)", LargeStackDepth)), 1 },
+        { new string('-', 10 * LargeStackDepth) + "1", 1 },
+    };
+
+    [Theory]
+    [MemberData(nameof(LargeStackExpressions))]
+    public void DeeplyNestedExpressionShouldBeParsedOnLargerStack(string expression, object expected)
+    {
+        Assert.Equal(expected, new Expression(expression, ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void DeeplyNestedFunctionCallsShouldBeParsedOnLargerStack()
+    {
+        var expression = string.Concat(Enumerable.Repeat("Abs(", LargeStackDepth)) + "-1" + new string(')', LargeStackDepth);
+
+        Assert.IsType<Domain.FunctionCall>(LogicalExpressionFactory.Create(expression, options: ExpressionOptions.NoCache, cancellationToken: TestContext.Current.CancellationToken));
+
+        // Each function call evaluates its arguments as an expression of its own, so even the non-recursive evaluator
+        // may run out of stack, but it must say so with an exception instead of terminating the process
+        var exception = Record.Exception(() => new Expression(expression, ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator).Evaluate(TestContext.Current.CancellationToken));
+        Assert.True(exception is null or NCalcException, exception?.ToString());
+    }
+
+    [Fact]
+    public void DeeplyNestedExpressionShouldThrowExceptionInsteadOfStackOverflowWhenSerialized()
+    {
+        var expression = LogicalExpressionFactory.Create(string.Concat(Enumerable.Repeat("Abs(", LargeStackDepth)) + "1" + new string(')', LargeStackDepth),
+            options: ExpressionOptions.NoCache, cancellationToken: TestContext.Current.CancellationToken);
+
+        var exception = Record.Exception(() => expression.ToString());
+        Assert.True(exception is null or NCalcException, exception?.ToString());
+    }
+
+    [Fact]
+    public void FunctionDeclaredInDeeplyNestedExpressionShouldBeRegistered()
+    {
+        // No assignments: with them on, every group is parsed twice, so deep groups take exponential time
+        var expression = new Expression("fn Half(x) { return x / 2 }; Half(" + new string('(', LargeStackDepth) + "84" + new string(')', LargeStackDepth) + ")",
+            ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences);
+
+        Assert.Equal(42, Convert.ToInt32(expression.Evaluate(TestContext.Current.CancellationToken)));
+    }
+
+    [Fact]
+    public void DeeplyNestedExpressionShouldThrowParserExceptionWhenLargerStackIsOff()
+    {
+        var expression = new string('(', LargeStackDepth) + "1" + new string(')', LargeStackDepth);
+        var stackSize = LogicalExpressionParser.DeepExpressionStackSize;
+        LogicalExpressionParser.DeepExpressionStackSize = 0;
+        try
+        {
+            Assert.Throws<NCalcParserException>(() => new Expression(expression, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            LogicalExpressionParser.DeepExpressionStackSize = stackSize;
+        }
     }
 
     [Fact]

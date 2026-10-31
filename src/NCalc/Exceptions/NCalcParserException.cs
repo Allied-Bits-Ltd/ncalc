@@ -6,6 +6,11 @@ public sealed class NCalcParserException : NCalcException
 
     public Parlot.TextPosition Position => _position;
 
+    /// <summary>
+    /// Tells that the parser ran out of stack space, so the expression may be parsed on a thread with a larger stack.
+    /// </summary>
+    internal bool IsNestedTooDeeply { get; init; }
+
     public NCalcParserException(string message) : base(message)
     {
     }

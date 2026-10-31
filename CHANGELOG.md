@@ -12,6 +12,7 @@
 * A chain of three or more `**` operators no longer loses operands: `2**2**2**2` is 65536 (right-associative) instead of 16. Previously, only the first three operands were used.
 * Alphabetic keywords and operators (`true`, `false`, `null`, `return`, `not`, `and`, `or`, `xor`, `mod`, `div`, `in`, `like`, `BIT_*`, `if`, `else`, `while`, `fn`) are now recognized only as whole words. Previously, they matched the beginning of a longer identifier, so `returnValue * 2` was parsed as `return (Value * 2)`, `trueValue` and `true_flag` failed to parse, and `2 mod3` was accepted as `2 mod 3`.
 * With `ParseComplexNumbers`, the imaginary unit `i` is now recognized only as a whole word or a number suffix (`i`, `2i`). Previously, it took the first letter of identifiers and of the `in` operator, so `2 in (1, 2)`, `index * 2` or `info` failed to parse.
+* Deeply nested expressions can be parsed. All binary operators are parsed by a single loop instead of a nested parser per precedence level, which about doubles the nesting a stack can hold, and an expression that is still nested too deeply is parsed again on a thread with a larger stack (16 MB by default, set by `LogicalExpressionParser.DeepExpressionStackSize`; 0 turns it off). About 3,000–5,000 levels of parentheses, function calls or ternaries are now accepted instead of about 60–160. Serialization (`ToString()`), parameter and function extraction and lambda compilation throw `NCalcException` when the stack runs low instead of crashing the process.
 
 # 9.0.6.5  (Allied Bits)
 

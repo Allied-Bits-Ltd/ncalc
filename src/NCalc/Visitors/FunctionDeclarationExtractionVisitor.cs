@@ -1,4 +1,5 @@
 using NCalc.Domain;
+using NCalc.Helpers;
 
 namespace NCalc.Visitors;
 
@@ -14,6 +15,7 @@ internal sealed class FunctionDeclarationExtractionVisitor : ILogicalExpressionV
 
     public bool Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         foreach (var value in list)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -22,35 +24,62 @@ internal sealed class FunctionDeclarationExtractionVisitor : ILogicalExpressionV
         return true;
     }
 
-    public bool Visit(UnaryExpression expression, CancellationToken cancellationToken = default) => expression.Expression.Accept(this, cancellationToken);
+    public bool Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return expression.Expression.Accept(this, cancellationToken);
+    }
 
     public bool Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         expression.LeftExpression.Accept(this, cancellationToken);
         return expression.RightExpression.Accept(this, cancellationToken);
     }
 
     public bool Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         expression.LeftExpression.Accept(this, cancellationToken);
         expression.MiddleExpression.Accept(this, cancellationToken);
         return expression.RightExpression.Accept(this, cancellationToken);
     }
 
-    public bool Visit(FunctionCall function, CancellationToken cancellationToken = default) => function.Parameters.Accept(this, cancellationToken);
+    public bool Visit(FunctionCall function, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return function.Parameters.Accept(this, cancellationToken);
+    }
 
-    public bool Visit(PercentExpression expression, CancellationToken cancellationToken = default) => expression.Expression.Accept(this, cancellationToken);
+    public bool Visit(PercentExpression expression, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return expression.Expression.Accept(this, cancellationToken);
+    }
 
-    public bool Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default) => expression.Expression.Accept(this, cancellationToken);
+    public bool Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return expression.Expression.Accept(this, cancellationToken);
+    }
 
-    public bool Visit(VectorExpression expression, CancellationToken cancellationToken = default) => expression.Expressions.Accept(this, cancellationToken);
+    public bool Visit(VectorExpression expression, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return expression.Expressions.Accept(this, cancellationToken);
+    }
 
     public bool Visit(ValueExpression expression, CancellationToken cancellationToken = default) => true;
 
-    public bool Visit(ExpressionGroup group, CancellationToken cancellationToken = default) => group.Expression.Accept(this, cancellationToken);
+    public bool Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return group.Expression.Accept(this, cancellationToken);
+    }
 
     public bool Visit(FunctionExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         Functions.Add(expression.Function);
         foreach (var parameter in expression.Function.Parameters)
             parameter.DefaultValue?.Accept(this, cancellationToken);
@@ -59,6 +88,7 @@ internal sealed class FunctionDeclarationExtractionVisitor : ILogicalExpressionV
 
     public bool Visit(StatementSequence seq, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         foreach (var value in seq)
         {
             cancellationToken.ThrowIfCancellationRequested();

@@ -1,4 +1,5 @@
 ﻿using NCalc.Domain;
+using NCalc.Helpers;
 
 namespace NCalc.Visitors;
 
@@ -11,6 +12,7 @@ public sealed class ParameterExtractionVisitor : ILogicalExpressionVisitor<List<
 
     public List<string> Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         var parameters = new List<string>();
         foreach (var value in list)
         {
@@ -30,10 +32,15 @@ public sealed class ParameterExtractionVisitor : ILogicalExpressionVisitor<List<
         return parameters;
     }
 
-    public List<string> Visit(UnaryExpression expression, CancellationToken cancellationToken = default) => expression.Expression.Accept(this, cancellationToken);
+    public List<string> Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return expression.Expression.Accept(this, cancellationToken);
+    }
 
     public List<string> Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         var leftParameters = expression.LeftExpression.Accept(this, cancellationToken);
         var rightParameters = expression.RightExpression.Accept(this, cancellationToken);
 
@@ -43,6 +50,7 @@ public sealed class ParameterExtractionVisitor : ILogicalExpressionVisitor<List<
 
     public List<string> Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         var leftParameters = expression.LeftExpression.Accept(this, cancellationToken);
         var middleParameters = expression.MiddleExpression.Accept(this, cancellationToken);
         var rightParameters = expression.RightExpression.Accept(this, cancellationToken);
@@ -54,6 +62,7 @@ public sealed class ParameterExtractionVisitor : ILogicalExpressionVisitor<List<
 
     public List<string> Visit(FunctionCall function, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         var parameters = new List<string>();
 
         var innerParameters = function.Parameters.Accept(this, cancellationToken);
@@ -62,20 +71,41 @@ public sealed class ParameterExtractionVisitor : ILogicalExpressionVisitor<List<
         return parameters.Distinct().ToList();
     }
 
-    public List<string> Visit(PercentExpression expression, CancellationToken cancellationToken = default) => expression.Expression.Accept(this, cancellationToken);
+    public List<string> Visit(PercentExpression expression, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return expression.Expression.Accept(this, cancellationToken);
+    }
 
-    public List<string> Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default) => expression.Expression.Accept(this, cancellationToken);
+    public List<string> Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return expression.Expression.Accept(this, cancellationToken);
+    }
 
-    public List<string> Visit(VectorExpression expression, CancellationToken cancellationToken = default) => expression.Expressions.Accept(this, cancellationToken);
+    public List<string> Visit(VectorExpression expression, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return expression.Expressions.Accept(this, cancellationToken);
+    }
 
     public List<string> Visit(ValueExpression expression, CancellationToken cancellationToken = default) => [];
 
-    public List<string> Visit(ExpressionGroup group, CancellationToken cancellationToken = default) => group.Expression.Accept(this, cancellationToken);
+    public List<string> Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return group.Expression.Accept(this, cancellationToken);
+    }
 
-    public List<string> Visit(FunctionExpression expression, CancellationToken cancellationToken = default) => expression.Function.Body.Accept(this, cancellationToken);
+    public List<string> Visit(FunctionExpression expression, CancellationToken cancellationToken = default)
+    {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+        return expression.Function.Body.Accept(this, cancellationToken);
+    }
 
     public List<string> Visit(StatementSequence seq, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         var parameters = new List<string>();
         foreach (var value in seq)
         {
