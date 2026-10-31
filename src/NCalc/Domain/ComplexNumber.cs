@@ -291,14 +291,14 @@ namespace NCalc.Domain
         {
             formatProvider ??= CultureInfo.InvariantCulture;
 
-            string realStr = Real.ToString();
+            string realStr = MathHelper.FormatBigDecimal(Real, formatProvider);
 
             object absImg = MathHelper.Abs(Imaginary, _mathHelperOptions);
 
             string imagStr;
 
             if (absImg is BigDecimal bd)
-                imagStr = bd.ToString();
+                imagStr = MathHelper.FormatBigDecimal(bd, formatProvider);
             else
                 if (absImg is double d)
                     imagStr = d.ToString(format, formatProvider);

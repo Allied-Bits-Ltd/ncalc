@@ -53,6 +53,28 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         return false;
     }
 
+    // Like ExpressionsEvaluated, but the right operand is not evaluated when the left one is null (and TreatNullAsZero is not set),
+    // as in the recursive evaluator, where such operators return null without evaluating the right operand
+    private bool ExpressionsEvaluatedUnlessLeftNull(ExpressionTask<ValueTask<object?>> task, LogicalExpression expression1, LogicalExpression expression2)
+    {
+        if (task.ChildStates.Count == 0)
+        {
+            task.ChildStates.Add(new ExpressionState<ValueTask<object?>>(expression1));
+            return false;
+        }
+
+        if (task.ChildStates.Count == 1)
+        {
+            if (task.ChildStates[0].Value is null && !context.Options.HasFlag(ExpressionOptions.TreatNullAsZero))
+                return true;
+
+            task.ChildStates.Add(new ExpressionState<ValueTask<object?>>(expression2));
+            return false;
+        }
+
+        return task.ChildStates[1].ValueSet;
+    }
+
     public virtual ValueTask<object?> Visit(TernaryExpression expression, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
     {
         // Request the value of the condition
@@ -119,7 +141,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                 case BinaryExpressionType.PlusAssignment:
                 {
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -165,7 +187,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 }
                 case BinaryExpressionType.MinusAssignment:
                 {
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -211,7 +233,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 }
                 case BinaryExpressionType.MultiplyAssignment:
                 {
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -255,7 +277,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                 case BinaryExpressionType.DivAssignment:
                 {
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -318,7 +340,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                 case BinaryExpressionType.AndAssignment:
 
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -335,7 +357,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         cancellationToken).ConfigureAwait(false));
 
                 case BinaryExpressionType.OrAssignment:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -350,7 +372,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         cancellationToken).ConfigureAwait(false));
 
                 case BinaryExpressionType.XOrAssignment:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -458,7 +480,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                 case BinaryExpressionType.Div:
                 {
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -523,7 +545,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                 case BinaryExpressionType.IntDivB:
                 case BinaryExpressionType.IntDivP:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -565,7 +587,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                 case BinaryExpressionType.Minus:
                 {
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -611,7 +633,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 }
 
                 case BinaryExpressionType.Modulo:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -621,7 +643,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                 case BinaryExpressionType.Plus:
                 {
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -668,7 +690,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                 case BinaryExpressionType.Times:
                 {
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -710,7 +732,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 }
 
                 case BinaryExpressionType.BitwiseAnd:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -728,7 +750,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             MathHelper.ConvertToULong(rightValue, "Bitwise And", context.CultureInfo, expression.RightExpression.Location));
 
                 case BinaryExpressionType.BitwiseOr:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -746,7 +768,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         MathHelper.ConvertToULong(rightValue, "Bitwise Or", context.CultureInfo, expression.RightExpression.Location));
 
                 case BinaryExpressionType.BitwiseXOr:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -764,7 +786,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             MathHelper.ConvertToULong(rightValue, "Bitwise XOr", context.CultureInfo, expression.RightExpression.Location));
 
                 case BinaryExpressionType.LeftShift:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -774,7 +796,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return SetTaskValue(task, MathHelper.LeftShift(leftValue, rightValue, true, context));
 
                 case BinaryExpressionType.RightShift:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -784,7 +806,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return SetTaskValue(task, MathHelper.RightShift(leftValue, rightValue, true, context));
 
                 case BinaryExpressionType.Exponentiation:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -794,7 +816,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return SetTaskValue(task, MathHelper.Pow(leftValue, rightValue, true, context));
 
                 case BinaryExpressionType.Factorial:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -804,7 +826,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return SetTaskValue(task, MathHelper.Factorial(leftValue!, rightValue!, context));
 
                 case BinaryExpressionType.In:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -814,7 +836,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return SetTaskValue(task, EvaluationHelper.In(rightValue, leftValue, context));
 
                 case BinaryExpressionType.NotIn:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -825,7 +847,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                 case BinaryExpressionType.Like:
                 {
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -837,7 +859,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                 case BinaryExpressionType.NotLike:
                 {
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
                         return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
@@ -927,7 +949,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                                 result = identList[lowerBound + i];
 
                                 if (result is LogicalExpression expr)
-                                    result = await expr.AcceptNoRecurse(this, new ExpressionTask<ValueTask<object?>>(null, new ExpressionState<ValueTask<object?>>(expr)), cancellationToken).ConfigureAwait(false);
+                                    result = await EvaluateNoRecurseAsync(expr, cancellationToken).ConfigureAwait(false); // the whole element, not a single step of it
                                 resultArr[i] = result;
                             }
                             result = resultArr;
@@ -1000,7 +1022,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             result = identString[index];
                         }
                         if (result is LogicalExpression expr)
-                            result = await expr.Accept(this, cancellationToken).ConfigureAwait(false);
+                            result = await EvaluateNoRecurseAsync(expr, cancellationToken).ConfigureAwait(false);
                     }
                     return SetTaskValue(task, result);
                 }
@@ -1063,7 +1085,12 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         {
             object? value = task.ChildStates[0].Value;
 
-            SetTaskValue(task, K3LogicHelper.Not(value));
+            object? notValue = SetTaskValue(task, K3LogicHelper.Not(value));
+#if NET8_0_OR_GREATER
+            return ValueTask.FromResult(notValue);
+#else
+            return new ValueTask<object?>(notValue);
+#endif
         }
 
         if (!TryGetValueOrNull(task.ChildStates[0].Value, out object? result))
@@ -1210,9 +1237,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     {
         if (task.ChildStates.Count < list.Count)
         {
-            foreach(LogicalExpression expression in list)
-                if (task.ChildStates.Any(e => e.Expression == expression) == false)
-                    task.ChildStates.Add(new ExpressionState<ValueTask<object?>>(expression));
+            // One state per position: the same node may appear more than once, so states are not looked up by the expression
+            for (int i = task.ChildStates.Count; i < list.Count; i++)
+                task.ChildStates.Add(new ExpressionState<ValueTask<object?>>(list[i]));
 #if NET8_0_OR_GREATER
             return ValueTask.FromResult((object?)null);
 #else
@@ -1276,9 +1303,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
         if (task.ChildStates.Count < seq.Count)
         {
-            foreach (LogicalExpression expression in seq)
-                if (task.ChildStates.Any(e => e.Expression == expression) == false)
-                    task.ChildStates.Add(new ExpressionState<ValueTask<object?>>(expression));
+            // One state per position: the same node may appear more than once, so states are not looked up by the expression
+            for (int i = task.ChildStates.Count; i < seq.Count; i++)
+                task.ChildStates.Add(new ExpressionState<ValueTask<object?>>(seq[i]));
 #if NET8_0_OR_GREATER
             return ValueTask.FromResult((object?)null);
 #else
@@ -1295,7 +1322,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 #endif
         }
 
-        result = task.ChildStates[^1].Value;
+        // As in the recursive evaluator, TreatNullAsZero applies to the result of the sequence
+        if (!TryGetValueOrNull(task.ChildStates[^1].Value, out result))
+            result = null;
 
         /*if ((context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true) && result is Percent valPercent)
             result = valPercent.Value;*/

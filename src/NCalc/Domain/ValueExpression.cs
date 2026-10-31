@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Text.Json.Serialization;
 
 using ExtendedNumerics;
@@ -23,8 +23,26 @@ public sealed class ValueExpression : LogicalExpression
     internal StringKind StringKind { get; private set; }
     internal string? OriginalString { get; private set; }
 
+    private object? _value;
+    private Func<object>? _valueFactory;
+
     [JsonConverter(typeof(ObjectValueJsonConverter))]
-    public object? Value { get; set; }
+    public object? Value
+    {
+        // A relative date or time literal such as #now# or #today# is computed again whenever its value is read,
+        // so it is not frozen at the time of parsing (parsed expressions are cached and evaluated many times)
+        get => _valueFactory is not null ? _valueFactory() : _value;
+        set
+        {
+            _value = value;
+            _valueFactory = null;
+        }
+    }
+
+    /// <summary>
+    /// The function that computes the value of a relative date or time literal, or null for a constant value.
+    /// </summary>
+    internal Func<object>? ValueFactory => _valueFactory;
     public ValueType Type { get; set; }
 
     public ValueExpression()
@@ -69,6 +87,12 @@ public sealed class ValueExpression : LogicalExpression
         Type = ValueType.String;
         OriginalString = originalString;
         StringKind = kind;
+    }
+
+    internal ValueExpression(Func<object> valueFactory, ValueType type)
+    {
+        _valueFactory = valueFactory;
+        Type = type;
     }
 
     public ValueExpression(char value)

@@ -53,6 +53,8 @@ public class WhiteSpaceParser : Parser<TextSpan>
                 if (nextChars.Equals("///", StringComparison.Ordinal))
                     break;
             }
+            if (_supportPythonComments && IsDateTimeLiteralStart(context.Scanner.Buffer, context.Scanner.Cursor.Offset))
+                break;
             if (!_commentParser.Parse(context, ref result))
                 break;
         }
@@ -69,6 +71,29 @@ public class WhiteSpaceParser : Parser<TextSpan>
 
         context.ExitParser(this);
         return true;
+    }
+
+    /// <summary>
+    /// Tells whether a '#' starts a date or time literal (#2001-01-01#, #now#) rather than a Python-style comment: the literal
+    /// starts with a letter or a digit and is closed by another '#' on the same line, while a comment usually starts with "# ".
+    /// </summary>
+    private static bool IsDateTimeLiteralStart(string buffer, int offset)
+    {
+        if (offset + 1 >= buffer.Length || buffer[offset] != '#')
+            return false;
+
+        // A literal starts with a letter or a digit (#2001-01-01#, #now#, #1 month ago#) or with a minus and a digit (#-02:00#),
+        // while decorated comments such as #* ... *# or #----# do not
+        char first = buffer[offset + 1];
+        if (!char.IsLetterOrDigit(first) && !(first == '-' && offset + 2 < buffer.Length && char.IsDigit(buffer[offset + 2])))
+            return false;
+
+        for (int i = offset + 1; i < buffer.Length && buffer[i] != '\n' && buffer[i] != '\r'; i++)
+        {
+            if (buffer[i] == '#')
+                return true;
+        }
+        return false;
     }
 
     public override string ToString() => $"WhiteSpaceParser";

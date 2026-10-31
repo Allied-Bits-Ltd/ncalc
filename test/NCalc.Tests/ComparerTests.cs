@@ -1,4 +1,10 @@
+using System.Numerics;
+
+using ExtendedNumerics;
+
+using NCalc.Domain;
 using NCalc.Exceptions;
+using NCalc.Helpers;
 
 namespace NCalc.Tests;
 
@@ -184,5 +190,150 @@ public class ComparerTests
         var asyncExpression = new AsyncExpression(expression);
         asyncExpression.Parameters["x"] = value;
         Assert.Equal(expected, await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static async Task<object?[]> EvaluateInAllEvaluators(string expression, ExpressionOptions options, IDictionary<string, object?>? parameters = null, CultureInfo? cultureInfo = null, AdvExpressionOptions advancedOptions = AdvExpressionOptions.None)
+    {
+        var results = new List<object?>();
+        foreach (var nonRecursive in new[] { false, true })
+        {
+            var o = options | ExpressionOptions.NoCache | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+            var syncExpression = new Expression(expression, o, cultureInfo ?? CultureInfo.InvariantCulture);
+            var asyncExpression = new AsyncExpression(expression, o, cultureInfo ?? CultureInfo.InvariantCulture);
+            if (advancedOptions != AdvExpressionOptions.None)
+            {
+                syncExpression.AdvancedOptions = new AdvancedExpressionOptions(syncExpression.CultureInfo, advancedOptions);
+                asyncExpression.AdvancedOptions = new AdvancedExpressionOptions(asyncExpression.CultureInfo, advancedOptions);
+            }
+            foreach (var parameter in parameters ?? new Dictionary<string, object?>())
+            {
+                syncExpression.Parameters[parameter.Key] = parameter.Value;
+                asyncExpression.Parameters[parameter.Key] = parameter.Value;
+            }
+            results.Add(syncExpression.Evaluate(TestContext.Current.CancellationToken));
+            results.Add(await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken));
+        }
+        return results.ToArray();
+    }
+
+    [Theory]
+    [InlineData(ExpressionOptions.NoStringTypeCoercion, "'5'", 1)]
+    [InlineData(ExpressionOptions.NoStringTypeCoercion, "'5'", 5)]
+    [InlineData(ExpressionOptions.CompareIncompatibleTypes, "#2020-01-01#", 5)]
+    public async Task ValuesThatCannotBeComparedShouldOnlyBeUnequal(ExpressionOptions options, string left, int right)
+    {
+        // Previously "'5' < 1" and "1 < '5'" were both true, and CompareIncompatibleTypes ordered values by their hash codes
+        foreach (var (a, b) in new[] { (left, right.ToString(CultureInfo.InvariantCulture)), (right.ToString(CultureInfo.InvariantCulture), left) })
+        {
+            foreach (var op in new[] { "<", "<=", ">", ">=", "==" })
+                Assert.All(await EvaluateInAllEvaluators($"{a} {op} {b}", options), r => Assert.Equal(false, r));
+            Assert.All(await EvaluateInAllEvaluators($"{a} != {b}", options), r => Assert.Equal(true, r));
+        }
+    }
+
+    public static TheoryData<string, object, object, bool> NumbersOfDifferentKindsData => new()
+    {
+        { "a < b", 1m, 1e300, true },
+        { "a < b", decimal.MaxValue, 1e30, true },
+        { "a < b", 1m, double.PositiveInfinity, true },
+        { "a > b", 1m, double.NegativeInfinity, true },
+        { "a > b", ulong.MaxValue, 1L, true },
+        { "a > b", 9223372036854775808UL, -1, true },
+        { "a == b", ulong.MaxValue, long.MaxValue, false },
+        { "a < b", -1L, 0UL, true },
+        { "a == b", new BigInteger(10), 1.5, false },
+        { "a > b", new BigInteger(10), 1.5, true },
+        { "a == b", new BigInteger(10), 10m, true },
+        { "a == b", new BigInteger(10), "10", true },
+        { "a == b", new BigDecimal(10), "abc", false },
+        { "a < b", new BigDecimal(10), double.PositiveInfinity, true },
+    };
+
+    [Theory]
+    [MemberData(nameof(NumbersOfDifferentKindsData))]
+    public async Task NumbersOfDifferentKindsShouldBeComparedByValue(string expression, object a, object b, bool expected)
+    {
+        var results = await EvaluateInAllEvaluators(expression, ExpressionOptions.None, new Dictionary<string, object?> { ["a"] = a, ["b"] = b });
+        Assert.All(results, r => Assert.Equal(expected, r));
+    }
+
+    [Fact]
+    public void MathHelperCompareShouldOrderMixedNumbers()
+    {
+        var comparisonOptions = new ComparisonOptions(CultureInfo.InvariantCulture, ExpressionOptions.None);
+        var mathHelperOptions = new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.None);
+
+        Assert.True(MathHelper.Compare(1, new BigDecimal(2), comparisonOptions, mathHelperOptions) < 0);
+        Assert.True(MathHelper.Compare(1, new BigInteger(2), comparisonOptions, mathHelperOptions) < 0);
+        Assert.True(MathHelper.Compare(new BigDecimal(2), 1, comparisonOptions, mathHelperOptions) > 0);
+        Assert.Equal(0, MathHelper.Compare(double.NaN, double.NaN, comparisonOptions, mathHelperOptions));
+
+        var values = new List<object?> { 3, new BigDecimal(1), 2, new BigDecimal(5), 0 };
+        values.Sort(new BoxedNumberComparer(comparisonOptions, mathHelperOptions));
+        Assert.Equal([0.0, 1.0, 2.0, 3.0, 5.0], values.Select(v => MathHelper.ConvertToDouble(v, mathHelperOptions)));
+    }
+
+    [Theory]
+    [InlineData("de-DE", "'1,5' == 1.5", true)]
+    [InlineData("de-DE", "1.5 in ('1,5', 2)", true)]
+    [InlineData("de-DE", "x LIKE '1,5'", true)]
+    [InlineData("en-US", "'1,5' == 1.5", false)]
+    [InlineData("en-US", "1.5 in ('1.5', 2)", true)]
+    [InlineData("en-US", "x LIKE '1.5'", true)]
+    [InlineData("en-US", "x in ('1.5', 2)", true)]
+    public async Task ComparisonsShouldUseTheCultureOfTheExpression(string expressionCulture, string expression, bool expected)
+    {
+        // The result must not depend on the culture of the thread, only on the culture of the expression
+        var oldCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            foreach (var threadCulture in new[] { "en-US", "de-DE", "sk-SK" })
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(threadCulture);
+                var results = await EvaluateInAllEvaluators(expression, ExpressionOptions.None, new Dictionary<string, object?> { ["x"] = 1.5 }, CultureInfo.GetCultureInfo(expressionCulture));
+                Assert.All(results, r => Assert.Equal(expected, r));
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = oldCulture;
+        }
+    }
+
+    [Theory]
+    [InlineData("tr-TR", false)]
+    [InlineData("en-US", true)]
+    public async Task CaseInsensitiveComparisonShouldUseTheCultureOfTheExpression(string expressionCulture, bool expected)
+    {
+        var results = await EvaluateInAllEvaluators("'i' == 'I'", ExpressionOptions.CaseInsensitiveStringComparer, cultureInfo: CultureInfo.GetCultureInfo(expressionCulture));
+        Assert.All(results, r => Assert.Equal(expected, r));
+    }
+
+    [Theory]
+    [InlineData("(1+2i) == (1+2i)", AdvExpressionOptions.ParseComplexNumbers, true)]
+    [InlineData("(1+2i) != (1+3i)", AdvExpressionOptions.ParseComplexNumbers, true)]
+    [InlineData("i*i == -1", AdvExpressionOptions.ParseComplexNumbers, true)]
+    [InlineData("10% == 10%", AdvExpressionOptions.CalculatePercent, true)]
+    [InlineData("10% < 20%", AdvExpressionOptions.CalculatePercent, true)]
+    [InlineData("[1;2] == [1;2]", AdvExpressionOptions.ParseVectors, true)]
+    [InlineData("[1;2] == [1;3]", AdvExpressionOptions.ParseVectors, false)]
+    [InlineData("[1;2] != 1", AdvExpressionOptions.ParseVectors, true)]
+    public async Task ComplexNumbersVectorsAndPercentsShouldBeComparable(string expression, AdvExpressionOptions advancedOptions, bool expected)
+    {
+        var results = await EvaluateInAllEvaluators(expression, ExpressionOptions.None, advancedOptions: advancedOptions);
+        Assert.All(results, r => Assert.Equal(expected, r));
+    }
+
+    [Fact]
+    public void OrderingComplexNumbersOrVectorsShouldFailClearly()
+    {
+        var complex = new Expression("(1+2i) < (1+3i)", ExpressionOptions.NoCache) { AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.ParseComplexNumbers) };
+        Assert.Throws<NCalcEvaluationException>(() => complex.Evaluate(TestContext.Current.CancellationToken));
+
+        var vector = new Expression("[1;2] < [1;3]", ExpressionOptions.NoCache) { AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.ParseVectors) };
+        Assert.Throws<NCalcEvaluationException>(() => vector.Evaluate(TestContext.Current.CancellationToken));
+
+        var percent = new Expression("Max(10%, 20%)", ExpressionOptions.NoCache) { AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.CalculatePercent) };
+        Assert.Equal(20, Convert.ToInt32(((Percent)percent.Evaluate(TestContext.Current.CancellationToken)!).Value, CultureInfo.InvariantCulture));
     }
 }

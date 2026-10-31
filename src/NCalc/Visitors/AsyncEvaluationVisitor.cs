@@ -1026,7 +1026,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         }
 
         // Recursively evaluates the underlying expression
-        var result = await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false);
+        if (!TryGetValueOrNull(await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false), out object? result))
+            return null;
 
         return EvaluationHelper.Unary(expression, result, context);
     }
@@ -1034,19 +1035,17 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     public virtual async ValueTask<object?> Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
         EnsureSufficientExecutionStack(expression);
-        object? result = await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false);
-        if (result is null)
-            return result;
-        return new Percent(result);
+        if (!TryGetValueOrNull(await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false), out object? result))
+            return null;
+        return new Percent(result!);
     }
 
     public virtual async ValueTask<object?> Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
         EnsureSufficientExecutionStack(expression);
-        object? result = await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false);
-        if (result is null)
-            return result;
-        return new ComplexNumber(0, result, new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options));
+        if (!TryGetValueOrNull(await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false), out object? result))
+            return null;
+        return new ComplexNumber(0, result!, new MathHelperOptions(expression.CultureInfo ?? CultureInfo.CurrentCulture, expression.Options));
     }
 
     public virtual async ValueTask<object?> Visit(VectorExpression expression, CancellationToken cancellationToken = default)
@@ -1248,6 +1247,10 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             cancellationToken.ThrowIfCancellationRequested();
         }
 
+        // As in the synchronous evaluator, TreatNullAsZero applies to the result of the sequence
+        if (!TryGetValueOrNull(result, out result))
+            return null;
+
         return result;
     }
 
@@ -1258,8 +1261,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
         if (!context.Options.HasFlag(ExpressionOptions.CompareNullValues))
         {
+            // A null value is unequal to any other value, as in the synchronous evaluator
             if ((a is null || b is null) && !(a is null && b is null))
-                return false;
+                return comparisonType == ComparisonType.NotEqual;
         }
         return EvaluationHelper.Compare(a, b, comparisonType, context);
     }
@@ -1300,8 +1304,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             await currentTask.State.Expression.AcceptNoRecurse<ValueTask<object?>>(this, currentTask, cancellationToken).ConfigureAwait(false);
             if (currentTask.State.ValueSet)
             {
-                // Remove the current task from the stack
-                stack.Remove(currentTask);
+                // Remove the current task from the stack; it is the last one, so no search is needed
+                stack.RemoveAt(stack.Count - 1);
             }
             else
             {

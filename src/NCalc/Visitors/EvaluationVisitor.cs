@@ -1315,8 +1315,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             _ = currentTask.State.Expression.AcceptNoRecurse(this, currentTask, cancellationToken);
             if (currentTask.State.ValueSet)
             {
-                // Remove the current task from the stack
-                stack.Remove(currentTask);
+                // Remove the current task from the stack; it is the last one, so no search is needed
+                stack.RemoveAt(stack.Count - 1);
             }
             else
             {

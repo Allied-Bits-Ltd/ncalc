@@ -1,4 +1,4 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Collections.Concurrent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -105,6 +105,27 @@ public static class LogicalExpressionParser
     /// The levels are listed from the tightest to the loosest and are tried in this order at every position.
     /// A level whose operator matches but is not followed by an operand gives way to the next level, as the nested parsers did.
     /// </summary>
+    /// <summary>
+    /// Creates a time span from the parts of a time literal. TimeSpan.TryParse would read "25:00:00" as 25 days, so the parts are
+    /// checked explicitly: minutes and seconds must be below 60, and hours below 24 when the literal also has days ("1.23:00:00");
+    /// without days, any number of hours is allowed ("25:00:00" is 25 hours).
+    /// </summary>
+    private static bool TryCreateTimeSpan(string hours, string minutes, string? seconds, bool hasDays, out TimeSpan result)
+    {
+        result = default;
+        int secondValue = 0;
+        if (!int.TryParse(hours, NumberStyles.None, CultureInfo.InvariantCulture, out int hourValue)
+            || !int.TryParse(minutes, NumberStyles.None, CultureInfo.InvariantCulture, out int minuteValue)
+            || (seconds is not null && !int.TryParse(seconds, NumberStyles.None, CultureInfo.InvariantCulture, out secondValue)))
+            return false;
+
+        if (minuteValue > 59 || secondValue > 59 || (hasDays && hourValue > 23))
+            return false;
+
+        result = new TimeSpan(hourValue, minuteValue, secondValue);
+        return true;
+    }
+
     private sealed class BinaryOperatorParser(Parser<LogicalExpression> operand, Parser<BinaryExpressionType>[] levels) : Parser<LogicalExpression>
     {
         public override bool Parse(ParseContext context, ref ParseResult<LogicalExpression> result)
@@ -358,9 +379,13 @@ public static class LogicalExpressionParser
                         }
                         else
                         {
-                            long converted = Convert.ToInt64(strValue, 16);
-                            if (converted >= int.MinValue && converted <= int.MaxValue)
+                            // The digits are a magnitude, not a two's-complement bit pattern: 0xFFFFFFFFFFFFFFFF is ulong.MaxValue, as 0xFFFFFFFF is uint.MaxValue
+                            ulong converted = Convert.ToUInt64(strValue, 16);
+                            if (converted <= int.MaxValue)
                                 return new ValueExpression((object)(int)converted).SetLocation(new ParlotExpressionLocation(ctx));
+                            else
+                            if (converted <= long.MaxValue)
+                                return new ValueExpression((object)(long)converted).SetLocation(new ParlotExpressionLocation(ctx));
                             else
                                 return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         }
@@ -413,9 +438,13 @@ public static class LogicalExpressionParser
                         }
                         else
                         {
-                            long converted = Convert.ToInt64(strValue, 8);
-                            if (converted >= int.MinValue && converted <= int.MaxValue)
+                            // The digits are a magnitude, not a two's-complement bit pattern: 0xFFFFFFFFFFFFFFFF is ulong.MaxValue, as 0xFFFFFFFF is uint.MaxValue
+                            ulong converted = Convert.ToUInt64(strValue, 8);
+                            if (converted <= int.MaxValue)
                                 return new ValueExpression((object)(int)converted).SetLocation(new ParlotExpressionLocation(ctx));
+                            else
+                            if (converted <= long.MaxValue)
+                                return new ValueExpression((object)(long)converted).SetLocation(new ParlotExpressionLocation(ctx));
                             else
                                 return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         }
@@ -462,9 +491,13 @@ public static class LogicalExpressionParser
                         }
                         else
                         {
-                            long converted = Convert.ToInt64(strValue, 2);
-                            if (converted >= int.MinValue && converted <= int.MaxValue)
+                            // The digits are a magnitude, not a two's-complement bit pattern: 0xFFFFFFFFFFFFFFFF is ulong.MaxValue, as 0xFFFFFFFF is uint.MaxValue
+                            ulong converted = Convert.ToUInt64(strValue, 2);
+                            if (converted <= int.MaxValue)
                                 return new ValueExpression((object)(int)converted).SetLocation(new ParlotExpressionLocation(ctx));
+                            else
+                            if (converted <= long.MaxValue)
+                                return new ValueExpression((object)(long)converted).SetLocation(new ParlotExpressionLocation(ctx));
                             else
                                 return new ValueExpression((object)converted).SetLocation(new ParlotExpressionLocation(ctx));
                         }
@@ -1301,7 +1334,7 @@ public static class LogicalExpressionParser
                 }
                 if (useSecondTime || !onlyCustomTimeTranslation)
                 {
-                    if (TimeSpan.TryParse($"{time.Item3}{builtInTimeSep}{time.Item4}{builtInTimeSep}{time.Item5}", out var result))
+                    if (TryCreateTimeSpan(time.Item3.ToString(), time.Item4.ToString(), time.Item5.ToString(), time.Item2.Length > 0, out var result))
                     {
                         TimeSpan tsResult = result;
 
@@ -1344,7 +1377,7 @@ public static class LogicalExpressionParser
                 }
                 if (useSecondTime || !onlyCustomTimeTranslation)
                 {
-                    if (TimeSpan.TryParse($"{time.Item3}{builtInTimeSep}{time.Item4}", out var result))
+                    if (TryCreateTimeSpan(time.Item3.ToString(), time.Item4.ToString(), null, time.Item2.Length > 0, out var result))
                     {
                         TimeSpan tsResult = result;
 
@@ -1482,8 +1515,7 @@ public static class LogicalExpressionParser
                     int hour = -1;
                     int minute = -1;
                     int second = -1;
-                    int msec = 0;
-                    int mcsec = 0;
+                    long fractionTicks = 0;
 
                     int.TryParse(dateTime.Item1.ToString(), out year);
                     int.TryParse(dateTime.Item2.ToString(), out month);
@@ -1492,42 +1524,14 @@ public static class LogicalExpressionParser
                     int.TryParse(dateTime.Item4.Item2.ToString(), out minute);
                     int.TryParse(dateTime.Item4.Item3.ToString(), out second);
 
-                    if (dateTime.Item4.Item4.Length > 0)
-                    {
-                        int.TryParse(dateTime.Item4.Item4.ToString(), out msec);
-
-                        switch (dateTime.Item4.Item4.Length)
-                        {
-                            case 1:
-                                msec = msec * 100;
-                                break;
-                            case 2:
-                                msec = msec * 10;
-                                break;
-                            case 3:
-                                break;
-                            case 4:
-                                msec = msec / 10;
-                                mcsec = (msec % 10) * 100;
-                                break;
-                            case 5:
-                                msec = msec / 100;
-                                mcsec = (msec % 100) * 10;
-                                break;
-                            case 6:
-                                msec = msec / 1000;
-                                mcsec = (msec % 1000);
-                                break;
-                        }
-                    }
+                    // The fraction of a second has up to 7 digits (ticks), as in the round-trip format "o"; further digits are below the tick resolution
+                    string fraction = dateTime.Item4.Item4.ToString();
+                    if (fraction.Length > 0)
+                        fractionTicks = long.Parse(fraction.PadRight(7, '0').Substring(0, 7), CultureInfo.InvariantCulture);
 
                     try
                     {
-#if NET8_0_OR_GREATER
-                        DateTime result = new DateTime(year, month, day, hour, minute, second, msec, mcsec, DateTimeKind.Utc);
-#else
-                        DateTime result = new DateTime(year, month, day, hour, minute, second, msec, DateTimeKind.Utc);
-#endif
+                        DateTime result = new DateTime(year, month, day, hour, minute, second, DateTimeKind.Utc).AddTicks(fractionTicks);
                         return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                     catch
@@ -1790,27 +1794,36 @@ public static class LogicalExpressionParser
                         }
                     }
 
+                    // Shifts a moment by the period; the period is applied when the value is read, as "1 month" depends on the month
+                    DateTime Shift(DateTime dt, int sign)
+                    {
+                        if (yearValue != 0)
+                            dt = dt.AddYears(sign * yearValue);
+                        if (monthValue != 0)
+                            dt = dt.AddMonths(sign * monthValue);
+                        if (weekValue != 0)
+                            dt = dt.AddDays(sign * weekValue * 7);
+                        if (dayValue != 0)
+                            dt = dt.AddDays(sign * dayValue);
+                        if (hourValue != 0)
+                            dt = dt.AddHours(sign * hourValue);
+                        if (minuteValue != 0)
+                            dt = dt.AddMinutes(sign * minuteValue);
+                        if (secondValue != 0)
+                            dt = dt.AddSeconds(sign * secondValue);
+                        if (msecValue != 0)
+                            dt = dt.AddMilliseconds(sign * msecValue);
+                        return dt;
+                    }
+
+                    // The values below depend on the current time, so they are computed whenever the expression is evaluated, not when it is parsed
                     if (string.IsNullOrEmpty(prefix) && string.IsNullOrEmpty(suffix))
                     {
-                        DateTime current = DateTime.UtcNow;
-                        DateTime dt = current;
-                        if (yearValue != 0)
-                            dt = dt.AddYears(yearValue);
-                        if (monthValue != 0)
-                            dt = dt.AddMonths(monthValue);
-                        if (weekValue != 0)
-                            dt = dt.AddDays(weekValue * 7);
-                        if (dayValue != 0)
-                            dt = dt.AddDays(dayValue);
-                        if (hourValue != 0)
-                            dt = dt.AddHours(hourValue);
-                        if (minuteValue != 0)
-                            dt = dt.AddMinutes(minuteValue);
-                        if (secondValue != 0)
-                            dt = dt.AddSeconds(secondValue);
-                        if (msecValue != 0)
-                            dt = dt.AddMilliseconds(msecValue);
-                        return new ValueExpression(dt - current).SetLocation(new ParlotExpressionLocation(ctx));
+                        return new ValueExpression(() =>
+                        {
+                            DateTime current = DateTime.UtcNow;
+                            return Shift(current, 1) - current;
+                        }, NCalc.Domain.ValueType.TimeSpan).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                     else
                     {
@@ -1819,83 +1832,34 @@ public static class LogicalExpressionParser
                             throw new FormatException(string.Format(errDuplicateTimeRelationIndicators, prefix, suffix));
                         }
 
-                        bool addTime = false;
-                        bool pastTime = false;
-                        DateTime dt = DateTime.Now; // people are interested in local time now, today, before, or after current moment
-
                         prefix = prefix?.ToLowerInvariant();
                         suffix = suffix?.ToLowerInvariant();
 
+                        // people are interested in local time now, today, before, or after current moment
+                        Func<DateTime, DateTime> fromNow;
                         if (prefix is not null && extOptions.PeriodNowIndicators.Contains(prefix))
-                        {
-                            addTime = false;  // ... and use dt as is
-                        }
+                            fromNow = static now => now;
                         else
                         if (prefix is not null && extOptions.PeriodTodayIndicators.Contains(prefix))
-                        {
-                            addTime = false;
-                            dt = dt.Date;
-                        }
+                            fromNow = static now => now.Date;
                         else
                         if (prefix is not null && extOptions.PeriodYesterdayIndicators.Contains(prefix))
-                        {
-                            addTime = false;
-                            dt = dt.Date.AddDays(-1);
-                        }
+                            fromNow = static now => now.Date.AddDays(-1);
                         else
                         if (prefix is not null && extOptions.PeriodTomorrowIndicators.Contains(prefix))
-                        {
-                            addTime = false;
-                            dt = dt.Date.AddDays(1);
-                        }
+                            fromNow = static now => now.Date.AddDays(1);
                         else
                         if ((prefix is not null && extOptions.PeriodPastIndicators.Contains(prefix)) || (suffix is not null && extOptions.PeriodPastIndicators.Contains(suffix)))
-                        {
-                            addTime = true;
-                            pastTime = true;
-                        }
+                            fromNow = now => Shift(now, -1);
                         else
                         if ((prefix is not null && extOptions.PeriodFutureIndicators.Contains(prefix)) || (suffix is not null && extOptions.PeriodFutureIndicators.Contains(suffix)))
-                        {
-                            addTime = true;
-                            pastTime = false;
-                        }
+                            fromNow = now => Shift(now, 1);
                         else
                         {
                             throw new FormatException(string.Format(errUnrecognizedTimeRelationIndicator, prefix));
                         }
 
-                        if (addTime)
-                        {
-                            if (pastTime)
-                            {
-                                yearValue = -yearValue;
-                                monthValue = -monthValue;
-                                weekValue = -weekValue;
-                                dayValue = -dayValue;
-                                hourValue = -hourValue;
-                                minuteValue = -minuteValue;
-                                secondValue = -secondValue;
-                                msecValue = -msecValue;
-                            }
-                            if (yearValue != 0)
-                                dt = dt.AddYears(yearValue);
-                            if (monthValue != 0)
-                                dt = dt.AddMonths(monthValue);
-                            if (weekValue != 0)
-                                dt = dt.AddDays(weekValue * 7);
-                            if (dayValue != 0)
-                                dt = dt.AddDays(dayValue);
-                            if (hourValue != 0)
-                                dt = dt.AddHours(hourValue);
-                            if (minuteValue != 0)
-                                dt = dt.AddMinutes(minuteValue);
-                            if (secondValue != 0)
-                                dt = dt.AddSeconds(secondValue);
-                            if (msecValue != 0)
-                                dt = dt.AddMilliseconds(msecValue);
-                        }
-                        return new ValueExpression(dt).SetLocation(new ParlotExpressionLocation(ctx));
+                        return new ValueExpression(() => fromNow(DateTime.Now), NCalc.Domain.ValueType.DateTime).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 });
             }
@@ -1919,34 +1883,42 @@ public static class LogicalExpressionParser
 
         if (!options.HasFlag(ExpressionOptions.DontParseGuids))
         {
+            // Only the first group may follow whitespace; the hyphens and the other groups follow directly, so "a - b - c - d - e"
+            // stays a subtraction, and the GUID must be a whole token
             var eightHexSequence = Terms
                 .Pattern(isHexDigit, 8, 8);
 
-            var fourHexSequence = Terms
+            var guidHyphen = Literals.Char('-');
+
+            var fourHexSequence = Literals
                 .Pattern(isHexDigit, 4, 4);
 
-            var twelveHexSequence = Terms
+            var twelveHexSequence = Literals
                 .Pattern(isHexDigit, 12, 12);
 
             var thirtyTwoHexSequence = Terms
                 .Pattern(isHexDigit, 32, 32);
 
             var guidWithHyphens = eightHexSequence
-                    .AndSkip(minus)
+                    .AndSkip(guidHyphen)
                     .And(fourHexSequence)
-                    .AndSkip(minus)
+                    .AndSkip(guidHyphen)
                     .And(fourHexSequence)
-                    .AndSkip(minus)
+                    .AndSkip(guidHyphen)
                     .And(fourHexSequence)
-                    .AndSkip(minus)
+                    .AndSkip(guidHyphen)
                     .And(twelveHexSequence)
+                    .AndSkip(Not(identifierPartChar))
                 .Then<LogicalExpression>(static (ctx, g) =>
                         new ValueExpression(Guid.Parse(g.Item1.ToString() + g.Item2 + g.Item3 + g.Item4 + g.Item5)).SetLocation(new ParlotExpressionLocation(ctx)));
 
             Parser<LogicalExpression> guidWithoutHyphens;
 
+            // 32 hex characters without hyphens are a GUID only when they mix decimal digits and letters:
+            // all digits are a number, and all letters are an identifier
             guidWithoutHyphens = thirtyTwoHexSequence
-                .AndSkip(Not(decimalOrDoubleNumber))
+                .AndSkip(Not(identifierPartChar))
+                .When(static (_, g) => g.Span.IndexOfAny("0123456789".AsSpan()) >= 0 && g.Span.IndexOfAny("abcdefABCDEF".AsSpan()) >= 0)
                 .Then<LogicalExpression>(static (ctx, g) => new ValueExpression(Guid.Parse(g.ToString()!)).SetLocation(new ParlotExpressionLocation(ctx)));
 
             guid = OneOf(guidWithHyphens, guidWithoutHyphens);

@@ -131,8 +131,8 @@ public static class TypeHelper
         {
             true when options.IsCaseInsensitive => StringComparer.OrdinalIgnoreCase,
             true => StringComparer.Ordinal,
-            false when options.IsCaseInsensitive => StringComparer.CurrentCultureIgnoreCase,
-            _ => StringComparer.CurrentCulture
+            // Culture-sensitive comparison uses the culture of the expression, not the culture of the current thread
+            false => StringComparer.Create(options.CultureInfo ?? CultureInfo.CurrentCulture, options.IsCaseInsensitive)
         };
     }
 
@@ -169,6 +169,88 @@ public static class TypeHelper
         }
     }
 
+    /// <summary>
+    /// Compares two numbers exactly when both are integers or at least one of them is a big number. Integers of any size and sign are
+    /// compared by value; a big number is compared as a BigDecimal when either operand has a fractional part, and infinity is greater
+    /// (or smaller) than any finite number. Other pairs are left to the caller.
+    /// </summary>
+    internal static bool TryCompareNumbers(object? a, object? b, out int outcome)
+    {
+        outcome = 0;
+        if (a is null || b is null)
+            return false;
+
+        bool bigA = a is BigInteger or BigDecimal, bigB = b is BigInteger or BigDecimal;
+        if (MathHelper.IsBoxedIntegerNumber(a) && MathHelper.IsBoxedIntegerNumber(b))
+        {
+            bool unsignedA = a is byte or ushort or uint or ulong, unsignedB = b is byte or ushort or uint or ulong;
+            if (!unsignedA && !unsignedB)
+                outcome = Convert.ToInt64(a, CultureInfo.InvariantCulture).CompareTo(Convert.ToInt64(b, CultureInfo.InvariantCulture));
+            else
+            if (unsignedA && unsignedB)
+                outcome = Convert.ToUInt64(a, CultureInfo.InvariantCulture).CompareTo(Convert.ToUInt64(b, CultureInfo.InvariantCulture));
+            else
+            {
+                // A negative signed value is smaller than any unsigned value; otherwise both fit in ulong
+                long signedValue = Convert.ToInt64(unsignedA ? b : a, CultureInfo.InvariantCulture);
+                ulong unsignedValue = Convert.ToUInt64(unsignedA ? a : b, CultureInfo.InvariantCulture);
+                int signedComparedToUnsigned = signedValue < 0 ? -1 : ((ulong)signedValue).CompareTo(unsignedValue);
+                outcome = unsignedA ? -signedComparedToUnsigned : signedComparedToUnsigned;
+            }
+            return true;
+        }
+
+        if (!(bigA || bigB) || !MathHelper.IsBoxedNumberOrBigNumber(a) || !MathHelper.IsBoxedNumberOrBigNumber(b))
+            return false;
+
+        if (GetInfinitySign(a) is { } infinityA)
+        {
+            outcome = infinityA;
+            return true;
+        }
+        if (GetInfinitySign(b) is { } infinityB)
+        {
+            outcome = -infinityB;
+            return true;
+        }
+        if (a is double or float && double.IsNaN(Convert.ToDouble(a, CultureInfo.InvariantCulture)))
+        {
+            outcome = -1;
+            return true;
+        }
+        if (b is double or float && double.IsNaN(Convert.ToDouble(b, CultureInfo.InvariantCulture)))
+        {
+            outcome = 1;
+            return true;
+        }
+
+        if (a is BigInteger || MathHelper.IsBoxedIntegerNumber(a))
+        {
+            if (b is BigInteger || MathHelper.IsBoxedIntegerNumber(b))
+            {
+                outcome = MathHelper.ConvertToBigInteger(a).CompareTo(MathHelper.ConvertToBigInteger(b));
+                return true;
+            }
+        }
+
+        outcome = MathHelper.ConvertToBigDecimal(a).CompareTo(MathHelper.ConvertToBigDecimal(b));
+        return true;
+    }
+
+    private static int? GetInfinitySign(object? value) => value switch
+    {
+        double d when double.IsInfinity(d) => Math.Sign(d),
+        float f when float.IsInfinity(f) => Math.Sign(f),
+        _ => null
+    };
+
+    private static bool IsOutsideDecimalRange(object? value) => value switch
+    {
+        double d => double.IsInfinity(d) || d < (double)decimal.MinValue || d > (double)decimal.MaxValue,
+        float f => float.IsInfinity(f) || f < (float)decimal.MinValue || f > (float)decimal.MaxValue,
+        _ => false
+    };
+
     public static bool CompareUsingMostPreciseType(object? a, object? b, ExpressionContextBase context, out int outcome)
     {
         ComparisonOptions cmpOptions = context;
@@ -184,55 +266,9 @@ public static class TypeHelper
 
         try
         {
-            if (MathHelper.IsBoxedIntegerNumberOrBigNumber(a) && MathHelper.IsBoxedIntegerNumberOrBigNumber(b))
+            if (TryCompareNumbers(a, b, out outcome))
             {
-                object aVal = a!;
-                object bVal = b!;
-                TypeCode typeCode = MathHelper.ConvertToHighestPrecision(ref aVal, ref bVal, false, mathHelperOptions);
-                if (typeCode == TypeCode.Empty)
-                {
-                    outcome = -1;
-                    return false;
-                }
-
-                if (typeCode == TypeCode.Object)
-                {
-                    outcome = 0;
-
-                    if (aVal is BigDecimal || bVal is BigDecimal)
-                    {
-                        if (aVal is BigDecimal bdA)
-                        {
-                            if (bVal is BigDecimal bdB)
-                                outcome = bdA.CompareTo(bdB);
-                            else
-                                outcome = bdA.CompareTo(MathHelper.ConvertToBigDecimal(bVal));
-                        }
-                        else
-                        {
-                            outcome = MathHelper.ConvertToBigDecimal(aVal).CompareTo(((BigDecimal)bVal));
-                        }
-                    }
-                    else
-                    if (aVal is BigInteger || bVal is BigInteger)
-                    {
-                        if (aVal is BigInteger biA)
-                        {
-                            if (bVal is BigInteger biB)
-                                outcome = biA.CompareTo(biB);
-                            else
-                                outcome = biA.CompareTo(MathHelper.ConvertToBigInteger(bVal));
-                        }
-                        else
-                        {
-                                outcome = MathHelper.ConvertToBigInteger(aVal).CompareTo(((BigInteger)bVal));
-                        }
-                    }
-                    return true;
-                }
-
-                aValue = aVal;
-                bValue = bVal;
+                return true;
             }
             else
             {
@@ -263,7 +299,7 @@ public static class TypeHelper
                             if (b is string stb)
                                 bValue = stb;
                             else
-                                bValue = b?.ToString() ?? "null";
+                                bValue = Convert.ToString(b, comparisonOptions.CultureInfo) ?? "null";
 
                             compareStrings = true;
                         }
@@ -292,7 +328,7 @@ public static class TypeHelper
                             if (a is string sta)
                                 aValue = sta;
                             else
-                                aValue = a?.ToString() ?? "null";
+                                aValue = Convert.ToString(a, comparisonOptions.CultureInfo) ?? "null";
 
                             compareStrings = true;
                         }
@@ -306,7 +342,21 @@ public static class TypeHelper
 
                 if (!compareStrings)
                 {
+                    // A string literal converted above may now be compared exactly with a number
+                    if (TryCompareNumbers(a, b, out outcome))
+                        return true;
+
+                    // A big number compared with a value of another kind (e.g. a boolean) is compared as a double
+                    if (a is BigInteger or BigDecimal && !MathHelper.IsBoxedNumberOrBigNumber(b))
+                        a = MathHelper.ConvertToDouble(a, mathHelperOptions);
+                    if (b is BigInteger or BigDecimal && !MathHelper.IsBoxedNumberOrBigNumber(a))
+                        b = MathHelper.ConvertToDouble(b, mathHelperOptions);
+
                     mpt = GetMostPreciseType(a?.GetType(), b?.GetType());
+
+                    // A double beyond the range of decimal (or infinity) cannot be converted to decimal, but it can be compared with one as a double
+                    if (mpt == typeof(decimal) && (IsOutsideDecimalRange(a) || IsOutsideDecimalRange(b)))
+                        mpt = typeof(double);
 
                     aValue = a is not null ? Convert.ChangeType(a, mpt, comparisonOptions.CultureInfo) : null;
                     bValue = b is not null ? Convert.ChangeType(b, mpt, comparisonOptions.CultureInfo) : null;
@@ -320,8 +370,9 @@ public static class TypeHelper
             if (!comparisonOptions.CompareIncompatibleTypes)
                 throw new NCalcEvaluationException($"Comparison of incomparable types was attempted. The types of the operands are {a?.GetType().Name ?? "null"} and {b?.GetType().Name ?? "null"}.", ex);
 
-            aValue = a is not null ? a.GetHashCode() : null;
-            bValue = b is not null ? b.GetHashCode() : null;
+            // The values cannot be ordered; the caller treats them as unequal, so every comparison except "!=" is false
+            outcome = -1;
+            return false;
         }
         var comparer = GetStringComparer(comparisonOptions);
 

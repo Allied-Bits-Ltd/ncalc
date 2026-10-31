@@ -202,4 +202,69 @@ public class DateTimeTests
 
         Assert.Equal(dt, res);
     }
+
+    [Theory]
+    [InlineData("1", 1000000L)]
+    [InlineData("12", 1200000L)]
+    [InlineData("123", 1230000L)]
+    [InlineData("1234", 1234000L)]
+    [InlineData("12345", 1234500L)]
+    [InlineData("123456", 1234560L)]
+    [InlineData("1234567", 1234567L)]
+    public void IsoDateTimeFractionShouldBeExact(string fraction, long expectedTicks)
+    {
+        var result = (DateTime)new Expression($"#2001-01-01T00:00:00.{fraction}#", ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken)!;
+        Assert.Equal(expectedTicks, result.Ticks % TimeSpan.TicksPerSecond);
+    }
+
+    [Theory]
+    [InlineData("#25:00:00#", 25, 0)]
+    [InlineData("#100:30#", 100, 30)]
+    [InlineData("#24:00:00#", 24, 0)]
+    [InlineData("#1.23:00:00#", 47, 0)]
+    public void TimeLiteralShouldNotReadHoursAsDays(string expression, int hours, int minutes)
+    {
+        Assert.Equal(new TimeSpan(hours, minutes, 0), new Expression(expression, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("#1.25:00:00#")]
+    [InlineData("#10:60:00#")]
+    [InlineData("#00:00:61#")]
+    public void TimeLiteralWithOutOfRangePartsShouldBeRejected(string expression)
+    {
+        Assert.ThrowsAny<NCalcException>(() => new Expression(expression, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RelativeDateLiteralsShouldBeComputedAtEvaluation()
+    {
+        var options = new AdvancedExpressionOptions(AdvExpressionOptions.ParseHumanePeriods);
+        var expression = new Expression("#now#") { AdvancedOptions = options };
+        var first = (DateTime)expression.Evaluate(TestContext.Current.CancellationToken)!;
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+
+        // Both the same instance and a new instance that gets the parsed expression from the cache must see the later time
+        Assert.True((DateTime)expression.Evaluate(TestContext.Current.CancellationToken)! > first);
+        Assert.True((DateTime)new Expression("#now#") { AdvancedOptions = options }.Evaluate(TestContext.Current.CancellationToken)! > first);
+        Assert.True(new Expression("#now#") { AdvancedOptions = options }.ToLambda<DateTime>()() > first);
+        Assert.Equal(DateTime.Today, new Expression("#today#") { AdvancedOptions = options }.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("#2001-01-01#")]
+    [InlineData("# a comment\n#2001-01-01#")]
+    [InlineData("#2001-01-01# # a comment")]
+    [InlineData("#2001-01-01#  #a comment")]
+    public void DateLiteralsShouldWorkWithPythonComments(string expression)
+    {
+        Assert.Equal(new DateTime(2001, 1, 1), new Expression(expression, ExpressionOptions.SupportPythonComments | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void PythonCommentsShouldStillBeComments()
+    {
+        Assert.Equal(3, new Expression("1 + 2 # comment", ExpressionOptions.SupportPythonComments | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(3, new Expression("1 + 2 #comment", ExpressionOptions.SupportPythonComments | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+    }
 }

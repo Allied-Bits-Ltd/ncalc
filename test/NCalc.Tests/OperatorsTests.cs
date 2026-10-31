@@ -1,5 +1,7 @@
 using NCalc.Domain;
+using NCalc.Exceptions;
 using NCalc.Factories;
+using NCalc.Helpers;
 
 namespace NCalc.Tests;
 
@@ -197,5 +199,125 @@ public class OperatorsTests : TestBase
         e.Parameters["a"] = 0;
 
         Assert.Equal(expected, (bool)e.Evaluate(TestContext.Current.CancellationToken)!);
+    }
+
+    [Fact]
+    public async Task LikeShouldNotBacktrackExponentially()
+    {
+        // A regular expression took minutes for this pattern and a 200-character value
+        var e = new Expression("x LIKE '%a%a%a%a%a%b'", ExpressionOptions.NoCache);
+        e.Parameters["x"] = new string('a', 200);
+        var evaluation = Task.Run(() => e.Evaluate(), TestContext.Current.CancellationToken);
+        var finished = await Task.WhenAny(evaluation, Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        Assert.True(finished == evaluation, "LIKE did not complete in 5 s");
+        Assert.Equal(false, await evaluation);
+    }
+
+    [Theory]
+    [InlineData("'abc' LIKE 'a%'", true)]
+    [InlineData("'abc' LIKE 'A_C'", false)]
+    [InlineData("'abcabc' LIKE '%bc'", true)]
+    [InlineData("'ab' LIKE 'a%b%'", true)]
+    [InlineData("'' LIKE '%'", true)]
+    [InlineData("'' LIKE '_'", false)]
+    [InlineData("'a.c' LIKE 'a.c'", true)]
+    [InlineData("'abc' LIKE 'a.c'", false)]
+    [InlineData("'a(c' LIKE 'a(_'", true)]
+    public void LikeShouldMatchWildcards(string expression, bool expected)
+    {
+        Assert.Equal(expected, new Expression(expression, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(expected, new Expression(expression, ExpressionOptions.NoCache).ToLambda<bool>()());
+    }
+
+    [Theory]
+    [InlineData("0!", ExpressionOptions.None, "1")]
+    [InlineData("5!!", ExpressionOptions.None, "15")]
+    [InlineData("20!", ExpressionOptions.None, "2432902008176640000")]
+    [InlineData("21!", ExpressionOptions.None, "5.109094217170944E+19")]
+    [InlineData("21!", ExpressionOptions.OverflowProtection, "5.109094217170944E+19")]
+    [InlineData("21!", ExpressionOptions.UseBigNumbers, "51090942171709440000")]
+    [InlineData("0!", ExpressionOptions.UseBigNumbers, "1")]
+    public void FactorialShouldNotWrapAround(string expression, ExpressionOptions options, string expected)
+    {
+        var result = new Expression(expression, options | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expected, Convert.ToString(result, CultureInfo.InvariantCulture));
+    }
+
+    [Theory]
+    [InlineData("(-3)!", ExpressionOptions.None)]
+    [InlineData("(-3)!", ExpressionOptions.UseBigNumbers)]
+    [InlineData("1000000!", ExpressionOptions.UseBigNumbers)]
+    public void FactorialShouldRejectNegativeAndHugeArguments(string expression, ExpressionOptions options)
+    {
+        Assert.Throws<NCalcEvaluationException>(() => new Expression(expression, options | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    public static TheoryData<string, ExpressionOptions, object?, object?, object> ReducedResultTypeData => new()
+    {
+        { "Pow(2, 63)", ExpressionOptions.DecimalAsDefault, null, null, 9223372036854775808UL },
+        { "Pow(2, 63)", ExpressionOptions.UseBigNumbers, null, null, 9223372036854775808UL },
+        { "Pow(3, 40)", ExpressionOptions.DecimalAsDefault, null, null, 12157665459056928801UL },
+        { "1 << 63", ExpressionOptions.None, null, null, 9223372036854775808UL },
+        { "a + 0", ExpressionOptions.ReduceArithmeticResultType, ulong.MaxValue, null, ulong.MaxValue },
+        { "a - b", ExpressionOptions.None, (byte)0, (byte)1, -1 },
+        { "a - b", ExpressionOptions.None, (ushort)0, (ushort)1, -1 },
+        { "a - b", ExpressionOptions.None, (sbyte)0, 1u, -1L },
+        { "a * b", ExpressionOptions.None, (ushort)65535, (ushort)65535, 4294836225u },
+        { "a * b", ExpressionOptions.None, uint.MaxValue, uint.MaxValue, 18446744065119617025UL },
+    };
+
+    [Theory]
+    [MemberData(nameof(ReducedResultTypeData))]
+    public void ArithmeticResultShouldKeepItsValueWhenItsTypeIsReduced(string expression, ExpressionOptions options, object? a, object? b, object expected)
+    {
+        var e = new Expression(expression, options | ExpressionOptions.NoCache);
+        e.Parameters["a"] = a;
+        e.Parameters["b"] = b;
+        var result = e.Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("5 % 0", ExpressionOptions.None)]
+    [InlineData("5 // 0", ExpressionOptions.None)]
+    [InlineData("5 div 0", ExpressionOptions.None)]
+    [InlineData("5 % 0", ExpressionOptions.UseBigNumbers)]
+    [InlineData("5 / 0", ExpressionOptions.UseBigNumbers)]
+    [InlineData("a / b", ExpressionOptions.None)]
+    [InlineData("a % b", ExpressionOptions.None)]
+    public void DivisionByZeroShouldBeReportedAsSuch(string expression, ExpressionOptions options)
+    {
+        // It was reported as "Operator '%' is not implemented for operands of types Int32 and Int32"
+        var e = new Expression(expression, options | ExpressionOptions.NoCache);
+        e.Parameters["a"] = 5m;
+        e.Parameters["b"] = 0m;
+        Assert.Throws<DivideByZeroException>(() => e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void FloatDividedByDecimalShouldWork()
+    {
+        var e = new Expression("a / b", ExpressionOptions.NoCache);
+        e.Parameters["a"] = 3f;
+        e.Parameters["b"] = 1.5m;
+        Assert.Equal(2m, e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("-5 // 2", ExpressionOptions.None, -3)]
+    [InlineData("-5 // 2", ExpressionOptions.DecimalAsDefault, -3)]
+    [InlineData("-5 // 2", ExpressionOptions.UseBigNumbers, -3)]
+    [InlineData("-5 div 2", ExpressionOptions.UseBigNumbers, -2)]
+    [InlineData("a div 2", ExpressionOptions.UseBigNumbers, -2)]
+    [InlineData("a // 2", ExpressionOptions.UseBigNumbers, -3)]
+    [InlineData("b // 2", ExpressionOptions.UseBigNumbers, 3)]
+    public void IntegerDivisionShouldGiveAnIntegerForBigDecimals(string expression, ExpressionOptions options, int expected)
+    {
+        var e = new Expression(expression, options | ExpressionOptions.NoCache);
+        e.Parameters["a"] = new ExtendedNumerics.BigDecimal(-5);
+        e.Parameters["b"] = new ExtendedNumerics.BigDecimal(new System.Numerics.BigInteger(75), -1);
+        var result = e.Evaluate(TestContext.Current.CancellationToken);
+        Assert.True(MathHelper.IsBoxedIntegerNumberOrBigNumber(result) && result is not ExtendedNumerics.BigDecimal, $"{result} ({result?.GetType().Name}) is not an integer");
+        Assert.Equal(expected, Convert.ToInt32(result is System.Numerics.BigInteger bi ? (int)bi : result, CultureInfo.InvariantCulture));
     }
 }

@@ -1,4 +1,6 @@
-﻿using ExtendedNumerics;
+﻿using System.Numerics;
+
+using ExtendedNumerics;
 
 using NCalc.Domain;
 using NCalc.Exceptions;
@@ -388,5 +390,44 @@ public class ParserTests
         stopwatch.Stop();
         Assert.False(hasErrors, e.Error?.InnerException?.Message ?? e.Error?.Message);
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1), $"Parsing took {stopwatch.Elapsed}");
+    }
+
+    public static TheoryData<string, ExpressionOptions, object> RadixLiteralData => new()
+    {
+        { "0xFFFFFFFFFFFFFFFF", ExpressionOptions.None, ulong.MaxValue },
+        { "0xFFFFFFFFFFFFFFFF", ExpressionOptions.UseBigNumbers, ulong.MaxValue },
+        { "0x8000000000000000", ExpressionOptions.None, 9223372036854775808UL },
+        { "0x7FFFFFFFFFFFFFFF", ExpressionOptions.None, long.MaxValue },
+        { "0xFFFFFFFF", ExpressionOptions.None, 4294967295L },
+        { "0b1111111111111111111111111111111111111111111111111111111111111111", ExpressionOptions.None, ulong.MaxValue },
+        { "0o1777777777777777777777", ExpressionOptions.None, ulong.MaxValue },
+        { "0x10000000000000000", ExpressionOptions.UseBigNumbers, BigInteger.Parse("18446744073709551616", CultureInfo.InvariantCulture) },
+    };
+
+    [Theory]
+    [MemberData(nameof(RadixLiteralData))]
+    public void RadixLiteralsShouldNotWrapToNegativeValues(string expression, ExpressionOptions options, object expected)
+    {
+        Assert.Equal(expected, new Expression(expression, options | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void HexRunsShouldBeGuidsOnlyWhenTheyLookLikeGuids()
+    {
+        var number = new Expression("12345678901234567890123456789012", ExpressionOptions.UseBigNumbers | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken);
+        Assert.Equal(BigInteger.Parse("12345678901234567890123456789012", CultureInfo.InvariantCulture), number);
+
+        var identifier = new Expression("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ExpressionOptions.NoCache);
+        identifier.Parameters["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] = 7;
+        Assert.Equal(7, identifier.Evaluate(TestContext.Current.CancellationToken));
+
+        var subtraction = new Expression("deadbeef - cafe", ExpressionOptions.NoCache);
+        subtraction.Parameters["deadbeef"] = 10;
+        subtraction.Parameters["cafe"] = 3;
+        Assert.Equal(7, subtraction.Evaluate(TestContext.Current.CancellationToken));
+
+        var guid = Guid.Parse("deadbeef-cafe-babe-face-0123456789ab");
+        Assert.Equal(guid, new Expression("deadbeef-cafe-babe-face-0123456789ab", ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(guid, new Expression("deadbeefcafebabeface0123456789ab", ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
     }
 }

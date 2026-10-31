@@ -224,6 +224,27 @@ public class SerializationTests
     }
 
     [Fact]
+    public void ComplexNumbersAndVectorsShouldBeFormattedInvariantly()
+    {
+        // The real part and vector components were formatted with the culture current at the first use of BigDecimal
+        var oldCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            foreach (var culture in new[] { "de-DE", "en-US" })
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
+                var complex = new ComplexNumber(new BigDecimal(new System.Numerics.BigInteger(-2), -1), new BigDecimal(new System.Numerics.BigInteger(4), -1));
+                Assert.Equal("-0.2 + 0.4i", complex.ToString());
+                Assert.Equal("[1, 2.5]", new NCalcVector([new BigDecimal(1), new BigDecimal(new System.Numerics.BigInteger(25), -1)]).ToString());
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = oldCulture;
+        }
+    }
+
+    [Fact]
     public void Function_Serialization_Test()
     {
         Assert.Equal("test(True and False; -(True and False))", new FunctionCall(new Identifier("test"), [

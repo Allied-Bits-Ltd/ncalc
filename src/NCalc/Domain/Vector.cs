@@ -604,7 +604,7 @@ namespace NCalc.Domain
                 for (int i = 0; i < _components.Length; i++)
                 {
                     if (i > 0) sb.Append(", ");
-                    sb.Append(_components[i].ToString());
+                    sb.Append(MathHelper.FormatBigDecimal(_components[i], formatProvider));
                 }
             }
             sb.Append(']');

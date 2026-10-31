@@ -1231,7 +1231,16 @@ public static class MathHelper
         {
             // For multiplication, we must up the number of bits to avoid a possible overflow.
             // We can't just call ConvertToHighestPrecision(...,...,true,...) because ConvertToHighestPrecision will do unexpected things.
-            typeCode = TypeCodeExpandBits(typeCode, ref a, ref b, options);
+            // The product of two unsigned values always fits in the next unsigned type, but not in the signed type of that size (255 * 255 > short.MaxValue).
+            TypeCode? unsignedProductTypeCode = typeCode switch { TypeCode.Byte => TypeCode.UInt16, TypeCode.UInt16 => TypeCode.UInt32, TypeCode.UInt32 => TypeCode.UInt64, _ => null };
+            if (unsignedProductTypeCode is { } productTypeCode)
+            {
+                a = Convert.ChangeType(a, productTypeCode, options.CultureInfo);
+                b = Convert.ChangeType(b, productTypeCode, options.CultureInfo);
+                typeCode = productTypeCode;
+            }
+            else
+                typeCode = TypeCodeExpandBits(typeCode, ref a, ref b, options);
             typesWereExpanded = true;
         }
 
@@ -1666,9 +1675,9 @@ public static class MathHelper
                 return iResult;
             }
 
-            if ((typeA == typeof(float)) && (double)result >= float.MinValue && (double)result <= float.MaxValue)
+            // A float divided by a decimal gives a decimal, which stays as it is
+            if ((typeA == typeof(float)) && result is double dResult && dResult >= float.MinValue && dResult <= float.MaxValue)
             {
-                double dResult = (double)result;
                 return (float)dResult;
             }
 
@@ -1741,7 +1750,10 @@ public static class MathHelper
                 if (truncateFirst)
                 {
                     BigInteger biA = GetWholeValue(bdA);
-                    if (!((b is BigInteger) || (b is BigDecimal)))
+                    if (b is BigDecimal bdDivisor)
+                        b = GetWholeValue(bdDivisor);
+                    else
+                    if (b is not BigInteger)
                         b = ConvertToLong(b, "Integer Div", options.CultureInfo, null);
 
                     biResult = IntegerDivide(biA, b);
@@ -1757,7 +1769,7 @@ public static class MathHelper
                 if (truncateFirst)
                 {
                     BigInteger biB = GetWholeValue(bdB);
-                    if (!((a is BigInteger) || (a is BigDecimal)))
+                    if (a is not BigInteger)
                         a = ConvertToLong(a, "Integer Div", options.CultureInfo, null);
 
                     biResult = IntegerDivide(a, biB);
@@ -1825,11 +1837,11 @@ public static class MathHelper
 
             if (bdResult is not null)
             {
-                object? reducedResult = ReduceNumericType(bdResult.Value, reduceTypes ? null : t, options);
-                if (!truncateFirst)
-                    return Floor(reducedResult, options);
-
-                return reducedResult;
+                // The quotient is floored exactly; going through double would lose digits and give a double
+                BigInteger floored = GetWholeValue(bdResult.Value);
+                if (bdResult.Value.Sign < 0 && !IsWholeNumber(bdResult.Value))
+                    floored -= 1;
+                return ReduceNumericType(floored, reduceTypes ? null : t, options);
             }
 
             if (biResult is not null)
@@ -2069,7 +2081,7 @@ public static class MathHelper
     public static object? Max(object? a, object? b, MathHelperOptions options)
     {
         int cmpResult = Compare(a, b, options, options);
-        if (cmpResult == -1)
+        if (cmpResult < 0)
             return b;
 
         return a;
@@ -2132,7 +2144,7 @@ public static class MathHelper
     public static object? Min(object? a, object? b, MathHelperOptions options)
     {
         int cmpResult = Compare(a, b, options, options);
-        if (cmpResult == 1)
+        if (cmpResult > 0)
             return b;
 
         return a;
@@ -2414,6 +2426,22 @@ public static class MathHelper
             return TypeCode.Double;
         }
 
+        // A signed integer and an unsigned integer of at least its size (up to 32 bits) are computed in the next wider signed type, as in C#;
+        // converting the signed operand to the unsigned type would turn 0 - 1u into 4294967295
+        if (!floatingPointA && !floatingPointB && IsUnsignedTypeCode(typeCodeA) != IsUnsignedTypeCode(typeCodeB))
+        {
+            int unsignedSize = IsUnsignedTypeCode(typeCodeA) ? bitSizeA : bitSizeB;
+            int signedSize = IsUnsignedTypeCode(typeCodeA) ? bitSizeB : bitSizeA;
+            if (unsignedSize >= signedSize && unsignedSize <= 32)
+            {
+                TypeCode signedTypeCode = unsignedSize switch { 8 => TypeCode.Int16, 16 => TypeCode.Int32, _ => TypeCode.Int64 };
+                a = Convert.ChangeType(a, signedTypeCode, options.CultureInfo);
+                b = Convert.ChangeType(b, signedTypeCode, options.CultureInfo);
+                typesWereExpanded = true;
+                return signedTypeCode;
+            }
+        }
+
         if ((floatingPointA && !floatingPointB) || (bitSizeA > bitSizeB && floatingPointA == floatingPointB))
         {
             try
@@ -2565,6 +2593,8 @@ public static class MathHelper
         }
         return result;
     }
+
+    private static bool IsUnsignedTypeCode(TypeCode typeCode) => typeCode is TypeCode.Byte or TypeCode.UInt16 or TypeCode.UInt32 or TypeCode.UInt64;
 
     private static int? TypeCodeBitSize(TypeCode typeCode, out bool floatingPoint)
     {
@@ -3310,13 +3340,25 @@ public static class MathHelper
         return float.IsInfinity(result) ? throw new OverflowException("The value is outside the range of float.") : result;
     }
 
+    /// <summary>
+    /// Formats a BigDecimal with the decimal separator of the given culture (the invariant culture by default). BigDecimal.ToString()
+    /// uses the culture current at the first use of BigDecimal, and BigDecimal.ToString(provider) pads the fraction to
+    /// NumberDecimalDigits places (1 becomes "1.00"), so the culture's number format is used without the padding.
+    /// </summary>
+    internal static string FormatBigDecimal(BigDecimal value, IFormatProvider? provider)
+    {
+        var numberFormat = (NumberFormatInfo)NumberFormatInfo.GetInstance(provider ?? CultureInfo.InvariantCulture).Clone();
+        numberFormat.NumberDecimalDigits = 0;
+        return value.ToString(numberFormat);
+    }
+
     internal static decimal BigDecimalToDecimal(BigDecimal value)
         => decimal.Parse(ToInvariantExponentString(value), NumberStyles.Float, CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// The maximum number of significant digits of an exact (big-number or decimal) integer power.
-    /// A power whose result would have more digits throws <see cref="NCalcEvaluationException"/> before it is computed,
-    /// so that a short expression such as "2 ** 2000000" cannot occupy the CPU for a long time. The default is 100,000.
+    /// The maximum number of significant digits of an exact (big-number or decimal) integer power or big-number factorial.
+    /// A power or factorial whose result would have more digits throws <see cref="NCalcEvaluationException"/> before it is computed,
+    /// so that a short expression such as "2 ** 2000000" or "1000000!" cannot occupy the CPU for a long time. The default is 100,000.
     /// </summary>
     public static int MaxPowResultDigits { get; set; } = 100_000;
 
@@ -3359,93 +3401,71 @@ public static class MathHelper
 
     public static object Factorial(object a, object b, MathHelperOptions options)
     {
-        if (!options.UseBigNumbers)
-        {
-            return Factorial(ConvertToLong(a, "Factorial", options.CultureInfo, null), ConvertToLong(b, "Factorial", options.CultureInfo, null), options);
-        }
-
         if (a is ComplexNumber || b is ComplexNumber)
             throw new InvalidOperationException($"The Factorial function is not defined for complex numbers");
 
-        BigInteger value;
-
-        if (a is BigInteger)
-            value = (BigInteger)a;
-        else
-            value = ConvertToBigInteger(a);
-
         long step = ConvertToLong(b, "Factorial", options.CultureInfo, null);
-        if (value <= 0)
-            throw new NotImplementedException("Factorial operation is not implemented for negative or zero values");
-        if (step <= 0)
-            throw new NotImplementedException("Factorial operation cannot be done with a negative or zero step");
 
-        if (value.IsZero)
-            return 1;
-        else
-        if (value.IsOne)
-            return 1;
-        else
-        if (value == 2)
-            return 2;
-
-        var result = value;
-
-        value = value - step;
-        while (value > 1)
+        if (!options.UseBigNumbers)
         {
-            result = result * value;
-            value = value - step;
-        }
-
-        if (result >= int.MinValue && result <= int.MaxValue)
-            return (int)result;
-
-        if (options.UseBigNumbers)
-        {
-            if (result >= long.MinValue && result <= long.MaxValue)
-                return (long)result;
-            else
-                return result;
-        }
-        else
-        {
-            return (long)result;
-        }
-    }
-
-    public static long Factorial(long a, long b, MathHelperOptions options)
-    {
-        if (a <= 0)
-            throw new NotImplementedException("Factorial operation is not implemented for negative or zero values");
-        if (b <= 0)
-            throw new NotImplementedException("Factorial operation cannot be done with a negative or zero step");
-
-        switch (a)
-        {
-            case 0:
-            case 1: return 1;
-            case 2: return 2;
-        }
-
-        long value = a;
-        var step = b;
-
-        var result = value;
-
-        value = value - step;
-        while (value > 1)
-        {
+            long n = ConvertToLong(a, "Factorial", options.CultureInfo, null);
             try
             {
-                result = result * value;
+                return Factorial(n, step, options);
             }
             catch (OverflowException)
             {
-                return -1;
+                // Like other integer results beyond the range of long without UseBigNumbers, the result becomes a double.
+                // Every factor is at least 2, so the product reaches infinity after at most about a thousand steps.
+                double result = n;
+                for (long value = n - step; value > 1 && !double.IsInfinity(result); value -= step)
+                    result *= value;
+                return result;
             }
-            value = value - step;
         }
+
+        BigInteger bigValue = a is BigInteger bigA ? bigA : ConvertToBigInteger(a);
+        CheckFactorialArguments(bigValue, step);
+        if (bigValue <= 1)
+            return 1;
+
+        // log10(n!) by Stirling's formula; a multifactorial with step k has about 1/k of these digits
+        double n2 = (double)bigValue;
+        double digits = (n2 * Math.Log(n2) - n2 + 0.5 * Math.Log(2 * Math.PI * n2)) / Math.Log(10) / step;
+        if (digits > MaxPowResultDigits)
+            throw new NCalcEvaluationException($"The result of the factorial would have about {digits:0} digits, which exceeds the limit of {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
+
+        var product = bigValue;
+        for (var value = bigValue - step; value > 1; value -= step)
+            product *= value;
+
+        if (product <= int.MaxValue)
+            return (int)product;
+        if (product <= long.MaxValue)
+            return (long)product;
+        return product;
+    }
+
+    private static void CheckFactorialArguments(BigInteger value, long step)
+    {
+        if (value.Sign < 0)
+            throw new NCalcEvaluationException("The factorial is not defined for negative numbers");
+        if (step <= 0)
+            throw new NCalcEvaluationException("The step of a factorial must be positive");
+    }
+
+    /// <summary>
+    /// Computes the factorial of <paramref name="a"/>, or the multifactorial with the step <paramref name="b"/> (a * (a - b) * (a - 2b) * ...).
+    /// </summary>
+    /// <exception cref="NCalcEvaluationException"><paramref name="a"/> is negative or <paramref name="b"/> is not positive.</exception>
+    /// <exception cref="OverflowException">The result does not fit in a <see cref="long"/>.</exception>
+    public static long Factorial(long a, long b, MathHelperOptions options)
+    {
+        CheckFactorialArguments(a, b);
+
+        long result = Math.Max(a, 1);
+        for (long value = a - b; value > 1; value -= b)
+            result = checked(result * value);
 
         return result;
     }
@@ -4231,7 +4251,7 @@ public static class MathHelper
 
             return result;
         }
-        catch(Exception ex) when (ex is not OverflowException)
+        catch(Exception ex) when (ex is not OverflowException and not DivideByZeroException)
         {
             if (ex is RuntimeBinderException && (operation == ArithmeticOperation.AddPercent || operation == ArithmeticOperation.SubtractPercent || operation == ArithmeticOperation.MultiplyPercent || operation == ArithmeticOperation.DividePercent))
                 throw new InvalidOperationException($"The operation '{operation}' contained double or decimal operands which conflicted with the UseDecimalAsDefault setting and with each other", ex);
@@ -4713,6 +4733,12 @@ public static class MathHelper
     {
         int result;
 
+        // Percentages are ordered by their values; vectors have no order
+        if (a is Percent percentA && b is Percent percentB)
+            return Compare(percentA.Value, percentB.Value, comparisonOptions, mathHelperOptions);
+        if (a is NCalcVector || b is NCalcVector)
+            throw new NCalcEvaluationException("Vectors can only be compared for equality");
+
         if (a is ComplexNumber || b is ComplexNumber)
         {
             if (a is ComplexNumber cnA)
@@ -4733,29 +4759,11 @@ public static class MathHelper
             }
         }
 
-        // Handle possible NaN
-        if (a is double dA)
-        {
-            if (Double.IsNaN(dA))
-                return -1;
-        }
-        else
-        if (a is float fA)
-        {
-            if (float.IsNaN(fA))
-                return -1;
-        }
-        if (b is double dB)
-        {
-            if (Double.IsNaN(dB))
-                return 1;
-        }
-        else
-        if (b is float fB)
-        {
-            if (float.IsNaN(fB))
-                return 1;
-        }
+        // NaN equals NaN and is smaller than any other number, as double.CompareTo orders it
+        bool nanA = (a is double dA && double.IsNaN(dA)) || (a is float fA && float.IsNaN(fA));
+        bool nanB = (b is double dB && double.IsNaN(dB)) || (b is float fB && float.IsNaN(fB));
+        if (nanA || nanB)
+            return nanA == nanB ? 0 : (nanA ? -1 : 1);
 
         // Handle null
         if (a is null || b is null)
@@ -4769,43 +4777,9 @@ public static class MathHelper
                 return 1;
         }
 
-        // Handle bug numbers
-        if (a is BigDecimal || b is BigDecimal)
-        {
-            if (a is BigDecimal bdA)
-            {
-                if (b is BigDecimal bdB)
-                    result = bdA.CompareTo(bdB);
-                else
-                    result = bdA.CompareTo(MathHelper.ConvertToBigDecimal(b));
-            }
-            else
-            {
-                result = ((BigDecimal)b).CompareTo(MathHelper.ConvertToBigDecimal(a));
-            }
-
-            return result;
-        }
-        else
-        if (a is BigInteger || b is BigInteger)
-        {
-            if (a is BigInteger biA)
-            {
-                if (b is BigInteger biB)
-                    result = biA.CompareTo(biB);
-                else
-                    result = biA.CompareTo(MathHelper.ConvertToBigInteger(b));
-            }
-            else
-            {
-                result = ((BigInteger)b).CompareTo(MathHelper.ConvertToBigInteger(a));
-            }
-
-            return result;
-        }
-
-        // Handle everything else. We are not interested in the value returned by CompareUsingMostPreciseType because it would return false only when comparison of non-compatible types is allowed and in this case, the result is returned based on object hash codes.
-        TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result);
+        // Values that cannot be compared are ordered by the names of their types, so that sorting stays consistent
+        if (!TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result))
+            return string.CompareOrdinal(a.GetType().FullName, b.GetType().FullName);
         return result;
     }
 
@@ -5198,7 +5172,7 @@ public static class MathHelper
         }
     }
 
-    static object ReduceComplexToReal(ComplexNumber value, MathHelperOptions? options = default)
+    internal static object ReduceComplexToReal(ComplexNumber value, MathHelperOptions? options = default)
     {
         if (!value.IsReal)
             return value;
@@ -5228,6 +5202,21 @@ public static class MathHelper
         }
         if (MathHelper.IsBoxedIntegerNumber(lValue))
         {
+            // The value decides what it can be reduced to: an unsigned value beyond the range of long stays ulong,
+            // and a negative value is reduced to the signed type that C# would use instead of the unsigned type
+            if (lValue is ulong bigUnsigned && bigUnsigned > long.MaxValue)
+                return bigUnsigned;
+
+            bool isNegative = lValue is sbyte or short or int or long && Convert.ToInt64(lValue, CultureInfo.InvariantCulture) < 0;
+            if (isNegative)
+            {
+                if (restrictToType == typeof(byte) || restrictToType == typeof(ushort) || restrictToType == typeof(char))
+                    restrictToType = typeof(int);
+                else
+                if (restrictToType == typeof(uint) || restrictToType == typeof(ulong))
+                    restrictToType = typeof(long);
+            }
+
             if (restrictToType == typeof(ulong) || restrictToType == typeof(uint) || restrictToType == typeof(ushort) || restrictToType == typeof(byte) || restrictToType == typeof(char))
             {
                 ulong candidate = MathHelper.ConvertToULong(lValue, string.Empty, options.CultureInfo, null);

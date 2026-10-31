@@ -1,6 +1,5 @@
 ﻿using System.Numerics;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using ExtendedNumerics;
 
 using NCalc.Domain;
@@ -204,6 +203,10 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(ValueExpression expression, CancellationToken cancellationToken = default)
     {
+        // A relative date or time literal (#now#) is computed whenever the compiled lambda runs
+        if (expression.ValueFactory is { } valueFactory)
+            return LinqExpression.Convert(LinqExpression.Invoke(LinqExpression.Constant(valueFactory)), expression.Value!.GetType());
+
         return LinqExpression.Constant(expression.Value);
     }
 
@@ -1209,19 +1212,10 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         var leftStr = LinqExpression.Call(leftObj, objToString);
         var rightStr = LinqExpression.Call(rightObj, objToString);
 
-        var miRegexEscape = typeof(Regex).GetMethod(nameof(Regex.Escape), new[] { typeof(string) })!;
-        var miStringReplace = typeof(string).GetMethod(nameof(string.Replace), new[] { typeof(string), typeof(string) })!;
-
-        var escaped = LinqExpression.Call(null, miRegexEscape, rightStr);
-        var withStar = LinqExpression.Call(escaped, miStringReplace, LinqExpression.Constant("%"), LinqExpression.Constant(".*"));
-        var withUnderscore = LinqExpression.Call(withStar, miStringReplace, LinqExpression.Constant("_"), LinqExpression.Constant("."));
-
-        var miConcat = typeof(string).GetMethod(nameof(string.Concat), new[] { typeof(string), typeof(string), typeof(string) })!;
-        var pattern = LinqExpression.Call(miConcat, LinqExpression.Constant("^"), withUnderscore, LinqExpression.Constant("$")); // "^" + pattern + "$"
-
-        var miIsMatch = typeof(Regex).GetMethod(nameof(Regex.IsMatch), new[] { typeof(string), typeof(string), typeof(RegexOptions) })!;
-        var options = LinqExpression.Constant(_options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer) ? RegexOptions.IgnoreCase : RegexOptions.None);
-        var callIsMatch = LinqExpression.Call(null, miIsMatch, leftStr, pattern, options);
+        // The same wildcard matcher as the evaluators use; a regular expression would backtrack exponentially on some patterns
+        var miMatches = typeof(EvaluationHelper).GetMethod(nameof(EvaluationHelper.MatchesLikePattern), BindingFlags.NonPublic | BindingFlags.Static)!;
+        var currentCulture = LinqExpression.Property(null, typeof(CultureInfo).GetProperty(nameof(CultureInfo.CurrentCulture))!);
+        var callIsMatch = LinqExpression.Call(null, miMatches, leftStr, rightStr, LinqExpression.Constant(_caseInsensitiveStringComparer), currentCulture);
 
         // if either side is null should be false
         var leftNull = LinqExpression.Equal(leftObj, LinqExpression.Constant(null));

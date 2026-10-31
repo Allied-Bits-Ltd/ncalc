@@ -1,6 +1,5 @@
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 using ExtendedNumerics;
 using NCalc.Domain;
 using NCalc.Exceptions;
@@ -291,7 +290,7 @@ public static class EvaluationHelper
             return false;
         }
 
-        var leftValueString = Convert.ToString(leftValue, CultureInfo.InvariantCulture);
+        var leftValueString = Convert.ToString(leftValue, context.CultureInfo);
 
         if (string.IsNullOrEmpty(leftValueString) && string.IsNullOrEmpty(rightValue))
             return true;
@@ -315,8 +314,9 @@ public static class EvaluationHelper
                 return false;
             }
 
-            return rightArray.OfType<string>().Contains(Convert.ToString(leftValue, context.CultureInfo) ?? string.Empty,
-                TypeHelper.GetStringComparer(context));
+            // A string is looked up with the string comparer; any other value is compared as with "=", so that "x in (...)" and "x = ..." agree
+            if (leftValue is string leftString)
+                return rightArray.OfType<string>().Contains(leftString, TypeHelper.GetStringComparer(context));
         }
 
         return rightArray.Contains(leftValue, new ObjectEqualityComparer(context));
@@ -380,6 +380,30 @@ public static class EvaluationHelper
     public static bool Compare(object? a, object? b, ComparisonType comparisonType, ComparisonOptions comparisonOptions, MathHelperOptions mathHelperOptions)
     {
         int result;
+
+        // Percentages are compared by their values; a complex number with no imaginary part is a real number
+        if (a is Percent percentA && b is Percent percentB)
+            return Compare(percentA.Value, percentB.Value, comparisonType, comparisonOptions, mathHelperOptions);
+        if (a is ComplexNumber realA && realA.IsReal)
+            a = MathHelper.ReduceComplexToReal(realA, mathHelperOptions);
+        if (b is ComplexNumber realB && realB.IsReal)
+            b = MathHelper.ReduceComplexToReal(realB, mathHelperOptions);
+
+        // Complex numbers and vectors have no order, but they can be compared for equality
+        if (a is ComplexNumber || b is ComplexNumber || a is NCalcVector || b is NCalcVector)
+        {
+            if (comparisonType is not (ComparisonType.Equal or ComparisonType.NotEqual))
+                throw new NCalcEvaluationException($"{(a is NCalcVector || b is NCalcVector ? "Vectors" : "Complex numbers")} can only be compared for equality");
+
+            bool equal = (a, b) switch
+            {
+                (ComplexNumber complexA, ComplexNumber complexB) => complexA.Real.CompareTo(complexB.Real) == 0 && complexA.Imaginary.CompareTo(complexB.Imaginary) == 0,
+                (NCalcVector vectorA, NCalcVector vectorB) => vectorA.Dimensions == vectorB.Dimensions
+                    && Enumerable.Range(0, vectorA.Dimensions).All(i => vectorA[i].CompareTo(vectorB[i]) == 0),
+                _ => false
+            };
+            return (comparisonType == ComparisonType.Equal) == equal;
+        }
         if (a is double dA)
         {
             if (Double.IsNaN(dA))
@@ -426,38 +450,11 @@ public static class EvaluationHelper
             }
         }
         else
-        if (a is BigDecimal || b is BigDecimal)
         {
-            if (a is BigDecimal bdA)
-            {
-                if (b is BigDecimal bdB)
-                    result = bdA.CompareTo(bdB);
-                else
-                    result = bdA.CompareTo(MathHelper.ConvertToBigDecimal(b));
-            }
-            else
-            {
-                result = MathHelper.ConvertToBigDecimal(a).CompareTo((BigDecimal)b);
-            }
-        }
-        else
-        if (a is BigInteger || b is BigInteger)
-        {
-            if (a is BigInteger biA)
-            {
-                if (b is BigInteger biB)
-                    result = biA.CompareTo(biB);
-                else
-                    result = biA.CompareTo(MathHelper.ConvertToBigInteger(b));
-            }
-            else
-            {
-                result = MathHelper.ConvertToBigInteger(a).CompareTo((BigInteger)b);
-            }
-        }
-        else
-        {
-            TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result);
+            // Values that cannot be compared (a string and a number with NoStringTypeCoercion, or incompatible types with
+            // CompareIncompatibleTypes) are unequal and unordered
+            if (!TypeHelper.CompareUsingMostPreciseType(a, b, comparisonOptions, mathHelperOptions, out result))
+                return comparisonType == ComparisonType.NotEqual;
         }
 
         return comparisonType switch
@@ -511,7 +508,7 @@ public static class EvaluationHelper
     /// Determines whether a specified string matches a pattern using an event or SQL-like wildcards.
     /// </summary>
     /// <param name="value">The string to be compared against the pattern.</param>
-    /// <param name="pattern">The pattern to match. If a default Regex-based matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
+    /// <param name="pattern">The pattern to match. If the default matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
     /// <param name="context">The context containing options for the comparison.</param>
     /// <returns>
     /// <c>true</c> if the <paramref name="value"/> matches the <paramref name="pattern"/>; otherwise, <c>false</c>.
@@ -535,23 +532,14 @@ public static class EvaluationHelper
         if (outcome.HasValue)
             return outcome.Value;
 
-        var regexPattern = Regex.Escape(pattern)
-            .Replace("%", ".*") // % matches zero or more characters
-            .Replace("_", "."); // _ matches exactly one character
-
-        var options = context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer)
-            ? RegexOptions.IgnoreCase
-            : RegexOptions.None;
-
-        // Use ^ and $ to match the start and end of the string
-        return Regex.IsMatch(value, $"^{regexPattern}$", options);
+        return MatchesLikePattern(value, pattern, context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer), context.CultureInfo);
     }
 
     /// <summary>
     /// Determines whether a specified string matches a pattern using an event or SQL-like wildcards.
     /// </summary>
     /// <param name="value">The string to be compared against the pattern.</param>
-    /// <param name="pattern">The pattern to match. If a default Regex-based matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
+    /// <param name="pattern">The pattern to match. If the default matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
     /// <param name="context">The context containing options for the comparison.</param>
     /// <param name="cancellationToken">An optional cancellation token.</param>
     /// <returns>
@@ -580,23 +568,14 @@ public static class EvaluationHelper
         if (outcome.HasValue)
             return outcome.Value;
 
-        var regexPattern = Regex.Escape(pattern)
-            .Replace("%", ".*") // % matches zero or more characters
-            .Replace("_", "."); // _ matches exactly one character
-
-        var options = context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer)
-            ? RegexOptions.IgnoreCase
-            : RegexOptions.None;
-
-        // Use ^ and $ to match the start and end of the string
-        return Regex.IsMatch(value, $"^{regexPattern}$", options);
+        return MatchesLikePattern(value, pattern, context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer), context.CultureInfo);
     }
 
     /// <summary>
     /// Determines whether a specified string matches a pattern using an event or SQL-like wildcards.
     /// </summary>
     /// <param name="value">The string to be compared against the pattern.</param>
-    /// <param name="pattern">The pattern to match. If a default Regex-based matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
+    /// <param name="pattern">The pattern to match. If the default matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
     /// <param name="context">The context containing options for the comparison.</param>
     /// <returns>
     /// <c>true</c> if the <paramref name="value"/> matches the <paramref name="pattern"/>; otherwise, <c>false</c>.
@@ -615,8 +594,8 @@ public static class EvaluationHelper
                 throw new NCalcEvaluationException("A value in LIKE and NOTLIKE operations must be a char or a string");
         }
 
-        string? lValue = value.ToString();
-        string? lPattern = pattern.ToString();
+        string? lValue = Convert.ToString(value, context.CultureInfo);
+        string? lPattern = Convert.ToString(pattern, context.CultureInfo);
 
         if (lValue is null || lPattern is null)
         {
@@ -637,23 +616,14 @@ public static class EvaluationHelper
         if (outcome.HasValue)
             return outcome.Value;
 
-        var regexPattern = Regex.Escape(lPattern)
-            .Replace("%", ".*") // % matches zero or more characters
-            .Replace("_", "."); // _ matches exactly one character
-
-        var options = context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer)
-            ? RegexOptions.IgnoreCase
-            : RegexOptions.None;
-
-        // Use ^ and $ to match the start and end of the string
-        return Regex.IsMatch(lValue, $"^{regexPattern}$", options);
+        return MatchesLikePattern(lValue, lPattern, context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer), context.CultureInfo);
     }
 
     /// <summary>
     /// Determines whether a specified string matches a pattern using an event or SQL-like wildcards.
     /// </summary>
     /// <param name="value">The string to be compared against the pattern.</param>
-    /// <param name="pattern">The pattern to match. If a default Regex-based matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
+    /// <param name="pattern">The pattern to match. If the default matcher is used, '%' matches zero or more characters, and '_' matches exactly one character.</param>
     /// <param name="context">The context containing options for the comparison.</param>
     /// <param name="cancellationToken">An optional cancellation token.</param>
     /// <returns>
@@ -673,8 +643,8 @@ public static class EvaluationHelper
                 throw new NCalcEvaluationException("A value in LIKE and NOTLIKE operations must be a char or a string");
         }
 
-        string? lValue = value.ToString();
-        string? lPattern = pattern.ToString();
+        string? lValue = Convert.ToString(value, context.CultureInfo);
+        string? lPattern = Convert.ToString(pattern, context.CultureInfo);
 
         if (lValue is null || lPattern is null)
         {
@@ -699,16 +669,51 @@ public static class EvaluationHelper
         if (outcome.HasValue)
             return outcome.Value;
 
-        var regexPattern = Regex.Escape(lPattern)
-            .Replace("%", ".*") // % matches zero or more characters
-            .Replace("_", "."); // _ matches exactly one character
+        return MatchesLikePattern(lValue, lPattern, context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer), context.CultureInfo);
+    }
 
-        var options = context.Options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer)
-            ? RegexOptions.IgnoreCase
-            : RegexOptions.None;
+    /// <summary>
+    /// Matches a value against a LIKE pattern, where '%' matches zero or more characters and '_' matches exactly one character.
+    /// </summary>
+    /// <remarks>
+    /// A regular expression would backtrack exponentially on patterns such as '%a%a%a%b'; this matcher only returns to the
+    /// last '%' on a mismatch, so it takes at most O(value length × pattern length) steps.
+    /// </remarks>
+    internal static bool MatchesLikePattern(string value, string pattern, bool ignoreCase, CultureInfo cultureInfo)
+    {
+        var textInfo = cultureInfo.TextInfo;
+        bool CharsMatch(char patternChar, char valueChar)
+            => patternChar == valueChar || (ignoreCase && textInfo.ToUpper(patternChar) == textInfo.ToUpper(valueChar));
 
-        // Use ^ and $ to match the start and end of the string
-        return Regex.IsMatch(lValue, $"^{regexPattern}$", options);
+        int valueIndex = 0, patternIndex = 0;
+        int lastWildcard = -1, valueIndexAtWildcard = 0;
+        while (valueIndex < value.Length)
+        {
+            if (patternIndex < pattern.Length && pattern[patternIndex] == '%')
+            {
+                lastWildcard = patternIndex++;
+                valueIndexAtWildcard = valueIndex;
+            }
+            else
+            if (patternIndex < pattern.Length && (pattern[patternIndex] == '_' || CharsMatch(pattern[patternIndex], value[valueIndex])))
+            {
+                patternIndex++;
+                valueIndex++;
+            }
+            else
+            if (lastWildcard >= 0)
+            {
+                // Let the last '%' absorb one more character and retry the rest of the pattern
+                patternIndex = lastWildcard + 1;
+                valueIndex = ++valueIndexAtWildcard;
+            }
+            else
+                return false;
+        }
+
+        while (patternIndex < pattern.Length && pattern[patternIndex] == '%')
+            patternIndex++;
+        return patternIndex == pattern.Length;
     }
 
     internal static void EnsureProperParamNumInFunctionCall(Function userFunction, FunctionCall functionCall)
@@ -792,13 +797,11 @@ public static class EvaluationHelper
     {
         private readonly ComparisonOptions _comparisonOptions;
         private readonly MathHelperOptions _mathHelperOptions;
-        private readonly bool _noStringTypeCoercion;
 
         public ObjectEqualityComparer(ExpressionContextBase context)
         {
             _comparisonOptions = context;
             _mathHelperOptions = context;
-            _noStringTypeCoercion = context.Options.HasFlag(ExpressionOptions.NoStringTypeCoercion);
         }
 
         public new bool Equals(object? x, object? y)
@@ -806,39 +809,9 @@ public static class EvaluationHelper
             if (x is null || y is null)
                 return x == y;
 
-            if (_noStringTypeCoercion)
-                return Compare(x, y, ComparisonType.Equal, _comparisonOptions, _mathHelperOptions);
-
-            return x switch
-            {
-                byte intX when y is string strY => intX.ToString() == strY,
-                sbyte intX when y is string strY => intX.ToString() == strY,
-                short intX when y is string strY => intX.ToString() == strY,
-                ushort intX when y is string strY => intX.ToString() == strY,
-                int intX when y is string strY => intX.ToString() == strY,
-                uint intX when y is string strY => intX.ToString() == strY,
-                long intX when y is string strY => intX.ToString() == strY,
-                ulong intX when y is string strY => intX.ToString() == strY,
-                float intX when y is string strY => intX.ToString() == strY,
-                double intX when y is string strY => intX.ToString() == strY,
-                decimal intX when y is string strY => intX.ToString() == strY,
-                BigInteger intX when y is string strY => intX.ToString() == strY,
-                BigDecimal intX when y is string strY => intX.ToString() == strY,
-                string strX when y is byte intY => strX == intY.ToString(),
-                string strX when y is sbyte intY => strX == intY.ToString(),
-                string strX when y is short intY => strX == intY.ToString(),
-                string strX when y is ushort intY => strX == intY.ToString(),
-                string strX when y is int intY => strX == intY.ToString(),
-                string strX when y is uint intY => strX == intY.ToString(),
-                string strX when y is long intY => strX == intY.ToString(),
-                string strX when y is ulong intY => strX == intY.ToString(),
-                string strX when y is float intY => strX == intY.ToString(),
-                string strX when y is double intY => strX == intY.ToString(),
-                string strX when y is decimal intY => strX == intY.ToString(),
-                string strX when y is BigInteger intY => strX == intY.ToString(),
-                string strX when y is BigDecimal intY => strX == intY.ToString(),
-                _ => Compare(x, y, ComparisonType.Equal, _comparisonOptions, _mathHelperOptions)
-            };
+            // The same equality as the "=" operator: a string literal is converted to the type of the other value,
+            // and numbers are not compared through their culture-dependent text
+            return Compare(x, y, ComparisonType.Equal, _comparisonOptions, _mathHelperOptions);
         }
 
         public int GetHashCode(object? obj)
