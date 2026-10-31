@@ -146,5 +146,25 @@ namespace NCalc.Tests
             result = await new AsyncExpression(expr, ExpressionOptions.UseTernaryLogic | ExpressionOptions.UseNonRecursiveEvaluator).EvaluateAsync(TestContext.Current.CancellationToken);
             Assert.Equal(expected, (bool?)result);
         }
+
+        [Theory]
+        [InlineData("n ? 1 : 2", ExpressionOptions.None, null)]
+        [InlineData("(n ? 1 : 2)", ExpressionOptions.None, null)]
+        [InlineData("n ? 1 : 2", ExpressionOptions.TreatNullAsZero, 2)]
+        public async Task TernaryWithNullConditionShouldNotHang(string expr, ExpressionOptions extraOptions, object? expected)
+        {
+            // Before the fix, the non-recursive evaluator visited the ternary again forever; the timeout turns a hang into a failure
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            var options = ExpressionOptions.UseNonRecursiveEvaluator | ExpressionOptions.AllowNullParameter | extraOptions;
+
+            var expression = new Expression(expr, options);
+            expression.Parameters["n"] = null;
+            Assert.Equal(expected, expression.Evaluate(timeout.Token));
+
+            var asyncExpression = new AsyncExpression(expr, options);
+            asyncExpression.Parameters["n"] = null;
+            Assert.Equal(expected, await asyncExpression.EvaluateAsync(timeout.Token));
+        }
     }
 }

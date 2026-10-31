@@ -66,11 +66,12 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         // Request the value of the middle or right expression
         if (task.ChildStates.Count == 1)
         {
+            // A null condition makes the whole expression null; the value must be set, or the task is visited again forever
             if (!TryGetValueOrNull(task.ChildStates[0].Value, out object? value))
 #if NET8_0_OR_GREATER
-                return ValueTask.FromResult((object?)null);
+                return ValueTask.FromResult(SetTaskValue(task, null));
 #else
-                return new ValueTask<object?>((object?)null);
+                return new ValueTask<object?>(SetTaskValue(task, null));
 #endif
             task.ChildStates.Add(new ExpressionState<ValueTask<object?>>(MathHelper.ConvertToBoolean(value, "Ternary", context.CultureInfo, expression.LeftExpression.Location) ? expression.MiddleExpression : expression.RightExpression));
 #if NET8_0_OR_GREATER
