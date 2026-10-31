@@ -1618,7 +1618,7 @@ public static class MathHelper
                 if (result is BigDecimal bdResult)
                 {
                     if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
-                        dResult = (double)bdResult;
+                        dResult = BigDecimalToDouble(bdResult);
                 }
                 else
                 if (result is double dd)
@@ -3291,6 +3291,28 @@ public static class MathHelper
     internal static BigInteger GetWholeValue(BigDecimal value)
         => value.Exponent >= 0 ? value.Mantissa * BigInteger.Pow(10, value.Exponent) : BigInteger.Divide(value.Mantissa, BigInteger.Pow(10, -value.Exponent));
 
+    // The explicit conversions of BigDecimal to double, float and decimal format the number with the culture that was current when
+    // BigDecimal was first used, but parse it with the current culture, so after a culture change 1.5 becomes 15; its conversion to int
+    // fails on any fraction. These helpers format the mantissa and the exponent invariantly instead.
+    // A value beyond the range of the target type throws OverflowException, as the library's conversions do.
+    private static string ToInvariantExponentString(BigDecimal value)
+        => value.Mantissa.ToString(CultureInfo.InvariantCulture) + "E" + value.Exponent.ToString(CultureInfo.InvariantCulture);
+
+    internal static double BigDecimalToDouble(BigDecimal value)
+    {
+        double result = double.Parse(ToInvariantExponentString(value), NumberStyles.Float, CultureInfo.InvariantCulture);
+        return double.IsInfinity(result) ? throw new OverflowException("The value is outside the range of double.") : result;
+    }
+
+    internal static float BigDecimalToSingle(BigDecimal value)
+    {
+        float result = float.Parse(ToInvariantExponentString(value), NumberStyles.Float, CultureInfo.InvariantCulture);
+        return float.IsInfinity(result) ? throw new OverflowException("The value is outside the range of float.") : result;
+    }
+
+    internal static decimal BigDecimalToDecimal(BigDecimal value)
+        => decimal.Parse(ToInvariantExponentString(value), NumberStyles.Float, CultureInfo.InvariantCulture);
+
     /// <summary>
     /// The maximum number of significant digits of an exact (big-number or decimal) integer power.
     /// A power whose result would have more digits throws <see cref="NCalcEvaluationException"/> before it is computed,
@@ -3905,9 +3927,9 @@ public static class MathHelper
     {
         return value switch
         {
-            ComplexNumber cn => cn.IsReal ? (double) cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to double", cn.ToString(), typeof(ComplexNumber), typeof(double)),
+            ComplexNumber cn => cn.IsReal ? BigDecimalToDouble(cn.Real) : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to double", cn.ToString(), typeof(ComplexNumber), typeof(double)),
             BigInteger bigI => ((double)bigI),
-            BigDecimal bigD => ((double)bigD),
+            BigDecimal bigD => BigDecimalToDouble(bigD),
             double @double => @double,
             char ch => Convert.ToDouble(ch.ToString(), options.CultureInfo),
             _ => Convert.ToDouble(value, options.CultureInfo)
@@ -3920,9 +3942,9 @@ public static class MathHelper
         {
             return value switch
             {
-                ComplexNumber cn => cn.IsReal ? (double)cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to double", cn.ToString(), typeof(ComplexNumber), typeof(double)),
+                ComplexNumber cn => cn.IsReal ? BigDecimalToDouble(cn.Real) : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to double", cn.ToString(), typeof(ComplexNumber), typeof(double)),
                 BigInteger bigI => ((double)bigI),
-                BigDecimal bigD => ((double)bigD),
+                BigDecimal bigD => BigDecimalToDouble(bigD),
                 double @double => @double,
                 char ch => Convert.ToDouble(ch.ToString(), cultureInfo),
                 _ => Convert.ToDouble(value, cultureInfo)
@@ -3941,9 +3963,9 @@ public static class MathHelper
     {
         return value switch
         {
-            ComplexNumber cn => cn.IsReal ? (decimal)cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to decimal", cn.ToString(), typeof(ComplexNumber), typeof(decimal)),
+            ComplexNumber cn => cn.IsReal ? BigDecimalToDecimal(cn.Real) : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to decimal", cn.ToString(), typeof(ComplexNumber), typeof(decimal)),
             BigInteger bigI => ((decimal)bigI),
-            BigDecimal bigD => ((decimal)bigD),
+            BigDecimal bigD => BigDecimalToDecimal(bigD),
             decimal @decimal => @decimal,
             char ch => Convert.ToDecimal(ch.ToString(), options.CultureInfo),
             _ => Convert.ToDecimal(value, options.CultureInfo)
@@ -3956,9 +3978,9 @@ public static class MathHelper
         {
             return value switch
             {
-                ComplexNumber cn => cn.IsReal ? (decimal)cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to decimal", cn.ToString(), typeof(ComplexNumber), typeof(decimal)),
+                ComplexNumber cn => cn.IsReal ? BigDecimalToDecimal(cn.Real) : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to decimal", cn.ToString(), typeof(ComplexNumber), typeof(decimal)),
                 BigInteger bigI => ((decimal)bigI),
-                BigDecimal bigD => ((decimal)bigD),
+                BigDecimal bigD => BigDecimalToDecimal(bigD),
                 decimal @decimal => @decimal,
                 char ch => Convert.ToDecimal(ch.ToString(), cultureInfo),
                 _ => Convert.ToDecimal(value, cultureInfo)
@@ -3977,9 +3999,9 @@ public static class MathHelper
     {
         return value switch
         {
-            ComplexNumber cn => cn.IsReal ? (int)cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to an integer", cn.ToString(), typeof(ComplexNumber), typeof(int)),
+            ComplexNumber cn => cn.IsReal ? (int)GetWholeValue(cn.Real) : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to an integer", cn.ToString(), typeof(ComplexNumber), typeof(int)),
             BigInteger bigI => ((int)bigI),
-            BigDecimal bigD => ((int)bigD),
+            BigDecimal bigD => (int)GetWholeValue(bigD),
 
             int i => i,
             double dd => (int)Math.Truncate(dd),
@@ -3996,9 +4018,9 @@ public static class MathHelper
         {
             return value switch
             {
-                ComplexNumber cn => cn.IsReal ? (int)cn.Real : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to an integer", cn.ToString(), typeof(ComplexNumber), typeof(int)),
+                ComplexNumber cn => cn.IsReal ? (int)GetWholeValue(cn.Real) : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to an integer", cn.ToString(), typeof(ComplexNumber), typeof(int)),
                 BigInteger bigI => ((int)bigI),
-                BigDecimal bigD => ((int)bigD),
+                BigDecimal bigD => (int)GetWholeValue(bigD),
 
                 int i => i,
                 double dd => (int)Math.Truncate(dd),
@@ -4026,7 +4048,7 @@ public static class MathHelper
                     ? (long)GetWholeValue(cn.Real) : throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)))
                 : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)),
             BigInteger bigI => ((long)bigI),
-            BigDecimal bigD => ((long)(decimal)bigD),
+            BigDecimal bigD => ((long)GetWholeValue(bigD)),
 
             long l => l,
             int i => i,
@@ -4051,7 +4073,7 @@ public static class MathHelper
                         ? (long)GetWholeValue(cn.Real) : throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)))
                     : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)),
                 BigInteger bigI => ((long)bigI),
-                BigDecimal bigD => ((long)(decimal)bigD),
+                BigDecimal bigD => ((long)GetWholeValue(bigD)),
 
                 long l => l,
                 int i => i,
@@ -4085,7 +4107,7 @@ public static class MathHelper
                         : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong))))
                 : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to ulong", cn.ToString(), typeof(ComplexNumber), typeof(ulong)),
             BigInteger bigI => bigI.Sign >= 0 ? ((ulong)bigI) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong)),
-            BigDecimal bigD => bigD.Sign >= 0 ? ((ulong)(decimal)bigD) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigDecimal), typeof(ulong)),
+            BigDecimal bigD => bigD.Sign >= 0 ? ((ulong)GetWholeValue(bigD)) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigDecimal), typeof(ulong)),
 
             ulong ul => ul,
             uint ui => ui,
@@ -4113,7 +4135,7 @@ public static class MathHelper
                             : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong))))
                     : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to ulong", cn.ToString(), typeof(ComplexNumber), typeof(ulong)),
                 BigInteger bigI => bigI.Sign >= 0 ? ((ulong)bigI) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong)),
-                BigDecimal bigD => bigD.Sign >= 0 ? ((ulong)(decimal)bigD) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigDecimal), typeof(ulong)),
+                BigDecimal bigD => bigD.Sign >= 0 ? ((ulong)GetWholeValue(bigD)) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigDecimal), typeof(ulong)),
 
                 ulong ul => ul,
                 uint ui => ui,
@@ -4884,7 +4906,7 @@ public static class MathHelper
             case double db: return db;
             case decimal dd: return (double)dd;
             case BigInteger bi: return (double)(long)bi;
-            case BigDecimal bd: return (double)bd;
+            case BigDecimal bd: return BigDecimalToDouble(bd);
             default:
                 throw new ArgumentException("Provided object is not a supported numeric type.");
         }
@@ -4909,7 +4931,7 @@ public static class MathHelper
             case double db: return (decimal)db;
             case decimal dd: return dd;
             case BigInteger bi: return (decimal)(long)bi;
-            case BigDecimal bd: return (decimal)bd;
+            case BigDecimal bd: return BigDecimalToDecimal(bd);
             default:
                 throw new ArgumentException("Provided object is not a supported numeric type.");
         }
@@ -5184,7 +5206,7 @@ public static class MathHelper
         if (options?.UseBigNumbers == true)
             return value.Real;
 
-        return (double)value.Real;
+        return BigDecimalToDouble(value.Real);
     }
 
     public static object? ReduceNumericType(object value, Type? restrictToType = null, MathHelperOptions options = default)
@@ -5292,23 +5314,23 @@ public static class MathHelper
 
         if (((restrictToType is null && (options.Value.DecimalAsDefault)) || restrictToType == typeof(decimal)) && (value >= decimal.MinValue && value <= decimal.MaxValue))
         {
-            return (decimal)value;
+            return BigDecimalToDecimal(value);
         }
 
         if (restrictToType == typeof(float) && (value >= float.MinValue && value <= float.MaxValue))
         {
-            return (float)value;
+            return BigDecimalToSingle(value);
         }
 
         if (restrictToType == typeof(double) && value >= double.MinValue && value <= double.MaxValue)
         {
-            return (double)value;
+            return BigDecimalToDouble(value);
         }
 
         // Otherwise, the value is narrowed to double only if no digits are lost
         if (options.Value.DecimalAsDefault != true && value >= double.MinValue && value <= double.MaxValue)
         {
-            double dValue = (double)value;
+            double dValue = BigDecimalToDouble(value);
             if (new BigDecimal(dValue) == value)
                 return dValue;
         }

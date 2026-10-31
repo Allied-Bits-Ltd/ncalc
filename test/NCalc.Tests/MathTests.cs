@@ -831,6 +831,39 @@ public class MathsTests : TestBase
     }
 
     [Fact]
+    public void BigDecimalConversionsShouldNotDependOnCurrentCulture()
+    {
+        // BigDecimal remembers the culture current at its first use; at least one of these cultures differs from it in the decimal separator
+        var oldCulture = CultureInfo.CurrentCulture;
+        var x = new BigDecimal(new BigInteger(15), -1);   // 1.5
+        try
+        {
+            foreach (var name in new[] { "en-US", "de-DE" })
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(name);
+                var options = new MathHelperOptions(CultureInfo.CurrentCulture, ExpressionOptions.None);
+
+                Assert.Equal(1.5, MathHelper.ConvertToDouble(x, options));
+                Assert.Equal(1.5m, MathHelper.ConvertToDecimal(x, options));
+                Assert.Equal(1, MathHelper.ConvertToInt(x, options));
+                Assert.Equal(1L, MathHelper.ConvertToLong(x, options));
+                Assert.Equal(1UL, MathHelper.ConvertToULong(x, options));
+                Assert.Equal(-1, MathHelper.ConvertToInt(-x, options));
+                Assert.Equal(1.5, new ComplexNumber(x, BigDecimal.Zero).ToComplex().Real);
+                Assert.Equal(1.5f, new NCalc.Domain.Vector([x, x]).ToVector2().X);
+
+                var expression = new NCalc.Expression("Sqrt(x * x) + 1", ExpressionOptions.NoCache);
+                expression.Parameters["x"] = x;
+                Assert.Equal(2.5, Convert.ToDouble(expression.Evaluate(TestContext.Current.CancellationToken)), 10);
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = oldCulture;
+        }
+    }
+
+    [Fact]
     public void MixedNumericTypesShouldMatchCSharpArithmetic()
     {
         // Every pair of numeric types and every arithmetic operator is compared with what C# computes;

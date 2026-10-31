@@ -685,7 +685,7 @@ namespace NCalc.Domain
         /// <see cref="BigDecimal"/> to <c>double</c>.
         /// </summary>
         public Complex ToComplex() =>
-            new Complex((double)Real, (double)Imaginary);
+            new Complex(MathHelper.BigDecimalToDouble(Real), MathHelper.BigDecimalToDouble(Imaginary));
 
         /// <summary>
         /// Creates a <see cref="ComplexNumber"/> from a <see cref="Complex"/>.
@@ -741,8 +741,8 @@ namespace NCalc.Domain
             if (tol == 0.0)
                 return obj.GetHashCode();
 
-            long realBucket = (long)Math.Round((double)(obj.Real / tol));
-            long imaginaryBucket = (long)Math.Round((double)(obj.Imaginary / tol));
+            long realBucket = (long)Math.Round(MathHelper.BigDecimalToDouble(obj.Real / tol));
+            long imaginaryBucket = (long)Math.Round(MathHelper.BigDecimalToDouble(obj.Imaginary / tol));
 
             unchecked
             {

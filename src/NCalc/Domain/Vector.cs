@@ -432,7 +432,7 @@ namespace NCalc.Domain
             if (Dimensions != 2)
                 throw new InvalidOperationException(
                     $"Cannot convert a {Dimensions}-dimensional vector to Vector2 — exactly 2 dimensions are required.");
-            return new Vector2((float)(double)_components[0], (float)(double)_components[1]);
+            return new Vector2(MathHelper.BigDecimalToSingle(_components[0]), MathHelper.BigDecimalToSingle(_components[1]));
         }
 
         /// <summary>Creates an NCalc <see cref="Vector"/> from a <see cref="Vector2"/>.</summary>
@@ -458,9 +458,9 @@ namespace NCalc.Domain
                 throw new InvalidOperationException(
                     $"Cannot convert a {Dimensions}-dimensional vector to Vector3 — exactly 3 dimensions are required.");
             return new Vector3(
-                (float)(double)_components[0],
-                (float)(double)_components[1],
-                (float)(double)_components[2]);
+                MathHelper.BigDecimalToSingle(_components[0]),
+                MathHelper.BigDecimalToSingle(_components[1]),
+                MathHelper.BigDecimalToSingle(_components[2]));
         }
 
         /// <summary>Creates an NCalc <see cref="Vector"/> from a <see cref="Vector3"/>.</summary>
@@ -491,10 +491,10 @@ namespace NCalc.Domain
                 throw new InvalidOperationException(
                     $"Cannot convert a {Dimensions}-dimensional vector to Vector4 — exactly 4 dimensions are required.");
             return new Vector4(
-                (float)(double)_components[0],
-                (float)(double)_components[1],
-                (float)(double)_components[2],
-                (float)(double)_components[3]);
+                MathHelper.BigDecimalToSingle(_components[0]),
+                MathHelper.BigDecimalToSingle(_components[1]),
+                MathHelper.BigDecimalToSingle(_components[2]),
+                MathHelper.BigDecimalToSingle(_components[3]));
         }
 
         /// <summary>Creates an NCalc <see cref="Vector"/> from a <see cref="Vector4"/>.</summary>
@@ -539,7 +539,7 @@ namespace NCalc.Domain
 
             var values = new T[count];
             for (int i = 0; i < count; i++)
-                values[i] = (T)Convert.ChangeType((double)_components[i], typeof(T));
+                values[i] = (T)Convert.ChangeType(MathHelper.BigDecimalToDouble(_components[i]), typeof(T));
 
             return new System.Numerics.Vector<T>(values);
         }
@@ -645,7 +645,7 @@ namespace NCalc.Domain
                 return obj.GetHashCode();
             for (int i = 0; i < obj.Dimensions; i++)
             {
-                long bucket = (long)Math.Round((double)(obj[i] / tol));
+                long bucket = (long)Math.Round(MathHelper.BigDecimalToDouble(obj[i] / tol));
                 hash = hash * 23 + bucket.GetHashCode();
             }
             return hash;
