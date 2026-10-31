@@ -59,9 +59,62 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         }
         else
         {
-            return EncapsulateNoValue(expression.LeftExpression) + "? " + EncapsulateNoValue(expression.MiddleExpression) + ": " + EncapsulateNoValue(expression.RightExpression);
+            // The parts of a ternary operator are parsed as binary expressions, so a nested ternary operator needs parentheses
+            return EncapsulateNoValue(expression.LeftExpression, parensNeeded: GetPrecedence(expression.LeftExpression) <= TernaryPrecedence) + "? "
+                + EncapsulateNoValue(expression.MiddleExpression, parensNeeded: GetPrecedence(expression.MiddleExpression) <= TernaryPrecedence) + ": "
+                + EncapsulateNoValue(expression.RightExpression, parensNeeded: GetPrecedence(expression.RightExpression) <= TernaryPrecedence);
         }
     }
+
+    // How tightly an expression binds, following the grammar of LogicalExpressionParser: an operand is parenthesized when it binds
+    // more loosely than its position allows, so that the text is parsed back into the same tree.
+    private const int LowestPrecedence = 0;
+    private const int TernaryPrecedence = 5;
+    private const int UnaryPrecedence = 70;
+    private const int ExponentiationPrecedence = 80;
+    private const int PostfixPrecedence = 90;
+    private const int PrimaryPrecedence = 100;
+
+    private static int? GetBinaryOperatorPrecedence(BinaryExpressionType type) => type switch
+    {
+        BinaryExpressionType.Exponentiation => ExponentiationPrecedence,
+        BinaryExpressionType.Times or BinaryExpressionType.Div or BinaryExpressionType.Modulo
+            or BinaryExpressionType.IntDivB or BinaryExpressionType.IntDivP => 60,
+        BinaryExpressionType.Plus or BinaryExpressionType.Minus => 55,
+        BinaryExpressionType.LeftShift or BinaryExpressionType.RightShift => 50,
+        BinaryExpressionType.Greater or BinaryExpressionType.GreaterOrEqual or BinaryExpressionType.Less or BinaryExpressionType.LessOrEqual
+            or BinaryExpressionType.In or BinaryExpressionType.NotIn or BinaryExpressionType.Like or BinaryExpressionType.NotLike => 45,
+        BinaryExpressionType.Equal or BinaryExpressionType.NotEqual => 40,
+        BinaryExpressionType.BitwiseAnd => 35,
+        BinaryExpressionType.BitwiseXOr => 30,
+        BinaryExpressionType.BitwiseOr => 25,
+        BinaryExpressionType.And => 20,
+        BinaryExpressionType.XOr => 15,
+        BinaryExpressionType.Or => 10,
+        _ => null
+    };
+
+    private int GetPrecedence(LogicalExpression expression) => expression switch
+    {
+        // A negative number is written with a leading minus, which is parsed as a unary operator where one is allowed
+        ValueExpression value => IsNegativeNumber(value) ? UnaryPrecedence : PrimaryPrecedence,
+        BinaryExpression binary => GetBinaryOperatorPrecedence(binary.Type)
+            ?? (binary.Type is BinaryExpressionType.Factorial or BinaryExpressionType.IndexAccess or BinaryExpressionType.RangeIndex ? PostfixPrecedence : LowestPrecedence),
+        UnaryExpression unary => unary.Type switch
+        {
+            UnaryExpressionType.FromEnd => PrimaryPrecedence,
+            UnaryExpressionType.Return => LowestPrecedence,
+            _ => UnaryPrecedence
+        },
+        PercentExpression or ImaginaryNumberExpression => PostfixPrecedence,
+        IfStatementExpression => LowestPrecedence,
+        TernaryExpression => TernaryPrecedence,
+        StatementSequence or FunctionExpression => LowestPrecedence,
+        _ => PrimaryPrecedence
+    };
+
+    private bool IsNegativeNumber(ValueExpression value)
+        => value.Type is ValueType.Integer or ValueType.Float && value.Accept(this).StartsWith("-", StringComparison.Ordinal);
 
     public string Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
@@ -96,7 +149,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         {
             if ((expression.RightExpression is ValueExpression valueExpression) && (valueExpression.Type == ValueType.Integer) && (valueExpression.Value != null))
             {
-                parensNeeded = !(expression.LeftExpression is Identifier || expression.LeftExpression is ValueExpression);
+                parensNeeded = GetPrecedence(expression.LeftExpression) < PrimaryPrecedence;
                 resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, false, parensNeeded));
 
                 var step = (int)valueExpression.Value;
@@ -110,6 +163,17 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             parensNeeded = false;
             if (expression.Type is BinaryExpressionType.RangeIndex)
                 parensNeeded = !(expression.LeftExpression is Identifier || expression.LeftExpression is ValueExpression) && !(expression.LeftExpression is UnaryExpression unExp && unExp.Type == UnaryExpressionType.FromEnd);
+            else
+            if (expression.Type is BinaryExpressionType.IndexAccess)
+                parensNeeded = GetPrecedence(expression.LeftExpression) < PostfixPrecedence;
+            else
+            if (GetBinaryOperatorPrecedence(expression.Type) is int precedence)
+            {
+                // Binary operators are left-associative, except exponentiation, whose left operand must bind more tightly than it
+                parensNeeded = expression.Type == BinaryExpressionType.Exponentiation
+                    ? GetPrecedence(expression.LeftExpression) <= precedence
+                    : GetPrecedence(expression.LeftExpression) < precedence;
+            }
 
             appendSpace = expression.Type != BinaryExpressionType.IndexAccess && expression.Type != BinaryExpressionType.RangeIndex;
             resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, appendSpace, parensNeeded));
@@ -159,6 +223,15 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
         if (expression.Type is BinaryExpressionType.RangeIndex)
             parensNeeded = !(expression.RightExpression is Identifier || expression.RightExpression is ValueExpression) && !(expression.RightExpression is UnaryExpression unExp2 && unExp2.Type == UnaryExpressionType.FromEnd);
+        else
+        if (GetBinaryOperatorPrecedence(expression.Type) is int operatorPrecedence)
+        {
+            parensNeeded = expression.Type == BinaryExpressionType.Exponentiation
+                ? GetPrecedence(expression.RightExpression) < operatorPrecedence
+                : GetPrecedence(expression.RightExpression) <= operatorPrecedence;
+        }
+        else
+            parensNeeded = false;
 
         appendSpace = true;
         if (expression.Type == BinaryExpressionType.IndexAccess)
@@ -195,7 +268,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             _ => string.Empty
         };
 
-        bool parensNeeded = !(expression.Expression is Identifier || expression.Expression is ValueExpression);
+        bool parensNeeded = !(expression.Expression is Identifier || (expression.Expression is ValueExpression value && !IsNegativeNumber(value)));
         result += EncapsulateNoValue(expression.Expression, parensNeeded: parensNeeded);
         return result;
     }
@@ -205,7 +278,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
-        bool parensNeeded = !(expression.Expression is Identifier || expression.Expression is ValueExpression);
+        bool parensNeeded = GetPrecedence(expression.Expression) < PrimaryPrecedence;
         return EncapsulateNoValue(expression.Expression, false, parensNeeded) + "%";
     }
 
@@ -214,7 +287,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
-        bool parensNeeded = !(expression.Expression is Identifier || expression.Expression is ValueExpression);
+        bool parensNeeded = GetPrecedence(expression.Expression) < PrimaryPrecedence;
         return EncapsulateNoValue(expression.Expression, false, parensNeeded) + "i";
     }
 
@@ -285,18 +358,13 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         string sep = GetListItemSeparator(context.AdvancedOptions);
         var resultBuilder = new StringBuilder(function.Identifier.Name +'(');
 
+        // Not every argument ends with a space (identifiers do not), so each one is trimmed instead of removing its last character
         for (int i = 0; i < function.Parameters.Count; i++)
         {
-            resultBuilder.Append(function.Parameters[i].Accept(this, cancellationToken));
-            if (i < function.Parameters.Count - 1)
-            {
-                resultBuilder.Remove(resultBuilder.Length - 1, 1);
+            if (i > 0)
                 resultBuilder.Append(sep);
-            }
+            resultBuilder.Append(function.Parameters[i].Accept(this, cancellationToken).TrimEnd());
         }
-
-        while (resultBuilder[^1] == ' ')
-            resultBuilder.Remove(resultBuilder.Length - 1, 1);
 
         resultBuilder.Append(") ");
         return resultBuilder.ToString();
@@ -426,6 +494,8 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         if (expression is ValueExpression valueExpression)
         {
             string result = valueExpression.Accept(this);
+            if (parensNeeded)
+                return "(" + result.TrimEnd() + (appendSpace ? ") " : ")");
             if (!appendSpace)
                 result = result.TrimEnd();
             return result;

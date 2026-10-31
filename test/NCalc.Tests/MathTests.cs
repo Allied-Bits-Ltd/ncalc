@@ -788,7 +788,7 @@ public class MathsTests : TestBase
     [InlineData("10 ** 5000000000", ExpressionOptions.UseBigNumbers)]
     [InlineData("1 ** 5000000000", ExpressionOptions.UseBigNumbers)]
     [InlineData("(-1) ** 5000000001", ExpressionOptions.UseBigNumbers)]
-    public void BigPowerShouldCompleteQuickly(string expr, ExpressionOptions options)
+    public async Task BigPowerShouldCompleteQuickly(string expr, ExpressionOptions options)
     {
         // The exact power used to run for seconds to minutes; it must now either finish or fail with the size limit quickly
         object? result = null;
@@ -798,7 +798,8 @@ public class MathsTests : TestBase
             try { result = new NCalc.Expression(expr, options | ExpressionOptions.NoCache).Evaluate(); }
             catch (Exception e) { error = e; }
         }, TestContext.Current.CancellationToken);
-        Assert.True(evaluation.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), $"{expr} did not complete in 10 s");
+        var finished = await Task.WhenAny(evaluation, Task.Delay(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.True(finished == evaluation, $"{expr} did not complete in 10 s");
 
         switch (expr)
         {

@@ -342,7 +342,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return UpdateParameter(expression.LeftExpression, null, cancellationToken);
 
-                    bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal || leftValue is TimeSpan || leftValue is NCalcVector || rightValue is NCalcVector;
+                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertDividendToDouble(leftValue, rightValue);
 
                     if (handlePercent)
                     {
@@ -517,7 +517,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (!TryGetValueOrNull(right.Value, out rightValue))
                         return null;
 
-                    bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal || leftValue is TimeSpan || leftValue is NCalcVector || rightValue is NCalcVector;
+                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertDividendToDouble(leftValue, rightValue);
 
                     if (handlePercent)
                     {

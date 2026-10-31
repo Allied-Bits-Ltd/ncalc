@@ -248,7 +248,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         }
                     }
 
-                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.Multiply(leftValue, rightValue, true, context), cancellationToken));
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, EvaluationHelper.Multiply(leftValue, rightValue, context), cancellationToken));
                 }
 
                 case BinaryExpressionType.DivAssignment:
@@ -260,7 +260,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
                         return SetTaskValue(task, UpdateParameter(expression.LeftExpression, null, cancellationToken));
 
-                    bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
+                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertDividendToDouble(leftValue, rightValue);
 
                     if (handlePercent)
                     {
@@ -306,7 +306,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
 
                     {
-                        object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                        object? result = EvaluationHelper.Divide(leftValue, rightValue, context);
                         if (result is null)
                             return SetTaskValue(task, null);
 
@@ -456,7 +456,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
                         return SetTaskValue(task, null);
 
-                    bool noConvertToDouble = IsReal(leftValue) || IsReal(rightValue) || leftValue is BigInteger || rightValue is BigInteger || leftValue is BigDecimal || rightValue is BigDecimal;
+                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertDividendToDouble(leftValue, rightValue);
 
                     if (handlePercent)
                     {
@@ -503,7 +503,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.LeftExpression.Location);
 
                     {
-                        object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                        object? result = EvaluationHelper.Divide(leftValue, rightValue, context);
                         if (result is null)
                             return SetTaskValue(task, null);
                         return SetTaskValue(task, result);
@@ -695,7 +695,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         }
                     }
 
-                    return SetTaskValue(task, MathHelper.Multiply(leftValue, rightValue, true, context));
+                    return SetTaskValue(task, EvaluationHelper.Multiply(leftValue, rightValue, context));
                 }
 
                 case BinaryExpressionType.BitwiseAnd:

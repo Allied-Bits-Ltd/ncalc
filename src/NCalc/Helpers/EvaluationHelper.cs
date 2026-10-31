@@ -216,6 +216,21 @@ public static class EvaluationHelper
     }
 
     /// <summary>
+    /// Tells whether the left operand of a division is converted to double before dividing, so that dividing two integers gives a fractional result.
+    /// Floating-point and big numbers, complex numbers, vectors and timespans keep their type. All evaluators use this check.
+    /// </summary>
+    /// <param name="leftValue">The left operand.</param>
+    /// <param name="rightValue">The right operand.</param>
+    /// <returns><see langword="true"/> if the left operand is converted to double.</returns>
+    public static bool ShouldConvertDividendToDouble(object? leftValue, object? rightValue)
+        => !(TypeHelper.IsReal(leftValue) || TypeHelper.IsReal(rightValue)
+            || leftValue is BigInteger || rightValue is BigInteger
+            || leftValue is BigDecimal || rightValue is BigDecimal
+            || leftValue is ComplexNumber || rightValue is ComplexNumber
+            || leftValue is NCalcVector || rightValue is NCalcVector
+            || leftValue is TimeSpan);
+
+    /// <summary>
     /// Divides the first value by the second one, with support for timespans as left values.
     /// </summary>
     /// <param name="leftValue">The left operand.</param>

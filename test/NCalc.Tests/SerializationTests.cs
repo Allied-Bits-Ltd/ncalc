@@ -139,6 +139,90 @@ public class SerializationTests
                 .ToString());
     }
 
+    [Theory]
+    [InlineData("(1 + 2) * 3", "(1 + 2) * 3")]
+    [InlineData("1 - (2 - 3)", "1 - (2 - 3)")]
+    [InlineData("1 - 2 - 3", "1 - 2 - 3")]
+    [InlineData("(-2) ** 2", "(-2) ** 2")]
+    [InlineData("(2 ** 3) ** 2", "(2 ** 3) ** 2")]
+    [InlineData("2 ** (3 ** 2)", "2 ** 3 ** 2")]
+    [InlineData("2 ** -1", "2 ** (-1)")]
+    [InlineData("(a ? 1 : 2) ? 3 : 4", "(a ? 1 : 2) ? 3 : 4")]
+    [InlineData("a ? (b ? 1 : 2) : 3", "a ? (b ? 1 : 2) : 3")]
+    [InlineData("(a or b) and c", "(a or b) and c")]
+    [InlineData("Max(abc, 1)", "Max(abc; 1)")]
+    [InlineData("Max(a, b)", "Max(a; b)")]
+    [InlineData("Abs([a]) + Max([a], abc)", "Abs([a]) + Max([a]; abc)")]
+    public void ToStringShouldKeepTheMeaningOfTheExpression(string expression, string expected)
+    {
+        var parsed = new Expression(expression, ExpressionOptions.NoCache);
+        Assert.False(parsed.HasErrors());
+        Assert.Equal(expected, parsed.LogicalExpression!.ToString());
+    }
+
+    [Fact]
+    public void ToStringShouldRoundTripRandomExpressions()
+    {
+        // Random expressions with random parentheses: the text produced by ToString must parse back to an expression with the same result
+        var random = new Random(20261031);
+        string[] binaryOperators = ["+", "-", "*", "/", "%", "**", "&", "|", "^", "<<", ">>", "=", "!=", "<", ">=", "and", "or", "xor", "div"];
+
+        string Atom() => random.Next(7) switch
+        {
+            0 => "a", 1 => "abc", 2 => $"Max({Generate(1)}, {Generate(1)})", 3 => $"Abs({Generate(1)})", 4 => "true", _ => random.Next(10).ToString(CultureInfo.InvariantCulture)
+        };
+        string Wrap(string text) => random.Next(2) == 0 ? $"({text})" : text;
+        string Generate(int depth)
+        {
+            if (depth <= 0 || random.Next(10) < 2)
+                return Atom();
+            return random.Next(10) switch
+            {
+                0 => "-" + Wrap(Generate(depth - 1)),
+                1 => "not " + Wrap(Generate(depth - 1)),
+                2 => $"{Wrap(Generate(depth - 1))} ? {Wrap(Generate(depth - 1))} : {Wrap(Generate(depth - 1))}",
+                _ => $"{Wrap(Generate(depth - 1))} {binaryOperators[random.Next(binaryOperators.Length)]} {Wrap(Generate(depth - 1))}"
+            };
+        }
+        string Evaluate(string text)
+        {
+            try
+            {
+                var expression = new Expression(text, ExpressionOptions.NoCache);
+                expression.Parameters["a"] = 3;
+                expression.Parameters["abc"] = 7;
+                var result = expression.Evaluate(TestContext.Current.CancellationToken);
+                return $"{Convert.ToString(result, CultureInfo.InvariantCulture)} {result?.GetType().Name}";
+            }
+            catch (Exception ex)
+            {
+                return ex.GetType().Name;
+            }
+        }
+
+        var failures = new List<string>();
+        for (int i = 0; i < 1000 && failures.Count < 10; i++)
+        {
+            string source = Generate(4);
+            var original = new Expression(source, ExpressionOptions.NoCache);
+            if (original.HasErrors())
+                continue;
+
+            string text = original.LogicalExpression!.ToString();
+            var reparsed = new Expression(text, ExpressionOptions.NoCache);
+            if (reparsed.HasErrors())
+                failures.Add($"{source} -> {text}: does not parse");
+            else
+            if (reparsed.LogicalExpression!.ToString() != text)
+                failures.Add($"{source} -> {text} -> {reparsed.LogicalExpression}");
+            else
+            if (Evaluate(source) != Evaluate(text))
+                failures.Add($"{source} = {Evaluate(source)}, {text} = {Evaluate(text)}");
+        }
+
+        Assert.Empty(failures);
+    }
+
     [Fact]
     public void Function_Serialization_Test()
     {

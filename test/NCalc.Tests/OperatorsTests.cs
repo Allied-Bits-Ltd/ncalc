@@ -1,3 +1,4 @@
+using NCalc.Domain;
 using NCalc.Factories;
 
 namespace NCalc.Tests;
@@ -98,6 +99,48 @@ public class OperatorsTests : TestBase
         {
             Assert.Equal(expected, new Expression(expression, options).Evaluate(TestContext.Current.CancellationToken));
             Assert.Equal(expected, await new AsyncExpression(expression, options).EvaluateAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Theory]
+    [InlineData("(1+2i)/(3-4i)", "-0.2 + 0.4i")]
+    [InlineData("(1+2i)*(3-4i)", "11 + 2i")]
+    [InlineData("c /= (1-1i)", "0.5 + 0.5i")]
+    [InlineData("[2;4] / 2", "[1, 2]")]
+    [InlineData("t * 2", "02:00:00")]
+    [InlineData("t / 2", "00:30:00")]
+    [InlineData("2147483647 * 2", "4294967294 Int64")]
+    [InlineData("x /= 2", "2 Double")]
+    [InlineData("x *= 2147483647", "8589934588 Int64")]
+    public async Task MultiplyAndDivideShouldGiveTheSameResultInAllEvaluators(string expression, string expected)
+    {
+        static void Prepare<T>(ExpressionBase<T> e) where T : ExpressionContextBase, new()
+        {
+            e.AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.ParseComplexNumbers | AdvExpressionOptions.ParseVectors);
+            e.Parameters["c"] = 1;
+            e.Parameters["t"] = TimeSpan.FromHours(1);
+            e.Parameters["x"] = 4;
+        }
+
+        static string Show(object? result) => result switch
+        {
+            ComplexNumber cn => $"{cn.ToComplex().Real.ToString(CultureInfo.InvariantCulture)} {(cn.ToComplex().Imaginary < 0 ? "-" : "+")} {Math.Abs(cn.ToComplex().Imaginary).ToString(CultureInfo.InvariantCulture)}i",
+            NCalc.Domain.Vector or TimeSpan => Convert.ToString(result, CultureInfo.InvariantCulture)!,
+            _ => $"{Convert.ToString(result, CultureInfo.InvariantCulture)} {result?.GetType().Name}"
+        };
+
+        foreach (var nonRecursive in new[] { false, true })
+        {
+            var options = ExpressionOptions.NoCache | ExpressionOptions.SupportTimeOperations | ExpressionOptions.UseAssignments
+                          | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+
+            var syncExpression = new Expression(expression, options);
+            Prepare(syncExpression);
+            Assert.Equal(expected, Show(syncExpression.Evaluate(TestContext.Current.CancellationToken)));
+
+            var asyncExpression = new AsyncExpression(expression, options);
+            Prepare(asyncExpression);
+            Assert.Equal(expected, Show(await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken)));
         }
     }
 
