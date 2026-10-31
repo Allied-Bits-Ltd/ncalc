@@ -780,6 +780,46 @@ public class MathsTests : TestBase
         Assert.True(((ComplexNumber)result).Imaginary.Equals(expectedImaginary));
     }
 
+    [Fact]
+    public void MixedNumericTypesShouldMatchCSharpArithmetic()
+    {
+        // Every pair of numeric types and every arithmetic operator is compared with what C# computes;
+        // pairs that C# does not allow (e.g. decimal with double) are skipped
+        object[] lefts = [7, 7L, 7UL, 7.5f, 7.5, 7.5m];
+        object[] rights = [2, 2L, 2UL, 2.5f, 2.5, 2.5m];
+        var failures = new List<string>();
+
+        foreach (var a in lefts)
+        foreach (var b in rights)
+        foreach (var op in new[] { "+", "-", "*", "/", "%" })
+        {
+            double expected;
+            try
+            {
+                dynamic da = a, db = b;
+                expected = Convert.ToDouble(op switch { "+" => da + db, "-" => da - db, "*" => da * db, "/" => da / db, _ => da % db });
+            }
+            catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
+            {
+                continue;
+            }
+
+            var expression = new NCalc.Expression($"a {op} b", ExpressionOptions.NoCache);
+            expression.Parameters["a"] = a;
+            expression.Parameters["b"] = b;
+            var actual = Convert.ToDouble(expression.Evaluate(TestContext.Current.CancellationToken));
+
+            // C# divides integers with truncation, NCalc divides them exactly
+            if (op == "/" && MathHelper.IsBoxedIntegerNumber(a) && MathHelper.IsBoxedIntegerNumber(b))
+                expected = Convert.ToDouble(a) / Convert.ToDouble(b);
+
+            if (Math.Abs(actual - expected) > 1e-6 * Math.Max(1, Math.Abs(expected)))
+                failures.Add($"{a.GetType().Name} {op} {b.GetType().Name}: expected {expected}, got {actual}");
+        }
+
+        Assert.Empty(failures);
+    }
+
     [Theory]
     [InlineData("1 / 0.0", ExpressionOptions.None, double.PositiveInfinity)]
     [InlineData("-1 / 0.0", ExpressionOptions.None, double.NegativeInfinity)]

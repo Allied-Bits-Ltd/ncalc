@@ -2404,7 +2404,17 @@ public static class MathHelper
             }
         }
 
-        if ((floatingPointA && !floatingPointB) || (bitSizeA > bitSizeB))
+        // When one operand is floating-point and the other is an integer, the integer is converted to the floating-point type, whatever the bit sizes are.
+        // A float cannot hold a 64-bit integer with a meaningful precision, so such a pair is computed in double.
+        if (floatingPointA != floatingPointB && (floatingPointA ? typeCodeA : typeCodeB) == TypeCode.Single && (floatingPointA ? bitSizeB : bitSizeA) >= 64)
+        {
+            a = Convert.ToDouble(a, options.CultureInfo);
+            b = Convert.ToDouble(b, options.CultureInfo);
+            typesWereExpanded = true;
+            return TypeCode.Double;
+        }
+
+        if ((floatingPointA && !floatingPointB) || (bitSizeA > bitSizeB && floatingPointA == floatingPointB))
         {
             try
             {
@@ -2424,7 +2434,7 @@ public static class MathHelper
             }
         }
         else
-        if ((!floatingPointA && floatingPointB) || bitSizeB > bitSizeA)
+        if ((!floatingPointA && floatingPointB) || (bitSizeB > bitSizeA && floatingPointA == floatingPointB))
         {
             try
             {
