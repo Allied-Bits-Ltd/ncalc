@@ -1130,9 +1130,9 @@ public static class MathHelper
 
                 if (bdResult is not null)
                 {
-                    if (bdResult.Value.DecimalPlaces == 0)
+                    if (IsWholeNumber(bdResult.Value))
                     {
-                        result = bdResult.Value.WholeValue;
+                        result = GetWholeValue(bdResult.Value);
                         return ReduceNumericType(result, reduceTypes ? null : t, options);
                     }
                     else
@@ -1481,14 +1481,14 @@ public static class MathHelper
             if (bdResult is not null)
             {
                 // With a big-number operand, a fractional result is narrowed only as far as no digits are lost
-                if (bigOperand && bdResult.Value.DecimalPlaces != 0)
+                if (bigOperand && !IsWholeNumber(bdResult.Value))
                     return ReduceNumericType(bdResult.Value, null, options);
 
                 if (reduceTypes)
                 {
-                    if ((IsBoxedIntegerNumberOrBigNumber(typeA) || options.ReduceDivResultToInteger) && bdResult.Value.DecimalPlaces == 0)
+                    if ((IsBoxedIntegerNumberOrBigNumber(typeA) || options.ReduceDivResultToInteger) && IsWholeNumber(bdResult.Value))
                     {
-                        BigInteger biResult = bdResult.Value.WholeValue;
+                        BigInteger biResult = GetWholeValue(bdResult.Value);
 
                         if (biResult >= long.MinValue && biResult <= long.MaxValue)
                             return (long)biResult;
@@ -1521,9 +1521,9 @@ public static class MathHelper
                 }
                 else // try to keep the original type of a
                 {
-                    if (IsBoxedIntegerNumberOrBigNumber(typeA) && bdResult.Value.DecimalPlaces == 0)
+                    if (IsBoxedIntegerNumberOrBigNumber(typeA) && IsWholeNumber(bdResult.Value))
                     {
-                        BigInteger biResult = bdResult.Value.WholeValue;
+                        BigInteger biResult = GetWholeValue(bdResult.Value);
 
                         if ((typeA == typeof(short)) && biResult >= short.MinValue && biResult <= short.MaxValue)
                             return (short)biResult;
@@ -1740,7 +1740,7 @@ public static class MathHelper
             {
                 if (truncateFirst)
                 {
-                    BigInteger biA = bdA.WholeValue;
+                    BigInteger biA = GetWholeValue(bdA);
                     if (!((b is BigInteger) || (b is BigDecimal)))
                         b = ConvertToLong(b, "Integer Div", options.CultureInfo, null);
 
@@ -1756,7 +1756,7 @@ public static class MathHelper
             {
                 if (truncateFirst)
                 {
-                    BigInteger biB = bdB.WholeValue;
+                    BigInteger biB = GetWholeValue(bdB);
                     if (!((a is BigInteger) || (a is BigDecimal)))
                         a = ConvertToLong(a, "Integer Div", options.CultureInfo, null);
 
@@ -3252,8 +3252,8 @@ public static class MathHelper
                 exponent = bi;
                 return true;
             case BigDecimal bd:
-                if (bd.DecimalPlaces != 0) return false;
-                exponent = bd.WholeValue;
+                if (!IsWholeNumber(bd)) return false;
+                exponent = GetWholeValue(bd);
                 return true;
             case byte byt: exponent = new BigInteger(byt); return true;
             case sbyte sb: exponent = new BigInteger(sb); return true;
@@ -3265,25 +3265,40 @@ public static class MathHelper
             case ulong ul: exponent = new BigInteger(ul); return true;
             case float f:
                 if (f != Math.Truncate(f)) return false;
-                exponent = new BigDecimal(f).WholeValue;
+                exponent = GetWholeValue(new BigDecimal(f));
                 return true;
             case double d:
                 if (d != Math.Truncate(d)) return false;
                 if (d >= long.MinValue && d <= long.MaxValue)
                     exponent = new BigInteger((long)d);
                 else
-                    exponent = new BigDecimal(d).WholeValue;
+                    exponent = GetWholeValue(new BigDecimal(d));
                 return true;
             case decimal m:
                 if (m != Math.Truncate(m)) return false;
-                exponent = new BigDecimal(m).WholeValue;
+                exponent = GetWholeValue(new BigDecimal(m));
                 return true;
             default:
                 return false;
         }
     }
 
-    // Raises baseValue to an integer power using exponentiation by squaring.
+    // BigDecimal.DecimalPlaces and BigDecimal.WholeValue work through the string form of the number, which takes seconds for numbers
+    // with tens of thousands of digits; these helpers compute the same from the mantissa and the exponent.
+    internal static bool IsWholeNumber(BigDecimal value)
+        => value.Exponent >= 0 || (value.Mantissa % BigInteger.Pow(10, -value.Exponent)).IsZero;
+
+    internal static BigInteger GetWholeValue(BigDecimal value)
+        => value.Exponent >= 0 ? value.Mantissa * BigInteger.Pow(10, value.Exponent) : BigInteger.Divide(value.Mantissa, BigInteger.Pow(10, -value.Exponent));
+
+    /// <summary>
+    /// The maximum number of significant digits of an exact (big-number or decimal) integer power.
+    /// A power whose result would have more digits throws <see cref="NCalcEvaluationException"/> before it is computed,
+    /// so that a short expression such as "2 ** 2000000" cannot occupy the CPU for a long time. The default is 100,000.
+    /// </summary>
+    public static int MaxPowResultDigits { get; set; } = 100_000;
+
+    // Raises baseValue to an integer power exactly: the digits (mantissa) are raised with BigInteger.Pow and the decimal scale is multiplied.
     // Handles zero, one, negative exponents, and a zero base.
     private static BigDecimal BigDecimalPow(BigDecimal baseValue, BigInteger exponent)
     {
@@ -3300,25 +3315,24 @@ public static class MathHelper
             throw new DivideByZeroException("Zero cannot be raised to a negative power.");
         }
 
-        if (exponent < BigInteger.Zero)
-            return BigDecimal.One / BigDecimalPowPositive(baseValue, BigInteger.Negate(exponent));
+        BigInteger mantissa = baseValue.Mantissa;
+        int scale = baseValue.Exponent;
+        BigInteger n = BigInteger.Abs(exponent);
 
-        return BigDecimalPowPositive(baseValue, exponent);
-    }
+        // 1 and -1 can be raised to any power without computing anything
+        if (scale == 0 && BigInteger.Abs(mantissa).IsOne)
+            return (mantissa.Sign < 0 && !n.IsEven) ? new BigDecimal(BigInteger.MinusOne, 0) : BigDecimal.One;
 
-    // Exponentiation by squaring for positive exponents (O(log n) multiplications).
-    private static BigDecimal BigDecimalPowPositive(BigDecimal baseValue, BigInteger exponent)
-    {
-        BigDecimal result = BigDecimal.One;
-        BigDecimal current = baseValue;
-        while (exponent > BigInteger.Zero)
-        {
-            if (!exponent.IsEven)
-                result *= current;
-            current *= current;
-            exponent >>= 1;
-        }
-        return result;
+        // The result has about n * log10|mantissa| digits, and its scale is n * scale
+        double digits = (double)n * BigInteger.Log10(BigInteger.Abs(mantissa));
+        double resultScale = (double)n * scale;
+        if (digits > MaxPowResultDigits)
+            throw new NCalcEvaluationException($"The result of the power operation would have about {digits:0} digits, which exceeds the limit of {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
+        if (Math.Abs(resultScale) > int.MaxValue)
+            throw new NCalcEvaluationException("The result of the power operation is too large or too small to be represented exactly.");
+
+        var positive = new BigDecimal(BigInteger.Pow(mantissa, (int)n), (int)resultScale);
+        return exponent.Sign < 0 ? BigDecimal.One / positive : positive;
     }
 
     public static object Factorial(object a, object b, MathHelperOptions options)
@@ -3841,7 +3855,7 @@ public static class MathHelper
         else
         if (a is BigDecimal bdA)
         {
-            return bdA.WholeValue;
+            return GetWholeValue(bdA);
         }
 
         if (a is ComplexNumber cnA)
@@ -4008,8 +4022,8 @@ public static class MathHelper
         return value switch
         {
             ComplexNumber cn => cn.IsReal
-                ? (cn.Real.DecimalPlaces == 0
-                    ? (long)cn.Real.WholeValue : throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)))
+                ? (IsWholeNumber(cn.Real)
+                    ? (long)GetWholeValue(cn.Real) : throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)))
                 : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)),
             BigInteger bigI => ((long)bigI),
             BigDecimal bigD => ((long)(decimal)bigD),
@@ -4033,8 +4047,8 @@ public static class MathHelper
             return value switch
             {
                 ComplexNumber cn => cn.IsReal
-                    ? (cn.Real.DecimalPlaces == 0
-                        ? (long)cn.Real.WholeValue : throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)))
+                    ? (IsWholeNumber(cn.Real)
+                        ? (long)GetWholeValue(cn.Real) : throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)))
                     : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to long", cn.ToString(), typeof(ComplexNumber), typeof(long)),
                 BigInteger bigI => ((long)bigI),
                 BigDecimal bigD => ((long)(decimal)bigD),
@@ -4064,10 +4078,10 @@ public static class MathHelper
         return value switch
         {
             ComplexNumber cn => cn.IsReal
-                ? (cn.Real.DecimalPlaces != 0
+                ? (!IsWholeNumber(cn.Real)
                     ? throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to ulong", cn.ToString(), typeof(ComplexNumber), typeof(ulong))
                     : (cn.Real.Sign >= 0
-                        ? (ulong)cn.Real.WholeValue
+                        ? (ulong)GetWholeValue(cn.Real)
                         : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong))))
                 : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to ulong", cn.ToString(), typeof(ComplexNumber), typeof(ulong)),
             BigInteger bigI => bigI.Sign >= 0 ? ((ulong)bigI) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong)),
@@ -4092,10 +4106,10 @@ public static class MathHelper
             return value switch
             {
                 ComplexNumber cn => cn.IsReal
-                    ? (cn.Real.DecimalPlaces != 0
+                    ? (!IsWholeNumber(cn.Real)
                         ? throw new NCalcConversionException("The real part of the complex number contains a fractional part, so this complex number cannot be converted to ulong", cn.ToString(), typeof(ComplexNumber), typeof(ulong))
                         : (cn.Real.Sign >= 0
-                            ? (ulong)cn.Real.WholeValue
+                            ? (ulong)GetWholeValue(cn.Real)
                             : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong))))
                     : throw new NCalcConversionException("A complex number with a non-zero imaginary part cannot be converted to ulong", cn.ToString(), typeof(ComplexNumber), typeof(ulong)),
                 BigInteger bigI => bigI.Sign >= 0 ? ((ulong)bigI) : throw new NCalcConversionException("A negative number cannot be converted to ulong", value.ToString() ?? string.Empty, typeof(BigInteger), typeof(ulong)),
@@ -4390,7 +4404,7 @@ public static class MathHelper
             default:
                 throw new ArgumentException("When dividing a BigInteger, the second parameter must be a boxed numeric type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger, BigDecimal).", nameof(b));
         }
-        return result.WholeValue;
+        return GetWholeValue(result);
     }
 
     public static BigDecimal Divide(BigDecimal a, object b)
@@ -4442,7 +4456,7 @@ public static class MathHelper
     public static BigInteger IntegerDivide(object a, BigDecimal b)
     {
         var value = ConvertToBigDecimal(a);
-        return (value / b).WholeValue;
+        return GetWholeValue(value / b);
     }
 
     public static BigDecimal Divide(object a, BigDecimal b)
@@ -4490,8 +4504,8 @@ public static class MathHelper
             case ulong value: return value;
             case BigInteger value: return value;
             case ComplexNumber cn:
-                return cn.IsReal && cn.Real.DecimalPlaces == 0
-                    ? cn.Real.GetWholePart()
+                return cn.IsReal && IsWholeNumber(cn.Real)
+                    ? GetWholeValue(cn.Real)
                     : throw new NCalcConversionException("A complex number cannot be converted to BigInteger", cn.ToString() ?? string.Empty, typeof(ComplexNumber), typeof(BigInteger));
             default:
                 throw new NCalcConversionException("The source of the conversion to a BigInteger must be a boxed integer type (byte, sbyte, short, ushort, int, uint, long, ulong, BigInteger).", a.ToString() ?? string.Empty, a.GetType(), typeof(BigInteger));
@@ -4800,7 +4814,7 @@ public static class MathHelper
                 case double db: if (db == Math.Truncate(db) && FitsInLong(db)) return (long)db; else return null;
                 case decimal dd: if (dd == Math.Truncate(dd)) return (long)dd; else return null;
                 case BigInteger bi: return (long)bi;
-                case BigDecimal bd: if (bd.DecimalPlaces == 0) return (long)(bd.GetWholePart()); else return null;
+                case BigDecimal bd: if (IsWholeNumber(bd)) return (long)GetWholeValue(bd); else return null;
                 default:
                     throw new ArgumentException("Provided object is not a supported numeric type.");
             }
@@ -4836,7 +4850,7 @@ public static class MathHelper
                 case double db: if (db == Math.Truncate(db) && FitsInULong(db)) return (ulong)db; else return null;
                 case decimal dd: if (dd == Math.Truncate(dd)) return (ulong)dd; else return null;
                 case BigInteger bi: return (ulong)bi;
-                case BigDecimal bd: if (bd.DecimalPlaces == 0) return (ulong)(bd.GetWholePart()); else return null;
+                case BigDecimal bd: if (IsWholeNumber(bd)) return (ulong)GetWholeValue(bd); else return null;
                 default:
                     throw new ArgumentException("Provided object is not a supported numeric type.");
             }
@@ -4926,7 +4940,7 @@ public static class MathHelper
         else
         if (t == typeof(BigDecimal))
         {
-            if (((BigDecimal)obj).DecimalPlaces == 0)
+            if (IsWholeNumber((BigDecimal)obj))
             {
                 return true;
             }
@@ -5001,7 +5015,7 @@ public static class MathHelper
 
         if (obj is BigDecimal bd)
         {
-            return bd.DecimalPlaces == 0;
+            return IsWholeNumber(bd);
         }
 
         return null;
@@ -5261,9 +5275,9 @@ public static class MathHelper
 
         BigInteger? biResult = null;
 
-        if (forceInteger || value.DecimalPlaces == 0)
+        if (forceInteger || IsWholeNumber(value))
         {
-            biResult = value.WholeValue;
+            biResult = GetWholeValue(value);
 
             if ((restrictToType is null || restrictToType == typeof(long) || restrictToType == typeof(int) || restrictToType == typeof(short)) && biResult >= long.MinValue && biResult <= long.MaxValue)
                 return (long)biResult;

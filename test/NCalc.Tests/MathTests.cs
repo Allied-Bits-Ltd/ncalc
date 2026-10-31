@@ -780,6 +780,56 @@ public class MathsTests : TestBase
         Assert.True(((ComplexNumber)result).Imaginary.Equals(expectedImaginary));
     }
 
+    [Theory]
+    [InlineData("2 ** 200000", ExpressionOptions.UseBigNumbers)]
+    [InlineData("Pow(1.5, 20000)", ExpressionOptions.DecimalAsDefault)]
+    [InlineData("2 ** 2000000", ExpressionOptions.UseBigNumbers)]
+    [InlineData("Pow(1.5, 100000)", ExpressionOptions.DecimalAsDefault)]
+    [InlineData("10 ** 5000000000", ExpressionOptions.UseBigNumbers)]
+    [InlineData("1 ** 5000000000", ExpressionOptions.UseBigNumbers)]
+    [InlineData("(-1) ** 5000000001", ExpressionOptions.UseBigNumbers)]
+    public void BigPowerShouldCompleteQuickly(string expr, ExpressionOptions options)
+    {
+        // The exact power used to run for seconds to minutes; it must now either finish or fail with the size limit quickly
+        object? result = null;
+        Exception? error = null;
+        var evaluation = Task.Run(() =>
+        {
+            try { result = new NCalc.Expression(expr, options | ExpressionOptions.NoCache).Evaluate(); }
+            catch (Exception e) { error = e; }
+        }, TestContext.Current.CancellationToken);
+        Assert.True(evaluation.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), $"{expr} did not complete in 10 s");
+
+        switch (expr)
+        {
+            case "2 ** 200000":
+                Assert.Equal(BigInteger.Pow(2, 200000), result);
+                break;
+            case "Pow(1.5, 20000)":
+                Assert.Equal(new BigDecimal(BigInteger.Pow(15, 20000), -20000), result);
+                break;
+            case "1 ** 5000000000":
+                Assert.Equal(1, result);
+                break;
+            case "(-1) ** 5000000001":
+                Assert.Equal(-1, result);
+                break;
+            default:
+                Assert.IsType<NCalcEvaluationException>(error);
+                break;
+        }
+    }
+
+    [Theory]
+    [InlineData("2 ** -3", ExpressionOptions.UseBigNumbers, 0.125)]
+    [InlineData("(-2) ** 3", ExpressionOptions.UseBigNumbers, -8)]
+    [InlineData("1.1 ** 3", ExpressionOptions.DecimalAsDefault, 1.331)]
+    [InlineData("0.5 ** 2", ExpressionOptions.DecimalAsDefault, 0.25)]
+    public void ExactPowerShouldKeepSmallResults(string expr, ExpressionOptions options, double expected)
+    {
+        Assert.Equal(expected, Convert.ToDouble(new NCalc.Expression(expr, options | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken)), 10);
+    }
+
     [Fact]
     public void MixedNumericTypesShouldMatchCSharpArithmetic()
     {
