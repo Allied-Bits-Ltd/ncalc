@@ -39,6 +39,30 @@ public static class EvaluationHelper
 #endif
     }
 
+    private const string ExpressionTooDeepToVisitMessage = "The expression is nested too deeply to be processed";
+
+    /// <summary>
+    /// Throws an <see cref="NCalcException"/> when the remaining stack space is too small for a recursive visitor other than the evaluators
+    /// (serialization, extraction of parameters and functions, lambda compilation) to visit one more level of the tree,
+    /// instead of letting the process terminate with an uncatchable StackOverflowException.
+    /// </summary>
+    internal static void EnsureSufficientExecutionStackToVisit()
+    {
+#if NET
+        if (!RuntimeHelpers.TryEnsureSufficientExecutionStack())
+            throw new NCalcException(ExpressionTooDeepToVisitMessage);
+#else
+        try
+        {
+            RuntimeHelpers.EnsureSufficientExecutionStack();
+        }
+        catch (InsufficientExecutionStackException)
+        {
+            throw new NCalcException(ExpressionTooDeepToVisitMessage);
+        }
+#endif
+    }
+
     /// <summary>
     /// Adds two values, with special handling for string concatenation based on the context options.
     /// </summary>

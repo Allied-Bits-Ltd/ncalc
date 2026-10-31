@@ -20,6 +20,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         if (expression is IfStatementExpression)
@@ -64,6 +65,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         cancellationToken.ThrowIfCancellationRequested();
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
@@ -175,6 +177,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         string result = expression.Type switch
@@ -199,6 +202,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         bool parensNeeded = !(expression.Expression is Identifier || expression.Expression is ValueExpression);
@@ -207,6 +211,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         bool parensNeeded = !(expression.Expression is Identifier || expression.Expression is ValueExpression);
@@ -215,6 +220,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(VectorExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         string sep = GetListItemSeparator(context.AdvancedOptions);
@@ -268,6 +274,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(FunctionCall function, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         function.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         if (context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.UseResultReference) == true && function.Identifier.Name == "@")
@@ -305,6 +312,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         list.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         string sep = GetListItemSeparator(context.AdvancedOptions);
@@ -324,11 +332,13 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         return string.Join(group.Expression.Accept(this, cancellationToken).Trim(), "{ ", " }");
     }
 
     public string Visit(FunctionExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         StringBuilder resultBuilder = new();
         Function function = expression.Function;
         if (!string.IsNullOrEmpty(function.Description))
@@ -391,6 +401,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(StatementSequence seq, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         seq.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         var resultBuilder = new StringBuilder();

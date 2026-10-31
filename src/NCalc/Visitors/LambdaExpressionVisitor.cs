@@ -49,6 +49,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         var conditional = expression.LeftExpression.Accept(this, cancellationToken);
         var ifTrue = expression.MiddleExpression.Accept(this, cancellationToken);
         var ifFalse = expression.RightExpression.Accept(this, cancellationToken);
@@ -58,6 +59,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         var left = expression.LeftExpression.Accept(this, cancellationToken);
         var right = expression.RightExpression.Accept(this, cancellationToken);
 
@@ -152,6 +154,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         var operand = expression.Expression.Accept(this, cancellationToken);
 
         return expression.Type switch
@@ -173,6 +176,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         LinqExpression result = expression.Expression.Accept(this, cancellationToken);
         if (result.Type != typeof(Percent))
             return WrapWithPercent(result);
@@ -182,16 +186,19 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         throw new NotImplementedException("Complex numbers are not supported in Lambda expressions");
     }
 
     public LinqExpression Visit(VectorExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         throw new NotImplementedException("Vectors are not supported in Lambda expressions");
     }
 
     public LinqExpression Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         return group.Expression.Accept(this, cancellationToken);
     }
 
@@ -202,6 +209,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(FunctionCall function, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         var args = new LinqExpression[function.Parameters.Count];
         for (var i = 0; i < function.Parameters.Count; i++)
         {
@@ -363,6 +371,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         var newList = LinqExpression.New(typeof(List<object>));
         return LinqExpression.ListInit(newList,
             list.Select(e => LinqExpression.Convert(e.Accept(this), typeof(object)))
@@ -371,10 +380,12 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     public LinqExpression Visit(FunctionExpression expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         throw new NotImplementedException();
     }
     public LinqExpression Visit(StatementSequence expression, CancellationToken cancellationToken = default)
     {
+        EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         List<LinqExpression> expressions = [];
         foreach (LogicalExpression expr in expression)
         {

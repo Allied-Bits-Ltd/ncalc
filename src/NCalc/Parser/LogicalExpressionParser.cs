@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Collections.Concurrent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 
 using ExtendedNumerics;
 
@@ -78,7 +79,7 @@ public static class LogicalExpressionParser
         {
 #if NET
             if (!RuntimeHelpers.TryEnsureSufficientExecutionStack())
-                throw new NCalcParserException($"{ExpressionTooDeepMessage} at position {context.Scanner.Cursor.Position}", context.Scanner.Cursor.Position);
+                throw new NCalcParserException($"{ExpressionTooDeepMessage} at position {context.Scanner.Cursor.Position}", context.Scanner.Cursor.Position) { IsNestedTooDeeply = true };
 #else
             try
             {
@@ -86,7 +87,7 @@ public static class LogicalExpressionParser
             }
             catch (InsufficientExecutionStackException ex)
             {
-                throw new NCalcParserException($"{ExpressionTooDeepMessage} at position {context.Scanner.Cursor.Position}", ex, context.Scanner.Cursor.Position);
+                throw new NCalcParserException($"{ExpressionTooDeepMessage} at position {context.Scanner.Cursor.Position}", ex, context.Scanner.Cursor.Position) { IsNestedTooDeeply = true };
             }
 #endif
             return parser.Parse(context, ref result);
@@ -96,6 +97,89 @@ public static class LogicalExpressionParser
     }
 
     private static Parser<T> StackGuarded<T>(Parser<T> parser) => new StackGuardParser<T>(parser);
+
+    /// <summary>
+    /// Parses a chain of left-associative binary operators of several precedence levels in one loop with explicit stacks,
+    /// instead of a nested parser per level, so that each nesting level of an expression (a group, a function argument)
+    /// takes far fewer stack frames.
+    /// The levels are listed from the tightest to the loosest and are tried in this order at every position.
+    /// A level whose operator matches but is not followed by an operand gives way to the next level, as the nested parsers did.
+    /// </summary>
+    private sealed class BinaryOperatorParser(Parser<LogicalExpression> operand, Parser<BinaryExpressionType>[] levels) : Parser<LogicalExpression>
+    {
+        public override bool Parse(ParseContext context, ref ParseResult<LogicalExpression> result)
+        {
+            context.EnterParser(this);
+
+            if (!operand.Parse(context, ref result))
+            {
+                context.ExitParser(this);
+                return false;
+            }
+
+            var start = result.Start;
+            var end = result.End;
+
+            // Each operand keeps the location of its end, which a node built from it as the right operand takes,
+            // as the factory of a left-associative parser is called right after the right operand is parsed
+            var operands = new List<(LogicalExpression Value, ExpressionLocation End)> { (result.Value, new ParlotExpressionLocation(context)) };
+            var operators = new List<(int Level, BinaryExpressionType Type)>();
+
+            while (true)
+            {
+                var operatorPosition = context.Scanner.Cursor.Position;
+                var matched = false;
+
+                for (var level = 0; level < levels.Length; level++)
+                {
+                    var operatorResult = new ParseResult<BinaryExpressionType>();
+                    if (!levels[level].Parse(context, ref operatorResult))
+                        continue;
+
+                    var rightResult = new ParseResult<LogicalExpression>();
+                    if (!operand.Parse(context, ref rightResult))
+                    {
+                        context.Scanner.Cursor.ResetPosition(operatorPosition);
+                        continue;
+                    }
+
+                    // Neither the operator nor the operand read anything, so they would match forever
+                    if (context.Scanner.Cursor.Offset == operatorPosition.Offset)
+                        break;
+
+                    // All operators are left-associative, so the pending ones that bind at least as tightly are applied first
+                    while (operators.Count > 0 && operators[operators.Count - 1].Level <= level)
+                        Reduce(operands, operators);
+
+                    operators.Add((level, operatorResult.Value));
+                    operands.Add((rightResult.Value, new ParlotExpressionLocation(context)));
+                    end = rightResult.End;
+                    matched = true;
+                    break;
+                }
+
+                if (!matched)
+                    break;
+            }
+
+            while (operators.Count > 0)
+                Reduce(operands, operators);
+
+            result = new ParseResult<LogicalExpression>(start, end, operands[0].Value);
+
+            context.ExitParser(this);
+            return true;
+        }
+
+        private static void Reduce(List<(LogicalExpression Value, ExpressionLocation End)> operands, List<(int Level, BinaryExpressionType Type)> operators)
+        {
+            var right = operands[operands.Count - 1];
+            var left = operands[operands.Count - 2];
+            operands.RemoveAt(operands.Count - 1);
+            operands[operands.Count - 1] = (new BinaryExpression(operators[operators.Count - 1].Type, left.Value, right.Value).SetLocation(right.End), right.End);
+            operators.RemoveAt(operators.Count - 1);
+        }
+    }
 
     private static (Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)[] StackGuarded(List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)> ops)
         => ops.Select(op => (StackGuarded(op.Item1), op.Item2)).ToArray();
@@ -1956,7 +2040,7 @@ public static class LogicalExpressionParser
 
         // factorial => primary ("!")* ;
         // A factorial includes any primary
-        var factorial = OneOf(indexedAccess/*, indexedAccess*/).And(ZeroOrMany(exclamationMark.AndSkip(Not(equal))))
+        var factorial = indexedAccess.And(ZeroOrMany(exclamationMark.AndSkip(Not(equal))))
             .Then((ctx, x) =>
             {
                 if (x.Item2.Count == 0)
@@ -2089,82 +2173,56 @@ public static class LogicalExpressionParser
         // The operators are guarded because Parlot's Unary parser recurses once per prefix operator
         var unary = exponential.Unary(StackGuarded(unaryOps));
 
-        List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression, LogicalExpression>)>  multiplicativeList = [
-            (intDivB, static (ctx, a, b) => new BinaryExpression(BinaryExpressionType.IntDivB, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
-            (divided, static  (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Div, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
-            (times, static  (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Times, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
-            (modulo, static  (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Modulo, a, b).SetLocation(new ParlotExpressionLocation(ctx)))];
+        // multiplicative => unary ( ( "/" | "*" | "%" ) unary )* ;
+        List<Parser<BinaryExpressionType>> multiplicativeOps = [
+            intDivB.Then(BinaryExpressionType.IntDivB),
+            divided.Then(BinaryExpressionType.Div),
+            times.Then(BinaryExpressionType.Times),
+            modulo.Then(BinaryExpressionType.Modulo)];
         if (!options.HasFlag(ExpressionOptions.SupportCStyleComments))
         {
-            multiplicativeList.Insert(1, (intDivP, (ctx, a, b) => new BinaryExpression(BinaryExpressionType.IntDivP, a, b).SetLocation(new ParlotExpressionLocation(ctx))));
+            multiplicativeOps.Insert(1, intDivP.Then(BinaryExpressionType.IntDivP));
         }
-        // multiplicative => unary ( ( "/" | "*" | "%" ) unary )* ;
-        var multiplicative = unary.LeftAssociative(multiplicativeList.ToArray());
 
-        // additive => multiplicative ( ( "-" | "+" ) multiplicative )* ;
-        var additive = multiplicative.LeftAssociative(
-            (plus, static (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Plus, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
-            (minus, static (ctx, a, b) => new BinaryExpression(BinaryExpressionType.Minus, a, b).SetLocation(new ParlotExpressionLocation(ctx)))
-        );
+        // The binary operator levels, all left-associative, from the loosest to the tightest
+        // (the array below lists them the other way round, in the order in which they are tried):
+        // logical        => bitwise ( "or" | "xor" | "and", each its own level ) bitwise )* ;
+        // bitwise        => equality ( ( "|" | "^" | "&", each its own level ) equality )* ;
+        // equality       => relational ( ( "=" | "!=" ) relational )* ;
+        // relational     => shift ( ( ">=" | "<=" | "<" | ">" | "in" | "not in" | "like" | "not like" ) shift )* ;
+        // shift          => additive ( ( "<<" | ">>" ) additive )* ;
+        // additive       => multiplicative ( ( "-" | "+" ) multiplicative )* ;
+        Parser<BinaryExpressionType>[] binaryLevels =
+        [
+            OneOf(multiplicativeOps.ToArray()),
+            OneOf(
+                plus.Then(BinaryExpressionType.Plus),
+                minus.Then(BinaryExpressionType.Minus)),
+            OneOf(
+                leftShift.Then(BinaryExpressionType.LeftShift),
+                rightShift.Then(BinaryExpressionType.RightShift)),
+            OneOf(
+                greaterOrEqual.Then(BinaryExpressionType.GreaterOrEqual),
+                lessOrEqual.Then(BinaryExpressionType.LessOrEqual),
+                less.Then(BinaryExpressionType.Less),
+                greater.Then(BinaryExpressionType.Greater),
+                @in.Then(BinaryExpressionType.In),
+                notIn.Then(BinaryExpressionType.NotIn),
+                like.Then(BinaryExpressionType.Like),
+                notLike.Then(BinaryExpressionType.NotLike)),
+            OneOf(
+                equal.Then(BinaryExpressionType.Equal),
+                notEqual.Then(BinaryExpressionType.NotEqual)),
+            bitwiseAnd.Then(BinaryExpressionType.BitwiseAnd),
+            bitwiseXOr.Then(BinaryExpressionType.BitwiseXOr),
+            bitwiseOr.Then(BinaryExpressionType.BitwiseOr),
+            and.Then(BinaryExpressionType.And),
+            xor.Then(BinaryExpressionType.XOr),
+            or.Then(BinaryExpressionType.Or),
+        ];
 
-        // shift => additive ( ( "<<" | ">>" ) additive )* ;
-        var shift = additive.LeftAssociative(
-            (leftShift, static (ctx, a, b) => new BinaryExpression(BinaryExpressionType.LeftShift, a, b).SetLocation(new ParlotExpressionLocation(ctx))),
-            (rightShift, static (ctx, a, b) => new BinaryExpression(BinaryExpressionType.RightShift, a, b).SetLocation(new ParlotExpressionLocation(ctx)))
-        );
-
-        // relational => shift ( ( ">=" | "<=" | "<" | ">" | "in" | "not in" ) shift )* ;
-        var relational = shift.And(ZeroOrMany(OneOf(
-                    greaterOrEqual.Then(BinaryExpressionType.GreaterOrEqual),
-                    lessOrEqual.Then(BinaryExpressionType.LessOrEqual),
-                    less.Then(BinaryExpressionType.Less),
-                    greater.Then(BinaryExpressionType.Greater),
-                    @in.Then(BinaryExpressionType.In),
-                    notIn.Then(BinaryExpressionType.NotIn),
-                    like.Then(BinaryExpressionType.Like),
-                    notLike.Then(BinaryExpressionType.NotLike)
-                )
-                .And(shift)))
-            .Then(ParseBinaryExpression);
-
-        var equality = relational.And(ZeroOrMany(OneOf(
-                    equal.Then(BinaryExpressionType.Equal),
-                    notEqual.Then(BinaryExpressionType.NotEqual))
-                .And(relational)))
-            .Then(ParseBinaryExpression);
-
-        var binAndTypeParser = bitwiseAnd.Then(BinaryExpressionType.BitwiseAnd);
-
-        var binOrTypeParser = bitwiseOr.Then(BinaryExpressionType.BitwiseOr);
-
-        var binXorTypeParser = bitwiseXOr.Then(BinaryExpressionType.BitwiseXOr);
-
-        // "and" has higher precedence than "or"
-        var binAndParser = equality.And(ZeroOrMany(binAndTypeParser.And(equality)))
-            .Then(ParseBinaryExpression);
-
-        var binXorParser = binAndParser.And(ZeroOrMany(binXorTypeParser.And(binAndParser)))
-            .Then(ParseBinaryExpression);
-
-        var binOrParser = binXorParser.And(ZeroOrMany(binOrTypeParser.And(binXorParser)))
-            .Then(ParseBinaryExpression);
-
-        var andTypeParser = and.Then(BinaryExpressionType.And);
-
-        var orTypeParser = or.Then(BinaryExpressionType.Or);
-
-        var xorTypeParser = xor.Then(BinaryExpressionType.XOr);
-
-        var andParser = binOrParser.And(ZeroOrMany(andTypeParser.And(binOrParser)))
-            .Then(ParseBinaryExpression);
-
-        var xorParser = andParser.And(ZeroOrMany(xorTypeParser.And(andParser)))
-            .Then(ParseBinaryExpression);
-
-        var orParser = xorParser.And(ZeroOrMany(orTypeParser.And(xorParser)))
-            .Then(ParseBinaryExpression);
-
-        var logical = orParser;
+        // One parser for all binary levels: a nested parser per level would cost a dozen stack frames per nesting level
+        var logical = new BinaryOperatorParser(unary, binaryLevels);
 
         /*
          * old
@@ -2197,8 +2255,7 @@ public static class LogicalExpressionParser
             .Then(static (ctx, x) =>
                 x.Item2.Item1 is null
                     ? x.Item1
-                    : new TernaryExpression(x.Item1, x.Item2.Item1, x.Item2.Item2).SetLocation(new ParlotExpressionLocation(ctx)))
-            .Or(logical);
+                    : new TernaryExpression(x.Item1, x.Item2.Item1, x.Item2.Item2).SetLocation(new ParlotExpressionLocation(ctx)));
 
         List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)> returnOps =
         [
@@ -2439,7 +2496,96 @@ public static class LogicalExpressionParser
         return Parse(parserToUse, context);
     }
 
+    /// <summary>
+    /// The stack size, in bytes, of the thread on which an expression that is nested too deeply to be parsed on the calling thread
+    /// is parsed once more. The default is 16 MB; 0 turns the second attempt off.
+    /// The resulting expression tree is as deep as its text, so evaluating it may require <see cref="ExpressionOptions.UseNonRecursiveEvaluator"/>.
+    /// </summary>
+    public static int DeepExpressionStackSize
+    {
+        get => _deepExpressionStackSize;
+        set
+        {
+            if (value < 0)
+                throw new ArgumentOutOfRangeException(nameof(value));
+            _deepExpressionStackSize = value;
+        }
+    }
+
+    private static int _deepExpressionStackSize = 16 * 1024 * 1024;
+
     public static LogicalExpression Parse(Parser<LogicalExpression> parserToUse, LogicalExpressionParserContext context)
+    {
+        try
+        {
+            return ParseOnCurrentThread(parserToUse, context);
+        }
+        catch (NCalcParserException ex) when (ex.IsNestedTooDeeply && DeepExpressionStackSize > 0)
+        {
+            var result = ParseOnLargeStack(parserToUse, context);
+            if (result is null)
+                throw;
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Parses the expression again on a new thread with a stack of <see cref="DeepExpressionStackSize"/> bytes.
+    /// Ordinary expressions never get here, so they pay nothing for it.
+    /// </summary>
+    /// <returns>The expression, or <c>null</c> when the platform cannot start such a thread.</returns>
+    private static LogicalExpression? ParseOnLargeStack(Parser<LogicalExpression> parserToUse, LogicalExpressionParserContext context)
+    {
+#if NET
+        if (OperatingSystem.IsBrowser())
+            return null;
+#endif
+        // The failed attempt left the parsers it was in registered in the context, so the second attempt gets a fresh one
+        var retryContext = new LogicalExpressionParserContext(context.Scanner.Buffer, context.Options, context.CultureInfo, context.AdvancedOptions, context.CancellationToken)
+        {
+            OnEnterParser = context.OnEnterParser,
+            OnExitParser = context.OnExitParser,
+        };
+
+        // Some literals are parsed with the current culture, which a new thread would not have
+        var culture = CultureInfo.CurrentCulture;
+        var uiCulture = CultureInfo.CurrentUICulture;
+        LogicalExpression? result = null;
+        ExceptionDispatchInfo? error = null;
+
+        var thread = new Thread(() =>
+        {
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.CurrentUICulture = uiCulture;
+            try
+            {
+                result = ParseOnCurrentThread(parserToUse, retryContext);
+            }
+            catch (Exception ex)
+            {
+                error = ExceptionDispatchInfo.Capture(ex);
+            }
+        }, DeepExpressionStackSize);
+
+        try
+        {
+            thread.Start();
+        }
+        catch (Exception ex) when (ex is PlatformNotSupportedException or OutOfMemoryException)
+        {
+            return null;
+        }
+        thread.Join();
+
+        error?.Throw();
+
+        foreach (var function in retryContext.UserFunctions)
+            context.UserFunctions[function.Key] = function.Value;
+
+        return result!;
+    }
+
+    private static LogicalExpression ParseOnCurrentThread(Parser<LogicalExpression> parserToUse, LogicalExpressionParserContext context)
     {
         if (parserToUse.TryParse(context, out var result, out var error))
             return result;
