@@ -781,6 +781,24 @@ public class MathsTests : TestBase
     }
 
     [Theory]
+    [InlineData("2 in (1, 2)", true)]
+    [InlineData("2 in (1, 2) and index = 3", true)]
+    [InlineData("index * 2", 6)]
+    [InlineData("info", 4)]
+    [InlineData("i_count + 1", 6)]
+    [InlineData("in(index, 1, 3)", true)]
+    public void ComplexNumbersShouldNotBreakIdentifiersAndInOperator(string expr, object expected)
+    {
+        var expression = new NCalc.Expression(expr, ExpressionOptions.None);
+        expression.AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.ParseComplexNumbers);
+        expression.Parameters["index"] = 3;
+        expression.Parameters["info"] = 4;
+        expression.Parameters["i_count"] = 5;
+
+        Assert.Equal(expected, expression.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
     [InlineData("2i", 0, 2)]
     [InlineData("2i*2", 0, 4)]
     [InlineData("(1+2i)*2", 2, 4)]

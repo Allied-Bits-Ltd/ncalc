@@ -186,10 +186,22 @@ public static class LogicalExpressionParser
 
         var comment = OneOf(comments.ToArray());
 
+        // An alphabetic keyword must not be followed by a character that may continue an identifier,
+        // so that e.g. "returnValue" or "trueValue" is an identifier and "2 mod3" is not a modulo operation
+#if NET8_0_OR_GREATER
+        string identifierPartChars = "_" + extOptions?.ExtraIdentifierChars;
+        bool IsIdentifierPartChar(char c) => Character.IsIdentifierPart(c) || identifierPartChars.Contains(c);
+#else
+        static bool IsIdentifierPartChar(char c) => Character.IsIdentifierPart(c);
+#endif
+        var identifierPartChar = Literals.Pattern(IsIdentifierPartChar, 1, 1);
+        Parser<string> Keyword(string text, bool caseInsensitive = true) => Terms.Text(text, caseInsensitive).AndSkip(Not(identifierPartChar));
+
         bool useComplexNumbers = (extOptions?.Flags.HasFlag(AdvExpressionOptions.ParseComplexNumbers) == true);
 
-        var imaginaryChar = Terms.Char('i');
-        Parser<string>? imaginaryCharParser = useComplexNumbers ? Terms.Text("i") : null;
+        // The imaginary unit is a whole word too, so that it does not take the first letter of "in" or "index"
+        var imaginaryChar = Terms.Char('i').AndSkip(Not(identifierPartChar));
+        Parser<string>? imaginaryCharParser = useComplexNumbers ? Keyword("i", false) : null;
 
         Parser<LogicalExpression>? imaginaryCharExpression = imaginaryCharParser?
                 .Then<LogicalExpression>((ctx, x) => new ImaginaryNumberExpression(new ValueExpression(1), new Helpers.MathHelperOptions(cultureInfo, options)).SetLocation(new ParlotExpressionLocation(ctx))) ?? null;
@@ -533,17 +545,6 @@ public static class LogicalExpressionParser
         bool useCharsForOps = !options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars);
         bool useUnicodeForOps = options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations);
         bool useAssignments = options.HasFlag(ExpressionOptions.UseAssignments);
-
-        // An alphabetic keyword must not be followed by a character that may continue an identifier,
-        // so that e.g. "returnValue" or "trueValue" is an identifier and "2 mod3" is not a modulo operation
-#if NET8_0_OR_GREATER
-        string identifierPartChars = "_" + extOptions?.ExtraIdentifierChars;
-        bool IsIdentifierPartChar(char c) => Character.IsIdentifierPart(c) || identifierPartChars.Contains(c);
-#else
-        static bool IsIdentifierPartChar(char c) => Character.IsIdentifierPart(c);
-#endif
-        var identifierPartChar = Literals.Pattern(IsIdentifierPartChar, 1, 1);
-        Parser<string> Keyword(string text, bool caseInsensitive = true) => Terms.Text(text, caseInsensitive).AndSkip(Not(identifierPartChar));
 
         var comma = Terms.Char(',');
         var divided = useUnicodeForOps ? OneOf(Terms.Text("/"), Terms.Text("\u2236"), Terms.Text("\u00F7")) : Terms.Text("/");
