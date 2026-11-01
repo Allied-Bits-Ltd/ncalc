@@ -744,16 +744,9 @@ namespace NCalc.Domain
             if (tol == 0.0)
                 return obj.GetHashCode();
 
-            long realBucket = (long)Math.Round(MathHelper.BigDecimalToDouble(obj.Real / tol));
-            long imaginaryBucket = (long)Math.Round(MathHelper.BigDecimalToDouble(obj.Imaginary / tol));
-
-            unchecked
-            {
-                int hash = 17;
-                hash = hash * 23 + realBucket.GetHashCode();
-                hash = hash * 23 + imaginaryBucket.GetHashCode();
-                return hash;
-            }
+            // Equality within a tolerance is not transitive, so values on both sides of any bucket boundary can be equal:
+            // only a constant hash code is consistent with Equals. Hash-based collections work, but compare every pair.
+            return 0;
         }
     }
 

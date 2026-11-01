@@ -86,31 +86,27 @@ public static class EvaluationHelper
         {
             if ((leftValue is DateTime) && (MathHelper.IsBoxedIntegerNumberOrBigNumber(rightValue)))
             {
-                long? newTicks = MathHelper.GetBoxedIntegerNumberAsLong(MathHelper.Add(((DateTime)leftValue).Ticks, rightValue, true, context));
-                if (newTicks.HasValue)
-                    return new DateTime(newTicks.Value, ((DateTime)leftValue).Kind);
+                return ToDateTime(AddTicks(((DateTime)leftValue).Ticks, rightValue!, false), ((DateTime)leftValue).Kind);
             }
             else
             if ((leftValue is DateTime) && (rightValue is TimeSpan))
             {
-                return ((DateTime)leftValue).Add((TimeSpan)rightValue);
+                return TimeOperation(() => ((DateTime)leftValue).Add((TimeSpan)rightValue), nameof(DateTime));
             }
             else
             if ((leftValue is TimeSpan) && (MathHelper.IsBoxedIntegerNumberOrBigNumber(rightValue)))
             {
-                long? newTicks = MathHelper.GetBoxedIntegerNumberAsLong(MathHelper.Add(((TimeSpan)leftValue).Ticks, rightValue, true, context));
-                if (newTicks.HasValue)
-                    return new TimeSpan(newTicks.Value);
+                return ToTimeSpan(AddTicks(((TimeSpan)leftValue).Ticks, rightValue!, false));
             }
             else
             if ((leftValue is TimeSpan) && (rightValue is TimeSpan))
             {
-                return ((TimeSpan)leftValue).Add((TimeSpan)rightValue);
+                return TimeOperation(() => ((TimeSpan)leftValue).Add((TimeSpan)rightValue), nameof(TimeSpan));
             }
             else
             if ((rightValue is DateTime) && (leftValue is TimeSpan))
             {
-                return ((DateTime)rightValue).Add((TimeSpan)leftValue);
+                return TimeOperation(() => ((DateTime)rightValue).Add((TimeSpan)leftValue), nameof(DateTime));
             }
         }
 
@@ -139,16 +135,12 @@ public static class EvaluationHelper
         {
             if ((leftValue is DateTime) && (MathHelper.IsBoxedIntegerNumberOrBigNumber(rightValue)))
             {
-                long? newTicks = MathHelper.GetBoxedIntegerNumberAsLong(MathHelper.Subtract(((DateTime)leftValue).Ticks, rightValue, true, context));
-                if (newTicks.HasValue)
-                    return new DateTime(newTicks.Value, ((DateTime)leftValue).Kind);
+                return ToDateTime(AddTicks(((DateTime)leftValue).Ticks, rightValue!, true), ((DateTime)leftValue).Kind);
             }
             else
             if ((leftValue is TimeSpan) && (MathHelper.IsBoxedIntegerNumberOrBigNumber(rightValue)))
             {
-                long? newTicks = MathHelper.GetBoxedIntegerNumberAsLong(MathHelper.Subtract(((TimeSpan)leftValue).Ticks, rightValue, true, context));
-                if (newTicks.HasValue)
-                    return new TimeSpan(newTicks.Value);
+                return ToTimeSpan(AddTicks(((TimeSpan)leftValue).Ticks, rightValue!, true));
             }
             else
             if (leftValue is DateTime && (rightValue is DateTime))
@@ -158,12 +150,12 @@ public static class EvaluationHelper
             else
             if (leftValue is DateTime && (rightValue is TimeSpan))
             {
-                return ((DateTime)leftValue).Subtract((TimeSpan)rightValue);
+                return TimeOperation(() => ((DateTime)leftValue).Subtract((TimeSpan)rightValue), nameof(DateTime));
             }
             else
             if ((leftValue is TimeSpan) && (rightValue is TimeSpan))
             {
-                return ((TimeSpan)leftValue).Subtract((TimeSpan)rightValue);
+                return TimeOperation(() => ((TimeSpan)leftValue).Subtract((TimeSpan)rightValue), nameof(TimeSpan));
             }
         }
         return MathHelper.Subtract(leftValue, rightValue, context.Options.HasFlag(ExpressionOptions.ReduceArithmeticResultType), context);
@@ -180,35 +172,15 @@ public static class EvaluationHelper
     {
         if (context.Options.HasFlag(ExpressionOptions.SupportTimeOperations))
         {
-            object? ticks = null;
+            // The product is computed exactly (or in double for a floating-point factor) and rounded to the nearest tick
             if (MathHelper.IsBoxedNumberOrBigNumber(leftValue) && (rightValue is TimeSpan rts))
             {
-                ticks = MathHelper.Multiply(leftValue, (object) rts.Ticks, true, context);
+                return ToTimeSpan(MultiplyTicks(rts.Ticks, leftValue!));
             }
             else
             if ((leftValue is TimeSpan lts) && MathHelper.IsBoxedNumberOrBigNumber(rightValue))
             {
-                ticks = MathHelper.Multiply((object)lts.Ticks, rightValue, true, context);
-            }
-            if (ticks is not null)
-            {
-                if (ticks is int it)
-                    return new TimeSpan(it);
-                else
-                if (ticks is uint uit)
-                    return new TimeSpan(uit);
-                else
-                if (ticks is long lt)
-                    return new TimeSpan(lt);
-                else
-                if (ticks is ulong ult)
-                    return new TimeSpan((long)ult);
-                else
-                if (ticks is float ft)
-                    return new TimeSpan((long)Math.Round(ft));
-                else
-                if (ticks is double dt)
-                    return new TimeSpan((long)Math.Round(dt));
+                return ToTimeSpan(MultiplyTicks(lts.Ticks, rightValue!));
             }
         }
         return MathHelper.Multiply(leftValue, rightValue, context.Options.HasFlag(ExpressionOptions.ReduceArithmeticResultType), context);
@@ -240,26 +212,94 @@ public static class EvaluationHelper
     {
         if (context.Options.HasFlag(ExpressionOptions.SupportTimeOperations))
         {
+            // The quotient is rounded to the nearest tick, as TimeSpan / double does, whatever the type of the divisor
             if ((leftValue is TimeSpan lts) && MathHelper.IsBoxedNumberOrBigNumber(rightValue))
             {
-                var ticks = MathHelper.Divide((object)lts.Ticks, rightValue, true, context);
-                if (ticks is not null)
-                {
-                    if (ticks is int it)
-                        return new TimeSpan(it);
-                    else
-                    if (ticks is long lt)
-                        return new TimeSpan(lt);
-                    else
-                    if (ticks is float ft)
-                        return new TimeSpan((long)Math.Round(ft));
-                    else
-                    if (ticks is double dt)
-                        return new TimeSpan((long)Math.Round(dt));
-                }
+                return ToTimeSpan(DivideTicks(lts.Ticks, rightValue!));
             }
         }
         return MathHelper.Divide(leftValue, rightValue, context.Options.HasFlag(ExpressionOptions.ReduceArithmeticResultType), context);
+    }
+
+    // Time arithmetic: the number of ticks is computed exactly or in floating point, rounded to the nearest tick (midpoints to even,
+    // as TimeSpan / double does), and a result outside the range of TimeSpan or DateTime throws NCalcEvaluationException
+    // instead of wrapping around or throwing a .NET exception.
+    private static object AddTicks(long ticks, object amount, bool subtract)
+    {
+        if (amount is BigDecimal bdAmount)
+            return subtract ? MathHelper.ConvertToBigDecimal(ticks) - bdAmount : MathHelper.ConvertToBigDecimal(ticks) + bdAmount;
+
+        BigInteger integerAmount = MathHelper.ConvertToBigInteger(amount);
+        return subtract ? ticks - integerAmount : ticks + integerAmount;
+    }
+
+    private static object MultiplyTicks(long ticks, object factor)
+    {
+        return factor switch
+        {
+            double d => (object)(ticks * d),
+            float f => (object)(ticks * (double)f),
+            decimal or BigDecimal => (object)(MathHelper.ConvertToBigDecimal(ticks) * MathHelper.ConvertToBigDecimal(factor)),
+            _ => (object)(ticks * MathHelper.ConvertToBigInteger(factor))
+        };
+    }
+
+    private static object DivideTicks(long ticks, object divisor)
+    {
+        switch (divisor)
+        {
+            case double d:
+                return ticks / d;
+            case float f:
+                return ticks / (double)f;
+            case decimal or BigDecimal:
+                BigDecimal bdDivisor = MathHelper.ConvertToBigDecimal(divisor);
+                if (bdDivisor.IsZero())
+                    throw new DivideByZeroException();
+                return MathHelper.Divide(MathHelper.ConvertToBigDecimal(ticks), (object)bdDivisor);
+            default:
+                // Integers are divided exactly, and the remainder decides the rounding
+                BigInteger integerDivisor = MathHelper.ConvertToBigInteger(divisor);
+                BigInteger quotient = BigInteger.DivRem(ticks, integerDivisor, out BigInteger remainder);
+                BigInteger twiceRemainder = BigInteger.Abs(remainder) * 2;
+                BigInteger absDivisor = BigInteger.Abs(integerDivisor);
+                if (twiceRemainder > absDivisor || (twiceRemainder == absDivisor && !quotient.IsEven))
+                    quotient += (ticks < 0) == (integerDivisor.Sign < 0) ? 1 : -1;
+                return quotient;
+        }
+    }
+
+    private static long ToTicks(object ticks, long minTicks, long maxTicks, string typeName)
+    {
+        BigInteger wholeTicks = ticks switch
+        {
+            double d when double.IsNaN(d) || double.IsInfinity(d) => throw new NCalcEvaluationException($"The result of the time operation is outside the range of {typeName}"),
+            double d => new BigInteger(Math.Round(d)),
+            BigDecimal bd => MathHelper.GetWholeValue(MathHelper.RoundBigDecimal(bd, 0, MidpointRounding.ToEven)),
+            _ => MathHelper.ConvertToBigInteger(ticks)
+        };
+
+        if (wholeTicks < minTicks || wholeTicks > maxTicks)
+            throw new NCalcEvaluationException($"The result of the time operation is outside the range of {typeName}");
+        return (long)wholeTicks;
+    }
+
+    private static TimeSpan ToTimeSpan(object ticks)
+        => new(ToTicks(ticks, TimeSpan.MinValue.Ticks, TimeSpan.MaxValue.Ticks, nameof(TimeSpan)));
+
+    private static DateTime ToDateTime(object ticks, DateTimeKind kind)
+        => new(ToTicks(ticks, DateTime.MinValue.Ticks, DateTime.MaxValue.Ticks, nameof(DateTime)), kind);
+
+    private static T TimeOperation<T>(Func<T> operation, string typeName)
+    {
+        try
+        {
+            return operation();
+        }
+        catch (Exception ex) when (ex is OverflowException or ArgumentOutOfRangeException)
+        {
+            throw new NCalcEvaluationException($"The result of the time operation is outside the range of {typeName}", ex);
+        }
     }
 
     /// <summary>
@@ -769,6 +809,19 @@ public static class EvaluationHelper
         return new NestedExpressionScope(current);
     }
 
+    /// <summary>
+    /// The handlers of an expression evaluated as the value of a parameter: its own ones, then those of the outer expression.
+    /// A handler that both have is called once.
+    /// </summary>
+    internal static THandler? CombineHandlers<THandler>(THandler? own, THandler? outer) where THandler : Delegate
+    {
+        if (own is null)
+            return outer;
+        if (outer is null || own.Equals(outer))
+            return own;
+        return (THandler)Delegate.Combine(own, outer);
+    }
+
     internal static void EnsureProperParamNumInFunctionCall(Function userFunction, FunctionCall functionCall)
     {
         int argsCount = functionCall.Parameters.Count;
@@ -876,4 +929,111 @@ internal class ArgumentStateBase
 {
     protected object? _value = null;
     protected bool _valueSet = false;
+}
+
+/// <summary>
+/// The parameters of an expression that is evaluated as the value of a parameter of another expression: its own parameters come first,
+/// then those of the outer expression. Values written during the evaluation are kept in a local layer, so neither dictionary is changed
+/// (both may be read-only).
+/// </summary>
+internal sealed class ParameterOverlay<TValue>(IDictionary<string, TValue> own, IDictionary<string, TValue> outer) : IDictionary<string, TValue>
+{
+    private readonly Dictionary<string, TValue> _local = new(StringComparer.Ordinal);
+
+    public TValue this[string key]
+    {
+        get => TryGetValue(key, out var value) ? value : throw new KeyNotFoundException($"The parameter '{key}' is not defined.");
+        set => _local[key] = value;
+    }
+
+    public ICollection<string> Keys
+    {
+        get
+        {
+            var keys = new List<string>();
+            foreach (var pair in this)
+                keys.Add(pair.Key);
+            return keys;
+        }
+    }
+
+    public ICollection<TValue> Values
+    {
+        get
+        {
+            var values = new List<TValue>();
+            foreach (var pair in this)
+                values.Add(pair.Value);
+            return values;
+        }
+    }
+
+    // Not Enumerable.Count(), which would call this property
+    public int Count
+    {
+        get
+        {
+            var count = 0;
+            using var enumerator = GetEnumerator();
+            while (enumerator.MoveNext())
+                count++;
+            return count;
+        }
+    }
+
+    public bool IsReadOnly => false;
+
+    public void Add(string key, TValue value)
+    {
+        if (ContainsKey(key))
+            throw new ArgumentException($"The parameter '{key}' is already defined.", nameof(key));
+        _local.Add(key, value);
+    }
+
+    public void Add(KeyValuePair<string, TValue> item) => Add(item.Key, item.Value);
+
+    public void Clear() => _local.Clear();
+
+    public bool Contains(KeyValuePair<string, TValue> item)
+        => TryGetValue(item.Key, out var value) && EqualityComparer<TValue>.Default.Equals(value, item.Value);
+
+    public bool ContainsKey(string key) => _local.ContainsKey(key) || own.ContainsKey(key) || outer.ContainsKey(key);
+
+    public void CopyTo(KeyValuePair<string, TValue>[] array, int arrayIndex)
+    {
+        foreach (var pair in this)
+            array[arrayIndex++] = pair;
+    }
+
+    // Only the values written during the evaluation can be removed
+    public bool Remove(string key) => _local.Remove(key);
+
+    public bool Remove(KeyValuePair<string, TValue> item) => Contains(item) && _local.Remove(item.Key);
+
+    public bool TryGetValue(string key, out TValue value)
+    {
+        if (_local.TryGetValue(key, out value!) || own.TryGetValue(key, out value!) || outer.TryGetValue(key, out value!))
+            return true;
+        value = default!;
+        return false;
+    }
+
+    // Each name once, from the layer that provides its value
+    public IEnumerator<KeyValuePair<string, TValue>> GetEnumerator()
+    {
+        foreach (var pair in _local)
+            yield return pair;
+        foreach (var pair in own)
+        {
+            if (!_local.ContainsKey(pair.Key))
+                yield return pair;
+        }
+        foreach (var pair in outer)
+        {
+            if (!_local.ContainsKey(pair.Key) && !own.ContainsKey(pair.Key))
+                yield return pair;
+        }
+    }
+
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 }

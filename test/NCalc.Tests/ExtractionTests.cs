@@ -100,4 +100,14 @@ public class ExtractionTests
         Assert.Empty(new Expression((string?)null, ExpressionOptions.AllowNullOrEmptyExpressions).GetParameterNames(TestContext.Current.CancellationToken));
         Assert.Empty(new Expression(string.Empty, ExpressionOptions.AllowNullOrEmptyExpressions).GetFunctionNames(TestContext.Current.CancellationToken));
     }
+
+    // NCALC-134
+    [Fact]
+    public void UserFunctionParametersShouldBeRemovedAsTheyAreLookedUp()
+    {
+        const ExpressionOptions options = ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments;
+        // Names are looked up ordinally, so X is another parameter than x
+        Assert.Equal(["X"], new Expression("fn f(x) => X + x; f(1)", options).GetParameterNames(TestContext.Current.CancellationToken));
+        Assert.Empty(new Expression("fn f(x) => X + x; f(1)", options | ExpressionOptions.LowerCaseIdentifierLookup).GetParameterNames(TestContext.Current.CancellationToken));
+    }
 }

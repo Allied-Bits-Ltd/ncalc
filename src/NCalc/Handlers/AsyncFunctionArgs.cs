@@ -20,12 +20,22 @@ public class AsyncFunctionArgs(Guid id, AsyncExpression[] parameters) : EventArg
 
     public bool HasResult { get; private set; }
 
-    public async ValueTask<object?[]> EvaluateParametersAsync()
+    /// <summary>
+    /// Evaluates the arguments. They are evaluated with the cancellation token of the evaluation that calls the function.
+    /// </summary>
+    public ValueTask<object?[]> EvaluateParametersAsync() => EvaluateParametersAsync(CancellationToken.None);
+
+    /// <summary>
+    /// Evaluates the arguments with the given cancellation token, or with the token of the evaluation that calls the function
+    /// when the given one cannot be cancelled.
+    /// </summary>
+    public async ValueTask<object?[]> EvaluateParametersAsync(CancellationToken cancellationToken)
     {
         var values = new object?[Parameters.Length];
         for (var i = 0; i < values.Length; i++)
         {
-            values[i] = await Parameters[i].EvaluateAsync().ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            values[i] = await Parameters[i].EvaluateAsync(cancellationToken).ConfigureAwait(false);
         }
 
         return values;

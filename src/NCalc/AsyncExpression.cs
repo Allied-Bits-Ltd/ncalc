@@ -71,6 +71,55 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         EvaluationVisitorFactory = new AsyncEvaluationVisitorFactory();
     }
 
+    private AsyncExpression(AsyncExpressionContext context, IAsyncEvaluationVisitorFactory evaluationVisitorFactory) : base(context)
+    {
+        EvaluationVisitorFactory = evaluationVisitorFactory;
+    }
+
+    /// <summary>
+    /// Creates the expression for an argument of a function, which is a part of the tree that is being evaluated.
+    /// </summary>
+    internal static AsyncExpression CreateSubExpression(LogicalExpression logicalExpression, AsyncExpressionContext context, CancellationToken cancellationToken)
+    {
+        var expression = new AsyncExpression(context);
+        expression.InitSubExpression(logicalExpression, cancellationToken);
+        return expression;
+    }
+
+    /// <summary>
+    /// Evaluates this expression as the value of a parameter of an outer asynchronous expression. This expression's own parameters come
+    /// first, then those of the outer expression; neither are changed, and the handlers of the outer expression are called after this
+    /// expression's own ones.
+    /// </summary>
+    internal async ValueTask<object?> EvaluateAsParameterAsync(AsyncExpressionContext outerContext, CancellationToken cancellationToken)
+    {
+        // An expression that shares the context of the outer one has its parameters and handlers already
+        if (ReferenceEquals(Context, outerContext))
+            return await EvaluateAsync(cancellationToken).ConfigureAwait(false);
+
+        LogicalExpression ??= GetLogicalExpression(cancellationToken);
+        if (Error is not null)
+            throw Error;
+        if (LogicalExpression is null)
+            return null;
+
+        var ownContext = Context;
+        var nestedContext = ownContext with
+        {
+            StaticParameters = new ParameterOverlay<object?>(ownContext.StaticParameters, outerContext.StaticParameters),
+            DynamicParameters = new ParameterOverlay<AsyncExpressionParameter>(ownContext.DynamicParameters, outerContext.DynamicParameters),
+            AsyncEvaluateFunctionHandler = EvaluationHelper.CombineHandlers(ownContext.AsyncEvaluateFunctionHandler, outerContext.AsyncEvaluateFunctionHandler),
+            AsyncEvaluateParameterHandler = EvaluationHelper.CombineHandlers(ownContext.AsyncEvaluateParameterHandler, outerContext.AsyncEvaluateParameterHandler),
+            AsyncUpdateParameterHandler = EvaluationHelper.CombineHandlers(ownContext.AsyncUpdateParameterHandler, outerContext.AsyncUpdateParameterHandler),
+            AsyncMatchStringHandler = EvaluationHelper.CombineHandlers(ownContext.AsyncMatchStringHandler, outerContext.AsyncMatchStringHandler)
+        };
+
+        // The functions declared in the tree are in the shared UserFunctions of the copied context already
+        var nested = new AsyncExpression(nestedContext, EvaluationVisitorFactory);
+        nested.SetLogicalExpressionWithoutRegistration(LogicalExpression);
+        return await nested.InternalEvaluateAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public AsyncExpression(
         string expression,
         AsyncExpressionContext context,
@@ -133,9 +182,15 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
     public ValueTask<object?> EvaluateAsync(CancellationToken cancellationToken = default)
     {
+        return new ValueTask<object?>(ParseAndEvaluateAsync(GetEvaluationCancellationToken(cancellationToken)));
+    }
+
+    // Parsing errors and cancellation fault the returned task instead of being thrown from the call
+    private async Task<object?> ParseAndEvaluateAsync(CancellationToken cancellationToken)
+    {
         LogicalExpression ??= GetLogicalExpression(cancellationToken);
 
-        return new ValueTask<object?>(InternalEvaluateAsync(cancellationToken));
+        return await InternalEvaluateAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -145,9 +200,14 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
     public ValueTask<object?> EvaluateAsync(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext, CancellationToken cancellationToken = default)
     {
+        return new ValueTask<object?>(ParseAndEvaluateAsync(parser, parserContext, cancellationToken));
+    }
+
+    private async Task<object?> ParseAndEvaluateAsync(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext, CancellationToken cancellationToken)
+    {
         LogicalExpression = GetLogicalExpression(parser, parserContext);
 
-        return new ValueTask<object?>(InternalEvaluateAsync(cancellationToken));
+        return await InternalEvaluateAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<object?> InternalEvaluateAsync(CancellationToken cancellationToken = default)
@@ -155,8 +215,9 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         if (Error is not null)
             throw Error;
 
-        // If array evaluation, execute the same expression multiple times
-        if (Options.HasFlag(ExpressionOptions.IterateParameters))
+        // If array evaluation, execute the same expression multiple times. The arguments of functions are not iterated again:
+        // the outer evaluation has put the current elements into the parameters
+        if (Options.HasFlag(ExpressionOptions.IterateParameters) && !IsSubExpression)
             return await IterateParametersAsync(cancellationToken).ConfigureAwait(false);
 
         if (LogicalExpression is null)

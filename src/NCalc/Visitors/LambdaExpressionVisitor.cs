@@ -1,6 +1,4 @@
-﻿using System.Numerics;
-using System.Reflection;
-using ExtendedNumerics;
+﻿using System.Reflection;
 
 using NCalc.Domain;
 using NCalc.Exceptions;
@@ -14,186 +12,159 @@ using LinqParameterExpression = System.Linq.Expressions.ParameterExpression;
 
 namespace NCalc.Visitors;
 
+/// <summary>
+/// Compiles a <see cref="LogicalExpression"/> into a LINQ expression tree. The operators and built-in functions are compiled as calls
+/// to the helper methods that the evaluators use (see <see cref="LambdaRuntime"/>), so a compiled lambda gives the values that Evaluate() gives.
+/// Assignments (which need a context object to assign to), loops, <c>return</c>, indexes and function declarations are not supported
+/// and throw <see cref="NotSupportedException"/> when the lambda is created.
+/// </summary>
 public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpression>
 {
     private readonly IDictionary<string, object?>? _parameters;
     private readonly LinqExpression? _context;
     private readonly ExpressionOptions _options;
-    private readonly bool _ordinalStringComparer;
     private readonly bool _caseInsensitiveStringComparer;
-    private readonly bool _checked;
 
-    private ExpressionContext? _expressionContext;
+    private readonly ExpressionContext _expressionContext;
+    private readonly LinqExpression _expressionContextConstant;
 
-    private static readonly MethodInfo StringComparerEqualsMethod =
-        typeof(StringComparer).GetMethod("Equals", [typeof(string), typeof(string)])!;
-
-    private static readonly MethodInfo StringComparerCompareMethod =
-        typeof(StringComparer).GetMethod("Compare", [typeof(string), typeof(string)])!;
+    private static readonly LinqExpression NullConstant = LinqExpression.Constant(null, typeof(object));
 
     public LambdaExpressionVisitor(LinqParameterExpression? context, ExpressionContext? expressionContext, IDictionary<string, object?>? parameters, ExpressionOptions options)
     {
         if (context != null)
             _context = context;
-        if (expressionContext != null)
-            _expressionContext = expressionContext;
         if (parameters != null)
             _parameters = parameters;
 
         _options = options;
-        _ordinalStringComparer = _options.HasFlag(ExpressionOptions.OrdinalStringComparer);
-        _checked = _options.HasFlag(ExpressionOptions.OverflowProtection);
         _caseInsensitiveStringComparer = _options.HasFlag(ExpressionOptions.CaseInsensitiveStringComparer);
+
+        _expressionContext = expressionContext ?? new ExpressionContext(options, CultureInfo.CurrentCulture);
+        _expressionContextConstant = LinqExpression.Constant(_expressionContext, typeof(ExpressionContext));
     }
 
     public LinqExpression Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        var conditional = expression.LeftExpression.Accept(this, cancellationToken);
-        var ifTrue = expression.MiddleExpression.Accept(this, cancellationToken);
-        var ifFalse = expression.RightExpression.Accept(this, cancellationToken);
+        var conditional = Box(expression.LeftExpression.Accept(this, cancellationToken));
+        var ifTrue = Box(expression.MiddleExpression.Accept(this, cancellationToken));
+        var ifFalse = Box(expression.RightExpression.Accept(this, cancellationToken));
 
-        UnifyBranchTypes(ref ifTrue, ref ifFalse);
-        return LinqExpression.Condition(ToBoolean(conditional), ifTrue, ifFalse);
+        // As in the evaluators, a null condition gives null, and the result is the value of the chosen branch with its own type
+        var condition = LinqExpression.Variable(typeof(object), "condition");
+        return LinqExpression.Block(
+            [condition],
+            LinqExpression.Assign(condition, conditional),
+            LinqExpression.Condition(
+                CallRuntime(nameof(LambdaRuntime.IsNull), condition, _expressionContextConstant),
+                NullConstant,
+                LinqExpression.Condition(
+                    CallRuntime(nameof(LambdaRuntime.ToBoolean), condition, LinqExpression.Constant("Ternary"), NodeConstant(expression.LeftExpression), _expressionContextConstant),
+                    ifTrue,
+                    ifFalse)));
     }
 
     public LinqExpression Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        var left = expression.LeftExpression.Accept(this, cancellationToken);
-        var right = expression.RightExpression.Accept(this, cancellationToken);
 
-        if (_expressionContext?.AdvancedOptions != null && _expressionContext.AdvancedOptions.Flags.HasFlag(AdvExpressionOptions.CalculatePercent))
+        switch (expression.Type)
         {
-            if (left.Type == typeof(Percent) && right.Type == typeof(Percent))
-            {
-                return expression.Type switch
-                {
-                    BinaryExpressionType.Minus => _checked ? OfPercentAsPercent(UnwrapPercentValue(left), UnwrapPercentValue(right), LinqExpression.SubtractChecked, BinaryExpressionType.Minus) : OfPercentAsPercent(UnwrapPercentValue(left), UnwrapPercentValue(right), LinqExpression.Subtract, BinaryExpressionType.Minus),
-                    BinaryExpressionType.Plus => _checked ? OfPercentAsPercent(UnwrapPercentValue(left), UnwrapPercentValue(right), LinqExpression.AddChecked, BinaryExpressionType.Plus) : OfPercentAsPercent(UnwrapPercentValue(left), UnwrapPercentValue(right), LinqExpression.Add, BinaryExpressionType.Plus),
+            case BinaryExpressionType.Assignment:
+            case BinaryExpressionType.PlusAssignment:
+            case BinaryExpressionType.MinusAssignment:
+            case BinaryExpressionType.MultiplyAssignment:
+            case BinaryExpressionType.DivAssignment:
+            case BinaryExpressionType.AndAssignment:
+            case BinaryExpressionType.OrAssignment:
+            case BinaryExpressionType.XOrAssignment:
+                return Assignment(expression, cancellationToken);
 
-                    BinaryExpressionType.Unknown => throw new ArgumentOutOfRangeException(),
-                    _ => throw new ArgumentOutOfRangeException()
-                };
-            }
-            else
-            if (left.Type == typeof(Percent))
-            {
-                return expression.Type switch
-                {
-                    BinaryExpressionType.Div => WrapWithPercent(ConvertDoubleIfNoFraction(OfPercentAsNumeric(UnwrapPercentValue(left), right, LinqExpression.Divide, BinaryExpressionType.Div))),
-                    BinaryExpressionType.Times => _checked ? OfPercentAsPercent(UnwrapPercentValue(left), right, LinqExpression.MultiplyChecked, BinaryExpressionType.Times) : OfPercentAsPercent(UnwrapPercentValue(left), right, LinqExpression.Multiply, BinaryExpressionType.Times),
+            case BinaryExpressionType.WhileLoop:
+                throw new NotSupportedException("Loops are not supported in lambda expressions.");
 
-                    BinaryExpressionType.Unknown => throw new ArgumentOutOfRangeException(),
-                    _ => throw new ArgumentOutOfRangeException()
-                };
-            }
-            else
-            if (right.Type == typeof(Percent))
-            {
-                return expression.Type switch
-                {
-                    BinaryExpressionType.Assignment => UpdateParameter<object?>(expression.LeftExpression, right),
-                    BinaryExpressionType.PlusAssignment => UpdateParameter<object?>(expression.LeftExpression, _checked ? WithPercent(left, UnwrapPercentValue(right), LinqExpression.AddChecked, BinaryExpressionType.Plus) : WithPercent(left, UnwrapPercentValue(right), LinqExpression.Add, BinaryExpressionType.Plus)),
-                    BinaryExpressionType.MinusAssignment => UpdateParameter<object?>(expression.LeftExpression, _checked ? WithPercent(left, UnwrapPercentValue(right), LinqExpression.SubtractChecked, BinaryExpressionType.Minus) : WithPercent(left, UnwrapPercentValue(right), LinqExpression.Subtract, BinaryExpressionType.Minus)),
-                    BinaryExpressionType.MultiplyAssignment => UpdateParameter<object?>(expression.LeftExpression, _checked ? WithPercent(left, UnwrapPercentValue(right), LinqExpression.MultiplyChecked, BinaryExpressionType.Times) : WithPercent(left, UnwrapPercentValue(right), LinqExpression.Multiply, BinaryExpressionType.Times)),
-                    BinaryExpressionType.DivAssignment => UpdateParameter<object?>(expression.LeftExpression, ConvertDoubleIfNoFraction(WithPercent(left, UnwrapPercentValue(right), LinqExpression.Divide, BinaryExpressionType.Div))),
-                    BinaryExpressionType.Plus => _checked ? WithPercent(left, UnwrapPercentValue(right), LinqExpression.AddChecked, expression.Type) : WithPercent(left, UnwrapPercentValue(right), LinqExpression.Add, BinaryExpressionType.Plus),
-                    BinaryExpressionType.Minus => _checked ? WithPercent(left, UnwrapPercentValue(right), LinqExpression.SubtractChecked, expression.Type) : WithPercent(left, UnwrapPercentValue(right), LinqExpression.Subtract, BinaryExpressionType.Minus),
-                    BinaryExpressionType.Times => _checked ? WithPercent(left, UnwrapPercentValue(right), LinqExpression.MultiplyChecked, expression.Type) : WithPercent(left, UnwrapPercentValue(right), LinqExpression.Multiply, BinaryExpressionType.Times),
-                    BinaryExpressionType.Div => ConvertDoubleIfNoFraction(WithPercent(left, UnwrapPercentValue(right), LinqExpression.Divide, BinaryExpressionType.Div)),
-                    _ => throw new ArgumentOutOfRangeException()
-                };
-            }
+            case BinaryExpressionType.IndexAccess:
+            case BinaryExpressionType.RangeIndex:
+                throw new NotSupportedException("Indexed access to parameters is not supported for Lambda expressions. Please submit an issue to https://github.com/Allied-Bits-Ltd/ncalc/issues if you need this support.");
+
+            case BinaryExpressionType.Unknown:
+                throw new ArgumentOutOfRangeException(nameof(expression), expression.Type, null);
         }
 
-        return expression.Type switch
+        var left = Box(expression.LeftExpression.Accept(this, cancellationToken));
+        var right = Box(expression.RightExpression.Accept(this, cancellationToken));
+        var node = LinqExpression.Constant(expression);
+        var leftValue = LinqExpression.Variable(typeof(object), "left");
+
+        switch (expression.Type)
         {
-            BinaryExpressionType.Assignment => UpdateParameter<object?>(expression.LeftExpression, right),
+            case BinaryExpressionType.Equal:
+            case BinaryExpressionType.NotEqual:
+            case BinaryExpressionType.Greater:
+            case BinaryExpressionType.GreaterOrEqual:
+            case BinaryExpressionType.Less:
+            case BinaryExpressionType.LessOrEqual:
+                // Both operands are evaluated, null included
+                return CallRuntime(nameof(LambdaRuntime.Compare), left, right, node, _expressionContextConstant);
 
-            BinaryExpressionType.PlusAssignment => UpdateParameter<object?>(expression.LeftExpression, _checked ? WithCommonNumericType(left, right, LinqExpression.AddChecked, BinaryExpressionType.Plus) : WithCommonNumericType(left, right, LinqExpression.Add, BinaryExpressionType.Plus)),
-            BinaryExpressionType.MinusAssignment => UpdateParameter<object?>(expression.LeftExpression, _checked ? WithCommonNumericType(left, right, LinqExpression.SubtractChecked, BinaryExpressionType.Minus) : WithCommonNumericType(left, right, LinqExpression.Subtract, BinaryExpressionType.Minus)),
+            case BinaryExpressionType.And:
+            case BinaryExpressionType.Or:
+            case BinaryExpressionType.XOr:
+            {
+                // The right operand is evaluated only when the left one does not decide the result
+                var decided = LinqExpression.Variable(typeof(object), "decided");
+                return LinqExpression.Block(
+                    [leftValue, decided],
+                    LinqExpression.Assign(leftValue, left),
+                    LinqExpression.Assign(decided, CallRuntime(nameof(LambdaRuntime.LogicalLeft), leftValue, node, _expressionContextConstant)),
+                    LinqExpression.Condition(
+                        LinqExpression.ReferenceEqual(decided, LinqExpression.Constant(LambdaRuntime.Undecided)),
+                        CallRuntime(nameof(LambdaRuntime.LogicalRight), leftValue, right, node, _expressionContextConstant),
+                        decided));
+            }
 
-            BinaryExpressionType.MultiplyAssignment => UpdateParameter<object?>(expression.LeftExpression, _checked ? WithCommonNumericType(left, right, LinqExpression.MultiplyChecked) : WithCommonNumericType(left, right, LinqExpression.Multiply)),
-            BinaryExpressionType.DivAssignment => UpdateParameter<object?>(expression.LeftExpression, ConvertDoubleIfNoFraction(WithCommonNumericType(left, right, LinqExpression.Divide, BinaryExpressionType.DivAssignment))),
-
-            BinaryExpressionType.AndAssignment => UpdateParameter<object?>(expression.LeftExpression, LinqExpression.And(left, right)),
-            BinaryExpressionType.OrAssignment => UpdateParameter<object?>(expression.LeftExpression, LinqExpression.Or(left, right)),
-            BinaryExpressionType.XOrAssignment => UpdateParameter<object?>(expression.LeftExpression, LinqExpression.ExclusiveOr(left, right)),
-
-            BinaryExpressionType.And => LinqExpression.AndAlso(left, right),
-            BinaryExpressionType.Or => LinqExpression.OrElse(left, right),
-            BinaryExpressionType.XOr => BooleanXOr(left, right),
-            BinaryExpressionType.NotEqual => WithCommonNumericType(left, right, LinqExpression.NotEqual, expression.Type),
-            BinaryExpressionType.LessOrEqual => WithCommonNumericType(left, right, LinqExpression.LessThanOrEqual, expression.Type),
-            BinaryExpressionType.GreaterOrEqual => WithCommonNumericType(left, right, LinqExpression.GreaterThanOrEqual, expression.Type),
-            BinaryExpressionType.Less => WithCommonNumericType(left, right, LinqExpression.LessThan, expression.Type),
-            BinaryExpressionType.Greater => WithCommonNumericType(left, right, LinqExpression.GreaterThan, expression.Type),
-            BinaryExpressionType.Equal => WithCommonNumericType(left, right, LinqExpression.Equal, expression.Type),
-            BinaryExpressionType.Minus => _checked ? WithCommonNumericType(left, right, LinqExpression.SubtractChecked, BinaryExpressionType.Minus) : WithCommonNumericType(left, right, LinqExpression.Subtract, BinaryExpressionType.Minus),
-            BinaryExpressionType.Plus => _checked ? WithCommonNumericType(left, right, LinqExpression.AddChecked, BinaryExpressionType.Plus) : WithCommonNumericType(left, right, LinqExpression.Add, BinaryExpressionType.Plus),
-            BinaryExpressionType.Modulo => WithCommonNumericType(left, right, LinqExpression.Modulo),
-            BinaryExpressionType.Div => ConvertDoubleIfNoFraction(WithCommonNumericType(left, right, LinqExpression.Divide, BinaryExpressionType.Div)),
-            BinaryExpressionType.Times => Multiply(left, right),
-            BinaryExpressionType.BitwiseOr => LinqExpression.Or(left, right),
-            BinaryExpressionType.BitwiseAnd => LinqExpression.And(left, right),
-            BinaryExpressionType.BitwiseXOr => LinqExpression.ExclusiveOr(left, right),
-            BinaryExpressionType.LeftShift => LinqExpression.LeftShift(left, right),
-            BinaryExpressionType.RightShift => LinqExpression.RightShift(left, right),
-            BinaryExpressionType.Exponentiation => LinqExpression.Power(LinqExpression.Convert(left, typeof(double)), LinqExpression.Convert(right, typeof(double))),
-            BinaryExpressionType.Factorial => Factorial(left, right),
-            BinaryExpressionType.IndexAccess => throw new NotSupportedException("Indexed access to parameters is not supported for Lambda expressions. Please submit an issue to https://github.com/Allied-Bits-Ltd/ncalc/issues if you need this support."),
-            BinaryExpressionType.Like => LikeOperator(left, right),
-            BinaryExpressionType.NotLike => LinqExpression.Not(LikeOperator(left, right)),
-            BinaryExpressionType.In => InOperator(left, right),
-            BinaryExpressionType.NotIn => LinqExpression.Not(InOperator(left, right)),
-            BinaryExpressionType.Unknown => throw new ArgumentOutOfRangeException(),
-            _ => throw new ArgumentOutOfRangeException()
-        };
+            default:
+                // A null left operand gives null without evaluating the right one
+                return LinqExpression.Block(
+                    [leftValue],
+                    LinqExpression.Assign(leftValue, left),
+                    LinqExpression.Condition(
+                        CallRuntime(nameof(LambdaRuntime.IsNull), leftValue, _expressionContextConstant),
+                        NullConstant,
+                        CallRuntime(nameof(LambdaRuntime.Binary), leftValue, right, node, _expressionContextConstant)));
+        }
     }
 
     public LinqExpression Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        var operand = expression.Expression.Accept(this, cancellationToken);
+        if (expression.Type == UnaryExpressionType.Return)
+            throw new NotSupportedException("The return statement is not supported in lambda expressions.");
 
-        return expression.Type switch
-        {
-            UnaryExpressionType.Not => LinqExpression.Not(ToBoolean(operand)),
-            UnaryExpressionType.Negate => LinqExpression.Negate(operand),
-            UnaryExpressionType.BitwiseNot => LinqExpression.Not(operand),
-            UnaryExpressionType.SqRoot => Sqrt(operand),
-#if NET8_0_OR_GREATER
-            UnaryExpressionType.CbRoot => Cbrt(operand),
-#endif
-            UnaryExpressionType.FourthRoot => Frthrt(operand),
-            UnaryExpressionType.Positive => operand,
-            UnaryExpressionType.Return => BuildThrowNCalcFlowControl(operand, expression.Location),
-
-            _ => throw new ArgumentOutOfRangeException()
-        };
+        var operand = Box(expression.Expression.Accept(this, cancellationToken));
+        return CallRuntime(nameof(LambdaRuntime.Unary), operand, LinqExpression.Constant(expression), _expressionContextConstant);
     }
 
     public LinqExpression Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        LinqExpression result = expression.Expression.Accept(this, cancellationToken);
-        if (result.Type != typeof(Percent))
-            return WrapWithPercent(result);
-        else
-            return result;
+        var value = Box(expression.Expression.Accept(this, cancellationToken));
+        return CallRuntime(nameof(LambdaRuntime.Percent), value, _expressionContextConstant);
     }
 
     public LinqExpression Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        throw new NotImplementedException("Complex numbers are not supported in Lambda expressions");
+        var value = Box(expression.Expression.Accept(this, cancellationToken));
+        return CallRuntime(nameof(LambdaRuntime.Imaginary), value, LinqExpression.Constant(expression), _expressionContextConstant);
     }
 
     public LinqExpression Visit(VectorExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        throw new NotImplementedException("Vectors are not supported in Lambda expressions");
+        var components = LinqExpression.NewArrayInit(typeof(object), expression.Expressions.Select(e => Box(e.Accept(this, cancellationToken))));
+        return CallRuntime(nameof(LambdaRuntime.Vector), components, LinqExpression.Constant(expression));
     }
 
     public LinqExpression Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
@@ -214,188 +185,353 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
     public LinqExpression Visit(FunctionCall function, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        var args = new LinqExpression[function.Parameters.Count];
-        for (var i = 0; i < function.Parameters.Count; i++)
-        {
-            args[i] = function.Parameters[i].Accept(this, cancellationToken);
-        }
+        var functionName = function.Identifier.Name;
 
-        var functionName = function.Identifier.Name.ToUpperInvariant();
-        if (functionName is "IF" or "IFF")
-        {
-            // As in the evaluators, the third argument is optional, and the result is null when the condition is false
-            if (args.Length is < 2 or > 3)
-                throw new ArgumentException($"{functionName} takes 2 or 3 arguments");
-            var ifFalse = args.Length == 3 ? args[2] : LinqExpression.Constant(null, typeof(object));
-            UnifyBranchTypes(ref args[1], ref ifFalse);
-            return LinqExpression.Condition(ToBoolean(args[0]), args[1], ifFalse);
-        }
+        // Functions of the expression (fn declarations and the Functions dictionary) are called by the evaluators before the built-in ones
+        var ignoreIdentifierCase = _options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);
+        if (_expressionContext.UserFunctions.Keys.Concat(_expressionContext.Functions.Keys)
+            .Any(name => name.Equals(functionName, ignoreIdentifierCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+            throw new NotSupportedException($"The function '{functionName}' of the expression is not supported in lambda expressions.");
 
-        if (functionName == "IN")
+        var comparison = _options.HasFlag(ExpressionOptions.IgnoreCaseAtBuiltInFunctions) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var parameters = function.Parameters;
+
+        // The functions that do not evaluate all their arguments
+        if (functionName.Equals("if", comparison) || functionName.Equals("iff", comparison))
+            return IfFunction(function, cancellationToken);
+        if (functionName.Equals("ifs", comparison))
+            return IfsFunction(function, cancellationToken);
+        if (functionName.Equals("in", comparison))
+            return InFunction(function, cancellationToken);
+
+        var args = new LinqExpression[parameters.Count];
+        for (var i = 0; i < parameters.Count; i++)
         {
-            var items = LinqExpression.NewArrayInit(args[0].Type,
-                new ArraySegment<LinqExpression>(args, 1, args.Length - 1));
-            var smi = typeof(Array).GetMethod("IndexOf", [typeof(Array), typeof(object)]);
-            var r = LinqExpression.Call(smi!, LinqExpression.Convert(items, typeof(Array)),
-                LinqExpression.Convert(args[0], typeof(object)));
-            return LinqExpression.GreaterThanOrEqual(r, LinqExpression.Constant(0));
+            args[i] = parameters[i].Accept(this, cancellationToken);
         }
 
         //Context methods take precedence over built-in functions because they're user-customizable.
-        var mi = FindMethod(function.Identifier.Name, args, _expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true ? StringComparison.InvariantCultureIgnoreCase : StringComparison.InvariantCulture);
+        var mi = FindMethod(functionName, args, ignoreIdentifierCase ? StringComparison.InvariantCultureIgnoreCase : StringComparison.InvariantCulture);
         if (mi != null)
         {
             return LinqExpression.Call(_context, mi.MethodInfo, mi.PreparedArguments);
         }
 
-        Linq.UnaryExpression arg0;
-        Linq.UnaryExpression arg1;
+        var functionNode = LinqExpression.Constant(function);
 
-        switch (functionName)
+        if (functionName.Equals("%", StringComparison.Ordinal) || functionName.Equals("PercentOf", comparison))
+            return args.Length == 2 ? PercentFunction(nameof(LambdaRuntime.PercentOf), args) : ThrowEvaluationException("PercentOf() takes exactly 2 arguments", function.Location);
+        if (functionName.Equals("PercentDiff", comparison))
+            return args.Length == 2 ? PercentFunction(nameof(LambdaRuntime.PercentDiff), args) : ThrowEvaluationException("PercentDiff() takes exactly 2 arguments", function.Location);
+
+        foreach (var unaryFunction in LambdaRuntime.UnaryFunctions)
         {
-            // Exceptional handling
-            case "MAX":
-                CheckArgumentsLengthForFunction(functionName, function.Parameters.Count, 2);
-                arg0 = LinqExpression.Convert(args[0], typeof(double));
-                arg1 = LinqExpression.Convert(args[1], typeof(double));
-                return LinqExpression.Condition(LinqExpression.GreaterThan(arg0, arg1), arg0, arg1);
-            case "MIN":
-                CheckArgumentsLengthForFunction(functionName, function.Parameters.Count, 2);
-                arg0 = LinqExpression.Convert(args[0], typeof(double));
-                arg1 = LinqExpression.Convert(args[1], typeof(double));
-                return LinqExpression.Condition(LinqExpression.LessThan(arg0, arg1), arg0, arg1);
-            case "POW":
-                CheckArgumentsLengthForFunction(functionName, function.Parameters.Count, 2);
+            if (!functionName.Equals(unaryFunction.Key, comparison))
+                continue;
+            if (args.Length != 1)
+                return ThrowEvaluationException($"{(unaryFunction.Key == "Trunc" ? "Truncate" : unaryFunction.Key)}() takes exactly 1 argument", function.Location);
 
-                if (_options.HasFlag(ExpressionOptions.DecimalAsDefault))
-                {
-                    arg0 = LinqExpression.Convert(args[0], typeof(decimal));
-                    arg1 = LinqExpression.Convert(args[1], typeof(decimal));
-
-                    var @base = LinqExpression.Convert(arg0, typeof(BigDecimal));
-                    var exponent = LinqExpression.Convert(arg1, typeof(BigInteger));
-
-                    var methodInfo = typeof(BigDecimal).GetMethod("Pow", [typeof(BigDecimal), typeof(BigInteger)]);
-                    if (methodInfo != null)
-                    {
-                        var result = LinqExpression.Call(methodInfo, @base, exponent);
-                        return LinqExpression.Convert(result, typeof(decimal));
-                    }
-                }
-
-                arg0 = LinqExpression.Convert(args[0], typeof(double));
-                arg1 = LinqExpression.Convert(args[1], typeof(double));
-
-                return LinqExpression.Power(arg0, arg1);
-            case "ROUND":
-                CheckArgumentsLengthForFunction(functionName, function.Parameters.Count, 2);
-
-                // The overload must match the type of the value: Math.Round(decimal, ...) with DecimalAsDefault, Math.Round(double, ...) otherwise
-                Type roundType = _options.HasFlag(ExpressionOptions.DecimalAsDefault) ? typeof(decimal) : typeof(double);
-                arg0 = LinqExpression.Convert(args[0], roundType);
-                arg1 = LinqExpression.Convert(args[1], typeof(int));
-
-                var rounding = (_options & ExpressionOptions.RoundAwayFromZero) == ExpressionOptions.RoundAwayFromZero
-                    ? MidpointRounding.AwayFromZero
-                    : MidpointRounding.ToEven;
-                return LinqExpression.Call(typeof(Math).GetMethod(nameof(Math.Round), [roundType, typeof(int), typeof(MidpointRounding)])!, arg0, arg1,
-                    LinqExpression.Constant(rounding));
-
-            default:
-                // Regular handling
-                if (MathFunctionHelper.Functions.TryGetValue(functionName, out var f))
-                {
-                    MathMethodInfo func;
-
-                    if (_options.HasFlag(ExpressionOptions.DecimalAsDefault) && f.Any(_ => _.DecimalSupport))
-                        func = f.First(_ => _.DecimalSupport);
-                    else
-                        func = f.First(_ => !_.DecimalSupport);
-
-                    CheckArgumentsLengthForFunction(functionName, args.Length, func.ArgumentCount);
-
-                    var arguments = new List<LinqExpression>();
-
-                    var parameters = func.MethodInfo.GetParameters();
-                    for (int i = 0; i < parameters.Length; i++)
-                        arguments.Add(LinqExpression.Convert(args[i], parameters[i].ParameterType));
-
-                    return LinqExpression.Call(func.MethodInfo, arguments);
-                }
-
-                throw new MissingMethodException($"method not found: {functionName}");
+            // A null argument gives a null result, as with the operators
+            var arg0 = LinqExpression.Variable(typeof(object), "arg0");
+            return LinqExpression.Block(
+                [arg0],
+                LinqExpression.Assign(arg0, Box(args[0])),
+                LinqExpression.Condition(
+                    LinqExpression.ReferenceEqual(arg0, NullConstant),
+                    NullConstant,
+                    LinqExpression.Invoke(LinqExpression.Constant(unaryFunction.Value), arg0, _expressionContextConstant)));
         }
 
-        static void CheckArgumentsLengthForFunction(string funcStr, int argsNum, int argsNeed)
+        foreach (var binaryFunction in LambdaRuntime.BinaryFunctions)
         {
-            if (argsNum != argsNeed)
-                throw new ArgumentException($"{funcStr} takes exactly {argsNeed} argument");
+            if (!functionName.Equals(binaryFunction.Key, comparison))
+                continue;
+            if (args.Length != 2)
+                return ThrowEvaluationException($"{binaryFunction.Key}() takes exactly 2 arguments", function.Location);
+
+            // Both arguments are evaluated; a null argument gives a null result
+            var arg0 = LinqExpression.Variable(typeof(object), "arg0");
+            var arg1 = LinqExpression.Variable(typeof(object), "arg1");
+            return LinqExpression.Block(
+                [arg0, arg1],
+                LinqExpression.Assign(arg0, Box(args[0])),
+                LinqExpression.Assign(arg1, Box(args[1])),
+                LinqExpression.Condition(
+                    LinqExpression.OrElse(LinqExpression.ReferenceEqual(arg0, NullConstant), LinqExpression.ReferenceEqual(arg1, NullConstant)),
+                    NullConstant,
+                    LinqExpression.Invoke(LinqExpression.Constant(binaryFunction.Value), arg0, arg1, _expressionContextConstant)));
         }
+
+        if (functionName.Equals("MakeList", comparison))
+        {
+            if (args.Length is not (1 or 2))
+                return ThrowEvaluationException("MakeList() takes 1 or 2 arguments", function.Location);
+
+            // The size is checked before the value is evaluated
+            var size = LinqExpression.Variable(typeof(long), "size");
+            return LinqExpression.Block(
+                [size],
+                LinqExpression.Assign(size, CallRuntime(nameof(LambdaRuntime.MakeSize), Box(args[0]), LinqExpression.Constant("List size"), LinqExpression.Constant("MakeList"), functionNode)),
+                CallRuntime(nameof(LambdaRuntime.MakeList), size, args.Length == 2 ? Box(args[1]) : NullConstant));
+        }
+
+        if (functionName.Equals("MakeStr", comparison) || functionName.Equals("MakeString", comparison))
+        {
+            if (args.Length != 2)
+                return ThrowEvaluationException("MakeStr() takes exactly 2 arguments", function.Location);
+
+            var size = LinqExpression.Variable(typeof(long), "size");
+            return LinqExpression.Block(
+                [size],
+                LinqExpression.Assign(size, CallRuntime(nameof(LambdaRuntime.MakeSize), Box(args[0]), LinqExpression.Constant("String length"), LinqExpression.Constant("MakeStr"), functionNode)),
+                CallRuntime(nameof(LambdaRuntime.MakeString), size, Box(args[1]), functionNode));
+        }
+
+        throw new MissingMethodException($"method not found: {functionName}");
     }
 
     public LinqExpression Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
-        LinqExpression? result = null;
+        var identifierName = identifier.Name;
 
-        if (_context is null)
+        if (_options.HasFlag(ExpressionOptions.UseLoops)
+            && (identifierName.Equals("break", StringComparison.InvariantCultureIgnoreCase) || identifierName.Equals("continue", StringComparison.InvariantCultureIgnoreCase)))
+            throw new NotSupportedException("Loops are not supported in lambda expressions.");
+
+        // As in the evaluators, "null" is the null value with AllowNullParameter or UseTernaryLogic unless a parameter of that name is defined
+        var isNullValue = (_options.HasFlag(ExpressionOptions.AllowNullParameter) || _options.HasFlag(ExpressionOptions.UseTernaryLogic))
+            && identifierName.Equals("null", _options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+        if (_context is not null)
         {
-            object? param = null;
-            if (_parameters is not null &&
-                ((_expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true)
-                    ? EvaluationHelper.GetParameterValueFromListNoCase(_parameters, identifier.Name, out param)
-                    : _parameters.TryGetValue(identifier.Name, out param)))
-                result = LinqExpression.Constant(param);
-            else
-            // As in the evaluators, "null" is the null value with AllowNullParameter or UseTernaryLogic unless a parameter of that name is defined
-            if ((_options.HasFlag(ExpressionOptions.AllowNullParameter) || _options.HasFlag(ExpressionOptions.UseTernaryLogic))
-                && identifier.Name.Equals("null", _options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-                result = LinqExpression.Constant(null, typeof(object));
-            else
-                throw new NCalcParameterNotDefinedException(identifier.Name);
+            try
+            {
+                return LinqExpression.PropertyOrField(_context, identifierName);
+            }
+            catch (ArgumentException) when (isNullValue)
+            {
+                return NullConstant;
+            }
         }
-        if (result is null && _context is not null)
-            result = LinqExpression.PropertyOrField(_context, identifier.Name);
 
-        /*if (result is not null && identifier is IndexedIdentifier indIdent)
+        var ignoreCase = _options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);
+        object? param = null;
+        if (_parameters is not null &&
+            (ignoreCase
+                ? EvaluationHelper.GetParameterValueFromListNoCase(_parameters, identifierName, out param)
+                : _parameters.TryGetValue(identifierName, out param)))
         {
-            LinqExpression indexer = indIdent.Index.Accept(this, cancellationToken);
-            var indexValue = ((Linq.LambdaExpression)indexer).Body;
-            var indexerProperty = result.Type.GetProperty("Item", new[] { typeof(int) });
-            if (indexerProperty is null)
-                throw new NCalcParameterIndexException(identifierName, $"{identifierName}, if used with an index, must denote a list");
-            var indexerAccess = LinqExpression.MakeIndex(result, indexerProperty, new[] { indexValue });
+            return param switch
+            {
+                // A parameter that is an expression is evaluated whenever the lambda runs
+                Expression parameterExpression => CallRuntime(nameof(LambdaRuntime.EvaluateParameterExpression), LinqExpression.Constant(parameterExpression), _expressionContextConstant),
+                AsyncExpression => throw new NCalcEvaluationException($"The value of the parameter '{identifierName}' is an AsyncExpression, which cannot be evaluated synchronously. Use an AsyncExpression for the outer expression or an Expression for the parameter.", identifier.Location),
+                null => NullConstant,
+                _ => LinqExpression.Constant(param)
+            };
+        }
 
-            result = indexerAccess;
-        }*/
-        if (result is null)
-            throw new NCalcParameterNotDefinedException(identifier.Name);
-        return result;
+        ExpressionParameter? dynamicParameter = null;
+        if (ignoreCase
+                ? EvaluationVisitor.GetParameterValueFromListNoCase(_expressionContext.DynamicParameters, identifierName, out dynamicParameter)
+                : _expressionContext.DynamicParameters.TryGetValue(identifierName, out dynamicParameter))
+        {
+            return dynamicParameter is null
+                ? NullConstant
+                : CallRuntime(nameof(LambdaRuntime.EvaluateDynamicParameter), LinqExpression.Constant(dynamicParameter), LinqExpression.Constant(identifier), _expressionContextConstant);
+        }
+
+        if (isNullValue)
+            return NullConstant;
+
+        throw new NCalcParameterNotDefinedException(identifierName);
     }
 
     public LinqExpression Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        var newList = LinqExpression.New(typeof(List<object>));
-        return LinqExpression.ListInit(newList,
-            list.Select(e => LinqExpression.Convert(e.Accept(this), typeof(object)))
-        );
+        var newList = LinqExpression.New(typeof(List<object?>));
+        if (list.Count == 0)
+            return newList;
+        return LinqExpression.ListInit(newList, list.Select(e => Box(e.Accept(this, cancellationToken))));
     }
 
     public LinqExpression Visit(FunctionExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        throw new NotImplementedException();
+        throw new NotSupportedException("Function declarations are not supported in lambda expressions.");
     }
+
     public LinqExpression Visit(StatementSequence expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         List<LinqExpression> expressions = [];
         foreach (LogicalExpression expr in expression)
         {
-            expressions.Add(expr.Accept(this, cancellationToken));
+            expressions.Add(Box(expr.Accept(this, cancellationToken)));
         }
-        return SkipAndReturn(expressions);
+
+        // As in the evaluators, the value is that of the last statement
+        expressions[^1] = CallRuntime(nameof(LambdaRuntime.ValueOrNull), expressions[^1], _expressionContextConstant);
+        return LinqExpression.Block(typeof(object), expressions);
     }
+
+    /// <summary>
+    /// Converts the compiled expression to the result type of the lambda.
+    /// </summary>
+    internal LinqExpression ConvertToResultType(LinqExpression body, Type resultType)
+    {
+        if (body.Type == resultType)
+            return body;
+
+        // A value whose type is known only when the lambda runs is converted as a cast converts it
+        if (body.Type == typeof(object))
+            return ConvertAtRuntime(body, resultType);
+
+        // With OverflowProtection, a result that does not fit in the result type throws instead of being truncated
+        return _options.HasFlag(ExpressionOptions.OverflowProtection)
+            ? LinqExpression.ConvertChecked(body, resultType)
+            : LinqExpression.Convert(body, resultType);
+    }
+
+    private LinqExpression ConvertAtRuntime(LinqExpression value, Type type)
+    {
+        var method = typeof(LambdaRuntime).GetMethod(nameof(LambdaRuntime.ConvertResult), BindingFlags.NonPublic | BindingFlags.Static)!.MakeGenericMethod(type);
+        return LinqExpression.Call(method, Box(value), _expressionContextConstant);
+    }
+
+    private LinqExpression Assignment(BinaryExpression expression, CancellationToken cancellationToken)
+    {
+        // Without a context object the parameters are compiled as constants, so an assignment could not change them
+        if (_context is null)
+            throw new NotSupportedException("Assignments are supported in lambda expressions only with a context object whose members are assigned to (ToLambda<TContext, TResult>).");
+
+        if (expression.LeftExpression is not Identifier identifier)
+            throw new NotSupportedException("Indexed access to parameters is not supported for Lambda expressions. Please submit an issue to https://github.com/Allied-Bits-Ltd/ncalc/issues if you need this support.");
+
+        var member = LinqExpression.PropertyOrField(_context, identifier.Name);
+        var node = LinqExpression.Constant(expression);
+        LinqExpression newValue;
+
+        if (expression.Type == BinaryExpressionType.Assignment)
+        {
+            newValue = CallRuntime(nameof(LambdaRuntime.ValueOrNull), Box(expression.RightExpression.Accept(this, cancellationToken)), _expressionContextConstant);
+        }
+        else
+        {
+            // As in the evaluators, a null value of the member gives null and leaves it unchanged
+            var leftValue = LinqExpression.Variable(typeof(object), "left");
+            var right = Box(expression.RightExpression.Accept(this, cancellationToken));
+            newValue = LinqExpression.Block(
+                [leftValue],
+                LinqExpression.Assign(leftValue, Box(member)),
+                LinqExpression.Condition(
+                    CallRuntime(nameof(LambdaRuntime.IsNull), leftValue, _expressionContextConstant),
+                    LinqExpression.Constant(LambdaRuntime.NoUpdate),
+                    CallRuntime(nameof(LambdaRuntime.CompoundAssignment), leftValue, right, node, _expressionContextConstant)));
+        }
+
+        var value = LinqExpression.Variable(typeof(object), "value");
+        return LinqExpression.Block(
+            [value],
+            LinqExpression.Assign(value, newValue),
+            LinqExpression.Condition(
+                LinqExpression.ReferenceEqual(value, LinqExpression.Constant(LambdaRuntime.NoUpdate)),
+                NullConstant,
+                LinqExpression.Block(
+                    LinqExpression.IfThen(
+                        CallRuntime(nameof(LambdaRuntime.ShouldUpdate), value, LinqExpression.Constant(identifier), _expressionContextConstant),
+                        LinqExpression.Assign(member, ConvertAtRuntime(value, member.Type))),
+                    value)));
+    }
+
+    private LinqExpression IfFunction(FunctionCall function, CancellationToken cancellationToken)
+    {
+        var parameters = function.Parameters;
+        if (parameters.Count is < 2 or > 3)
+            return ThrowEvaluationException("iff() takes 2 or 3 arguments", function.Location);
+
+        // As in the evaluators, the third argument is optional, and the result is null when the condition is false
+        var condition = CallRuntime(nameof(LambdaRuntime.ToBooleanRaw), Box(parameters[0].Accept(this, cancellationToken)), LinqExpression.Constant("iff"),
+            NodeConstant(parameters[0]), _expressionContextConstant);
+        var ifTrue = Box(parameters[1].Accept(this, cancellationToken));
+        var ifFalse = parameters.Count == 3 ? Box(parameters[2].Accept(this, cancellationToken)) : NullConstant;
+        return LinqExpression.Condition(condition, ifTrue, ifFalse);
+    }
+
+    private LinqExpression IfsFunction(FunctionCall function, CancellationToken cancellationToken)
+    {
+        var parameters = function.Parameters;
+        if (parameters.Count < 2)
+            return ThrowEvaluationException("ifs() takes at least 2 arguments", function.Location);
+
+        var args = parameters.Select(p => Box(p.Accept(this, cancellationToken))).ToArray();
+
+        // Pairs of a condition and a value, optionally followed by the default value; null when no condition is true
+        LinqExpression result = args.Length % 2 == 1 ? args[^1] : NullConstant;
+        for (int i = (args.Length / 2 - 1) * 2; i >= 0; i -= 2)
+        {
+            var condition = CallRuntime(nameof(LambdaRuntime.ToBooleanRaw), args[i], LinqExpression.Constant("ifs"), NodeConstant(parameters[i]), _expressionContextConstant);
+            result = LinqExpression.Condition(condition, args[i + 1], result);
+        }
+        return result;
+    }
+
+    private LinqExpression InFunction(FunctionCall function, CancellationToken cancellationToken)
+    {
+        var parameters = function.Parameters;
+        if (parameters.Count < 2)
+            return ThrowEvaluationException("in() takes at least 2 arguments", function.Location);
+
+        // The same equality as the "=" operator; the items are evaluated until one is equal
+        var value = LinqExpression.Variable(typeof(object), "value");
+        LinqExpression? found = null;
+        for (var i = 1; i < parameters.Count; i++)
+        {
+            var item = CallRuntime(nameof(LambdaRuntime.InFunctionItem), value, Box(parameters[i].Accept(this, cancellationToken)), NodeConstant(parameters[i]), _expressionContextConstant);
+            found = found is null ? item : LinqExpression.OrElse(found, item);
+        }
+
+        return LinqExpression.Block(
+            [value],
+            LinqExpression.Assign(value, Box(parameters[0].Accept(this, cancellationToken))),
+            found!);
+    }
+
+    private LinqExpression PercentFunction(string method, LinqExpression[] args)
+    {
+        // The second argument is not evaluated when the first one is null
+        var arg0 = LinqExpression.Variable(typeof(object), "arg0");
+        var arg1 = LinqExpression.Variable(typeof(object), "arg1");
+        return LinqExpression.Block(
+            [arg0, arg1],
+            LinqExpression.Assign(arg0, Box(args[0])),
+            LinqExpression.Condition(
+                LinqExpression.ReferenceEqual(arg0, NullConstant),
+                NullConstant,
+                LinqExpression.Block(
+                    LinqExpression.Assign(arg1, Box(args[1])),
+                    LinqExpression.Condition(
+                        LinqExpression.ReferenceEqual(arg1, NullConstant),
+                        NullConstant,
+                        CallRuntime(method, arg0, arg1, _expressionContextConstant)))));
+    }
+
+    // An error that the evaluators report when the function is evaluated
+    private static LinqExpression ThrowEvaluationException(string message, ExpressionLocation location)
+    {
+        var constructor = typeof(NCalcEvaluationException).GetConstructor([typeof(string), typeof(ExpressionLocation)])!;
+        return LinqExpression.Throw(LinqExpression.New(constructor, LinqExpression.Constant(message), LinqExpression.Constant(location)), typeof(object));
+    }
+
+    private static LinqExpression Box(LinqExpression expression)
+        => expression.Type == typeof(object) ? expression : LinqExpression.Convert(expression, typeof(object));
+
+    private static LinqExpression NodeConstant(LogicalExpression expression)
+        => LinqExpression.Constant(expression, typeof(LogicalExpression));
+
+    private static Linq.MethodCallExpression CallRuntime(string name, params LinqExpression[] arguments)
+        => LinqExpression.Call(typeof(LambdaRuntime).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!, arguments);
 
     private ExtendedMethodInfo? FindMethod(string methodName, LinqExpression[] methodArgs, StringComparison stringComparison)
     {
@@ -415,7 +551,32 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             foreach (var potentialMethod in methods)
             {
                 var methodParams = potentialMethod.GetParameters();
-                var preparedArguments = LinqUtils.PrepareMethodArgumentsIfValid(methodParams, methodArgs);
+
+                // The value of an operator is known only when the lambda runs: it is converted to the type of the parameter then
+                var conversions = 0;
+                var arguments = methodArgs;
+                if (methodParams.Length > 0)
+                {
+                    var hasParamsKeyword = methodParams[^1].IsDefined(typeof(ParamArrayAttribute));
+                    arguments = new LinqExpression[methodArgs.Length];
+                    for (var i = 0; i < methodArgs.Length; i++)
+                    {
+                        var parameterType = hasParamsKeyword && i >= methodParams.Length - 1
+                            ? methodParams[^1].ParameterType.GetElementType()
+                            : i < methodParams.Length ? methodParams[i].ParameterType : null;
+                        if (methodArgs[i].Type == objectType && parameterType is not null && parameterType != objectType)
+                        {
+                            arguments[i] = ConvertAtRuntime(methodArgs[i], parameterType);
+                            conversions++;
+                        }
+                        else
+                        {
+                            arguments[i] = methodArgs[i];
+                        }
+                    }
+                }
+
+                var preparedArguments = LinqUtils.PrepareMethodArgumentsIfValid(methodParams, arguments);
 
                 if (preparedArguments != null)
                 {
@@ -423,7 +584,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                     {
                         MethodInfo = potentialMethod,
                         PreparedArguments = preparedArguments.Item2,
-                        Score = preparedArguments.Item1
+                        Score = preparedArguments.Item1 + conversions * methodArgs.Length
                     };
 
                     if (candidate.Score == 0)
@@ -486,474 +647,6 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         }
     }
 
-    private static Linq.Expression<Func<BigInteger>> ConvertToBigInteger(LinqExpression intExpr)
-    {
-        if (intExpr.Type != typeof(int) && intExpr.Type != typeof(long) && intExpr.Type != typeof(uint) && intExpr.Type != typeof(ulong) && intExpr.Type != typeof(string) && intExpr.Type != typeof(decimal) && intExpr.Type != typeof(double) && intExpr.Type != typeof(float))
-            throw new InvalidOperationException("Expression must return a signed or unsigned int or long.");
-
-        // Create the constructor call: new BigInteger(longExpr.Body)
-        if (intExpr.Type == typeof(string))
-        {
-            MethodInfo? methodInfo = typeof(BigInteger).GetMethod("Parse", [typeof(string)]);
-            if (methodInfo is null)
-                throw new InvalidOperationException($"Could not find a BigInteger Parse method that takes a parameter of type '{intExpr.Type}'");
-            var newExpr = LinqExpression.Call(methodInfo, intExpr);
-
-            // Build the new lambda expression
-            return LinqExpression.Lambda<Func<BigInteger>>(newExpr);
-        }
-        else
-        {
-            ConstructorInfo? constructor = null;
-            if (intExpr.Type == typeof(Int32))
-                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(int) });
-            if (intExpr.Type == typeof(UInt32))
-                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(uint) });
-            if (intExpr.Type == typeof(Int64))
-                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(long) });
-            if (intExpr.Type == typeof(UInt64))
-                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(ulong) });
-            if (intExpr.Type == typeof(decimal))
-                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(decimal) });
-            if (intExpr.Type == typeof(double))
-                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(double) });
-            if (intExpr.Type == typeof(float))
-                constructor = typeof(BigInteger).GetConstructor(new[] { typeof(float) });
-
-            if (constructor is null)
-                throw new InvalidOperationException($"Could not find a BigInteger constructor that takes a parameter of type '{intExpr.Type}'");
-            var newExpr = LinqExpression.New(constructor!, intExpr);
-
-            // Build the new lambda expression
-            return LinqExpression.Lambda<Func<BigInteger>>(newExpr);
-        }
-    }
-
-    private void OnUpdateParameter(string name, NCalc.Handlers.UpdateParameterArgs args)
-    {
-        _expressionContext?.UpdateParameterHandler?.Invoke(name, args);
-    }
-
-/*
-    private LinqExpression SkipAndReturn(LinqExpression left, LinqExpression right)
-    {
-        // Combine into a block: evaluate both, return right
-        var block = LinqExpression.Block(
-            LinqExpression.Convert(left, typeof(object)), // Evaluate and discard
-            right // Result returned
-        );
-        return block;
-    }
-*/
-    private LinqExpression SkipAndReturn(IList<LinqExpression> expressions)
-    {
-        // Combine into a block: evaluate all, return last
-
-        List<LinqExpression> convertedExpressions = [];
-        for (int i = 0; i < expressions.Count - 1; i++)
-        {
-            convertedExpressions.Add(LinqExpression.Convert(expressions[i], typeof(object)));
-        }
-        LinqExpression last = expressions[^1];
-        convertedExpressions.Add(last);
-
-        var block = LinqExpression.Block(last.Type, convertedExpressions);
-        return block;
-    }
-
-    private LinqExpression UpdateParameter<T>(LogicalExpression leftExpression, LinqExpression valueExpr)
-    {
-        if (leftExpression is Identifier identifier)
-        {
-            var identifierName = identifier.Name;
-
-            var sideEffect = new Func<T, bool>((value) =>
-            {
-                var parameterArgs = new NCalc.Handlers.UpdateParameterArgs(identifierName, identifier.Id, value);
-                OnUpdateParameter(identifierName, parameterArgs);
-
-                if (parameterArgs.UpdateParameterLists)
-                {
-                    if (_parameters is not null)
-                    {
-                        if (_expressionContext?.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) == true)
-                            EvaluationHelper.SetParameterValueFromListNoCase(_parameters, identifierName, value);
-                        else
-                            _parameters[identifierName] = value;
-                    }
-                    if (_context != null)
-                        return true;
-                }
-                return false;
-            });
-
-            var convertToT = LinqExpression.Convert(valueExpr, typeof(T));
-
-            Linq.LambdaExpression sideEffectFunc = bool (T x) => sideEffect(x);
-
-            var invokeSideEffect = LinqExpression.Invoke(sideEffectFunc, convertToT);
-
-            // Variable to store evaluated result
-            var valueVar = LinqExpression.Variable(typeof(T), "value");
-            var needUpdateParamsVar = LinqExpression.Variable(typeof(bool), "needUpdateParams");
-
-            // If required, update parameters
-            LinqExpression maybeUpdateParameters;
-            if (_context is null)
-                maybeUpdateParameters = LinqExpression.Empty();
-            else
-            {
-                var varType = LinqExpression.PropertyOrField(_context, identifierName).Type;
-                if (valueExpr.Type != varType)
-                    maybeUpdateParameters = LinqExpression.Assign(LinqExpression.PropertyOrField(_context, identifierName), LinqExpression.Convert(valueExpr, varType));
-                else
-                    maybeUpdateParameters = LinqExpression.Assign(LinqExpression.PropertyOrField(_context, identifierName), valueExpr);
-            }
-
-            // Sequence: run side-effect, then return value
-            var block = LinqExpression.Block(
-                [valueVar, needUpdateParamsVar],
-                LinqExpression.Assign(valueVar, convertToT),
-                LinqExpression.Assign(needUpdateParamsVar, invokeSideEffect),
-                LinqExpression.IfThen(needUpdateParamsVar, maybeUpdateParameters),
-                valueVar
-            );
-            return block;
-        }
-        else
-        {
-            return valueExpr;
-        }
-    }
-
-    private LinqExpression BooleanXOr(LinqExpression left, LinqExpression right)
-    {
-        if (left is null) throw new ArgumentNullException(nameof(left));
-        if (right is null) throw new ArgumentNullException(nameof(right));
-
-        // Convert each to boolean: true if not default(T), false if default(T)
-        LinqExpression leftIsDefault = LinqExpression.Equal(left, LinqExpression.Default(left.Type));
-        LinqExpression leftAsBool = LinqExpression.Not(leftIsDefault);
-
-        LinqExpression rightIsDefault = LinqExpression.Equal(right, LinqExpression.Default(right.Type));
-        LinqExpression rightAsBool = LinqExpression.Not(rightIsDefault);
-
-        // Apply boolean XOR: A ^ B
-        return LinqExpression.ExclusiveOr(leftAsBool, rightAsBool);
-    }
-
-    private LinqExpression Factorial(LinqExpression left, LinqExpression right)
-    {
-        left = LinqUtils.UnwrapNullable(left);
-        right = LinqUtils.UnwrapNullable(right);
-
-        if (left.Type == typeof(BigInteger) && right.Type == typeof(BigInteger))
-        {
-            MethodInfo? factorialMethod = typeof(MathHelper).GetMethod("Factorial", [typeof(object), typeof(object), typeof(MathHelperOptions)]);
-            if (factorialMethod != null)
-            {
-                return LinqExpression.Call(factorialMethod, left, right, LinqExpression.Constant(new MathHelperOptions()));
-            }
-        }
-        else
-        if (left.Type == typeof(BigInteger))
-        {
-            MethodInfo? factorialMethod = typeof(MathHelper).GetMethod("Factorial", [typeof(object), typeof(object), typeof(MathHelperOptions)]);
-            if (factorialMethod != null)
-            {
-                Linq.Expression<Func<long, BigInteger>> expr = x => new BigInteger(x);
-                return LinqExpression.Call(factorialMethod, left, ConvertToBigInteger(right), LinqExpression.Constant(new MathHelperOptions()));
-            }
-        }
-        else
-        if (right.Type == typeof(BigInteger))
-        {
-            MethodInfo? factorialMethod = typeof(MathHelper).GetMethod("Factorial", [typeof(object), typeof(object), typeof(MathHelperOptions)]);
-            if (factorialMethod != null)
-            {
-                Linq.Expression<Func<long, BigInteger>> expr = x => new BigInteger(x);
-                return LinqExpression.Call(factorialMethod, ConvertToBigInteger(left), right, LinqExpression.Constant(new MathHelperOptions()));
-            }
-        }
-        else
-        {
-            MethodInfo? factorialMethod = typeof(MathHelper).GetMethod("Factorial", [typeof(long), typeof(long), typeof(MathHelperOptions)]);
-            if (factorialMethod != null)
-            {
-                return LinqExpression.Call(factorialMethod, LinqExpression.Convert(left, typeof(long)), LinqExpression.Convert(right, typeof(long)), LinqExpression.Constant(new MathHelperOptions()));
-            }
-        }
-        return LinqExpression.Constant(0);
-    }
-
-    private LinqExpression Sqrt(LinqExpression left)
-    {
-        left = LinqUtils.UnwrapNullable(left);
-        MethodInfo? sqrtMethod = typeof(Math).GetMethod("Sqrt");
-        if (sqrtMethod != null)
-        {
-            return LinqExpression.Call(sqrtMethod, LinqExpression.Convert(left, typeof(double)));
-        }
-        return LinqExpression.Constant(0);
-    }
-
-    private LinqExpression Frthrt(LinqExpression left)
-    {
-        left = LinqUtils.UnwrapNullable(left);
-        MethodInfo? sqrtMethod = typeof(Math).GetMethod("Sqrt");
-        if (sqrtMethod != null)
-        {
-            return LinqExpression.Call(sqrtMethod, LinqExpression.Call(sqrtMethod, LinqExpression.Convert(left, typeof(double))));
-        }
-        return LinqExpression.Constant(0);
-    }
-
-#if NET8_0_OR_GREATER
-    private LinqExpression Cbrt(LinqExpression left)
-    {
-        left = LinqUtils.UnwrapNullable(left);
-        MethodInfo? cbrtMethod = typeof(Math).GetMethod("Cbrt");
-        if (cbrtMethod != null)
-        {
-            return LinqExpression.Call(cbrtMethod, LinqExpression.Convert(left, typeof(double)));
-        }
-        return LinqExpression.Constant(0);
-    }
-#endif
-        private LinqExpression WithCommonNumericType(LinqExpression left, LinqExpression right,
-        Func<LinqExpression, LinqExpression, LinqExpression> action,
-        BinaryExpressionType expressionType = BinaryExpressionType.Unknown)
-    {
-        left = LinqUtils.UnwrapNullable(left);
-        right = LinqUtils.UnwrapNullable(right);
-
-        if (_options.HasFlag(ExpressionOptions.AllowBooleanCalculation))
-        {
-            if (left.Type == typeof(bool))
-            {
-                left = LinqExpression.Condition(left, LinqExpression.Constant(1.0), LinqExpression.Constant(0.0));
-            }
-
-            if (right.Type == typeof(bool))
-            {
-                right = LinqExpression.Condition(right, LinqExpression.Constant(1.0), LinqExpression.Constant(0.0));
-            }
-        }
-
-        if (_options.HasFlag(ExpressionOptions.SupportTimeOperations))
-        {
-            if ((left.Type == typeof(DateTime)) && (right.Type == typeof(DateTime)))
-            {
-                if (expressionType == BinaryExpressionType.Minus)
-                {
-                    MethodInfo? subtractMethod = typeof(DateTime).GetMethod("Subtract", [typeof(DateTime)]);
-                    if (subtractMethod != null)
-                    {
-                        return LinqExpression.Call(left, subtractMethod, right);
-                    }
-                }
-                return LinqExpression.Constant(0);
-            }
-            else
-            if ((left.Type == typeof(DateTime)) && (right.Type == typeof(TimeSpan)))
-            {
-                switch (expressionType)
-                {
-                    case BinaryExpressionType.Plus:
-                        MethodInfo? addMethod = typeof(DateTime).GetMethod("Add", [typeof(TimeSpan)]);
-                        if (addMethod != null)
-                        {
-                            return LinqExpression.Call(left, addMethod, right);
-                        }
-                        break;
-                    case BinaryExpressionType.Minus:
-                        MethodInfo? subtractMethod = typeof(DateTime).GetMethod("Subtract", [typeof(TimeSpan)]);
-                        if (subtractMethod != null)
-                        {
-                            return LinqExpression.Call(left, subtractMethod, right);
-                        }
-                        break;
-                }
-                return LinqExpression.Constant(0);
-            }
-            else
-            if ((left.Type == typeof(TimeSpan)) && (right.Type == typeof(TimeSpan)))
-            {
-                switch (expressionType)
-                {
-                    case BinaryExpressionType.Plus:
-                        MethodInfo? addMethod = typeof(TimeSpan).GetMethod("Add", [typeof(TimeSpan)]);
-                        if (addMethod != null)
-                        {
-                            return LinqExpression.Call(left, addMethod, right);
-                        }
-                        break;
-                    case BinaryExpressionType.Minus:
-                        MethodInfo? subtractMethod = typeof(TimeSpan).GetMethod("Subtract", [typeof(TimeSpan)]);
-                        if (subtractMethod != null)
-                        {
-                            return LinqExpression.Call(left, subtractMethod, right);
-                        }
-                        break;
-                }
-                return LinqExpression.Constant(0);
-            }
-            else
-            if ((left.Type == typeof(TimeSpan)) && (right.Type == typeof(DateTime)))
-            {
-                if (expressionType == BinaryExpressionType.Plus)
-                {
-                    MethodInfo? addMethod = typeof(DateTime).GetMethod("Add", [typeof(TimeSpan)]);
-                    if (addMethod != null)
-                    {
-                        return LinqExpression.Call(right, addMethod, left);
-                    }
-                }
-                return LinqExpression.Constant(0);
-            }
-        }
-
-        var type = TypeHelper.GetMostPreciseNumberType(left.Type, right.Type);
-        if (expressionType == BinaryExpressionType.Div || expressionType == BinaryExpressionType.DivAssignment)
-        {
-            if (type != typeof(decimal))
-            {
-                type = typeof(double);
-            }
-            if (left.Type != type)
-            {
-                left = LinqExpression.Convert(left, type);
-            }
-            if (right.Type != type)
-            {
-                right = LinqExpression.Convert(right, type);
-            }
-            return action(left, right);
-        }
-        if (type != null)
-        {
-            if (left.Type != type)
-            {
-                left = LinqExpression.Convert(left, type);
-            }
-
-            if (right.Type != type)
-            {
-                right = LinqExpression.Convert(right, type);
-            }
-        }
-
-        if (typeof(string) != left.Type && typeof(string) != right.Type)
-            return action(left, right);
-
-        LinqExpression comparer;
-        if (_caseInsensitiveStringComparer)
-        {
-            if (_ordinalStringComparer)
-                comparer = LinqExpression.Constant(StringComparer.OrdinalIgnoreCase);
-            else
-                comparer = LinqExpression.Constant(StringComparer.CurrentCultureIgnoreCase);
-        }
-        else
-            comparer = LinqExpression.Constant(StringComparer.Ordinal);
-
-        switch (expressionType)
-        {
-            case BinaryExpressionType.Equal:
-                return LinqExpression.Call(comparer, StringComparerEqualsMethod, [left, right]);
-            case BinaryExpressionType.NotEqual:
-                return LinqExpression.Not(
-                    LinqExpression.Call(comparer, StringComparerEqualsMethod, [left, right]));
-            case BinaryExpressionType.GreaterOrEqual:
-                return LinqExpression.GreaterThanOrEqual(
-                    LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
-                    LinqExpression.Constant(0));
-            case BinaryExpressionType.LessOrEqual:
-                return LinqExpression.LessThanOrEqual(
-                    LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
-                    LinqExpression.Constant(0));
-            case BinaryExpressionType.Greater:
-                return LinqExpression.GreaterThan(
-                    LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
-                    LinqExpression.Constant(0));
-            case BinaryExpressionType.Less:
-                return LinqExpression.LessThan(
-                    LinqExpression.Call(comparer, StringComparerCompareMethod, [left, right]),
-                    LinqExpression.Constant(0));
-        }
-
-        return action(left, right);
-    }
-
-    private LinqExpression WrapWithPercent(LinqExpression valueExpression)
-    {
-        ConstructorInfo? constructor = typeof(Percent).GetConstructor(new[] { typeof(object), typeof(Type) });
-        if (constructor is null)
-            throw new InvalidOperationException($"Could not find a Percent constructor that takes a parameter of type '{valueExpression.Type.Name}'");
-
-        LinqExpression constructorArgument = LinqExpression.Convert(valueExpression, typeof(object));
-
-        Linq.NewExpression newExpr = LinqExpression.New(constructor!, constructorArgument, LinqExpression.Constant(valueExpression.Type));
-
-        return newExpr;
-        //return LinqExpression.Lambda<Func<Percent>>(newExpr);
-    }
-
-    private LinqExpression UnwrapPercentValue(LinqExpression expression)
-    {
-        if (expression.Type == typeof(Percent))
-        {
-            return Linq.Expression.Property(expression, nameof(Percent.Value));
-
-            /*
-            Linq.ParameterExpression percentParameter = Linq.Expression.Parameter(typeof(Percent), "p");
-
-            // The body of the final expression will need to:
-            // a) Get the Percent object (from percentSourceExpression)
-            // b) Get its Value property (p.Value)
-            // c) Get its OriginalType property (p.OriginalType)
-            // d) Call Convert.ChangeType(p.Value, p.OriginalType)
-
-            // Find the MethodInfo for Convert.ChangeType(object value, Type conversionType)
-            MethodInfo? changeTypeMethod = typeof(Convert).GetMethod(
-                nameof(Convert.ChangeType),
-                new[] { typeof(object), typeof(Type) }
-            );
-
-            if (changeTypeMethod is null)
-                throw new InvalidOperationException("Could not find the 'Convert.ChangeType' method.");
-
-            // Expression to access the 'Value' property from the 'Percent' object
-            // (This 'p.Value' needs to come from the result of percentSourceExpression)
-            Linq.MemberExpression valueProperty = Linq.Expression.Property(percentParameter, nameof(Percent.Value));
-
-            // Expression to access the 'OriginalType' property from the 'Percent' object
-            // (This 'p.OriginalType' needs to come from the result of percentSourceExpression)
-            Linq.MemberExpression originalTypeProperty = Linq.Expression.Property(percentParameter, nameof(Percent.OriginalType));
-
-            // The problem: we need the 'percentParameter' to be the *result* of 'percentSourceExpression'.
-            // We can achieve this by making the percentSourceExpression the initial value
-            // of a BlockExpression, and then using a ParameterExpression to represent that value.
-
-            Linq.ParameterExpression tempPercent = Linq.Expression.Variable(typeof(Percent), "tempPercent");
-
-            Linq.BlockExpression conversionBlock = Linq.Expression.Block(
-                new[] { tempPercent }, // Declare local variable tempPercent
-                Linq.Expression.Assign(tempPercent, expression), // Assign the result of sourceExpression to tempPercent
-                Linq.Expression.Call(
-                    changeTypeMethod,
-                    Linq.Expression.Convert(Linq.Expression.Property(tempPercent, nameof(Percent.Value)), typeof(object)), // Cast long to object for ChangeType
-                    Linq.Expression.Property(tempPercent, nameof(Percent.OriginalType))
-                )
-            );
-
-            return conversionBlock;
-            */
-        }
-
-        return LinqExpression.Constant(0);
-    }
-
     public static LinqExpression ConvertObjectExprToDouble(LinqExpression inputExpr)
     {
         // if (inputExpr is int) return (double)(int)inputExpr;
@@ -986,161 +679,6 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         );
     }
 
-    /// <summary>
-    /// Operations with a percent value being only the right operand
-    /// </summary>
-    private LinqExpression WithPercent(LinqExpression left, LinqExpression right,
-        Func<LinqExpression, LinqExpression, LinqExpression> action,
-        BinaryExpressionType expressionType = BinaryExpressionType.Unknown)
-    {
-        left = LinqUtils.UnwrapNullable(left);
-        right = LinqUtils.UnwrapNullable(right);
-
-        LinqExpression threshold = LinqExpression.Constant(100000);
-        LinqExpression cents = LinqExpression.Constant(100);
-
-        Type leftType = left.Type;
-        Type rightType = typeof(double);
-
-        var type = TypeHelper.GetMostPreciseNumberType(leftType, rightType);
-        if (expressionType == BinaryExpressionType.Div || expressionType == BinaryExpressionType.DivAssignment)
-        {
-            if (type != typeof(decimal))
-            {
-                type = typeof(double);
-            }
-        }
-
-        if (type != null)
-        {
-            if (left.Type != type)
-            {
-                left = LinqExpression.Convert(left, type);
-            }
-
-            /*if (right.Type != type)
-            {
-                right = LinqExpression.Convert(right, type);
-            }
-            */
-            if (threshold.Type != type)
-            {
-                threshold = LinqExpression.Convert(threshold, type);
-            }
-            if (cents.Type != type)
-            {
-                cents = LinqExpression.Convert(cents, type);
-            }
-        }
-        right = ConvertObjectExprToDouble(right);
-
-        if (typeof(string) != left.Type && typeof(string) != right.Type)
-        {
-            switch (expressionType)
-            {
-                case BinaryExpressionType.Times:
-                    return LinqExpression.Condition(
-                        LinqExpression.GreaterThanOrEqual(left, threshold),
-                        action(left, LinqExpression.Divide(right, cents)),
-                        LinqExpression.Divide(action(left, right), cents));
-                case BinaryExpressionType.Div:
-                        return action(LinqExpression.Multiply(left, cents), right);
-                case BinaryExpressionType.Plus:
-                case BinaryExpressionType.Minus:
-                    LinqExpression actionResult = action(cents, right);
-                    return LinqExpression.Divide(_checked ? LinqExpression.MultiplyChecked(left, actionResult) : LinqExpression.Multiply(left, actionResult), cents);
-            }
-            return action(left, right);
-        }
-
-        return LinqExpression.Constant(0);
-    }
-
-    /// <summary>
-    /// Operations with a percent value being the left operand or both operands
-    /// </summary>
-    private LinqExpression OfPercentAsNumeric(LinqExpression left, LinqExpression right,
-        Func<LinqExpression, LinqExpression, LinqExpression> action,
-        BinaryExpressionType expressionType = BinaryExpressionType.Unknown)
-    {
-        left = LinqUtils.UnwrapNullable(left);
-        right = LinqUtils.UnwrapNullable(right);
-
-        Type leftType = left.Type;
-        Type rightType = right.Type;
-
-        bool forceLeftConversion = false;
-        bool forceRightConversion = false;
-
-        if (leftType == typeof(object))
-        {
-            leftType = typeof(double);
-            forceLeftConversion = true;
-        }
-
-        if (rightType == typeof(object))
-        {
-            rightType = typeof(double);
-            forceRightConversion = true;
-        }
-
-        var type = TypeHelper.GetMostPreciseNumberType(leftType, rightType);
-        if (expressionType == BinaryExpressionType.Div || expressionType == BinaryExpressionType.DivAssignment)
-        {
-            if (type != typeof(decimal))
-            {
-                type = typeof(double);
-            }
-        }
-
-        if (type != null)
-        {
-            if (left.Type != type && !forceLeftConversion)
-            {
-                left = LinqExpression.Convert(left, type);
-            }
-
-            if (right.Type != type && !forceRightConversion)
-            {
-                right = LinqExpression.Convert(right, type);
-            }
-        }
-
-        // this is the value that came from Percent
-        if (forceLeftConversion)
-            left = ConvertObjectExprToDouble(left);
-        if (forceRightConversion)
-            right = ConvertObjectExprToDouble(right);
-
-        if (typeof(string) != left.Type && typeof(string) != right.Type)
-        {
-            LinqExpression result;
-            switch (expressionType)
-            {
-                case BinaryExpressionType.Times:
-                case BinaryExpressionType.Div:
-                case BinaryExpressionType.Plus:
-                case BinaryExpressionType.Minus:
-                    result = action(left, right);
-                    break;
-                default:
-                    result = LinqExpression.Constant(0);
-                    break;
-            }
-
-            return result;
-        }
-        return LinqExpression.Constant(0);
-    }
-
-    private LinqExpression OfPercentAsPercent(LinqExpression left, LinqExpression right,
-        Func<LinqExpression, LinqExpression, LinqExpression> action,
-        BinaryExpressionType expressionType = BinaryExpressionType.Unknown)
-    {
-        LinqExpression result = OfPercentAsNumeric(left, right, action, expressionType);
-        return WrapWithPercent(result);
-    }
-
     public static LinqExpression BuildThrowNCalcFlowControl(LinqExpression returnValueExpr, ExpressionLocation location)
     {
         if (returnValueExpr is null) throw new ArgumentNullException(nameof(returnValueExpr));
@@ -1162,91 +700,6 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
         // throw new NCalcFlowControl(...)
         return LinqExpression.Throw(newException);
-    }
-
-        private LinqExpression InOperator(LinqExpression left, LinqExpression arr)
-    {
-        if (arr is null) return LinqExpression.Constant(false);
-
-        // A value in a string is a substring, as in the evaluators
-        if (arr.Type == typeof(string))
-        {
-            var leftString = left.Type == typeof(string)
-                ? left
-                : LinqExpression.Call(typeof(Convert).GetMethod(nameof(Convert.ToString), [typeof(object)])!, LinqExpression.Convert(left, typeof(object)));
-            return LinqExpression.Call(arr, typeof(string).GetMethod(nameof(string.Contains), [typeof(string)])!, leftString);
-        }
-
-        if (!typeof(IEnumerable).IsAssignableFrom(arr.Type))
-            return LinqExpression.Constant(false);
-
-        var isString = left.Type == typeof(string);
-
-        var castMi = typeof(Enumerable).GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .First(m => m.Name == nameof(Enumerable.Cast) && m.GetParameters().Length == 1)
-            .MakeGenericMethod(left.Type);
-        var containsMi = typeof(Enumerable).GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .First(m => m.Name == nameof(Enumerable.Contains) && m.GetParameters().Length == (isString ? 3 : 2))
-            .MakeGenericMethod(left.Type);
-
-        var source = LinqExpression.Call(castMi, LinqExpression.Convert(arr, typeof(IEnumerable)));
-
-        if (isString)
-        {
-            LinqExpression comparer =
-                _caseInsensitiveStringComparer
-                    ? (_ordinalStringComparer
-                        ? LinqExpression.Constant(StringComparer.OrdinalIgnoreCase)
-                        : LinqExpression.Constant(StringComparer.CurrentCultureIgnoreCase))
-                    : (_ordinalStringComparer
-                        ? LinqExpression.Constant(StringComparer.Ordinal)
-                        : LinqExpression.Constant(StringComparer.CurrentCulture));
-
-            return LinqExpression.Call(
-                null, containsMi, source, LinqExpression.Convert(left, typeof(string)), comparer);
-        }
-
-        return LinqExpression.Call(null, containsMi, source, left);
-    }
-
-    // A condition or the operand of "not" that is not a boolean is converted as the evaluators convert it (1 is true)
-    private static LinqExpression ToBoolean(LinqExpression value)
-        => value.Type == typeof(bool)
-            ? value
-            : LinqExpression.Call(typeof(Convert).GetMethod(nameof(Convert.ToBoolean), [typeof(object)])!, LinqExpression.Convert(value, typeof(object)));
-
-    // The branches of a condition must have one type: numbers are converted to the wider type, other values to object
-    private static void UnifyBranchTypes(ref LinqExpression first, ref LinqExpression second)
-    {
-        if (first.Type == second.Type)
-            return;
-
-        Type[] numberTypePriority = [typeof(double), typeof(decimal), typeof(float), typeof(ulong), typeof(long), typeof(uint), typeof(int), typeof(ushort), typeof(short), typeof(byte), typeof(sbyte)];
-        int index1 = Array.IndexOf(numberTypePriority, first.Type);
-        int index2 = Array.IndexOf(numberTypePriority, second.Type);
-        Type target = index1 >= 0 && index2 >= 0 ? numberTypePriority[Math.Min(index1, index2)] : typeof(object);
-        first = LinqExpression.Convert(first, target);
-        second = LinqExpression.Convert(second, target);
-    }
-
-    // As in the evaluators, the product of two 32-bit (or smaller) integers is computed in 64 bits, so 2147483647 * 2 does not wrap around
-    private LinqExpression Multiply(LinqExpression left, LinqExpression right)
-    {
-        Type[] small = [typeof(int), typeof(short), typeof(sbyte), typeof(byte), typeof(ushort)];
-        bool leftSmall = Array.IndexOf(small, left.Type) >= 0, rightSmall = Array.IndexOf(small, right.Type) >= 0;
-        if (left.Type == typeof(uint) && right.Type == typeof(uint))
-        {
-            left = LinqExpression.Convert(left, typeof(ulong));
-            right = LinqExpression.Convert(right, typeof(ulong));
-        }
-        else
-        if ((leftSmall || left.Type == typeof(uint)) && (rightSmall || right.Type == typeof(uint)))
-        {
-            left = LinqExpression.Convert(left, typeof(long));
-            right = LinqExpression.Convert(right, typeof(long));
-        }
-
-        return _checked ? WithCommonNumericType(left, right, LinqExpression.MultiplyChecked) : WithCommonNumericType(left, right, LinqExpression.Multiply);
     }
 
     public LinqExpression LikeOperator(LinqExpression leftValue, LinqExpression? rightValue)

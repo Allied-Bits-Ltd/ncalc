@@ -4,7 +4,8 @@ public class BuiltInFunctionsTestData : TheoryData<string, object, double?>
 {
     public BuiltInFunctionsTestData()
     {
-        Add("Abs(-1)", 1d, null);
+        Add("Abs(-1)", 1, null);
+        Add("Abs(-1.5)", 1.5d, null);
         Add("Acos(1)", 0d, null);
         Add("Asin(0)", 0d, null);
         Add("Atan(0)", 0d, null);

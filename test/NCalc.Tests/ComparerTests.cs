@@ -369,4 +369,66 @@ public class ComparerTests
             Assert.Equal(expected, await new AsyncExpression(text, options).EvaluateAsync(TestContext.Current.CancellationToken));
         }
     }
+
+    // NCALC-123
+    [Fact]
+    public void BoxedNumberComparerHashShouldMatchEqualityAcrossTypes()
+    {
+        var options = new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.None);
+        var comparer = new BoxedNumberComparer(options, options);
+
+        foreach (var (x, y) in new (object, object)[] { (0.1f, 0.1m), (0.30000000000000004, 0.3m), ('a', 97), (1.5f, 1.5), (1.50m, 1.5), (new BigDecimal(new BigInteger(150), -2), 1.5) })
+        {
+            Assert.True(comparer.Equals(x, y), $"{x} and {y} should be equal");
+            Assert.Equal(comparer.GetHashCode(x), comparer.GetHashCode(y));
+        }
+
+        // Values beyond the range of double are hashed too
+        var huge = new BigDecimal(BigInteger.One, 400);
+        Assert.Equal(comparer.GetHashCode(huge), comparer.GetHashCode(new BigDecimal(new BigInteger(10), 399)));
+        Assert.NotEqual(comparer.GetHashCode(huge), comparer.GetHashCode(new BigDecimal(BigInteger.One, 401)));
+    }
+
+    // NCALC-123
+    [Fact]
+    public void ToleranceComparersShouldHashEqualValuesAlike()
+    {
+        var complexComparer = new ComplexNumberToleranceComparer(0.1);
+        var a = new ComplexNumber(new BigDecimal(new BigInteger(104), -2), BigDecimal.Zero);   // 1.04
+        var b = new ComplexNumber(new BigDecimal(new BigInteger(106), -2), BigDecimal.Zero);   // 1.06
+        Assert.True(complexComparer.Equals(a, b));
+        Assert.Equal(complexComparer.GetHashCode(a), complexComparer.GetHashCode(b));
+        Assert.Single(new HashSet<ComplexNumber>([a, b], complexComparer));
+
+        var vectorComparer = new VectorToleranceComparer(0.1);
+        var va = new NCalc.Domain.Vector([new BigDecimal(new BigInteger(104), -2), BigDecimal.One]);
+        var vb = new NCalc.Domain.Vector([new BigDecimal(new BigInteger(106), -2), BigDecimal.One]);
+        Assert.True(vectorComparer.Equals(va, vb));
+        Assert.Equal(vectorComparer.GetHashCode(va), vectorComparer.GetHashCode(vb));
+        Assert.Single(new HashSet<NCalc.Domain.Vector>([va, vb], vectorComparer));
+    }
+
+    // NCALC-121
+    [Fact]
+    public void PercentShouldHaveValueEqualityAndInvariantText()
+    {
+        Assert.Equal(new Percent(1.5), new Percent(1.5));
+        Assert.Equal(new Percent(10), new Percent(10.0));
+        Assert.Equal(new Percent(10).GetHashCode(), new Percent(10.0).GetHashCode());
+        Assert.Equal(new Percent(1.5m).GetHashCode(), new Percent(1.50m).GetHashCode());
+        Assert.NotEqual(new Percent(1.5), new Percent(2.5));
+
+        var oldCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("sk-SK");
+            Assert.Equal("1.5%", new Percent(1.5).ToString());
+            Assert.Equal("1,5%", new Percent(1.5).ToString(null, CultureInfo.GetCultureInfo("sk-SK")));
+            Assert.Equal("1.5%", new Percent(new BigDecimal(new BigInteger(15), -1)).ToString());
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = oldCulture;
+        }
+    }
 }

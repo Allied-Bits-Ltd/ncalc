@@ -26,8 +26,8 @@ public partial class Expression
     {
         LogicalExpression ??= GetLogicalExpression(cancellationToken);
 
-        if (LogicalExpression is null)
-            throw Error!;
+        if (Error is not null)
+            throw Error;
 
         LambdaExpressionVisitor visitor;
         LinqParameterExpression? parameter = null;
@@ -41,14 +41,12 @@ public partial class Expression
             visitor = new(parameter, this.Context, null, Options);
         }
 
-        var body = LogicalExpression.Accept(visitor);
-        if (!IsSameType(body, typeof(TResult)))
-        {
-            // With OverflowProtection, a result that does not fit in TResult throws instead of being truncated
-            body = Options.HasFlag(ExpressionOptions.OverflowProtection)
-                ? LinqExpression.ConvertChecked(body, typeof(TResult))
-                : LinqExpression.Convert(body, typeof(TResult));
-        }
+        // A null expression (allowed with AllowNullOrEmptyExpressions) evaluates to null, so the lambda returns the default value
+        if (LogicalExpression is null)
+            return new() { Expression = LinqExpression.Default(typeof(TResult)), Parameter = parameter };
+
+        // With OverflowProtection, a result that does not fit in TResult throws instead of being truncated
+        var body = visitor.ConvertToResultType(LogicalExpression.Accept(visitor, cancellationToken), typeof(TResult));
 
         return new() { Expression = body, Parameter = parameter };
     }
@@ -92,7 +90,4 @@ public partial class Expression
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsVoidType<TContext>() => typeof(TContext) == typeof(Void);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsSameType(LinqExpression expression, Type targetType) => expression.Type == targetType;
 }

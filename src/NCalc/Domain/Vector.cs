@@ -643,15 +643,12 @@ namespace NCalc.Domain
         public int GetHashCode(Vector obj)
         {
             double tol = _tolerance ?? Vector.Tolerance;
-            int hash = 17;
             if (tol == 0.0)
                 return obj.GetHashCode();
-            for (int i = 0; i < obj.Dimensions; i++)
-            {
-                long bucket = (long)Math.Round(MathHelper.BigDecimalToDouble(obj[i] / tol));
-                hash = hash * 23 + bucket.GetHashCode();
-            }
-            return hash;
+
+            // Equality within a tolerance is not transitive, so components on both sides of any bucket boundary can be equal:
+            // only the number of dimensions can be hashed consistently with Equals
+            return obj.Dimensions;
         }
     }
 

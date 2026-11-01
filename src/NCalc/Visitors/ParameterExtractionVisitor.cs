@@ -8,6 +8,19 @@ namespace NCalc.Visitors;
 /// </summary>
 public sealed class ParameterExtractionVisitor : ILogicalExpressionVisitor<List<string>>
 {
+    // Whether names are looked up ignoring case (LowerCaseIdentifierLookup), which decides the names that refer to user-function parameters
+    private readonly bool _ignoreCase;
+
+    public ParameterExtractionVisitor()
+    {
+    }
+
+    /// <param name="ignoreCase">Whether the names are looked up ignoring case, as with <see cref="ExpressionOptions.LowerCaseIdentifierLookup"/>.</param>
+    public ParameterExtractionVisitor(bool ignoreCase)
+    {
+        _ignoreCase = ignoreCase;
+    }
+
     public List<string> Visit(Identifier identifier, CancellationToken cancellationToken = default) => [identifier.Name];
 
     public List<string> Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
@@ -100,11 +113,15 @@ public sealed class ParameterExtractionVisitor : ILogicalExpressionVisitor<List<
     public List<string> Visit(FunctionExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        // The parameters of a user-defined function are its own names, not parameters of the expression
+        // The parameters of a user-defined function are its own names, not parameters of the expression. They are compared as the
+        // evaluator looks them up: ordinally, or by their lower-case form with LowerCaseIdentifierLookup
         var function = expression.Function;
         var parameters = function.Body.Accept(this, cancellationToken);
         foreach (var parameter in function.Parameters)
-            parameters.RemoveAll(name => name.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase));
+        {
+            var parameterName = _ignoreCase ? parameter.Name.ToLowerInvariant() : parameter.Name;
+            parameters.RemoveAll(name => string.Equals(_ignoreCase ? name.ToLowerInvariant() : name, parameterName, StringComparison.Ordinal));
+        }
         return parameters;
     }
 

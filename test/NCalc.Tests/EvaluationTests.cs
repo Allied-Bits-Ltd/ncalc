@@ -136,8 +136,8 @@ public class EvaluationTests : TestBase
     [Fact]
     public void ShouldHandleCaseSensitiveness()
     {
-        Assert.Equal(1M, new Expression("aBs(-1)", ExpressionOptions.DecimalAsDefault | ExpressionOptions.IgnoreCaseAtBuiltInFunctions).Evaluate(TestContext.Current.CancellationToken));
-        Assert.Equal(1M, new Expression("Abs(-1)", ExpressionOptions.DecimalAsDefault).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(1.5M, new Expression("aBs(-1.5)", ExpressionOptions.DecimalAsDefault | ExpressionOptions.IgnoreCaseAtBuiltInFunctions).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(1.5M, new Expression("Abs(-1.5)", ExpressionOptions.DecimalAsDefault).Evaluate(TestContext.Current.CancellationToken));
 
         Assert.Throws<NCalcFunctionNotFoundException>(() => new Expression("aBs(-1)").Evaluate(TestContext.Current.CancellationToken));
     }
@@ -367,5 +367,26 @@ public class EvaluationTests : TestBase
         Assert.Same(alive[^1], last);
         // Milliseconds alone, a few seconds when the other tests load the machine; the quadratic version took about 2 minutes
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(20), $"30000 inserts took {stopwatch.Elapsed}");
+    }
+
+    // NCALC-131
+    [Theory]
+    [InlineData(ExpressionOptions.None)]
+    [InlineData(ExpressionOptions.NoCache)]
+    public async Task ParseErrorShouldBeClearedWhenTheExpressionParsesLater(ExpressionOptions options)
+    {
+        var token = TestContext.Current.CancellationToken;
+
+        var expression = new Expression("1 /* c */ + 2", options);
+        Assert.ThrowsAny<NCalcException>(() => expression.Evaluate(token));
+        expression.Options |= ExpressionOptions.SupportCStyleComments;
+        Assert.Equal(3, expression.Evaluate(token));
+        Assert.Null(expression.Error);
+
+        var asyncExpression = new AsyncExpression("1 /* c */ + 2", options);
+        await Assert.ThrowsAnyAsync<NCalcException>(async () => await asyncExpression.EvaluateAsync(token));
+        asyncExpression.Options |= ExpressionOptions.SupportCStyleComments;
+        Assert.Equal(3, await asyncExpression.EvaluateAsync(token));
+        Assert.Null(asyncExpression.Error);
     }
 }

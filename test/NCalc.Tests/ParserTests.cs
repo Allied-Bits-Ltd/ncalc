@@ -362,34 +362,62 @@ public class ParserTests
         Assert.ThrowsAny<NCalcException>(() => e.Evaluate(TestContext.Current.CancellationToken));
     }
 
-    public static TheoryData<string> NestedExpressionsWithAssignments => new()
+    // The prefix, the opening part repeated at each nesting level, the innermost operand, the closing part and the nesting depth
+    public static TheoryData<string, string, string, string, int> NestedExpressionsWithAssignments => new()
     {
-        new string('(', 1000) + "84" + new string(')', 1000),
-        string.Concat(Enumerable.Repeat("Abs(", 200)) + "84" + new string(')', 200),
-        string.Concat(Enumerable.Repeat("a[", 200)) + "0" + new string(']', 200),
-        "b = " + string.Concat(Enumerable.Repeat("Abs(", 200)) + "84" + new string(')', 200),
+        { "", "(", "84", ")", 1000 },
+        { "", "Abs(", "84", ")", 200 },
+        { "", "a[", "0", "]", 200 },
+        { "b = ", "Abs(", "84", ")", 200 },
     };
 
+    // NCALC-135: the test compares the times of depth n and 2n after a warm-up, so neither the first parse with the options (JIT,
+    // building the parser) nor the load of a parallel test run decides the result
     [Theory]
     [MemberData(nameof(NestedExpressionsWithAssignments))]
-    public void NestedExpressionsWithAssignmentsShouldParseInLinearTime(string expression)
+    public void NestedExpressionsWithAssignmentsShouldParseInLinearTime(string prefix, string open, string operand, string close, int depth)
     {
         // The assignment target used to be parsed again as an ordinary operand at every nesting level, which took exponential time.
         // A large stack keeps the parser's depth guard out of the way, so only the parsing time is measured.
         var cancellationToken = TestContext.Current.CancellationToken;
-        Expression e = null!;
-        bool hasErrors = true;
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var thread = new Thread(() =>
+        const ExpressionOptions options = ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.NoCache;
+
+        string Build(int n) => prefix + string.Concat(Enumerable.Repeat(open, n)) + operand + string.Concat(Enumerable.Repeat(close, n));
+
+        // The shortest of a few runs is the least affected by other work on the machine
+        TimeSpan Measure(string expression)
         {
-            e = new Expression(expression, ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
-            hasErrors = e.HasErrors(cancellationToken);
-        }, 64 * 1024 * 1024);
-        thread.Start();
-        thread.Join();
-        stopwatch.Stop();
-        Assert.False(hasErrors, e.Error?.InnerException?.Message ?? e.Error?.Message);
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1), $"Parsing took {stopwatch.Elapsed}");
+            var best = TimeSpan.MaxValue;
+            for (var run = 0; run < 3; run++)
+            {
+                Expression e = null!;
+                bool hasErrors = true;
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var thread = new Thread(() =>
+                {
+                    e = new Expression(expression, options);
+                    hasErrors = e.HasErrors(cancellationToken);
+                }, 64 * 1024 * 1024);
+                thread.Start();
+                thread.Join();
+                stopwatch.Stop();
+                Assert.False(hasErrors, e.Error?.InnerException?.Message ?? e.Error?.Message);
+                if (stopwatch.Elapsed < best)
+                    best = stopwatch.Elapsed;
+            }
+            return best;
+        }
+
+        // Warm-up: builds the parser for these options and compiles the code paths
+        Measure(Build(10));
+        Measure(Build(depth));
+
+        var timeN = Measure(Build(depth));
+        var time2N = Measure(Build(2 * depth));
+
+        // Linear parsing doubles the time; exponential parsing multiplied it by far more. The bound is generous on purpose
+        Assert.True(time2N < TimeSpan.FromTicks(timeN.Ticks * 8) + TimeSpan.FromMilliseconds(100),
+            $"Parsing depth {depth} took {timeN}, depth {2 * depth} took {time2N}");
     }
 
     public static TheoryData<string, ExpressionOptions, object> RadixLiteralData => new()
@@ -515,5 +543,122 @@ public class ParserTests
     {
         // NCALC-076: the conditional operator is right-associative, as in C#
         Assert.Equal(expected, new Expression(text).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    private static long MeasureParseMilliseconds(string text, ExpressionOptions options)
+    {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        new Expression(text, options | ExpressionOptions.NoCache).HasErrors(TestContext.Current.CancellationToken);
+        return stopwatch.ElapsedMilliseconds;
+    }
+
+    private static string NestedTuples(int depth)
+    {
+        var text = "1";
+        for (int i = 0; i < depth; i++)
+            text = "(" + text + ", " + i + ")";
+        return text;
+    }
+
+    private static string NestedGroups(int depth, string content)
+        => new string('(', depth) + content + new string(')', depth);
+
+    [Theory]
+    [InlineData(ExpressionOptions.None)]
+    [InlineData(ExpressionOptions.UseAssignments)]
+    [InlineData(ExpressionOptions.SupportPythonComments)]
+    public void NestedListsAndFailingGroupsShouldParseInLinearTime(ExpressionOptions options)
+    {
+        // NCALC-102: each nesting level used to parse its content twice (as a group, then as a list), doubling the time per level.
+        // Depth 30 took hours; the bound is generous and the 2n/n ratio is not checked tightly, so the test is not load-sensitive
+        MeasureParseMilliseconds(NestedTuples(5), options); // warm up the parser cache
+
+        Assert.True(MeasureParseMilliseconds(NestedTuples(30), options) < 5000);
+        Assert.True(MeasureParseMilliseconds(NestedGroups(40, "#abc#"), options) < 5000);
+        Assert.True(MeasureParseMilliseconds(NestedGroups(40, "#1/2/2024#"), options) < 5000);
+        Assert.True(MeasureParseMilliseconds(NestedGroups(40, "Max((1, 2), #abc#)"), options) < 5000);
+
+        long single = Math.Max(MeasureParseMilliseconds(NestedTuples(60), options), 1);
+        long twice = MeasureParseMilliseconds(NestedTuples(120), options);
+        Assert.True(twice < single * 20 + 500, $"depth 60: {single} ms, depth 120: {twice} ms");
+    }
+
+    [Fact]
+    public void NestedListsAndGroupsShouldKeepTheirMeaning()
+    {
+        // NCALC-102: the memoized operands must not change what is parsed
+        var tuple = (LogicalExpressionList)LogicalExpressionFactory.Create(NestedTuples(3), cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(2, tuple.Count);
+        Assert.IsType<LogicalExpressionList>(tuple[0]);
+
+        Assert.Equal(7, new Expression("((((1 + 2)) * 2)) + 1").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(true, new Expression("2 in ((1), 2, (3))").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(3, new Expression("Max((1), Min((3), (4)))").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(6, new Expression("x := (1 + 2); x * (2)", ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences).Evaluate(TestContext.Current.CancellationToken));
+        Assert.True(new Expression(NestedGroups(40, "#abc#"), ExpressionOptions.NoCache).HasErrors(TestContext.Current.CancellationToken));
+        Assert.Equal(1, new Expression(NestedGroups(40, "1")).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("1 + 2 #see #3", ExpressionOptions.SupportPythonComments)]
+    [InlineData("1 + 2 #todo: fix#", ExpressionOptions.SupportPythonComments)]
+    [InlineData("1 #a#\n+ 2", ExpressionOptions.SupportPythonComments)]
+    [InlineData("1 + 2 #v2#", ExpressionOptions.SupportPythonComments | ExpressionOptions.DontParseDates)]
+    [InlineData("1 + 2 # see #3", ExpressionOptions.SupportPythonComments)]
+    [InlineData("1 + 2 #99:99#", ExpressionOptions.SupportPythonComments)]
+    public void PythonCommentWithASecondHashShouldBeAComment(string text, ExpressionOptions options)
+    {
+        // NCALC-106: '#' starts a date/time literal only when the literal is valid (and dates are parsed); otherwise it is a comment
+        Assert.Equal(3, new Expression(text, options | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void DateLiteralsShouldStillBeParsedWithPythonComments()
+    {
+        // NCALC-106
+        var options = ExpressionOptions.SupportPythonComments | ExpressionOptions.NoCache;
+        Assert.Equal(new DateTime(2001, 1, 1), new Expression("#2001-01-01# # the date", options).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(new TimeSpan(10, 30, 0), new Expression("#10:30# # the time #1#", options).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(new DateTime(2001, 1, 2), new Expression("#2001-01-01# + #1.00:00:00#", options | ExpressionOptions.SupportTimeOperations).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("'5 # five' = 5", ExpressionOptions.SupportPythonComments)]
+    [InlineData("'/*x*/ 5' = 5", ExpressionOptions.SupportCStyleComments)]
+    [InlineData("'5 // x' = 5", ExpressionOptions.SupportCStyleComments)]
+    public void LiteralsInStringsShouldNotContainComments(string text, ExpressionOptions options)
+    {
+        // NCALC-129: a string compared with a number is converted only when it is a single literal, without comments
+        var result = new Expression(text, options | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken);
+        Assert.NotEqual(true, result);
+    }
+
+    [Fact]
+    public void ThirtyTwoCharacterNumbersWithExponentShouldNotBeGuids()
+    {
+        // NCALC-129: digits with an exponent are a number, also when the run has the length of a GUID
+        Assert.Equal(1E+30, new Expression("100000000000000000000000000000e1", ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(1E+30 + 1, new Expression("100000000000000000000000000000e1 + 1", ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(1E+34, new Expression("1000000000000000000000000000000e+4", ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+
+        // A run that starts with a letter stays a GUID, as before; a parameter of this shape is written in brackets
+        Assert.IsType<Guid>(new Expression("abcdef11111111111111111111111111", ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        var identifier = new Expression("[abcdef11111111111111111111111111] + 1", ExpressionOptions.NoCache);
+        identifier.Parameters["abcdef11111111111111111111111111"] = 2;
+        Assert.Equal(3, identifier.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    // NCALC-117: ToString() writes a time span with a fraction of a second, so the parser reads one
+    [Theory]
+    [InlineData("#00:00:01.5#", 15_000_000L)]
+    [InlineData("#1.02:03:04.25#", 937_842_500_000L)]
+    [InlineData("#-00:00:00.0000001#", -1L)]
+    [InlineData("#-1.00:00:01.123456789#", -864_011_234_567L)]
+    [InlineData("#25:00:00.5#", 900_005_000_000L)]
+    public void TimeSpanLiteralShouldAcceptAFractionOfASecond(string expression, long ticks)
+    {
+        Assert.Equal(TimeSpan.FromTicks(ticks), new Expression(expression, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        var value = new ValueExpression(TimeSpan.FromTicks(ticks));
+        Assert.Equal(TimeSpan.FromTicks(ticks), new Expression(value.ToString(), ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
     }
 }

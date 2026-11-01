@@ -26,6 +26,12 @@ public sealed class LogicalExpressionParserContext : ParseContext
     // Outcomes of memoized parsers, keyed by the parser and the input offset
     internal Dictionary<(object Parser, int Offset), object> ParseMemo { get; } = [];
 
+    // The date/time literal parser of the grammar in use (it starts at the '#'), which tells a literal from a Python-style comment
+    internal Parser<LogicalExpression>? DateTimeLiteralParser { get; set; }
+
+    // Set while a '#' is being checked for a date/time literal, so that the whitespace skipped inside the literal does not check again
+    internal bool IsCheckingDateTimeLiteral { get; set; }
+
     public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo? cultureInfo, CancellationToken cancellationToken)
         : base(new Scanner(text), cancellationToken)
     {

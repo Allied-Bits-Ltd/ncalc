@@ -71,6 +71,59 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         EvaluationVisitorFactory = new EvaluationVisitorFactory();
     }
 
+    private Expression(ExpressionContext context, IEvaluationVisitorFactory evaluationVisitorFactory) : base(context)
+    {
+        EvaluationVisitorFactory = evaluationVisitorFactory;
+    }
+
+    /// <summary>
+    /// Creates the expression for an argument of a function, which is a part of the tree that is being evaluated.
+    /// </summary>
+    internal static Expression CreateSubExpression(LogicalExpression logicalExpression, ExpressionContext context, CancellationToken cancellationToken)
+    {
+        var expression = new Expression(context);
+        expression.InitSubExpression(logicalExpression, cancellationToken);
+        return expression;
+    }
+
+    /// <summary>
+    /// Evaluates this expression as the value of a parameter of an outer expression. This expression's own parameters come first,
+    /// then those of the outer expression; neither are changed, and the handlers of the outer expression are called after this
+    /// expression's own ones. An outer asynchronous expression provides its parameters, but not its asynchronous dynamic parameters
+    /// and handlers.
+    /// </summary>
+    internal object? EvaluateAsParameter(ExpressionContextBase outerContext, CancellationToken cancellationToken)
+    {
+        // An expression that shares the context of the outer one has its parameters and handlers already
+        if (ReferenceEquals(Context, outerContext))
+            return Evaluate(cancellationToken);
+
+        LogicalExpression ??= GetLogicalExpression(cancellationToken);
+        if (Error is not null)
+            throw Error;
+        if (LogicalExpression is null)
+            return null;
+
+        var ownContext = Context;
+        var nestedContext = ownContext with
+        {
+            StaticParameters = new ParameterOverlay<object?>(ownContext.StaticParameters, outerContext.StaticParameters)
+        };
+        if (outerContext is ExpressionContext outer)
+        {
+            nestedContext.DynamicParameters = new ParameterOverlay<ExpressionParameter>(ownContext.DynamicParameters, outer.DynamicParameters);
+            nestedContext.EvaluateFunctionHandler = EvaluationHelper.CombineHandlers(ownContext.EvaluateFunctionHandler, outer.EvaluateFunctionHandler);
+            nestedContext.EvaluateParameterHandler = EvaluationHelper.CombineHandlers(ownContext.EvaluateParameterHandler, outer.EvaluateParameterHandler);
+            nestedContext.UpdateParameterHandler = EvaluationHelper.CombineHandlers(ownContext.UpdateParameterHandler, outer.UpdateParameterHandler);
+            nestedContext.MatchStringHandler = EvaluationHelper.CombineHandlers(ownContext.MatchStringHandler, outer.MatchStringHandler);
+        }
+
+        // The functions declared in the tree are in the shared UserFunctions of the copied context already
+        var nested = new Expression(nestedContext, EvaluationVisitorFactory);
+        nested.SetLogicalExpressionWithoutRegistration(LogicalExpression);
+        return nested.InternalEvaluate(cancellationToken);
+    }
+
     public Expression(
         string expression,
         ExpressionContext context,
@@ -141,6 +194,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     /// <exception cref="NCalcException">Thrown when there is an error in the expression.</exception>
     public object? Evaluate(CancellationToken cancellationToken)
     {
+        cancellationToken = GetEvaluationCancellationToken(cancellationToken);
         LogicalExpression ??= GetLogicalExpression(cancellationToken);
 
         return InternalEvaluate(cancellationToken);
@@ -176,8 +230,9 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         if (LogicalExpression is null)
             return null;
 
-        // If array evaluation, execute the same expression multiple times
-        if (Options.HasFlag(ExpressionOptions.IterateParameters))
+        // If array evaluation, execute the same expression multiple times. The arguments of functions are not iterated again:
+        // the outer evaluation has put the current elements into the parameters
+        if (Options.HasFlag(ExpressionOptions.IterateParameters) && !IsSubExpression)
             return IterateParameters(cancellationToken);
 
         return EvaluateOnce(EvaluationVisitorFactory.Create(Context), cancellationToken);

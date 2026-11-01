@@ -67,6 +67,10 @@ public sealed class LogicalExpressionFactory : ILogicalExpressionFactory
 
     public static LogicalExpression Create(string expression, ExpressionContextBase? expressionContext = null, CultureInfo? cultureInfo = null, ExpressionOptions options = ExpressionOptions.None, AdvancedExpressionOptions? advancedOptions = null, CancellationToken cancellationToken = default)
     {
+        // The tree keeps a snapshot of the advanced options: a later change of the caller's instance must not change the meaning or
+        // the text (ToString) of a tree that was already parsed and may be cached
+        advancedOptions = advancedOptions?.Clone();
+
         var parserContext = new LogicalExpressionParserContext(expression, options, cultureInfo, cancellationToken);
         parserContext.AdvancedOptions = advancedOptions;
         LogicalExpression result = LogicalExpressionParser.Parse(parserContext);

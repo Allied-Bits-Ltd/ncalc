@@ -102,6 +102,23 @@ public static class LogicalExpressionParser
     /// A level whose operator matches but is not followed by an operand gives way to the next level, as the nested parsers did.
     /// </summary>
     /// <summary>
+    /// Tells whether a run of 32 hex characters is a number with an exponent rather than a GUID without hyphens.
+    /// </summary>
+    private static bool IsNumberWithExponent(ReadOnlySpan<char> text)
+    {
+        // Decimal digits, then one 'e' or 'E', then optional digits (the sign of the exponent, if any, follows the run)
+        int exponent = text.IndexOfAny('e', 'E');
+        if (exponent <= 0)
+            return false;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (i != exponent && !char.IsDigit(text[i]))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
     /// Creates a time span from the parts of a time literal. TimeSpan.TryParse would read "25:00:00" as 25 days, so the parts are
     /// checked explicitly: minutes and seconds must be below 60, and hours below 24 when the literal also has days ("1.23:00:00");
     /// without days, any number of hours is allowed ("25:00:00" is 25 hours).
@@ -120,6 +137,21 @@ public static class LogicalExpressionParser
 
         result = new TimeSpan(hourValue, minuteValue, secondValue);
         return true;
+    }
+
+    /// <summary>
+    /// Converts the digits after the seconds of a time span literal (#00:00:01.5#) to a time span; digits beyond the 7th (a tick) are ignored.
+    /// </summary>
+    private static TimeSpan GetSecondFraction(TextSpan digits)
+    {
+        if (digits.Length == 0)
+            return TimeSpan.Zero;
+
+        string text = digits.ToString();
+        text = text.Length > 7 ? text.Substring(0, 7) : text.PadRight(7, '0');
+        if (!long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out long ticks))
+            throw new FormatException("Invalid TimeSpan format.");
+        return TimeSpan.FromTicks(ticks);
     }
 
     private sealed class BinaryOperatorParser(Parser<LogicalExpression> operand, Parser<BinaryExpressionType>[] levels) : Parser<LogicalExpression>
@@ -244,6 +276,22 @@ public static class LogicalExpressionParser
     private static Parser<T> Memoized<T>(Parser<T> parser) => new MemoizedParser<T>(parser);
 
     /// <summary>
+    /// Gives the context of each parse the date/time literal parser of the grammar, with which the whitespace parser tells
+    /// a date/time literal (#2024-01-02#) from a Python-style comment that contains a second '#'.
+    /// </summary>
+    private sealed class DateTimeLiteralAwareParser(Parser<LogicalExpression> parser, Parser<LogicalExpression> dateTimeLiteral) : Parser<LogicalExpression>
+    {
+        public override bool Parse(ParseContext context, ref ParseResult<LogicalExpression> result)
+        {
+            if (context is LogicalExpressionParserContext parserContext)
+                parserContext.DateTimeLiteralParser = dateTimeLiteral;
+            return parser.Parse(context, ref result);
+        }
+
+        public override string ToString() => parser.ToString() ?? nameof(DateTimeLiteralAwareParser);
+    }
+
+    /// <summary>
     /// Creates the parser with the options that exist at the moment of call
     /// </summary>
     /// <returns>An instance of the newly created parser</returns>
@@ -264,8 +312,82 @@ public static class LogicalExpressionParser
     private static string GetParserCacheKey(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions)
     {
         const string separator = "\u001F";
-        return string.Concat(((long)options).ToString(CultureInfo.InvariantCulture), separator, cultureInfo.Name, separator,
-            CultureInfo.CurrentCulture.Name, separator, extOptions?.GetCacheKey() ?? string.Empty);
+        return string.Concat(((long)options).ToString(CultureInfo.InvariantCulture), separator, GetCultureCacheKey(cultureInfo), separator,
+            GetCultureCacheKey(CultureInfo.CurrentCulture), separator, extOptions?.GetCacheKey() ?? string.Empty);
+    }
+
+    private static readonly ConditionalWeakTable<CultureInfo, string> ReadOnlyCultureCacheKeys = new();
+    private static readonly ConditionalWeakTable<CultureInfo, string>.CreateValueCallback CreateCultureCacheKeyCallback = CreateCultureCacheKey;
+
+    /// <summary>
+    /// Returns a key for the formats of a culture that parsing depends on (date and time patterns and separators, number and
+    /// currency separators, signs). A culture that is not read-only may have been customized under a standard name, or changed
+    /// after use, so the name alone does not identify it; the formats are compared instead, which also keeps the number of cached
+    /// parsers bounded when a new instance of the same culture is created for each expression.
+    /// The key of a read-only culture cannot change, so it is computed once per instance.
+    /// </summary>
+    internal static string GetCultureCacheKey(CultureInfo culture)
+        => culture.IsReadOnly ? ReadOnlyCultureCacheKeys.GetValue(culture, CreateCultureCacheKeyCallback) : CreateCultureCacheKey(culture);
+
+    private static string CreateCultureCacheKey(CultureInfo culture)
+    {
+        var dateTimeFormat = culture.DateTimeFormat;
+        var numberFormat = culture.NumberFormat;
+        return JoinCacheKeyParts(
+        [
+            culture.Name,
+            dateTimeFormat.Calendar.GetType().FullName,
+            dateTimeFormat.ShortDatePattern,
+            dateTimeFormat.LongDatePattern,
+            dateTimeFormat.ShortTimePattern,
+            dateTimeFormat.LongTimePattern,
+            dateTimeFormat.DateSeparator,
+            dateTimeFormat.TimeSeparator,
+            dateTimeFormat.AMDesignator,
+            dateTimeFormat.PMDesignator,
+            numberFormat.NumberDecimalSeparator,
+            numberFormat.NumberGroupSeparator,
+            numberFormat.CurrencyDecimalSeparator,
+            numberFormat.CurrencyGroupSeparator,
+            numberFormat.CurrencySymbol,
+            numberFormat.NegativeSign,
+            numberFormat.PositiveSign,
+            numberFormat.PercentSymbol,
+        ]);
+    }
+
+    /// <summary>
+    /// Joins the parts of a cache key with a separator that is escaped inside the parts, so that two different lists of parts
+    /// (e.g. ["days,x"] and ["days", "x"]) never give the same key.
+    /// </summary>
+    internal static string JoinCacheKeyParts(IEnumerable<string?> parts)
+    {
+        const char separator = '\u001E';
+        var builder = new StringBuilder();
+        bool first = true;
+        foreach (var part in parts)
+        {
+            if (!first)
+                builder.Append(separator);
+            first = false;
+            AppendEscapedCacheKeyPart(builder, part);
+        }
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Appends a part of a cache key, escaping the characters that separate the parts and the escape character itself.
+    /// </summary>
+    internal static void AppendEscapedCacheKeyPart(StringBuilder builder, string? part)
+    {
+        if (part is null)
+            return;
+        foreach (var c in part)
+        {
+            if (c is '\\' or '\u001E' or '\u001F')
+                builder.Append('\\');
+            builder.Append(c);
+        }
     }
 
     /// <summary>
@@ -281,8 +403,16 @@ public static class LogicalExpressionParser
     /// </summary>
     internal static Parser<LogicalExpression> GetLiteralParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions)
     {
+        // A literal is data, so it never contains comments ('5 # five' is not 5); the context of the parse must not accept them either
+        options = WithoutComments(options);
         return LiteralParsers.GetOrAdd(GetParserCacheKey(cultureInfo, options, extOptions), _ => CreateParser(cultureInfo, options, extOptions?.Clone(), literalsOnly: true));
     }
+
+    /// <summary>
+    /// Returns the options without the comment syntaxes, for parsing a single literal.
+    /// </summary>
+    internal static ExpressionOptions WithoutComments(ExpressionOptions options)
+        => options & ~(ExpressionOptions.SupportPythonComments | ExpressionOptions.SupportCStyleComments);
 
     private static Parser<LogicalExpression> CreateParser(CultureInfo cultureInfo, ExpressionOptions options, AdvancedExpressionOptions? extOptions, bool literalsOnly)
     {
@@ -624,21 +754,21 @@ public static class LogicalExpressionParser
 
                     if (decimalDefault && (value >= decimal.MinValue && value <= decimal.MaxValue))
                     {
-                        decimal decValue = (decimal)value;
+                        decimal decValue = NCalc.Helpers.MathHelper.BigDecimalToDecimal(value.Value);
                         if (value == decValue)
                             return new ValueExpression(decValue).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
                     if (value >= double.MinValue && value <= double.MaxValue)
                     {
-                        double dValue = (double)value;
+                        double dValue = NCalc.Helpers.MathHelper.BigDecimalToDouble(value.Value);
                         if (value == dValue)
                             return new ValueExpression(dValue).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
                     if (!decimalDefault && (value >= decimal.MinValue && value <= decimal.MaxValue))
                     {
-                        decimal decValue = (decimal)value;
+                        decimal decValue = NCalc.Helpers.MathHelper.BigDecimalToDecimal(value.Value);
                         if (value == decValue)
                             return new ValueExpression(decValue).SetLocation(new ParlotExpressionLocation(ctx));
                     }
@@ -715,7 +845,6 @@ public static class LogicalExpressionParser
 
         bool useCharsForOps = !options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars);
         bool useUnicodeForOps = options.HasFlag(ExpressionOptions.UseUnicodeCharsForOperations);
-        bool useAssignments = options.HasFlag(ExpressionOptions.UseAssignments);
 
         var comma = Terms.Char(',');
         var divided = useUnicodeForOps ? OneOf(Terms.Text("/"), Terms.Text("\u2236"), Terms.Text("\u00F7")) : Terms.Text("/");
@@ -988,6 +1117,9 @@ public static class LogicalExpressionParser
 
         SequenceAndSkip<LogicalExpression, char>? dateTime = null;
 
+        // The same literal starting exactly at the '#', which tells a date/time literal from a Python-style comment
+        Parser<LogicalExpression>? dateTimeAtHash = null;
+
         if (!options.HasFlag(ExpressionOptions.DontParseDates))
         {
             DateTimeFormatInfo dateTimeFormat = extOptions?.GetFormat(typeof(DateTimeFormatInfo)) as DateTimeFormatInfo ?? cultureInfo.DateTimeFormat;
@@ -1194,7 +1326,7 @@ public static class LogicalExpressionParser
 
             if (extOptions is not null)
             {
-                customTimeSep = extOptions.TimeSeparator;
+                customTimeSep = extOptions.GetTimeSeparator();
                 if (customTimeSep != builtInTimeSep && !extOptions.Flags.HasFlag(AdvExpressionOptions.SkipBuiltInTimeSeparator))
                 {
                     useSecondTime = true; // we use the second time separator when both custom separator and the default one are enabled and are different
@@ -1329,14 +1461,15 @@ public static class LogicalExpressionParser
             Parser<LogicalExpression>? time12 = null;
             Parser<LogicalExpression>? shortTime12 = null;
 
-            var time = timeSpanDefinition.Then<LogicalExpression>((ctx, time) =>
+            // A time span may have a fraction of a second (#00:00:01.5#), which is how ToString() writes one
+            var time = timeSpanDefinition.And(ZeroOrOne(Literals.Char('.').SkipAnd(charIsNumber))).Then<LogicalExpression>((ctx, time) =>
             {
                 string customTimeSepForDT = dateTimeFormat.TimeSeparator;
                 if (useSecondTime || onlyCustomTimeTranslation)
                 {
                     if (DateTime.TryParse($"{time.Item3}{customTimeSepForDT}{time.Item4}{customTimeSepForDT}{time.Item5}", dateTimeFormat, DateTimeStyles.None, out var result))
                     {
-                        TimeSpan tsResult = result.TimeOfDay;
+                        TimeSpan tsResult = result.TimeOfDay + GetSecondFraction(time.Item6);
 
                         if (time.Item2.Length > 0)
                         {
@@ -1345,16 +1478,17 @@ public static class LogicalExpressionParser
                         }
                         if (time.Item1 == "-")
                         {
-                            tsResult = TimeSpan.FromMilliseconds(-tsResult.TotalMilliseconds);
+                            tsResult = tsResult.Negate();
                         }
                         return new ValueExpression(tsResult).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
-                if (useSecondTime || !onlyCustomTimeTranslation)
+                // The parts are already split at the separator, so they are read the same way on every path: a time span literal
+                // may have 24 or more hours (#25:00:00#), which DateTime.TryParse rejects
                 {
                     if (TryCreateTimeSpan(time.Item3.ToString(), time.Item4.ToString(), time.Item5.ToString(), time.Item2.Length > 0, out var result))
                     {
-                        TimeSpan tsResult = result;
+                        TimeSpan tsResult = result + GetSecondFraction(time.Item6);
 
                         if (time.Item2.Length > 0)
                         {
@@ -1363,7 +1497,7 @@ public static class LogicalExpressionParser
                         }
                         if (time.Item1 == "-")
                         {
-                            tsResult = TimeSpan.FromMilliseconds(-tsResult.TotalMilliseconds);
+                            tsResult = tsResult.Negate();
                         }
                         return new ValueExpression(tsResult).SetLocation(new ParlotExpressionLocation(ctx));
                     }
@@ -1393,7 +1527,8 @@ public static class LogicalExpressionParser
                         return new ValueExpression(tsResult).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                 }
-                if (useSecondTime || !onlyCustomTimeTranslation)
+                // The parts are already split at the separator, so they are read the same way on every path: a time span literal
+                // may have 24 or more hours (#25:00:00#), which DateTime.TryParse rejects
                 {
                     if (TryCreateTimeSpan(time.Item3.ToString(), time.Item4.ToString(), null, time.Item2.Length > 0, out var result))
                     {
@@ -1894,6 +2029,9 @@ public static class LogicalExpressionParser
                 .Char('#')
                 .SkipAnd(OneOf(timeParts.ToArray()))
                 .AndSkip(Literals.Char('#'));
+
+            if (options.HasFlag(ExpressionOptions.SupportPythonComments))
+                dateTimeAtHash = Literals.Char('#').SkipAnd(OneOf(timeParts.ToArray())).AndSkip(Literals.Char('#'));
         }
 
         var isHexDigit = Character.IsHexDigit;
@@ -1935,9 +2073,13 @@ public static class LogicalExpressionParser
 
             // 32 hex characters without hyphens are a GUID only when they mix decimal digits and letters:
             // all digits are a number, and all letters are an identifier
+            // Digits with a single 'e' (100…0e1, or 100…0e followed by "+1") are a number with an exponent.
+            // A run that starts with a letter stays a GUID (e.g. deadbeefcafebabeface0123456789ab); an identifier of this shape
+            // can be written in brackets
             guidWithoutHyphens = thirtyTwoHexSequence
                 .AndSkip(Not(identifierPartChar))
-                .When(static (_, g) => g.Span.IndexOfAny("0123456789".AsSpan()) >= 0 && g.Span.IndexOfAny("abcdefABCDEF".AsSpan()) >= 0)
+                .When(static (_, g) => g.Span.IndexOfAny("0123456789".AsSpan()) >= 0 && g.Span.IndexOfAny("abcdefABCDEF".AsSpan()) >= 0
+                    && !IsNumberWithExponent(g.Span))
                 .Then<LogicalExpression>(static (ctx, g) => new ValueExpression(Guid.Parse(g.ToString()!)).SetLocation(new ParlotExpressionLocation(ctx)));
 
             guid = OneOf(guidWithHyphens, guidWithoutHyphens);
@@ -2080,10 +2222,11 @@ public static class LogicalExpressionParser
                 }
             });
 
-        // The assignment target and the leftmost operand of an ordinary expression both start with indexedAccess,
-        // so each position is parsed once rather than once per alternative at every nesting level
-        if (useAssignments)
-            indexedAccess = Memoized(indexedAccess);
+        // Several alternatives start with the same operand: a parenthesized expression and a list (whose first item is parsed
+        // again when the group fails, e.g. at a separator or at a literal that is not a valid date), and an assignment target
+        // and an ordinary operand. Each position is therefore parsed once rather than once per alternative at every nesting
+        // level, which would take time exponential in the nesting depth
+        indexedAccess = Memoized(indexedAccess);
 
         // factorial => primary ("!")* ;
         // A factorial includes any primary
@@ -2487,8 +2630,11 @@ public static class LogicalExpressionParser
 
         var whitespaceParser = new WhiteSpaceParser(options);
 
-        var expressionParser = OneOf(topLevel, curlyBracedTopLevel).AndSkip(ZeroOrMany(whitespaceParser)).Eof()
+        Parser<LogicalExpression> expressionParser = OneOf(topLevel, curlyBracedTopLevel).AndSkip(ZeroOrMany(whitespaceParser)).Eof()
                 .ElseError(InvalidTokenMessage);
+
+        if (dateTimeAtHash is not null)
+            expressionParser = new DateTimeLiteralAwareParser(expressionParser, dateTimeAtHash);
 
         //AppContext.TryGetSwitch("NCalc.EnableParlotParserCompilation", out var enableParserCompilation);
 

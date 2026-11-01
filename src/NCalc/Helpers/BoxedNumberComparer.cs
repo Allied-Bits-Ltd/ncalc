@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -67,17 +68,67 @@ namespace NCalc.Helpers
                     return TypeHelper.GetStringComparer(_comparisonOptions).GetHashCode(text);
             }
 
-            if (MathHelper.IsBoxedNumberOrBigNumber(obj))
-                return GetNumberHashCode(obj);
+            if (MathHelper.IsBoxedNumberOrBigNumber(obj) || obj is char)
+                return GetNumberHashCode(obj!);
 
             return TypeHelper.GetStringComparer(_comparisonOptions).GetHashCode(Convert.ToString(obj, _comparisonOptions.CultureInfo) ?? string.Empty);
         }
 
-        private int GetNumberHashCode(object number)
+        // Numbers of different types are compared after a conversion that rounds a double to 15 and a float to 7 significant digits
+        // (0.1f equals 0.1m, and 0.30000000000000004 equals 0.3m). So every number is hashed by its value rounded to 7 significant
+        // digits, kept as a BigDecimal, so that values beyond the range of double (1E400) can be hashed too.
+        private const int HashedSignificantDigits = 7;
+
+        private static int GetNumberHashCode(object number)
         {
-            var value = MathHelper.ConvertToDouble(number, _mathHelperOptions);
-            // All NaNs are alike, and 0.0 and -0.0 are equal
-            return double.IsNaN(value) ? double.NaN.GetHashCode() : (value == 0 ? 0 : value.GetHashCode());
+            BigDecimal value;
+            switch (number)
+            {
+                // All NaNs are alike; infinities are equal only to themselves
+                case double d when double.IsNaN(d) || double.IsInfinity(d):
+                    return d.GetHashCode();
+                case float f when float.IsNaN(f) || float.IsInfinity(f):
+                    return ((double)f).GetHashCode();
+                case double d:
+                    value = Math.Abs(d) < (double)decimal.MaxValue ? new BigDecimal((decimal)d) : new BigDecimal(d);
+                    break;
+                case float f:
+                    value = Math.Abs(f) < (float)decimal.MaxValue ? new BigDecimal((decimal)f) : new BigDecimal((double)f);
+                    break;
+                case char ch:
+                    value = new BigDecimal((int)ch);
+                    break;
+                default:
+                    value = MathHelper.ConvertToBigDecimal(number);
+                    break;
+            }
+
+            // 0.0 and -0.0 are equal
+            BigInteger mantissa = value.Mantissa;
+            if (mantissa.IsZero)
+                return 0;
+
+            int exponent = value.Exponent;
+            int digits = BigInteger.Abs(mantissa).ToString(CultureInfo.InvariantCulture).Length;
+            if (digits > HashedSignificantDigits)
+            {
+                int shift = digits - HashedSignificantDigits;
+                BigInteger divisor = BigInteger.Pow(10, shift);
+                BigInteger quotient = BigInteger.DivRem(mantissa, divisor, out BigInteger remainder);
+                if (BigInteger.Abs(remainder) * 2 >= divisor)
+                    quotient += mantissa.Sign;
+                mantissa = quotient;
+                exponent += shift;
+            }
+
+            // Trailing zeros are removed, so that 1.50 and 1.5 (or 10 rounded up from 9.9999999) get the same hash code
+            while (!mantissa.IsZero && (mantissa % 10).IsZero)
+            {
+                mantissa /= 10;
+                exponent++;
+            }
+
+            return unchecked((mantissa.GetHashCode() * 397) ^ exponent);
         }
     }
 }

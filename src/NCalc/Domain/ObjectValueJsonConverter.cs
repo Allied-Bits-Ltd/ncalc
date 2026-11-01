@@ -14,11 +14,16 @@ namespace NCalc.Domain;
 /// Custom JSON converter for nullable <see langword="object"/> values stored in <see cref="ValueExpression.Value"/>.
 /// Supports primitive scalars, tagged type-preserving scalars, BigDecimal, BigInteger,
 /// ComplexNumber, Vector, JsonElement, dictionaries, and arrays.
+/// Dictionaries are written as <c>{"$type": "Dictionary", "$value": {...}}</c> and arrays of a scalar element type as
+/// <c>{"$type": "Int32[]", "$value": [...]}</c>, so that both are read back with their types; plain JSON objects and arrays are still read
+/// (as a dictionary, unless they have the form of a BigDecimal or a tagged value, and as a list).
 /// </summary>
 public sealed class ObjectValueJsonConverter : JsonConverter<object?>
 {
     private const string TypePropertyName = "$type";
     private const string ValuePropertyName = "$value";
+    private const string DictionaryTypeName = "Dictionary";
+    private const string ArrayTypeSuffix = "[]";
 
     public override object? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
@@ -53,7 +58,7 @@ public sealed class ObjectValueJsonConverter : JsonConverter<object?>
                 return ReadArray(ref reader);
 
             case JsonTokenType.StartObject:
-                return ReadObjectOrTypedScalar(ref reader);
+                return ReadObjectOrTypedScalar(ref reader, plainObject: false);
 
             default:
                 throw new JsonException($"Unsupported token type: {reader.TokenType}");
@@ -100,7 +105,8 @@ public sealed class ObjectValueJsonConverter : JsonConverter<object?>
         throw new JsonException("Unexpected end of JSON while reading array.");
     }
 
-    private static object ReadObjectOrTypedScalar(ref Utf8JsonReader reader)
+    // A plain object is the content of a tagged dictionary: it is not interpreted as a BigDecimal, a tagged value etc.
+    private static object ReadObjectOrTypedScalar(ref Utf8JsonReader reader, bool plainObject)
     {
         var dictionary = new Dictionary<string, object?>(StringComparer.Ordinal);
 
@@ -108,6 +114,9 @@ public sealed class ObjectValueJsonConverter : JsonConverter<object?>
         {
             if (reader.TokenType == JsonTokenType.EndObject)
             {
+                if (plainObject)
+                    return dictionary;
+
                 if (TryReadTaggedScalar(dictionary, out object? typedValue))
                     return typedValue!;
 
@@ -130,7 +139,12 @@ public sealed class ObjectValueJsonConverter : JsonConverter<object?>
             if (!reader.Read())
                 throw new JsonException("Unexpected end of JSON after property name.");
 
-            dictionary[propertyName] = ReadValue(ref reader);
+            // The value of a tagged dictionary is read as it is
+            if (!plainObject && propertyName == ValuePropertyName && reader.TokenType == JsonTokenType.StartObject
+                && dictionary.TryGetValue(TypePropertyName, out object? typeName) && typeName is DictionaryTypeName)
+                dictionary[propertyName] = ReadObjectOrTypedScalar(ref reader, plainObject: true);
+            else
+                dictionary[propertyName] = ReadValue(ref reader);
         }
 
         throw new JsonException("Unexpected end of JSON while reading object.");
@@ -357,9 +371,89 @@ public sealed class ObjectValueJsonConverter : JsonConverter<object?>
             case nameof(Guid):
                 return Guid.Parse(RequireString(typeName, text));
 
+            case nameof(DateTimeOffset):
+                return DateTimeOffset.ParseExact(RequireString(typeName, text), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+            case DictionaryTypeName:
+                return rawValue as Dictionary<string, object?> ?? throw new JsonException("Tagged value for 'Dictionary' must be an object.");
+
+            case string arrayTypeName when arrayTypeName.EndsWith(ArrayTypeSuffix, StringComparison.Ordinal):
+                if (rawValue is not List<object?> items)
+                    throw new JsonException($"Tagged value for '{arrayTypeName}' must be an array.");
+                return CreateArray(arrayTypeName.Substring(0, arrayTypeName.Length - ArrayTypeSuffix.Length), items);
+
             default:
                 throw new JsonException($"Unsupported tagged scalar type '{typeName}'.");
         }
+    }
+
+    // The element types whose arrays keep their type in JSON (the names are those of the tagged values)
+    private static string? GetArrayElementTypeName(Type? elementType)
+    {
+        if (elementType is null)
+            return null;
+        if (elementType == typeof(object))
+            return nameof(Object);
+        if (elementType == typeof(string))
+            return nameof(String);
+        if (elementType == typeof(BigInteger))
+            return nameof(BigInteger);
+        if (elementType == typeof(BigDecimal))
+            return nameof(BigDecimal);
+        if (elementType == typeof(Guid))
+            return nameof(Guid);
+        if (elementType == typeof(TimeSpan))
+            return nameof(TimeSpan);
+        if (elementType == typeof(DateTimeOffset))
+            return nameof(DateTimeOffset);
+
+        return Type.GetTypeCode(elementType) switch
+        {
+            TypeCode.Boolean or TypeCode.Char or TypeCode.SByte or TypeCode.Byte or TypeCode.Int16 or TypeCode.UInt16 or TypeCode.Int32
+                or TypeCode.UInt32 or TypeCode.Int64 or TypeCode.UInt64 or TypeCode.Single or TypeCode.Double or TypeCode.Decimal
+                or TypeCode.DateTime when !elementType.IsEnum => elementType.Name,
+            _ => null
+        };
+    }
+
+    private static Array CreateArray(string elementTypeName, List<object?> items) => elementTypeName switch
+    {
+        nameof(Object) => items.ToArray(),
+        nameof(String) => ToArray<string?>(items),
+        nameof(Boolean) => ToArray<bool>(items),
+        nameof(Char) => ToArray<char>(items),
+        nameof(SByte) => ToArray<sbyte>(items),
+        nameof(Byte) => ToArray<byte>(items),
+        nameof(Int16) => ToArray<short>(items),
+        nameof(UInt16) => ToArray<ushort>(items),
+        nameof(Int32) => ToArray<int>(items),
+        nameof(UInt32) => ToArray<uint>(items),
+        nameof(Int64) => ToArray<long>(items),
+        nameof(UInt64) => ToArray<ulong>(items),
+        nameof(Single) => ToArray<float>(items),
+        nameof(Double) => ToArray<double>(items),
+        nameof(Decimal) => ToArray<decimal>(items),
+        nameof(DateTime) => ToArray<DateTime>(items),
+        nameof(DateTimeOffset) => ToArray<DateTimeOffset>(items),
+        nameof(TimeSpan) => ToArray<TimeSpan>(items),
+        nameof(BigInteger) => ToArray<BigInteger>(items),
+        nameof(BigDecimal) => ToArray<BigDecimal>(items),
+        nameof(Guid) => ToArray<Guid>(items),
+        _ => throw new JsonException($"Unsupported array element type '{elementTypeName}'.")
+    };
+
+    private static T[] ToArray<T>(List<object?> items)
+    {
+        var result = new T[items.Count];
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (items[i] is T item)
+                result[i] = item;
+            else
+            if (items[i] is not null || default(T) is not null)
+                throw new JsonException($"Invalid element of an array of {typeof(T).Name}.");
+        }
+        return result;
     }
 
     private static string RequireString(string typeName, string? text)
@@ -487,17 +581,38 @@ public sealed class ObjectValueJsonConverter : JsonConverter<object?>
                 writer.WriteEndObject();
                 return;
 
+            case DateTimeOffset dto:
+                WriteTaggedString(writer, nameof(DateTimeOffset), dto.ToString("O", CultureInfo.InvariantCulture));
+                return;
+
             case JsonElement element:
                 element.WriteTo(writer);
                 return;
 
             case IDictionary<string, object?> dict:
+                // The entries are wrapped in a tagged object, so that a dictionary whose keys look like a BigDecimal ("Mantissa", "Exponent")
+                // or a tagged value ("$type", "$value") is read back as a dictionary
+                writer.WriteStartObject();
+                writer.WriteString(TypePropertyName, DictionaryTypeName);
+                writer.WritePropertyName(ValuePropertyName);
                 writer.WriteStartObject();
                 foreach (KeyValuePair<string, object?> pair in dict)
                 {
                     writer.WritePropertyName(pair.Key);
                     WriteValue(writer, pair.Value);
                 }
+                writer.WriteEndObject();
+                writer.WriteEndObject();
+                return;
+
+            case Array array when array.Rank == 1 && GetArrayElementTypeName(array.GetType().GetElementType()) is string elementTypeName:
+                // An array of a supported element type keeps its type: {"$type": "Int32[]", "$value": [...]}
+                writer.WriteStartObject();
+                writer.WriteString(TypePropertyName, elementTypeName + ArrayTypeSuffix);
+                writer.WriteStartArray(ValuePropertyName);
+                foreach (object? item in array)
+                    WriteValue(writer, item);
+                writer.WriteEndArray();
                 writer.WriteEndObject();
                 return;
 
@@ -522,7 +637,7 @@ public sealed class ObjectValueJsonConverter : JsonConverter<object?>
             default:
                 throw new NotSupportedException(
                     $"Unsupported runtime type '{value.GetType().FullName}'. " +
-                    "This converter supports primitive scalar types, string, DateTime, TimeSpan, BigInteger, " +
+                    "This converter supports primitive scalar types, string, DateTime, DateTimeOffset, TimeSpan, BigInteger, " +
                     "BigDecimal, ComplexNumber, Vector, JsonElement, dictionaries, and arrays/lists.");
         }
     }

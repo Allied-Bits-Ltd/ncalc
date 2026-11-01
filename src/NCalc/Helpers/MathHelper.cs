@@ -240,6 +240,17 @@ public static class MathHelper
     };
 #endif
 
+#if !AOT_COMPILATION
+    // The dynamic percent formulas cannot mix a big number with their double or decimal constants, nor a float or double with the
+    // decimal ones. Such operands go through the implementation without dynamic code, which NCalc.AOT always uses, so that
+    // NCalc and NCalc.AOT (or AvoidDynamicFunctions) give the same result.
+    private static bool CanUseDynamicPercentFunc(object a, object b, MathHelperOptions options)
+    {
+        bool decimalFormula = (options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal);
+        return !IsBigNumber(a) && !IsBigNumber(b) && !(decimalFormula && (a is float or double || b is float or double));
+    }
+#endif
+
     // The result type of a percent operation without dynamic code is the same as with it: decimal when DecimalAsDefault is set
     // or an operand is a decimal, double otherwise (big numbers stay as they are)
     private static object ToPercentResultType(object result, object a, object b, MathHelperOptions options)
@@ -254,7 +265,7 @@ public static class MathHelper
     private static object AddPercentFunc(object a, object b, MathHelperOptions options)
     {
 #if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions)
+        if (!options.AvoidDynamicFunctions && CanUseDynamicPercentFunc(a, b, options))
         {
             if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
                 return options.OverflowProtection ? AddPercentDecFuncChecked(a, b) : DynamicAddPercentDecFunc(a, b);
@@ -442,7 +453,7 @@ public static class MathHelper
     private static object SubtractPercentFunc(object a, object b, MathHelperOptions options)
     {
 #if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions)
+        if (!options.AvoidDynamicFunctions && CanUseDynamicPercentFunc(a, b, options))
         {
             if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
                 return options.OverflowProtection ? SubtractPercentDecFuncChecked(a, b) : DynamicSubtractPercentDecFunc(a, b);
@@ -631,7 +642,7 @@ public static class MathHelper
     private static object MultiplyPercentFunc(object a, object b, MathHelperOptions options)
     {
 #if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions)
+        if (!options.AvoidDynamicFunctions && CanUseDynamicPercentFunc(a, b, options))
         {
             if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
                 return options.OverflowProtection ? MultiplyPercentDecFuncChecked(a, b) : DynamicMultiplyPercentDecFunc(a, b);
@@ -814,7 +825,7 @@ public static class MathHelper
     private static object DividePercentFunc(object a, object b, MathHelperOptions options)
     {
 #if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions)
+        if (!options.AvoidDynamicFunctions && CanUseDynamicPercentFunc(a, b, options))
         {
             if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
                 return options.OverflowProtection ? DividePercentDecFuncChecked(a, b) : DynamicDividePercentDecFunc(a, b);
@@ -1087,6 +1098,8 @@ public static class MathHelper
         try
         {
             object result = ExecuteOperation(a, b, '+', ArithmeticOperation.Add, options, typeCode);
+            if (TryPromoteWrappedInteger(a, b, result, false, options, out var promoted))
+                result = promoted;
             return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
         catch (OverflowException)
@@ -1232,6 +1245,8 @@ public static class MathHelper
         try
         {
             object result = ExecuteOperation(a, b, '-', ArithmeticOperation.Subtract, options, typeCode);
+            if (TryPromoteWrappedInteger(a, b, result, true, options, out var promoted))
+                result = promoted;
             return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
         catch (OverflowException)
@@ -1243,6 +1258,18 @@ public static class MathHelper
                 return result;
             return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
+    }
+
+    // With UseBigNumbers, an integer sum or difference that wrapped around in the operand type is replaced with the exact value,
+    // as products and powers are promoted to BigInteger with this option
+    private static bool TryPromoteWrappedInteger(object a, object b, object result, bool subtract, MathHelperOptions options, out BigInteger exact)
+    {
+        exact = default;
+        if (!options.UseBigNumbers || !IsBoxedIntegerNumber(a) || !IsBoxedIntegerNumber(b) || !IsBoxedIntegerNumber(result))
+            return false;
+
+        exact = subtract ? ConvertToBigInteger(a) - ConvertToBigInteger(b) : ConvertToBigInteger(a) + ConvertToBigInteger(b);
+        return exact != ConvertToBigInteger(result);
     }
 
     public static object? SubtractPercent(object? a, object? b, MathHelperOptions options)
@@ -1287,6 +1314,9 @@ public static class MathHelper
                 typeCode = productTypeCode;
             }
             else
+            // There is no wider 64-bit type for a ulong product; converting it to long would fail for values above long.MaxValue,
+            // so without big numbers the product is computed in ulong (and wraps around, as in C#)
+            if (typeCode != TypeCode.UInt64 || options.UseBigNumbers)
                 typeCode = TypeCodeExpandBits(typeCode, ref a, ref b, options);
             typesWereExpanded = true;
         }
@@ -1441,11 +1471,8 @@ public static class MathHelper
         {
             if (IsBoxedIntegerNumber(a))
             {
-                long? tl = GetBoxedIntegerNumberAsLong(a);
-                if (tl is null)
-                    return null;
-
-                a = (decimal)tl;
+                // Every integer type, including a ulong above long.MaxValue, fits in decimal
+                a = GetBoxedNumberAsDecimal(a)!.Value;
                 typeCode = TypeCode.Decimal;
             }
             else
@@ -1465,11 +1492,8 @@ public static class MathHelper
 
             if (IsBoxedIntegerNumber(b))
             {
-                long? tl = GetBoxedIntegerNumberAsLong(b);
-                if (tl is null)
-                    return null;
-
-                b = (decimal)tl;
+                // Every integer type, including a ulong above long.MaxValue, fits in decimal
+                b = GetBoxedNumberAsDecimal(b)!.Value;
                 typeCode = TypeCode.Decimal;
             }
             else
@@ -1557,7 +1581,7 @@ public static class MathHelper
 
                     if ((options.DecimalAsDefault || typeA == typeof(decimal)) && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
                     {
-                        return (decimal)bdResult;
+                        return BigDecimalToDecimal(bdResult.Value);
                     }
 
                     /*if (bdResult >= float.MinValue && bdResult <= float.MaxValue)
@@ -1567,12 +1591,12 @@ public static class MathHelper
                     else*/
                     if (bdResult >= double.MinValue && bdResult <= double.MaxValue)
                     {
-                        return (double)bdResult;
+                        return BigDecimalToDouble(bdResult.Value);
                     }
 
                     if (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
                     {
-                        return (decimal)bdResult;
+                        return BigDecimalToDecimal(bdResult.Value);
                     }
                 }
                 else // try to keep the original type of a
@@ -1603,13 +1627,13 @@ public static class MathHelper
                     }
 
                     if ((options.DecimalAsDefault || typeA == typeof(decimal)) && (bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue))
-                        return (decimal)bdResult;
+                        return BigDecimalToDecimal(bdResult.Value);
 
                     if ((typeA == typeof(float)) && bdResult >= float.MinValue && bdResult <= float.MaxValue)
-                        return (float)bdResult;
+                        return BigDecimalToSingle(bdResult.Value);
 
                     if ((typeA == typeof(double)) && bdResult >= double.MinValue && bdResult <= double.MaxValue)
-                        return (double)bdResult;
+                        return BigDecimalToDouble(bdResult.Value);
                 }
 
                 return bdResult;
@@ -1644,7 +1668,7 @@ public static class MathHelper
             {
                 long? iResult = GetBoxedIntegerNumberAsLong(result);
                 if (iResult is null)
-                    return result;
+                    return GetBoxedIntegerNumberAsULong(result) is { } ulResult ? ulResult : result;
 
                 if (iResult >= int.MinValue && iResult <= int.MaxValue)
                     return (int)iResult;
@@ -1660,7 +1684,7 @@ public static class MathHelper
                 try
                 {
                     if (result is BigDecimal)
-                        return (decimal)result;
+                        return BigDecimalToDecimal((BigDecimal)result);
 
                     return ConvertToDecimal(result, "Divide", options.CultureInfo, null);
                 }
@@ -1699,7 +1723,7 @@ public static class MathHelper
             {
                 long? iResult = GetBoxedIntegerNumberAsLong(result);
                 if (iResult is null)
-                    return result;
+                    return GetBoxedIntegerNumberAsULong(result) is { } ulResult ? ulResult : result;
 
                 if ((typeA == typeof(short)) && iResult >= short.MinValue && iResult <= short.MaxValue)
                     return (short)iResult;
@@ -1769,7 +1793,7 @@ public static class MathHelper
                 a = cnA.Real;
                 if (!options.UseBigNumbers)
                 {
-                    a = (double)a;
+                    a = BigDecimalToDouble(cnA.Real);
                     typeCode = TypeCode.Double;
                 }
             }
@@ -1782,7 +1806,7 @@ public static class MathHelper
                 b = cnB.Real;
                 if (!options.UseBigNumbers)
                 {
-                    b = (double)b;
+                    b = BigDecimalToDouble(cnB.Real);
                     typeCode = TypeCode.Double;
                 }
             }
@@ -1831,7 +1855,8 @@ public static class MathHelper
             {
                 if (truncateFirst)
                 {
-                    b = ConvertToLong(b, "Integer Div", options.CultureInfo, null);
+                    if (b is not BigInteger)
+                        b = ConvertToLong(b, "Integer Div", options.CultureInfo, null);
                     biResult = IntegerDivide(biA, b);
                 }
                 else
@@ -1899,8 +1924,16 @@ public static class MathHelper
 
         if (truncateFirst)
         {
-            a = ConvertToLong(a, "Integer Div", options.CultureInfo, null);
-            b = ConvertToLong(b, "Integer Div", options.CultureInfo, null);
+            a = TruncateForIntegerDivision(a, options);
+            b = TruncateForIntegerDivision(b, options);
+
+            // Integer operands are divided exactly, so that a ulong above long.MaxValue and long.MinValue \ -1 do not overflow;
+            // a floating-point operand beyond the range of long (or NaN) is divided below and stays a floating-point number
+            if (IsBoxedIntegerNumber(a) && IsBoxedIntegerNumber(b))
+            {
+                BigInteger quotient = BigInteger.Divide(ConvertToBigInteger(a), ConvertToBigInteger(b));
+                return ReduceNumericType(quotient >= long.MinValue && quotient <= long.MaxValue ? (object)(long)quotient : quotient, reduceTypes ? null : t, options);
+            }
         }
 
         //var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
@@ -2004,6 +2037,28 @@ public static class MathHelper
         return result;
     }
 
+    // Truncates an operand of \ to an integer. Integers stay as they are; a floating-point value that does not fit in long
+    // (including NaN and infinity) is only truncated, because casting it to long would clamp it or give 0.
+    private static object TruncateForIntegerDivision(object value, MathHelperOptions options)
+    {
+        switch (value)
+        {
+            case byte or sbyte or short or ushort or int or uint or long or ulong:
+                return value;
+            case double d:
+                double truncatedDouble = Math.Truncate(d);
+                return FitsInLong(truncatedDouble) ? (object)(long)truncatedDouble : truncatedDouble;
+            case float f:
+                double truncatedSingle = Math.Truncate((double)f);
+                return FitsInLong(truncatedSingle) ? (object)(long)truncatedSingle : truncatedSingle;
+            case decimal m:
+                decimal truncatedDecimal = Math.Truncate(m);
+                return truncatedDecimal >= long.MinValue && truncatedDecimal <= long.MaxValue ? (object)(long)truncatedDecimal : truncatedDecimal;
+            default:
+                return ConvertToLong(value, "Integer Div", options.CultureInfo, null);
+        }
+    }
+
     public static object? DividePercent(object? a, object? b, MathHelperOptions options)
     {
         if (a is null || b is null)
@@ -2057,7 +2112,7 @@ public static class MathHelper
                 a = cnA.Real;
                 if (!options.UseBigNumbers)
                 {
-                    a = (double)a;
+                    a = BigDecimalToDouble(cnA.Real);
                     typeCode = TypeCode.Double;
                 }
             }
@@ -2070,7 +2125,7 @@ public static class MathHelper
                 b = cnB.Real;
                 if (!options.UseBigNumbers)
                 {
-                    b = (double)b;
+                    b = BigDecimalToDouble(cnB.Real);
                     typeCode = TypeCode.Double;
                 }
             }
@@ -2106,6 +2161,10 @@ public static class MathHelper
             if (biResult is not null)
                 return ReduceNumericType(biResult, reduceTypes ? null : t, options);
         }
+
+        // long.MinValue % -1 overflows in .NET although the remainder is 0; any value % -1 is 0
+        if (typeCode == TypeCode.Int64 && b is -1L)
+            return ReduceNumericType(0L, reduceTypes ? null : t, options);
 
         try
         {
@@ -2268,7 +2327,8 @@ public static class MathHelper
             byte b => (object)(-b),
             ushort us => (object)(-us),
             uint ui => (object)(-(long)ui),
-            ulong ul => options.UseBigNumbers ? (object)(-(new BigInteger(ul))) : (object)checked(-(long)ul),
+            // 2^63 is the negation of long.MinValue, so negating it gives long.MinValue back
+            ulong ul => options.UseBigNumbers ? (object)(-(new BigInteger(ul))) : (ul == (1UL << 63) ? (object)long.MinValue : (object)checked(-(long)ul)),
 
             // IEEE 754: -0.0f and -0.0d are distinct bit patterns from +0
             float f => (object)(-f),   // correctly produces -0f when f == +0f
@@ -2574,6 +2634,14 @@ public static class MathHelper
                     return TypeCode.Object;
                 }
                 else
+                if (a.GetType() != b.GetType() && IsBoxedIntegerNumber(a) && IsBoxedIntegerNumber(b) && ((a is ulong ulA && ulA > long.MaxValue) || (b is ulong ulB && ulB > long.MaxValue)))
+                {
+                    // A ulong beyond the range of long and a signed integer have no common 64-bit type; they are computed exactly as big integers
+                    a = ConvertToBigInteger(a);
+                    b = ConvertToBigInteger(b);
+                    return TypeCode.Object;
+                }
+                else
                 {
                     result = TypeCode.Int64;
                 }
@@ -2790,6 +2858,10 @@ public static class MathHelper
         if (a is NCalcVector vA)
             return NCalcVector.Abs(vA);
 
+        // An integer is made positive exactly, as by negation: the minimum value of a signed type becomes the next wider type
+        if (a is not null && IsBoxedIntegerNumber(a))
+            return ConvertToBigInteger(a).Sign < 0 ? Negate(a, false, options)! : a;
+
         if (options.DecimalAsDefault || a is decimal)
             return Math.Abs(ConvertToDecimal(a, "Abs", options.CultureInfo, null));
 
@@ -2945,6 +3017,13 @@ public static class MathHelper
 
     public static object Ceiling(object? a, MathHelperOptions options)
     {
+        if (a is Percent percent && percent.Value is not null)
+            return new Percent(Ceiling(percent.Value, options));
+
+        // An integer is already whole and is returned unchanged, so that it does not lose digits through double
+        if (a is not null && IsBoxedIntegerNumber(a))
+            return a;
+
         // A big number is rounded up exactly even when UseBigNumbers is not set
         if (a is BigInteger biA)
             return biA;
@@ -3147,6 +3226,13 @@ public static class MathHelper
 
     public static object Floor(object? a, MathHelperOptions options)
     {
+        if (a is Percent percent && percent.Value is not null)
+            return new Percent(Floor(percent.Value, options));
+
+        // An integer is already whole and is returned unchanged, so that it does not lose digits through double
+        if (a is not null && IsBoxedIntegerNumber(a))
+            return a;
+
         // A big number is floored exactly even when UseBigNumbers is not set
         if (a is BigInteger biA)
         {
@@ -3341,12 +3427,13 @@ public static class MathHelper
             case uint ui: exponent = new BigInteger(ui); return true;
             case long l: exponent = new BigInteger(l); return true;
             case ulong ul: exponent = new BigInteger(ul); return true;
+            // An infinite exponent is not a whole number (Math.Truncate returns it unchanged); it is raised in double
             case float f:
-                if (f != Math.Truncate(f)) return false;
+                if (float.IsInfinity(f) || f != Math.Truncate(f)) return false;
                 exponent = GetWholeValue(new BigDecimal(f));
                 return true;
             case double d:
-                if (d != Math.Truncate(d)) return false;
+                if (double.IsInfinity(d) || d != Math.Truncate(d)) return false;
                 if (d >= long.MinValue && d <= long.MaxValue)
                     exponent = new BigInteger((long)d);
                 else
@@ -3443,8 +3530,10 @@ public static class MathHelper
         if (scale == 0 && BigInteger.Abs(mantissa).IsOne)
             return (mantissa.Sign < 0 && !n.IsEven) ? new BigDecimal(BigInteger.MinusOne, 0) : BigDecimal.One;
 
-        // The result has about n * log10|mantissa| digits, and its scale is n * scale
-        double digits = (double)n * BigInteger.Log10(BigInteger.Abs(mantissa));
+        // The result has about n * log10|mantissa| significant digits, and its scale is n * scale. A positive scale adds trailing zeros
+        // that are stored in the exponent but become digits when the result is converted to an integer (10 is stored as 1E1,
+        // and 10 ** 200000 would become a 200,000-digit BigInteger), so it counts towards the limit too.
+        double digits = (double)n * (BigInteger.Log10(BigInteger.Abs(mantissa)) + Math.Max(scale, 0));
         double resultScale = (double)n * scale;
         if (digits > MaxPowResultDigits)
             throw new NCalcEvaluationException($"The result of the power operation would have about {digits:0} digits, which exceeds the limit of {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
@@ -3459,6 +3548,10 @@ public static class MathHelper
     {
         if (a is ComplexNumber || b is ComplexNumber)
             throw new InvalidOperationException($"The Factorial function is not defined for complex numbers");
+
+        // A fraction would be truncated by the conversion below (3.5! would give 6), so only whole numbers are accepted
+        if (IsBoxedFloatingNumberInteger(a) == false || IsBoxedFloatingNumberInteger(b) == false)
+            throw new NCalcEvaluationException("The factorial is defined only for whole numbers");
 
         long step = ConvertToLong(b, "Factorial", options.CultureInfo, null);
 
@@ -3480,7 +3573,12 @@ public static class MathHelper
             }
         }
 
-        BigInteger bigValue = a is BigInteger bigA ? bigA : ConvertToBigInteger(a);
+        BigInteger bigValue = a switch
+        {
+            BigInteger bigA => bigA,
+            BigDecimal or double or float or decimal => GetWholeValue(ConvertToBigDecimal(a)),
+            _ => ConvertToBigInteger(a)
+        };
         CheckFactorialArguments(bigValue, step);
         if (bigValue <= 1)
             return 1;
@@ -3559,6 +3657,9 @@ public static class MathHelper
 
         int precision = ConvertToInt(b, "Round", options.CultureInfo, null);
 
+        if (a is Percent percent && percent.Value is not null)
+            return new Percent(Round(percent.Value, b, rounding, options));
+
         if (a is ComplexNumber cnA)
             return ComplexNumber.Round(cnA, precision, rounding);
 
@@ -3573,7 +3674,8 @@ public static class MathHelper
             if (precision >= 0)
                 return a!;
 
-            var rounded = RoundToPowerOfTen(ConvertToBigInteger(a!), -precision, rounding);
+            // -int.MinValue overflows; rounding to 10^2147483648 gives zero as rounding to 10^2147483647 does
+            var rounded = RoundToPowerOfTen(ConvertToBigInteger(a!), precision == int.MinValue ? int.MaxValue : -precision, rounding);
             // The result keeps the type of the argument when it fits
             return NarrowToTypeOf(a!, rounded);
         }
@@ -3620,13 +3722,18 @@ public static class MathHelper
     /// </summary>
     public static BigDecimal RoundBigDecimal(BigDecimal value, int digits, MidpointRounding mode)
     {
-        int targetExponent = -digits;
+        // Computed in long, so that extreme digit counts (int.MinValue) do not overflow
+        long targetExponent = -(long)digits;
         if (value.Exponent >= targetExponent)
             return value;
 
-        var shift = targetExponent - value.Exponent;
-        var rounded = RoundToPowerOfTen(value.Mantissa, shift, mode);
-        return new BigDecimal(rounded / BigInteger.Pow(10, shift), targetExponent);
+        long shift = targetExponent - value.Exponent;
+        // A multiple that is larger than twice the value rounds it to zero (as in RoundToPowerOfTen), and the power is not computed
+        if (value.Mantissa.IsZero || shift > (long)Math.Ceiling(BigInteger.Log10(BigInteger.Abs(value.Mantissa))) + 1)
+            return BigDecimal.Zero;
+
+        var rounded = RoundToPowerOfTen(value.Mantissa, (int)shift, mode);
+        return new BigDecimal(rounded / BigInteger.Pow(10, (int)shift), (int)targetExponent);
     }
 
     private static object NarrowToTypeOf(object original, BigInteger value)
@@ -3641,6 +3748,11 @@ public static class MathHelper
             uint when value >= uint.MinValue && value <= uint.MaxValue => (object)(uint)value,
             long when value >= long.MinValue && value <= long.MaxValue => (object)(long)value,
             ulong when value >= ulong.MinValue && value <= ulong.MaxValue => (object)(ulong)value,
+            // A result that does not fit the type of the argument (Round(2147483647, -1)) gets the next integer type it fits in
+            BigInteger => (object)value,
+            _ when value >= int.MinValue && value <= int.MaxValue => (object)(int)value,
+            _ when value >= long.MinValue && value <= long.MaxValue => (object)(long)value,
+            _ when value >= ulong.MinValue && value <= ulong.MaxValue => (object)(ulong)value,
             _ => (object)value
         };
     }
@@ -3843,6 +3955,16 @@ public static class MathHelper
 
     public static object Sign(object? a, MathHelperOptions options)
     {
+        // The sign of a percent is the sign of its value
+        if (a is Percent percent && percent.Value is not null)
+            return Sign(percent.Value, options);
+
+        // NaN has no sign: it gives NaN, as the other functions do, instead of the ArithmeticException of Math.Sign
+        if (a is double.NaN)
+            return double.NaN;
+        if (a is float.NaN)
+            return float.NaN;
+
         if (a is BigInteger biA)
         {
             return biA.Sign;
@@ -3859,7 +3981,11 @@ public static class MathHelper
         if (options.DecimalAsDefault || a is decimal)
             return Math.Sign(ConvertToDecimal(a, "Sign", options.CultureInfo, null));
 
-        return Math.Sign(ConvertToDouble(a, "Sign", options.CultureInfo, null));
+        double d = ConvertToDouble(a, "Sign", options.CultureInfo, null);
+        // A string such as "NaN" converts to NaN
+        if (double.IsNaN(d))
+            return double.NaN;
+        return Math.Sign(d);
     }
 
     public static object Sec(object? a, MathHelperOptions options)
@@ -3959,6 +4085,10 @@ public static class MathHelper
     {
         if (a is null)
             return null;
+
+        // The square root of a percent is the square root of its fraction: Sqrt(25%) is 0.5
+        if (a is Percent percent && percent.Value is not null)
+            return Sqrt(Divide(percent.Value, 100m, true, options), options);
 
         if (options.UseBigNumbers)
         {
@@ -4074,6 +4204,9 @@ public static class MathHelper
 
     public static object Truncate(object? a, MathHelperOptions options)
     {
+        if (a is Percent percent && percent.Value is not null)
+            return new Percent(Truncate(percent.Value, options));
+
         if (options.SupportTimeOperations)
         {
             if (a is TimeSpan ts)
@@ -4704,6 +4837,7 @@ public static class MathHelper
     /// arithmetic on the two numbers (Max(3, 2.5) is a double whichever is larger); NaN wins, as with Math.Max and Math.Min.
     /// A string that is a number literal takes part as a number; a number cannot be compared with a value of another kind.
     /// Values of other kinds (strings, dates) are compared as with the comparison operators. A null argument gives null.
+    /// Values that cannot be ordered (complex numbers with an imaginary part, vectors, incomparable types) throw <see cref="NCalcEvaluationException"/>.
     /// </summary>
     private static object? MaxOrMin(object? a, object? b, bool max, MathHelperOptions options)
     {
@@ -4714,6 +4848,34 @@ public static class MathHelper
         a = ConvertNumericString(a, options);
         b = ConvertNumericString(b, options);
 
+        // Percentages are ordered by their values, and the chosen percent is returned
+        if (a is Percent percentA && b is Percent percentB && percentA.Value is not null && percentB.Value is not null)
+        {
+            if (percentA.Value is double.NaN or float.NaN)
+                return percentA;
+            if (percentB.Value is double.NaN or float.NaN)
+                return percentB;
+            int percentComparison = Compare(percentA.Value, percentB.Value, options, options);
+            return (max ? percentComparison < 0 : percentComparison > 0) ? percentB : percentA;
+        }
+
+        // A complex number with no imaginary part is a real number, as with the comparison operators
+        if (a is ComplexNumber realA && realA.IsReal)
+            a = ReduceComplexToReal(realA, options);
+        if (b is ComplexNumber realB && realB.IsReal)
+            b = ReduceComplexToReal(realB, options);
+        if (a is ComplexNumber or NCalcVector or Percent || b is ComplexNumber or NCalcVector or Percent)
+            throw new NCalcEvaluationException($"{function}() cannot order values of types {a.GetType().Name} and {b.GetType().Name}");
+
+        // A boolean takes part as 1 or 0 when boolean calculation is allowed, as in true + 5
+        if (options.AllowBooleanCalculation)
+        {
+            if (a is bool boolA && IsBoxedNumberOrBigNumber(b))
+                a = boolA ? 1 : 0;
+            if (b is bool boolB && IsBoxedNumberOrBigNumber(a))
+                b = boolB ? 1 : 0;
+        }
+
         bool aIsNumber = IsBoxedNumberOrBigNumber(a);
         bool bIsNumber = IsBoxedNumberOrBigNumber(b);
         if (aIsNumber != bIsNumber)
@@ -4721,23 +4883,46 @@ public static class MathHelper
 
         if (!aIsNumber)
         {
-            int result = Compare(a, b, options, options);
+            // The same ordering as the comparison operators; values that they cannot order cannot be compared here either
+            if (!TypeHelper.CompareUsingMostPreciseType(a, b, options, options, out int result))
+                throw new NCalcEvaluationException($"{function}() cannot compare values of types {a.GetType().Name} and {b.GetType().Name}");
             return (max ? result < 0 : result > 0) ? b : a;
+        }
+
+        // NaN wins, as with Math.Max and Math.Min; it is checked before the conversion, which cannot convert NaN to a big number
+        bool nanA = a is double.NaN or float.NaN;
+        bool nanB = b is double.NaN or float.NaN;
+        if (nanA || nanB)
+            return a is float && b is float ? (object)float.NaN : (object)double.NaN;
+
+        // An infinity cannot be converted to a big number either; it is larger (or smaller) than any big number
+        if (IsBigNumber(a) || IsBigNumber(b))
+        {
+            object? infinite = IsInfinity(a) ? a : IsInfinity(b) ? b : null;
+            if (infinite is not null)
+            {
+                bool positive = infinite is double.PositiveInfinity or float.PositiveInfinity;
+                object other = ReferenceEquals(infinite, a) ? b : a;
+                return positive == max ? infinite : other;
+            }
         }
 
         object widenedA = a;
         object widenedB = b;
         ConvertToHighestPrecision(ref widenedA, ref widenedB, false, options);
 
-        if (widenedA is double.NaN or float.NaN)
-            return widenedA;
-        if (widenedB is double.NaN or float.NaN)
-            return widenedB;
-
         // The original values are compared, so that the conversion does not make different values equal
         int comparison = Compare(a, b, options, options);
-        return (max ? comparison < 0 : comparison > 0) ? widenedB : widenedA;
+        bool pickB = max ? comparison < 0 : comparison > 0;
+
+        // A ulong above long.MaxValue and a signed integer are widened to BigInteger only to be compared; the chosen value keeps its type
+        if (widenedA is BigInteger && !IsBigNumber(a) && !IsBigNumber(b) && !options.UseBigNumbers)
+            return pickB ? b : a;
+        return pickB ? widenedB : widenedA;
     }
+
+    private static bool IsInfinity(object value)
+        => value is double.PositiveInfinity or double.NegativeInfinity or float.PositiveInfinity or float.NegativeInfinity;
 
     private static object ConvertNumericString(object value, MathHelperOptions options)
     {
@@ -4855,7 +5040,7 @@ public static class MathHelper
     {
         if (b is null)
             return null;
-        int intB = ConvertToInt(b, "Left Shift", options.CultureInfo, null);
+        int intB = GetBigShiftCount(a, b, "Left Shift", options);
         CheckBigShift(a, intB);
         return a << intB;
     }
@@ -4871,6 +5056,32 @@ public static class MathHelper
         double digits = BigInteger.Log10(BigInteger.Abs(a)) + step * 0.30102999566398120;
         if (digits > MaxPowResultDigits)
             throw new NCalcEvaluationException($"The result of the shift would have about {digits:0} digits, which exceeds the limit of {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
+    }
+
+    // The number of bits to shift: an integer of any type, including BigInteger, from 0 to int.MaxValue.
+    // A negative count is rejected for every type of the left operand (it is not turned into a shift in the other direction).
+    private static int GetShiftCount(object a, object? b)
+    {
+        if (b is not BigInteger && !IsBoxedIntegerNumber(b))
+            throw new NCalcEvaluationException($"The right operand {b} does not define the number of bits to shift {a}");
+
+        BigInteger count = ConvertToBigInteger(b!);
+        if (count.Sign < 0 || count > int.MaxValue)
+            throw new NCalcEvaluationException($"The value {count} cannot be used as a number of bits to shift {a}");
+
+        return (int)count;
+    }
+
+    // A big integer can also be shifted by a whole floating-point count, as before; a negative count is rejected as for other types
+    private static int GetBigShiftCount(BigInteger a, object b, string operation, MathHelperOptions options)
+    {
+        if (b is BigInteger || IsBoxedIntegerNumber(b))
+            return GetShiftCount(a, b);
+
+        int count = ConvertToInt(b, operation, options.CultureInfo, null);
+        if (count < 0)
+            throw new NCalcEvaluationException($"The value {count} cannot be used as a number of bits to shift {a}");
+        return count;
     }
 
     public static object? LeftShift(object? a, object? b, bool reduceTypes, MathHelperOptions options)
@@ -4892,45 +5103,40 @@ public static class MathHelper
         if (!MathHelper.IsBoxedIntegerNumber(a))
             throw new NCalcEvaluationException($"The left operand {a} cannot be bit-shifted");
 
-        long step;
+        int stepInt = GetShiftCount(a!, b);
 
-        if (b is BigInteger)
-        {
-            step = (long)b;
-        }
-        else
-        {
-            if (!MathHelper.IsBoxedIntegerNumber(b))
-                throw new NCalcEvaluationException($"The right operand {b} does not define the number of bits to shift {a}");
-
-            step = MathHelper.GetBoxedIntegerNumberAsLong(b) ?? throw new NCalcEvaluationException("");
-        }
-
-        if (step > int.MaxValue || step < 0)
-            throw new NCalcEvaluationException($"The value {step} cannot be used as a number of bits to shift {a}");
-
-        int stepInt = (int)step;
-
-        ulong ula = ConvertToULong(a, "Left Shift", options.CultureInfo, null);
+        // A negative value is shifted arithmetically, as in C# (-1 << 1 is -2), and its result is a long
+        BigInteger value = ConvertToBigInteger(a!);
+        bool negative = value.Sign < 0;
 
         // The shift is exact: the count is not masked to the width of the type (1 << 64 is not 1). Bits shifted beyond 64 make
         // a big integer with UseBigNumbers, an overflow with OverflowProtection, and are dropped otherwise (1 << 64 is 0)
         if (options.UseBigNumbers)
-            CheckBigShift(ula, step);
-        BigInteger shifted = stepInt >= 128 && !options.UseBigNumbers
-            ? (ula == 0 ? BigInteger.Zero : BigInteger.One << 128)
-            : new BigInteger(ula) << stepInt;
+            CheckBigShift(value, stepInt);
+        BigInteger shifted;
+        if (stepInt >= 128 && !options.UseBigNumbers)
+        {
+            // Only the lowest 64 bits are kept, and they are all zero; the stand-in value just has to be out of range
+            shifted = value.IsZero ? BigInteger.Zero : (negative ? BigInteger.MinusOne : BigInteger.One) << 128;
+        }
+        else
+            shifted = value << stepInt;
 
-        if (shifted > ulong.MaxValue)
+        if (shifted > ulong.MaxValue || shifted < long.MinValue)
         {
             if (options.UseBigNumbers)
                 return reduceTypes ? ReduceNumericType(shifted) : shifted;
             if (options.OverflowProtection)
-                throw new OverflowException($"The result of shifting {a} left by {step} bits does not fit in 64 bits");
+                throw new OverflowException($"The result of shifting {a} left by {stepInt} bits does not fit in 64 bits");
             shifted &= ulong.MaxValue;
         }
 
-        ulong result = (ulong)shifted;
+        // A negative result whose high bits were dropped is in the 64-bit pattern of its two's complement and is read back as a long
+        object result;
+        if (!negative)
+            result = (ulong)shifted;
+        else
+            result = shifted.Sign < 0 ? (long)shifted : unchecked((long)(ulong)shifted);
         if (reduceTypes)
             return ReduceNumericType(result);
 
@@ -4941,7 +5147,7 @@ public static class MathHelper
     {
         if (b is null)
             return null;
-        int intB = ConvertToInt(b, "Right Shift", options.CultureInfo, null);
+        int intB = GetBigShiftCount(a, b, "Right Shift", options);
         return a >> intB;
     }
 
@@ -4964,27 +5170,12 @@ public static class MathHelper
         if (!MathHelper.IsBoxedIntegerNumber(a))
             throw new NCalcEvaluationException($"The left operand {a} cannot be bit-shifted");
 
-        long step;
+        int step = GetShiftCount(a!, b);
 
-        if (b is BigInteger)
-        {
-            step = (long)b;
-        }
-        else
-        {
-            if (!MathHelper.IsBoxedIntegerNumber(b))
-                throw new NCalcEvaluationException($"The right operand {b} does not define the number of bits to shift {a}");
-
-            step = MathHelper.GetBoxedIntegerNumberAsLong(b) ?? throw new NCalcEvaluationException("");
-        }
-
-        if (step > int.MaxValue || step < 0)
-            throw new NCalcEvaluationException($"The value {step} cannot be used as a number of bits to shift {a}");
-
-        ulong ula = ConvertToULong(a, "Right Shift", options.CultureInfo, null);
-
-        // The count is not masked to the width of the type: shifting by 64 bits or more leaves nothing
-        ulong result = step >= 64 ? 0UL : ula >> (int)step;
+        // The count is not masked to the width of the type: shifting by 64 bits or more leaves nothing (or -1 for a negative value,
+        // which is shifted arithmetically as in C#: -8 >> 1 is -4)
+        BigInteger value = ConvertToBigInteger(a!);
+        object result = value.Sign < 0 ? (long)(value >> step) : (object)(ulong)(value >> step);
         if (reduceTypes)
             return ReduceNumericType(result);
 
@@ -5009,7 +5200,7 @@ public static class MathHelper
                     throw new InvalidOperationException($"The comparison operation is not defined for complex numbers");
                 a = cnA.Real;
                 if (!mathHelperOptions.UseBigNumbers)
-                    a = (double)a;
+                    a = BigDecimalToDouble(cnA.Real);
             }
             if (b is ComplexNumber cnB)
             {
@@ -5017,7 +5208,7 @@ public static class MathHelper
                     throw new InvalidOperationException($"The comparison operation is not defined for complex numbers");
                 b = cnB.Real;
                 if (!mathHelperOptions.UseBigNumbers)
-                    b = (double)b;
+                    b = BigDecimalToDouble(cnB.Real);
             }
         }
 

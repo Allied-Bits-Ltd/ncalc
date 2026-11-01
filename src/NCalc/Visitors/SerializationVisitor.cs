@@ -25,9 +25,15 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         return numberFormat;
     }
 
-    // A double is written so that it is read back exactly: in plain notation when that is exact (0.00001), otherwise in the round-trip format (1E-30)
+    // A double is written so that it is read back exactly: in plain notation when that is exact (0.00001), otherwise in the round-trip format (1E-30).
+    // The infinities are written as a number that is too large for a double, NaN as the difference of two infinities, as they have no literal.
     private string FormatDouble(double value)
     {
+        if (double.IsNaN(value))
+            return "(1e400 - 1e400)";
+        if (double.IsInfinity(value))
+            return value > 0 ? "1e400" : "-1e400";
+
         string roundTrip = value.ToString("R", _numberFormatInfo);
         if (roundTrip.IndexOf('E') < 0)
             return roundTrip;
@@ -76,6 +82,14 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             ? value.ToString("yyyy'-'MM'-'dd", CultureInfo.InvariantCulture)
             : value.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss.FFFFFFF", CultureInfo.InvariantCulture).TrimEnd('.'))
             + (value.Kind == DateTimeKind.Utc ? "Z" : string.Empty);
+
+    // A time span is written as [-][d.]hh:mm:ss[.fffffff], without trailing zeros in the fraction of a second: #1.02:03:04.5#
+    private static string FormatTimeSpan(TimeSpan value)
+    {
+        string text = value.ToString("c", CultureInfo.InvariantCulture);
+        int fraction = text.IndexOf('.', text.LastIndexOf(':'));
+        return fraction < 0 ? text : text.TrimEnd('0').TrimEnd('.');
+    }
 
     public string Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
@@ -239,7 +253,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                 parensNeeded = !(expression.LeftExpression is Identifier || expression.LeftExpression is ValueExpression) && !(expression.LeftExpression is UnaryExpression unExp && unExp.Type == UnaryExpressionType.FromEnd);
             else
             if (expression.Type is BinaryExpressionType.IndexAccess)
-                parensNeeded = GetPrecedence(expression.LeftExpression) < PostfixPrecedence;
+                // Only a name, a function call, a string or a list can be indexed directly: "s[1..4][0]" and "3![0]" are not parsed,
+                // "(s[1..4])[0]" is
+                parensNeeded = expression.LeftExpression is not (Identifier or FunctionCall or LogicalExpressionList or ValueExpression { Type: ValueType.String });
             else
             if (GetBinaryOperatorPrecedence(expression.Type) is int precedence)
             {
@@ -328,7 +344,8 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
         string result = expression.Type switch
         {
-            UnaryExpressionType.Not => "!",
+            // "!" is not an operator when the operator characters are skipped
+            UnaryExpressionType.Not => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "not " : "!",
             UnaryExpressionType.Negate => "-",
             UnaryExpressionType.FromEnd => "^",
             UnaryExpressionType.BitwiseNot => context.Options.HasFlag(ExpressionOptions.SkipLogicalAndBitwiseOpChars) ? "bit_not " : "~",
@@ -367,7 +384,8 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
 
-        bool parensNeeded = GetPrecedence(expression.Expression) < PrimaryPrecedence;
+        // Only a number is written directly before the "i": "x i" written as "xi" would be read as a name, so it is written as "(x)i"
+        bool parensNeeded = expression.Expression is not ValueExpression || GetPrecedence(expression.Expression) < PrimaryPrecedence;
         return EncapsulateNoValue(expression.Expression, false, parensNeeded) + "i";
     }
 
@@ -375,19 +393,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
 
-        string sep = GetListItemSeparator(context.AdvancedOptions);
-
-        var resultBuilder = new StringBuilder("[");
-        for (int i = 0; i < expression.Expressions.Count; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (i > 0)
-                resultBuilder.Append(sep);
-
-            resultBuilder.Append(expression.Expressions[i].Accept(this, cancellationToken).TrimEnd());
-        }
-        resultBuilder.Append(']');
-        return resultBuilder.ToString();
+        return "[" + JoinListItems(expression.Expressions, cancellationToken) + "]";
     }
 
     public string Visit(ValueExpression expression, CancellationToken cancellationToken = default)
@@ -396,9 +402,11 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
         return expression.Type switch
         {
+            // A ulong above long.MaxValue is written in hexadecimal, which is read back as a ulong (decimal digits would give a double)
+            ValueType.Integer when value is ulong ulongValue && ulongValue > long.MaxValue => $"0x{ulongValue.ToString("X", CultureInfo.InvariantCulture)} ",
             ValueType.Boolean or ValueType.Integer => $"{Convert.ToString(value, CultureInfo.InvariantCulture)} ",
             ValueType.DateTime => value is DateTime dateTime ? $"#{FormatDateTime(dateTime)}# " : $"#{value}# ",
-            ValueType.TimeSpan => $"#{Convert.ToString(value, CultureInfo.InvariantCulture)}# ",
+            ValueType.TimeSpan => value is TimeSpan timeSpan ? $"#{FormatTimeSpan(timeSpan)}# " : $"#{Convert.ToString(value, CultureInfo.InvariantCulture)}# ",
             ValueType.Float =>
                 value is null
                     ? string.Empty
@@ -434,19 +442,8 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             return "@";
         }
 
-        string sep = GetListItemSeparator(context.AdvancedOptions);
-        var resultBuilder = new StringBuilder(function.Identifier.Name +'(');
-
         // Not every argument ends with a space (identifiers do not), so each one is trimmed instead of removing its last character
-        for (int i = 0; i < function.Parameters.Count; i++)
-        {
-            if (i > 0)
-                resultBuilder.Append(sep);
-            resultBuilder.Append(function.Parameters[i].Accept(this, cancellationToken).TrimEnd());
-        }
-
-        resultBuilder.Append(") ");
-        return resultBuilder.ToString();
+        return function.Identifier.Name + "(" + JoinListItems(function.Parameters, cancellationToken) + ") ";
     }
 
     public string Visit(Identifier identifier, CancellationToken cancellationToken = default)
@@ -461,19 +458,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
 
-        string sep = GetListItemSeparator(context.AdvancedOptions);
-        var resultBuilder = new StringBuilder("(");
-        for (var i = 0; i < list.Count; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            resultBuilder.Append(list[i].Accept(this, cancellationToken).TrimEnd());
-            if (i < list.Count - 1)
-            {
-                resultBuilder.Append(sep);
-            }
-        }
-        resultBuilder.Append(')');
-        return resultBuilder.ToString();
+        return "(" + JoinListItems(list, cancellationToken) + ")";
     }
 
     public string Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
@@ -623,26 +608,57 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         }
     }
 
+    // Items are separated with a semicolon wherever the parser accepts one, as a comma may also be the decimal separator ("Max(1,5; 2)")
     private string GetListItemSeparator(AdvancedExpressionOptions? options)
     {
-        if (context.AdvancedOptions is not null)
-        {
-            return context.AdvancedOptions.ListItemSeparator switch
-            {
-                AdvancedExpressionOptions.ListItemSeparatorKind.Comma => ", ",
-                AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSemicolon => ", ",
-                AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSpace => ", ",
-                AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSemicolonOrSpace => ", ",
-                AdvancedExpressionOptions.ListItemSeparatorKind.Semicolon => "; ",
-                AdvancedExpressionOptions.ListItemSeparatorKind.SemicolonOrColon => "; ",
-                AdvancedExpressionOptions.ListItemSeparatorKind.SemicolonOrSpace => "; ",
-                AdvancedExpressionOptions.ListItemSeparatorKind.SemicolonOrColonOrSpace => "; ",
-                AdvancedExpressionOptions.ListItemSeparatorKind.Colon => ": ",
-                AdvancedExpressionOptions.ListItemSeparatorKind.Space => " ",
-                _ => "; ",
-            };
-        }
-        else
+        if (options is null)
             return "; ";
+
+        string separator = options.ListItemSeparator switch
+        {
+            AdvancedExpressionOptions.ListItemSeparatorKind.Comma or AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSpace => ",",
+            AdvancedExpressionOptions.ListItemSeparatorKind.Colon => ":",
+            AdvancedExpressionOptions.ListItemSeparatorKind.Space => string.Empty,
+            _ => ";",
+        };
+
+        // A separator that is also a decimal or group separator gets a space before it, so that it is not read as a part of a number
+        // ("Max(1 , 2)" instead of "Max(1, 2)", where "1," would be read as 1.0)
+        if (separator.Length > 0 && (separator == options.GetDecimalSeparator() || separator == options.GetSecondaryDecimalSeparator()
+            || separator == options.GetNumberGroupSeparator()))
+            separator = " " + separator;
+
+        return separator + " ";
+    }
+
+    // Writes the items of a list or of the arguments of a function. When the items are separated by spaces only, an item that starts
+    // with a sign is parenthesized ("1 (-2)", not "1 -2", which is a subtraction), and so is an item followed by a parenthesis or
+    // a bracket ("(a) (-2)", not "a (-2)", which is a function call, or "a [b]", which is an index).
+    private string JoinListItems(IList<LogicalExpression> items, CancellationToken cancellationToken)
+    {
+        string separator = GetListItemSeparator(context.AdvancedOptions);
+        var texts = new string[items.Count];
+        for (int i = 0; i < items.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            texts[i] = items[i].Accept(this, cancellationToken).Trim();
+        }
+
+        if (context.AdvancedOptions?.ListItemSeparator == AdvancedExpressionOptions.ListItemSeparatorKind.Space)
+        {
+            for (int i = 0; i < texts.Length; i++)
+            {
+                if (texts[i].StartsWith("-", StringComparison.Ordinal) || texts[i].StartsWith("+", StringComparison.Ordinal))
+                    texts[i] = "(" + texts[i] + ")";
+            }
+            // From the end, as a wrapped item makes the one before it need parentheses too
+            for (int i = texts.Length - 2; i >= 0; i--)
+            {
+                if (texts[i + 1].StartsWith("(", StringComparison.Ordinal) || texts[i + 1].StartsWith("[", StringComparison.Ordinal))
+                    texts[i] = "(" + texts[i] + ")";
+            }
+        }
+
+        return string.Join(separator, texts);
     }
 }

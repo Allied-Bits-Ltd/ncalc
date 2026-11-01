@@ -1014,9 +1014,8 @@ public class AdvFeatureTests : TestBase
         expression.AdvancedOptions.Flags |= AdvExpressionOptions.CalculatePercent;
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
-        if (expectedValue.Contains('.') && CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator != ".")
-            expectedValue = expectedValue.Replace(".", CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
 
+        // Percent.ToString() formats with the invariant culture, as ComplexNumber and Vector do
         Assert.Equal(expectedValue, result?.ToString());
     }
 
@@ -2743,9 +2742,7 @@ public class AsyncAdvFeatureTests
 
         var result = await expression.EvaluateAsync(TestContext.Current.CancellationToken);
 
-        if (expectedValue.Contains('.') && CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator != ".")
-            expectedValue = expectedValue.Replace(".", CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
-
+        // Percent.ToString() formats with the invariant culture, as ComplexNumber and Vector do
         Assert.Equal(expectedValue, result?.ToString());
     }
 

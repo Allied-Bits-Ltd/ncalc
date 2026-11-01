@@ -147,7 +147,8 @@ public static class TypeHelper
         try
         {
             var parser = LogicalExpressionParser.GetLiteralParser(options.CultureInfo, options.AllOptions, null);
-            var context = new LogicalExpressionParserContext(value, options.AllOptions, options.CultureInfo);
+            // The context skips whitespace for the parser, so it must not accept comments either
+            var context = new LogicalExpressionParserContext(value, LogicalExpressionParser.WithoutComments(options.AllOptions), options.CultureInfo);
             if (!parser.TryParse(context, out var parsed, out _))
                 return false;
 

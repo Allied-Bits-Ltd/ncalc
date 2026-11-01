@@ -442,11 +442,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     return SetTaskValue(task, MathHelper.ConvertToBoolean(rightValue, "Or", context.CultureInfo, expression.RightExpression.Location));
 
                 case BinaryExpressionType.XOr:
-                    if (!ExpressionsEvaluated(task, expression.LeftExpression, expression.RightExpression))
-                        return null;
-
+                    // As in the recursive evaluator, the right operand is not evaluated when the left one gives the result (null)
                     if (context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
                     {
+                        if (!ExpressionEvaluated(task, 0, expression.LeftExpression))
+                            return null;
                         leftValue = task.ChildStates[0].Value;
 
                         bool? leftBool = leftValue is bool lb ? lb : null;
@@ -456,12 +456,14 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         if (!ExpressionEvaluated(task, 1, expression.RightExpression))
                             return null;
                         rightValue = task.ChildStates[1].Value;
-                        if (rightValue == null)
+                        if (rightValue is not bool)
                             return SetTaskValue(task, null);
 
                         return SetTaskValue(task, K3LogicHelper.Xor(leftValue, rightValue));
                     }
 
+                    if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
+                        return null;
                     if (!TryGetValueOrNull(task.ChildStates[0].Value, out leftValue))
                         return SetTaskValue(task, null);
                     if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
@@ -868,7 +870,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (leftValue is not null && leftValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(leftValue))
                         throw new NCalcParameterIndexException("The lower boundary, unless omitted, should evaluate to zero or an integer number", expression.LeftExpression.Location);
                     if (rightValue is not null && rightValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
-                        throw new NCalcParameterIndexException("The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
+                        throw new NCalcParameterIndexException($"The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
 
                     int? leftInt = (leftValue is null) ? null : (leftValue is NCalc.Domain.Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, "Range Index", context.CultureInfo, expression.LeftExpression.Location);
                     int? rightInt = (rightValue is null) ? null : (rightValue is NCalc.Domain.Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, "Range Index", context.CultureInfo, expression.RightExpression.Location);
@@ -877,7 +879,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         throw new NCalcParameterIndexException("The lower boundary should be zero or a positive number", expression.LeftExpression.Location);
 
                     if (rightInt.HasValue && rightInt < 0)
-                        throw new NCalcParameterIndexException("The upper boundary should be zero or a positive number", expression.RightExpression.Location);
+                        throw new NCalcParameterIndexException($"The upper boundary should be zero or a positive number", expression.RightExpression.Location);
 
                     return SetTaskValue(task, new RangeValue
                     {
@@ -924,7 +926,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                             upperBound = (range.UpperBound?.IsFromEnd == true) ? (identList.Count - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identList.Count);
 
                             if (lowerBound > upperBound)
-                                throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
+                                throw new NCalcParameterIndexException($"The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
 
                             if (lowerBound >= identList.Count || upperBound > identList.Count)
                                 throw new NCalcParameterIndexException($"The index range [{lowerBound}..{upperBound}] goes out out of the list bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
@@ -950,7 +952,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                             upperBound = (range.UpperBound?.IsFromEnd == true) ? (identString.Length - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identString.Length);
 
                             if (lowerBound > upperBound)
-                                throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
+                                throw new NCalcParameterIndexException($"The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
 
                             if (lowerBound >= identString.Length || upperBound > identString.Length)
                                 throw new NCalcParameterIndexException($"The range [{lowerBound}..{upperBound}] is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
@@ -1071,6 +1073,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
             return SetTaskValue(task, K3LogicHelper.Not(value));
         }
+
+        // "return" returns any value, null included
+        if (expression.Type == UnaryExpressionType.Return)
+            throw new NCalcFlowControl(task.ChildStates[0].Value, expression.Location);
 
         object? result = null;
         if (!TryGetValueOrNull(task.ChildStates[0].Value, out result))

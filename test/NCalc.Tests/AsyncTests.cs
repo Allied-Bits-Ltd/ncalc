@@ -250,4 +250,24 @@ public class AsyncTests
         foreach (var result in new[] { new Expression(expression, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken), await new AsyncExpression(expression, ExpressionOptions.NoCache).EvaluateAsync(TestContext.Current.CancellationToken) })
             Assert.Equal(expected, result is bool b ? (b ? 1.0 : 0.0) : Convert.ToDouble(result, CultureInfo.InvariantCulture));
     }
+
+    // NCALC-134
+    [Fact]
+    public async Task EvaluateAsyncShouldFaultTheTaskInsteadOfThrowing()
+    {
+        // An empty expression: the error comes with the task
+        var task = new AsyncExpression(string.Empty).EvaluateAsync(TestContext.Current.CancellationToken);
+        await Assert.ThrowsAnyAsync<NCalc.Exceptions.NCalcException>(async () => await task);
+
+        // An already cancelled token, with and without parsing
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+        task = new AsyncExpression("1 + 2", ExpressionOptions.NoCache).EvaluateAsync(source.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await task);
+
+        var parsed = new AsyncExpression("1 + 2", ExpressionOptions.NoCache);
+        Assert.False(parsed.HasErrors(TestContext.Current.CancellationToken));
+        task = parsed.EvaluateAsync(source.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await task);
+    }
 }

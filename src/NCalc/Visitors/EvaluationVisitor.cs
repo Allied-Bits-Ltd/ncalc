@@ -203,6 +203,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     public virtual object? Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
     {
         EnsureSufficientExecutionStack(expression);
+        cancellationToken.ThrowIfCancellationRequested();
         var left = new DeferredValue(() => Evaluate(expression.LeftExpression, cancellationToken));
         var right = new DeferredValue(() => Evaluate(expression.RightExpression, cancellationToken));
 
@@ -836,7 +837,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (leftValue is not null && leftValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(leftValue))
                         throw new NCalcParameterIndexException("The lower boundary, unless omitted, should evaluate to zero or an integer number", expression.LeftExpression.Location);
                     if (rightValue is not null && rightValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
-                        throw new NCalcParameterIndexException("The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
+                        throw new NCalcParameterIndexException($"The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
 
                     int? leftInt = (leftValue is null) ? null : (leftValue is NCalc.Domain.Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, "Range Index", context.CultureInfo, expression.LeftExpression.Location);
                     int? rightInt = (rightValue is null) ? null : (rightValue is NCalc.Domain.Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, "Range Index", context.CultureInfo, expression.RightExpression.Location);
@@ -845,7 +846,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         throw new NCalcParameterIndexException("The lower boundary should be zero or a positive number", expression.LeftExpression.Location);
 
                     if (rightInt.HasValue && rightInt < 0)
-                        throw new NCalcParameterIndexException("The upper boundary should be zero or a positive number", expression.RightExpression.Location);
+                        throw new NCalcParameterIndexException($"The upper boundary should be zero or a positive number", expression.RightExpression.Location);
 
                     return new RangeValue
                     {
@@ -886,7 +887,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                             upperBound = (range.UpperBound?.IsFromEnd == true) ? (identList.Count - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identList.Count);
 
                             if (lowerBound > upperBound)
-                                throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
+                                throw new NCalcParameterIndexException($"The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
 
                             if (lowerBound >= identList.Count || upperBound > identList.Count)
                                 throw new NCalcParameterIndexException($"The index range [{lowerBound}..{upperBound}] goes out out of the list bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
@@ -911,7 +912,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                             upperBound = (range.UpperBound?.IsFromEnd == true) ? (identString.Length - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identString.Length);
 
                             if (lowerBound > upperBound)
-                                throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
+                                throw new NCalcParameterIndexException($"The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
 
                             if (lowerBound >= identString.Length || upperBound > identString.Length)
                                 throw new NCalcParameterIndexException($"The range [{lowerBound}..{upperBound}] is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
@@ -983,6 +984,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     while (ctr < Expression.MaxLoopIterations)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         ctr++;
 
                         if (!TryGetValueOrNull(Evaluate(expression.LeftExpression, cancellationToken), out leftValue))
@@ -1029,6 +1031,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
             return K3LogicHelper.Not(value);
         }
+
+        // "return" returns any value, null included
+        if (expression.Type == UnaryExpressionType.Return)
+            throw new NCalcFlowControl(expression.Expression.Accept(this, cancellationToken), expression.Location);
 
         // Recursively evaluates the underlying expression
         if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out object? result))
@@ -1081,6 +1087,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     public virtual object? Visit(FunctionCall functionCall, CancellationToken cancellationToken = default)
     {
         EnsureSufficientExecutionStack(functionCall);
+        cancellationToken.ThrowIfCancellationRequested();
         var argsCount = functionCall.Parameters.Count;
 
         var functionName = functionCall.Identifier.Name;
@@ -1101,10 +1108,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
         // Don't call parameters right now, instead let the function do it as needed.
         // Some parameters shouldn't be called, for instance, in a if(), the "not" value might be a division by zero
-        // Evaluating every value could produce unexpected behavior
+        // Evaluating every value could produce unexpected behavior.
+        // The arguments are evaluated with the token of this evaluation, also when a function evaluates them without one
         for (var i = 0; i < argsCount; i++)
         {
-            args[i] = new Expression(functionCall.Parameters[i], context);
+            args[i] = Expression.CreateSubExpression(functionCall.Parameters[i], context, cancellationToken);
         }
 
         var functionArgs = new FunctionArgs(functionCall.Identifier.Id, args);
@@ -1163,48 +1171,18 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             {
                 if (parameter is Expression expression)
                 {
-                    //Share the parameters with child expression.
-
-                    foreach (var p in context.StaticParameters)
-                    {
-                        if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
-                            EvaluationHelper.SetParameterValueFromListNoCase(expression.Parameters, p.Key, p.Value);
-                        else
-                            expression.Parameters[p.Key] = p.Value;
-                    }
-
-                    foreach (var p in context.DynamicParameters)
-                    {
-                        if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
-                            SetParameterValueFromListNoCase(expression.DynamicParameters, p.Key, p.Value);
-                        else
-                            expression.DynamicParameters[p.Key] = p.Value;
-                    }
-
-                    // The handlers of this expression are attached only for this evaluation; attaching them for good would call
-                    // each handler once more on every evaluation of this expression
+                    // The child expression sees its own parameters first, then the ones of this expression, and gets the handlers
+                    // of this expression for this evaluation only; nothing is written into the child
                     using (EvaluationHelper.EnterNestedExpression(expression))
-                    {
-                        expression.EvaluateFunction += context.EvaluateFunctionHandler;
-                        expression.EvaluateParameter += context.EvaluateParameterHandler;
-                        expression.UpdateParameter += context.UpdateParameterHandler;
-                        expression.MatchString += context.MatchStringHandler;
-                        try
-                        {
-                            result = expression.Evaluate(cancellationToken);
-                        }
-                        finally
-                        {
-                            expression.EvaluateFunction -= context.EvaluateFunctionHandler;
-                            expression.EvaluateParameter -= context.EvaluateParameterHandler;
-                            expression.UpdateParameter -= context.UpdateParameterHandler;
-                            expression.MatchString -= context.MatchStringHandler;
-                        }
-                    }
+                        result = expression.EvaluateAsParameter(context, cancellationToken);
                     if (result is null)
                     {
                         return result;
                     }
+                }
+                else if (parameter is AsyncExpression)
+                {
+                    throw new NCalcEvaluationException($"The value of the parameter '{identifierName}' is an AsyncExpression, which cannot be evaluated synchronously. Use an AsyncExpression for the outer expression or an Expression for the parameter.", identifier.Location);
                 }
                 else
                 {
@@ -1246,9 +1224,13 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     public virtual object Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
         EnsureSufficientExecutionStack(list);
-        List<object?> result = [];
+        List<object?> result = new(list.Count);
 
-        result.AddRange(list.Select(Evaluate));
+        foreach (var item in list)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            result.Add(Evaluate(item, cancellationToken));
+        }
 
         return result;
     }
@@ -1264,7 +1246,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         EnsureSufficientExecutionStack(seq);
         object? result = null;
         foreach (var expr in seq)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             result = Evaluate(expr, cancellationToken);
+        }
 
         if (!TryGetValueOrNull(result, out result))
             return null;
@@ -1363,7 +1348,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     {
         Dictionary<string, ArgumentStateBase> argumentStates = [];
 
-        EvaluationHelper.PopulateArgumentStates(userFunction, functionCall, argumentStates, context, (expression, context) => new ArgumentState(expression, context));
+        EvaluationHelper.PopulateArgumentStates(userFunction, functionCall, argumentStates, context, (expression, context) => new ArgumentState(expression, context, cancellationToken));
 
         var expression = new Expression(userFunction.Body, context.Options, context.CultureInfo);
         expression.AdvancedOptions = context.AdvancedOptions;
@@ -1462,7 +1447,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     }
 }
 
-internal class ArgumentState(LogicalExpression expression, ExpressionContextBase context) : ArgumentStateBase
+internal class ArgumentState(LogicalExpression expression, ExpressionContextBase context, CancellationToken cancellationToken) : ArgumentStateBase
 {
     internal object? Value
     {
@@ -1470,8 +1455,9 @@ internal class ArgumentState(LogicalExpression expression, ExpressionContextBase
         {
             if (!_valueSet)
             {
-                var expr = new Expression(expression, context as ExpressionContext);
-                _value = expr.Evaluate();
+                // The argument is a part of the calling expression, evaluated in its context
+                var expr = Expression.CreateSubExpression(expression, context as ExpressionContext ?? new ExpressionContext(), cancellationToken);
+                _value = expr.Evaluate(cancellationToken);
                 _valueSet = true;
             }
             return _value;

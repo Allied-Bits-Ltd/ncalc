@@ -282,4 +282,86 @@ public class DateTimeTests
         var text = new Expression("#2001-01-01T14:56:49Z#").GetLogicalExpression(TestContext.Current.CancellationToken)!.ToString();
         Assert.Equal(DateTimeKind.Utc, ((DateTime)new Expression(text).Evaluate(TestContext.Current.CancellationToken)!).Kind);
     }
+
+    private static object? EvaluateTime(string text, params (string Name, object Value)[] parameters)
+    {
+        var expression = new Expression(text, ExpressionOptions.SupportTimeOperations | ExpressionOptions.NoCache);
+        foreach (var (name, value) in parameters)
+            expression.Parameters[name] = value;
+        return expression.Evaluate(TestContext.Current.CancellationToken);
+    }
+
+    // NCALC-112
+    [Fact]
+    public void TimeSpanDivisionShouldRoundToTheNearestTick()
+    {
+        Assert.Equal(TimeSpan.FromTicks(3), EvaluateTime("t / 3", ("t", TimeSpan.FromTicks(10))));
+        Assert.Equal(TimeSpan.FromTicks(-3), EvaluateTime("t / -3", ("t", TimeSpan.FromTicks(10))));
+        Assert.Equal(TimeSpan.FromTicks(2), EvaluateTime("t / 4", ("t", TimeSpan.FromTicks(10))));
+        Assert.Equal(TimeSpan.FromTicks(4), EvaluateTime("t / 4", ("t", TimeSpan.FromTicks(14))));
+        Assert.Equal(TimeSpan.FromHours(1) / 7.0, EvaluateTime("t / 7", ("t", TimeSpan.FromHours(1))));
+        Assert.Equal(TimeSpan.FromTicks(3), EvaluateTime("t / d", ("t", TimeSpan.FromTicks(10)), ("d", 3m)));
+        Assert.Equal(TimeSpan.FromTicks(4), EvaluateTime("t / d", ("t", TimeSpan.FromTicks(10)), ("d", 2.5)));
+        Assert.Equal(TimeSpan.FromMinutes(30), EvaluateTime("t / 2", ("t", TimeSpan.FromHours(1))));
+    }
+
+    // NCALC-112
+    [Fact]
+    public void TimeArithmeticShouldNotWrapAround()
+    {
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateTime("t + 1", ("t", TimeSpan.MaxValue)));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateTime("t - 1", ("t", TimeSpan.MinValue)));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateTime("t * 2", ("t", TimeSpan.MaxValue)));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateTime("t * u", ("t", TimeSpan.FromTicks(2)), ("u", ulong.MaxValue)));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateTime("t + t", ("t", TimeSpan.MaxValue)));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateTime("d + 1", ("d", DateTime.MaxValue)));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateTime("d - 1", ("d", DateTime.MinValue)));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateTime("d + t", ("d", DateTime.MaxValue), ("t", TimeSpan.FromDays(1))));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateTime("t / 0.0", ("t", TimeSpan.FromDays(1))));
+
+        // Results within range are exact
+        Assert.Equal(TimeSpan.MaxValue, EvaluateTime("t + 1", ("t", TimeSpan.MaxValue - TimeSpan.FromTicks(1))));
+        Assert.Equal(TimeSpan.FromTicks(6), EvaluateTime("t * 3", ("t", TimeSpan.FromTicks(2))));
+        Assert.Equal(TimeSpan.FromTicks(6), EvaluateTime("3 * t", ("t", TimeSpan.FromTicks(2))));
+        Assert.Equal(TimeSpan.FromTicks(3), EvaluateTime("t * 1.5", ("t", TimeSpan.FromTicks(2))));
+        Assert.Equal(TimeSpan.FromTicks(3), EvaluateTime("t * m", ("t", TimeSpan.FromTicks(2)), ("m", 1.5m)));
+        Assert.Equal(new DateTime(2000, 1, 1, 0, 0, 1, DateTimeKind.Utc), EvaluateTime("d + 10000000", ("d", new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc))));
+    }
+
+    [Theory]
+    [InlineData("#25:00:00#", 1, 1, 0)]
+    [InlineData("#24:00#", 1, 0, 0)]
+    [InlineData("#48:30#", 2, 0, 30)]
+    [InlineData("#-25:00:00#", -1, -1, 0)]
+    public void TimeLiteralAbove24HoursShouldBeReadWithAdvancedOptions(string text, int days, int hours, int minutes)
+    {
+        // NCALC-111: the same literals with and without (default) advanced options
+        var expected = new TimeSpan(days, hours, minutes, 0);
+        Assert.Equal(expected, new Expression(text, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        var withOptions = new Expression(text, ExpressionOptions.NoCache) { AdvancedOptions = new AdvancedExpressionOptions() };
+        Assert.Equal(expected, withOptions.Evaluate(TestContext.Current.CancellationToken));
+        var withCulture = new Expression(text, ExpressionOptions.NoCache) { AdvancedOptions = new AdvancedExpressionOptions(CultureInfo.GetCultureInfo("en-US")) };
+        Assert.Equal(expected, withCulture.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void TimeLiteralShouldHonourTheTimeSeparatorType()
+    {
+        // NCALC-111: a custom separator is used only with SeparatorType.Custom
+        var custom = new AdvancedExpressionOptions(CultureInfo.InvariantCulture)
+        {
+            TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom,
+            TimeSeparator = "|",
+            Flags = AdvExpressionOptions.SkipBuiltInTimeSeparator,
+        };
+        Assert.Equal(new TimeSpan(25, 30, 0), new Expression("#25|30|00#", ExpressionOptions.NoCache) { AdvancedOptions = custom }.Evaluate(TestContext.Current.CancellationToken));
+
+        var builtIn = new AdvancedExpressionOptions(CultureInfo.InvariantCulture)
+        {
+            TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.BuiltIn,
+            TimeSeparator = "|",
+        };
+        Assert.Equal(new TimeSpan(25, 30, 0), new Expression("#25:30:00#", ExpressionOptions.NoCache) { AdvancedOptions = builtIn }.Evaluate(TestContext.Current.CancellationToken));
+        Assert.True(new Expression("#25|30|00#", ExpressionOptions.NoCache) { AdvancedOptions = builtIn }.HasErrors(TestContext.Current.CancellationToken));
+    }
 }

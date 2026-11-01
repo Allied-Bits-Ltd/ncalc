@@ -836,7 +836,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (leftValue is not null && leftValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(leftValue))
                         throw new NCalcParameterIndexException("The lower boundary, unless omitted, should evaluate to zero or an integer number", expression.LeftExpression.Location);
                     if (rightValue is not null && rightValue is not NCalc.Domain.Index && !MathHelper.IsBoxedNumberOrBigNumber(rightValue))
-                        throw new NCalcParameterIndexException("The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
+                        throw new NCalcParameterIndexException($"The upper boundary, unless omitted, should evaluate to zero or an integer number", expression.RightExpression.Location);
 
                     int? leftInt = (leftValue is null) ? null : (leftValue is NCalc.Domain.Index leftIdx) ? leftIdx.Value : MathHelper.ConvertToInt(leftValue, "Range Index", context.CultureInfo, expression.LeftExpression.Location);
                     int? rightInt = (rightValue is null) ? null : (rightValue is NCalc.Domain.Index rightIdx) ? rightIdx.Value : MathHelper.ConvertToInt(rightValue, "Range Index", context.CultureInfo, expression.RightExpression.Location);
@@ -845,7 +845,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         throw new NCalcParameterIndexException("The lower boundary should be zero or a positive number", expression.LeftExpression.Location);
 
                     if (rightInt.HasValue && rightInt < 0)
-                        throw new NCalcParameterIndexException("The upper boundary should be zero or a positive number", expression.RightExpression.Location);
+                        throw new NCalcParameterIndexException($"The upper boundary should be zero or a positive number", expression.RightExpression.Location);
 
                     return new RangeValue
                     {
@@ -886,7 +886,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             upperBound = (range.UpperBound?.IsFromEnd == true) ? (identList.Count - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identList.Count);
 
                             if (lowerBound > upperBound)
-                                throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
+                                throw new NCalcParameterIndexException($"The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
 
                             if (lowerBound >= identList.Count || upperBound > identList.Count)
                                 throw new NCalcParameterIndexException($"The index range [{lowerBound}..{upperBound}] goes out out of the list bounds [0; {identList.Count - 1}]", expression.RightExpression.Location);
@@ -913,7 +913,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                             upperBound = (range.UpperBound?.IsFromEnd == true) ? (identString.Length - range.UpperBound.Value.Value) : (range.UpperBound?.Value ?? identString.Length);
 
                             if (lowerBound > upperBound)
-                                throw new NCalcParameterIndexException("The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
+                                throw new NCalcParameterIndexException($"The upper boundary (the actual value is {upperBound}) should be equal to or larger than the lower boundary (the actual value is {lowerBound})", expression.RightExpression.Location);
 
                             if (lowerBound >= identString.Length || upperBound > identString.Length)
                                 throw new NCalcParameterIndexException($"The range [{lowerBound}..{upperBound}] is out of bounds [0; {identString.Length - 1}]", expression.RightExpression.Location);
@@ -1033,6 +1033,10 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             return K3LogicHelper.Not(value);
         }
 
+        // "return" returns any value, null included
+        if (expression.Type == UnaryExpressionType.Return)
+            throw new NCalcFlowControl(await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false), expression.Location);
+
         // Recursively evaluates the underlying expression
         if (!TryGetValueOrNull(await expression.Expression.Accept(this, cancellationToken).ConfigureAwait(false), out object? result))
             return null;
@@ -1077,6 +1081,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     public virtual async ValueTask<object?> Visit(FunctionCall functionCall, CancellationToken cancellationToken = default)
     {
         EnsureSufficientExecutionStack(functionCall);
+        cancellationToken.ThrowIfCancellationRequested();
         var argsCount = functionCall.Parameters.Count;
 
         var functionName = functionCall.Identifier.Name;
@@ -1097,10 +1102,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
         // Don't call parameters right now, instead let the function do it as needed.
         // Some parameters shouldn't be called, for instance, in a if(), the "not" value might be a division by zero
-        // Evaluating every value could produce unexpected behavior
+        // Evaluating every value could produce unexpected behavior.
+        // The arguments are evaluated with the token of this evaluation, also when a function evaluates them without one
         for (var i = 0; i < argsCount; i++)
         {
-            args[i] = new AsyncExpression(functionCall.Parameters[i], context);
+            args[i] = AsyncExpression.CreateSubExpression(functionCall.Parameters[i], context, cancellationToken);
         }
 
         var functionArgs = new AsyncFunctionArgs(functionCall.Identifier.Id, args);
@@ -1160,43 +1166,21 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             {
                 if (parameter is AsyncExpression expression)
                 {
-                    //Share the parameters with child expression.
-                    foreach (var p in context.StaticParameters)
-                    {
-                        if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
-                            EvaluationHelper.SetParameterValueFromListNoCase(expression.Parameters, p.Key, p.Value);
-                        else
-                            expression.Parameters[p.Key] = p.Value;
-                    }
-
-                    foreach (var p in context.DynamicParameters)
-                    {
-                        if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
-                            SetParameterValueFromListNoCase(expression.DynamicParameters, p.Key, p.Value);
-                        else
-                            expression.DynamicParameters[p.Key] = p.Value;
-                    }
-
-                    // The handlers of this expression are attached only for this evaluation; attaching them for good would call
-                    // each handler once more on every evaluation of this expression
+                    // The child expression sees its own parameters first, then the ones of this expression, and gets the handlers
+                    // of this expression for this evaluation only; nothing is written into the child
                     using (EvaluationHelper.EnterNestedExpression(expression))
+                        result = await expression.EvaluateAsParameterAsync(context, cancellationToken).ConfigureAwait(false);
+                    if (result is null)
                     {
-                        expression.EvaluateFunctionAsync += context.AsyncEvaluateFunctionHandler;
-                        expression.EvaluateParameterAsync += context.AsyncEvaluateParameterHandler;
-                        expression.UpdateParameterAsync += context.AsyncUpdateParameterHandler;
-                        expression.MatchStringAsync += context.AsyncMatchStringHandler;
-                        try
-                        {
-                            result = await expression.EvaluateAsync(cancellationToken).ConfigureAwait(false);
-                        }
-                        finally
-                        {
-                            expression.EvaluateFunctionAsync -= context.AsyncEvaluateFunctionHandler;
-                            expression.EvaluateParameterAsync -= context.AsyncEvaluateParameterHandler;
-                            expression.UpdateParameterAsync -= context.AsyncUpdateParameterHandler;
-                            expression.MatchStringAsync -= context.AsyncMatchStringHandler;
-                        }
+                        return result;
                     }
+                }
+                else if (parameter is Expression syncExpression)
+                {
+                    // A synchronous child expression sees the parameters of this expression too, but not its asynchronous
+                    // dynamic parameters and handlers
+                    using (EvaluationHelper.EnterNestedExpression(syncExpression))
+                        result = syncExpression.EvaluateAsParameter(context, cancellationToken);
                     if (result is null)
                     {
                         return result;
@@ -1478,7 +1462,8 @@ internal class AsyncArgumentState(LogicalExpression expression, ExpressionContex
     {
         if (!_valueSet)
         {
-            var expr = new AsyncExpression(expression, context as AsyncExpressionContext);
+            // The argument is a part of the calling expression, evaluated in its context
+            var expr = AsyncExpression.CreateSubExpression(expression, context as AsyncExpressionContext ?? new AsyncExpressionContext(), cancellationToken);
             _value = await expr.EvaluateAsync(cancellationToken).ConfigureAwait(false);
             _valueSet = true;
         }

@@ -1,4 +1,5 @@
 ﻿using NCalc;
+using NCalc.Domain;
 
 using Parlot;
 using Parlot.Fluent;
@@ -9,6 +10,10 @@ public class WhiteSpaceParser : Parser<TextSpan>
 {
     bool _supportCStyleComments = false;
     bool _supportPythonComments = false;
+    bool _parseDates = true;
+
+    // The key under which the outcome of a date/time literal check is remembered per position in the parse memo
+    private static readonly object DateTimeLiteralCheckKey = new();
 
     private Parser<TextSpan> _commentParser;
 
@@ -16,6 +21,7 @@ public class WhiteSpaceParser : Parser<TextSpan>
     {
         _supportCStyleComments = expressionOptions.HasFlag(ExpressionOptions.SupportCStyleComments);
         _supportPythonComments = expressionOptions.HasFlag(ExpressionOptions.SupportPythonComments);
+        _parseDates = !expressionOptions.HasFlag(ExpressionOptions.DontParseDates);
         List<Parser<TextSpan>> parsers = [];
         if (_supportCStyleComments)
         {
@@ -53,7 +59,8 @@ public class WhiteSpaceParser : Parser<TextSpan>
                 if (nextChars.Equals("///", StringComparison.Ordinal))
                     break;
             }
-            if (_supportPythonComments && IsDateTimeLiteralStart(context.Scanner.Buffer, context.Scanner.Cursor.Offset))
+            if (_supportPythonComments && _parseDates && IsDateTimeLiteralStart(context.Scanner.Buffer, context.Scanner.Cursor.Offset)
+                && IsDateTimeLiteral(context))
                 break;
             if (!_commentParser.Parse(context, ref result))
                 break;
@@ -74,7 +81,48 @@ public class WhiteSpaceParser : Parser<TextSpan>
     }
 
     /// <summary>
-    /// Tells whether a '#' starts a date or time literal (#2001-01-01#, #now#) rather than a Python-style comment: the literal
+    /// Tells whether the '#' at the cursor starts a valid date or time literal, by parsing it with the date/time literal parser
+    /// of the grammar. Anything else, e.g. "#see #3" or "#todo: fix#", is a comment. The outcome is remembered per position.
+    /// </summary>
+    private static bool IsDateTimeLiteral(ParseContext context)
+    {
+        // Without the grammar's literal parser (a context of another type), the shape of the text decides, as it did before
+        if (context is not LogicalExpressionParserContext parserContext || parserContext.DateTimeLiteralParser is null)
+            return true;
+
+        // Whitespace skipped inside a literal that is being checked must leave a '#' alone; the outer check decides
+        if (parserContext.IsCheckingDateTimeLiteral)
+            return true;
+
+        var start = context.Scanner.Cursor.Position;
+        var key = (DateTimeLiteralCheckKey, start.Offset);
+        if (parserContext.ParseMemo.TryGetValue(key, out var known))
+            return (bool)known;
+
+        bool isLiteral;
+        parserContext.IsCheckingDateTimeLiteral = true;
+        try
+        {
+            var literal = new ParseResult<LogicalExpression>();
+            isLiteral = parserContext.DateTimeLiteralParser.Parse(context, ref literal);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // An invalid date or time (e.g. #99:99#) is not a literal either
+            isLiteral = false;
+        }
+        finally
+        {
+            parserContext.IsCheckingDateTimeLiteral = false;
+            context.Scanner.Cursor.ResetPosition(start);
+        }
+
+        parserContext.ParseMemo[key] = isLiteral;
+        return isLiteral;
+    }
+
+    /// <summary>
+    /// Tells whether a '#' may start a date or time literal (#2001-01-01#, #now#) rather than a Python-style comment: the literal
     /// starts with a letter or a digit and is closed by another '#' on the same line, while a comment usually starts with "# ".
     /// </summary>
     private static bool IsDateTimeLiteralStart(string buffer, int offset)

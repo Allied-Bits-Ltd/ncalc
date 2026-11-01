@@ -45,7 +45,52 @@ public abstract class LogicalExpression
 
     public ExpressionLocation Location => _location;
 
-    public ExpressionOptions Options => _options;
+    /// <summary>
+    /// The options the expression was parsed with. They are kept in JSON, so that a deserialized expression is written by ToString()
+    /// in the same dialect (e.g. "==" with <see cref="ExpressionOptions.UseCStyleAssignments"/>).
+    /// </summary>
+#if NET
+    [JsonInclude]
+#endif
+    public ExpressionOptions Options
+    {
+        get => _options;
+        private set => _options = value;
+    }
+
+#if NET
+    /// <summary>
+    /// The parts of the advanced options that ToString() uses (the flags, the list separator and the decimal separator), kept in JSON.
+    /// The other advanced options (and the culture) only affect parsing and are not stored.
+    /// </summary>
+    [JsonInclude]
+    [JsonPropertyName("AdvancedOptions")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal SerializedAdvancedOptions? SerializedAdvancedOptionsForJson
+    {
+        get => _advancedOptions is null ? null : new SerializedAdvancedOptions
+        {
+            Flags = _advancedOptions.Flags,
+            ListItemSeparator = _advancedOptions.ListItemSeparator,
+            DecimalSeparator = _advancedOptions.GetDecimalSeparator()
+        };
+        private set => _advancedOptions = value is null ? null : new AdvancedExpressionOptions(value.Flags)
+        {
+            ListItemSeparator = value.ListItemSeparator,
+            DecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom,
+            DecimalSeparator = value.DecimalSeparator ?? "."
+        };
+    }
+
+    internal sealed class SerializedAdvancedOptions
+    {
+        public AdvExpressionOptions Flags { get; set; }
+
+        public AdvancedExpressionOptions.ListItemSeparatorKind ListItemSeparator { get; set; }
+
+        public string? DecimalSeparator { get; set; }
+    }
+#endif
 
     /// <summary>
     /// The functions declared with "fn" in the expression (set on the root expression only).

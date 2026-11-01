@@ -30,18 +30,32 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
     /// <summary>
     /// Extended Options for the expression evaluation.
     /// </summary>
+    /// <remarks>
+    /// The expression keeps a copy of the assigned options, which gets the <see cref="CultureInfo"/> of the expression. The copy belongs to
+    /// the expression: change the options through this property (<c>e.AdvancedOptions.Flags |= ...</c>); changes made to the assigned
+    /// instance afterwards do not affect the expression, and setting <see cref="CultureInfo"/> never changes an instance that may be shared
+    /// with other expressions. The next parse uses the current settings of the copy (the parse cache is keyed by them), and a parsed tree
+    /// keeps a snapshot of the options it was parsed with, which later changes do not affect.
+    /// </remarks>
     public AdvancedExpressionOptions? AdvancedOptions
     {
         get => Context.AdvancedOptions;
-        set => Context.AdvancedOptions = WithCulture(value, CultureInfo);
+        set
+        {
+            // Assigning the options the expression already has (e.g. its own copy) keeps them
+            if (ReferenceEquals(value, Context.AdvancedOptions) && ReferenceEquals(value, _ownAdvancedOptions))
+                return;
+            Context.AdvancedOptions = _ownAdvancedOptions = WithCulture(value, CultureInfo);
+        }
     }
 
-    // The advanced options get the culture of the expression. An instance with another culture may be shared with other expressions,
-    // so it is copied instead of being changed: setting the culture of one expression must not change the culture of another.
+    // The copy of the advanced options that belongs to this expression and can be changed in place
+    private AdvancedExpressionOptions? _ownAdvancedOptions;
+
     private static AdvancedExpressionOptions? WithCulture(AdvancedExpressionOptions? options, CultureInfo cultureInfo)
     {
-        if (options is null || Equals(options.CultureInfo, cultureInfo))
-            return options;
+        if (options is null)
+            return null;
 
         var copy = options.Clone();
         copy.CultureInfo = cultureInfo;
@@ -57,7 +71,14 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         set
         {
             Context.CultureInfo = value;
-            Context.AdvancedOptions = WithCulture(Context.AdvancedOptions, value);
+            // The options of the expression get the culture; options that came with the context may be shared, so they are copied first
+            if (Context.AdvancedOptions is { } advancedOptions)
+            {
+                if (ReferenceEquals(advancedOptions, _ownAdvancedOptions))
+                    advancedOptions.CultureInfo = value;
+                else
+                    Context.AdvancedOptions = _ownAdvancedOptions = WithCulture(advancedOptions, value);
+            }
         }
     }
 
@@ -90,6 +111,31 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
     }
 
     public Exception? Error { get; private set; }
+
+    // Set for the expressions that the evaluators create for the arguments of functions. Such an expression evaluates a part of a tree
+    // whose declared functions are registered already, does not iterate the list parameters again (the outer evaluation does that),
+    // and is evaluated with the token of the outer evaluation when no other token is given
+    private bool _isSubExpression;
+    private CancellationToken _subExpressionCancellationToken;
+
+    private protected bool IsSubExpression => _isSubExpression;
+
+    private protected void InitSubExpression(LogicalExpression logicalExpression, CancellationToken cancellationToken)
+    {
+        SetLogicalExpressionWithoutRegistration(logicalExpression);
+        _isSubExpression = true;
+        _subExpressionCancellationToken = cancellationToken;
+    }
+
+    // Sets the tree without searching it for declared functions, e.g. for a part of a tree that is being evaluated
+    private protected void SetLogicalExpressionWithoutRegistration(LogicalExpression logicalExpression)
+    {
+        _logicalExpression = logicalExpression;
+    }
+
+    // A sub-expression evaluated without a token uses the token of the evaluation that created it
+    private protected CancellationToken GetEvaluationCancellationToken(CancellationToken cancellationToken)
+        => cancellationToken.CanBeCanceled ? cancellationToken : _subExpressionCancellationToken;
 
     public static int MaxLoopIterations = 65536;
     public static bool UseNonRecursiveEvaluator = false;
@@ -146,7 +192,7 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         if (LogicalExpression is null && !(ExpressionString?.Length > 0) && Options.HasFlag(ExpressionOptions.AllowNullOrEmptyExpressions))
             return [];
 
-        var parameterExtractionVisitor = new ParameterExtractionVisitor();
+        var parameterExtractionVisitor = new ParameterExtractionVisitor(Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup));
         LogicalExpression ??= LogicalExpressionFactory.Create(ExpressionString!, Context, CultureInfo, Context.Options, Context.AdvancedOptions, cancellationToken);
         // Each name is reported once, in the order of its first use
         return LogicalExpression.Accept(parameterExtractionVisitor, cancellationToken).Distinct().ToList();
@@ -203,15 +249,21 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
 
     private string GetCacheKey(string expression)
     {
+        // The cultures are keyed as for the parser cache: by their formats, as a customized culture may keep a standard name.
+        // The expression comes last, as it may contain the separator
         const string separator = "\u001F";
-        return string.Concat(expression,
-            separator, ((long)(Context.Options & ~ExpressionOptions.NoCache)).ToString(CultureInfo.InvariantCulture),
-            separator, CultureInfo.Name,
-            separator, Context.AdvancedOptions?.GetCacheKey() ?? string.Empty);
+        return string.Concat(((long)(Context.Options & ~ExpressionOptions.NoCache)).ToString(CultureInfo.InvariantCulture),
+            separator, LogicalExpressionParser.GetCultureCacheKey(CultureInfo),
+            separator, LogicalExpressionParser.GetCultureCacheKey(CultureInfo.CurrentCulture),
+            separator, Context.AdvancedOptions?.GetCacheKey() ?? string.Empty,
+            separator, expression);
     }
 
     public LogicalExpression? GetLogicalExpression(CancellationToken cancellationToken = default)
     {
+        // The error of an earlier attempt (e.g. with other options) does not apply to this one
+        Error = null;
+
         if (!(ExpressionString?.Length > 0))
         {
             if (Options.HasFlag(ExpressionOptions.AllowNullOrEmptyExpressions))
@@ -250,6 +302,8 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
 
     public LogicalExpression? GetLogicalExpression(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext)
     {
+        Error = null;
+
         if (string.IsNullOrEmpty(parserContext.Scanner.Buffer))
         {
             if (Options.HasFlag(ExpressionOptions.AllowNullOrEmptyExpressions))

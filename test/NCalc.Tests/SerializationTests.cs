@@ -476,4 +476,156 @@ public class SerializationTests
         var quoted = new ValueExpression("it's a \\ test").ToString();
         Assert.Equal("it's a \\ test", new Expression(quoted).Evaluate(TestContext.Current.CancellationToken));
     }
+
+    // NCALC-117
+    [Fact]
+    public void ToStringAndJsonShouldRoundTripUnderTheOptionsOfTheExpression()
+    {
+        static AdvancedExpressionOptions Advanced(AdvExpressionOptions flags = AdvExpressionOptions.None,
+            AdvancedExpressionOptions.ListItemSeparatorKind separator = AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSemicolon,
+            bool decimalSeparatorFromCulture = false)
+            => new(flags)
+            {
+                ListItemSeparator = separator,
+                DecimalSeparatorType = decimalSeparatorFromCulture ? AdvancedExpressionOptions.SeparatorType.FromCulture : AdvancedExpressionOptions.SeparatorType.BuiltIn
+            };
+
+        var parameters = new Dictionary<string, object?> { ["s"] = "abcdefgh", ["x"] = 2, ["a"] = 1, ["b"] = 2 };
+        var rows = new (string Text, ExpressionOptions Options, Func<AdvancedExpressionOptions?> AdvancedOptions)[]
+        {
+            ("not true and false", ExpressionOptions.SkipLogicalAndBitwiseOpChars, () => null),
+            ("not (a = b) and true", ExpressionOptions.SkipLogicalAndBitwiseOpChars, () => null),
+            ("(s[1..4])[0]", ExpressionOptions.None, () => null),
+            ("(3!)[0]", ExpressionOptions.None, () => null),
+            ("x i", ExpressionOptions.None, () => Advanced(AdvExpressionOptions.ParseComplexNumbers)),
+            ("x i + (1 + 2) i", ExpressionOptions.None, () => Advanced(AdvExpressionOptions.ParseComplexNumbers)),
+            ("0xFFFFFFFFFFFFFFFF", ExpressionOptions.None, () => null),
+            ("0x8000000000000000 + 0", ExpressionOptions.UseBigNumbers, () => null),
+            ("1e400", ExpressionOptions.None, () => null),
+            ("-1e400 < 5", ExpressionOptions.None, () => null),
+            ("(1e400 - 1e400) * 2", ExpressionOptions.None, () => null),
+            ("Max(1; 2)", ExpressionOptions.None, () => Advanced(decimalSeparatorFromCulture: true)),
+            ("Max(1,5; 2)", ExpressionOptions.None, () => Advanced(decimalSeparatorFromCulture: true)),
+            ("Max(1 , 2) + Max(2,5 , 1)", ExpressionOptions.None, () => Advanced(separator: AdvancedExpressionOptions.ListItemSeparatorKind.Comma, decimalSeparatorFromCulture: true)),
+            ("Max(1 (-2))", ExpressionOptions.None, () => Advanced(separator: AdvancedExpressionOptions.ListItemSeparatorKind.Space)),
+            ("Max((a) (-b)) + Max((b) [a])", ExpressionOptions.None, () => Advanced(separator: AdvancedExpressionOptions.ListItemSeparatorKind.Space)),
+            ("#1 second 500 ms#", ExpressionOptions.None, () => Advanced(AdvExpressionOptions.ParseHumanePeriods)),
+            ("#-1.02:03:04.25#", ExpressionOptions.None, () => null),
+            ("x == 5", ExpressionOptions.UseCStyleAssignments, () => null),
+            ("6 bit_and 3 + bit_not 3", ExpressionOptions.SkipLogicalAndBitwiseOpChars, () => null),
+            ("7 mod 3", ExpressionOptions.None, () => Advanced(AdvExpressionOptions.CalculatePercent)),
+            ("a := 2; a + 1", ExpressionOptions.UseStatementSequences | ExpressionOptions.UseAssignments, () => null),
+        };
+
+        var culture = CultureInfo.GetCultureInfo("sk-SK");
+        Expression Create(string text, ExpressionOptions options, Func<AdvancedExpressionOptions?> advancedOptions)
+            => new(text, options | ExpressionOptions.NoCache, culture) { AdvancedOptions = advancedOptions(), Parameters = new Dictionary<string, object?>(parameters) };
+        string Evaluate(Expression expression)
+        {
+            try
+            {
+                var result = expression.Evaluate(TestContext.Current.CancellationToken);
+                return $"{Convert.ToString(result, CultureInfo.InvariantCulture)} {result?.GetType().Name}";
+            }
+            catch (Exception ex)
+            {
+                return ex.GetType().Name;
+            }
+        }
+
+        var failures = new List<string>();
+        foreach (var (text, options, advancedOptions) in rows)
+        {
+            var original = Create(text, options, advancedOptions);
+            var tree = original.GetLogicalExpression(TestContext.Current.CancellationToken);
+            if (tree is null)
+            {
+                failures.Add($"{text}: does not parse");
+                continue;
+            }
+
+            string expected = Evaluate(original);
+            string written = tree.ToString();
+            var reparsed = Create(written, options, advancedOptions);
+            if (reparsed.HasErrors(TestContext.Current.CancellationToken))
+                failures.Add($"{text} -> {written}: does not parse");
+            else
+            if (Evaluate(reparsed) != expected)
+                failures.Add($"{text} = {expected}, {written} = {Evaluate(reparsed)}");
+
+            var restored = JsonSerializer.Deserialize<LogicalExpression>(JsonSerializer.Serialize(tree))!;
+            if (restored.ToString() != written)
+                failures.Add($"{text}: JSON -> {restored}");
+            var fromJson = new Expression(restored, options | ExpressionOptions.NoCache, culture) { AdvancedOptions = advancedOptions(), Parameters = new Dictionary<string, object?>(parameters) };
+            if (Evaluate(fromJson) != expected)
+                failures.Add($"{text} = {expected}, from JSON = {Evaluate(fromJson)}");
+        }
+
+        Assert.Empty(failures);
+    }
+
+    // NCALC-117
+    [Fact]
+    public void JsonShouldKeepTheTypesOfValues()
+    {
+        static object? RoundTrip(object value)
+        {
+            var json = JsonSerializer.Serialize<LogicalExpression>(new ValueExpression(1) { Value = value });
+            return ((ValueExpression)JsonSerializer.Deserialize<LogicalExpression>(json)!).Value;
+        }
+
+        Assert.Equal(new[] { 1, 2 }, Assert.IsType<int[]>(RoundTrip(new[] { 1, 2 })));
+        Assert.Equal(new[] { "a", null }, Assert.IsType<string[]>(RoundTrip(new[] { "a", null })));
+        Assert.Equal(new object[] { 1L, "x" }, Assert.IsType<object[]>(RoundTrip(new object[] { 1L, "x" })));
+
+        // Dictionaries are read back as dictionaries, also when their keys look like a BigDecimal or a tagged value
+        var bigDecimalLike = Assert.IsType<Dictionary<string, object?>>(RoundTrip(new Dictionary<string, object?> { ["Mantissa"] = 5, ["Exponent"] = 1 }));
+        Assert.Equal(5, bigDecimalLike["Mantissa"]);
+        Assert.Equal(1, bigDecimalLike["Exponent"]);
+        var taggedLike = Assert.IsType<Dictionary<string, object?>>(RoundTrip(new Dictionary<string, object?> { ["$type"] = "Int32", ["$value"] = "5" }));
+        Assert.Equal("Int32", taggedLike["$type"]);
+        Assert.Equal("5", taggedLike["$value"]);
+
+        var offset = new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.FromHours(2));
+        Assert.Equal(offset, Assert.IsType<DateTimeOffset>(RoundTrip(offset)));
+        Assert.Equal(offset.Offset, ((DateTimeOffset)RoundTrip(offset)!).Offset);
+
+        // JSON written before dictionaries were tagged is still read
+        var untagged = JsonSerializer.Deserialize<LogicalExpression>("""{"$type":"value","Value":{"a":{"$type":"Int32","$value":"1"}},"Type":1}""");
+        Assert.Equal(1, Assert.IsType<Dictionary<string, object?>>(((ValueExpression)untagged!).Value)["a"]);
+    }
+
+    // NCALC-132
+    [Fact]
+    public void AdvancedOptionsShouldBeCopiedConsistently()
+    {
+        // The expression always keeps its own copy, also when the culture of the options is already that of the expression
+        var culture = CultureInfo.GetCultureInfo("en-US");
+        var shared = new AdvancedExpressionOptions(culture);
+        var expression = new Expression("#1 day#", ExpressionOptions.NoCache, culture) { AdvancedOptions = shared };
+        Assert.NotSame(shared, expression.AdvancedOptions);
+        Assert.True(expression.HasErrors(TestContext.Current.CancellationToken));
+
+        // The copy is changed through the property; the assigned instance is not changed
+        expression = new Expression("#1 day#", ExpressionOptions.NoCache, culture) { AdvancedOptions = shared };
+        expression.AdvancedOptions!.Flags |= AdvExpressionOptions.ParseHumanePeriods;
+        Assert.Equal(TimeSpan.FromDays(1), expression.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(AdvExpressionOptions.None, shared.Flags);
+
+        // Assigning the own copy again keeps it
+        var own = expression.AdvancedOptions;
+        expression.AdvancedOptions = own;
+        Assert.Same(own, expression.AdvancedOptions);
+
+        // A parsed tree keeps a snapshot: changing the options later does not change its text (it is cached and may be shared)
+        var options = new AdvancedExpressionOptions(culture) { ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.Semicolon };
+        var cached = new Expression("Max(1; 2) + 0", ExpressionOptions.None, culture) { AdvancedOptions = options };
+        var tree = cached.GetLogicalExpression(TestContext.Current.CancellationToken)!;
+        cached.AdvancedOptions!.ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.Comma;
+        Assert.Equal("Max(1; 2) + 0", tree.ToString());
+
+        var direct = LogicalExpressionFactory.Create("Max(1; 2)", advancedOptions: options, cancellationToken: TestContext.Current.CancellationToken);
+        options.ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.Comma;
+        Assert.Equal("Max(1; 2)", direct.ToString());
+    }
 }
