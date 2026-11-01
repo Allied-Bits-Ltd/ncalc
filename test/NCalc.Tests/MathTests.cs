@@ -2060,4 +2060,30 @@ public class MathsTests : TestBase
         Assert.Equal(4UL, MathHelper.RightShift(16, 2, false, MathHelperOptions.Empty));
         Assert.Equal(64UL, MathHelper.LeftShift(16, 2, false, MathHelperOptions.Empty));
     }
+
+    [Theory]
+    [InlineData("Asin(x)", -881251, -6)]
+    [InlineData("Acos(x)", 870639, -6)]
+    [InlineData("Ln(x)", 8409, -1)]
+    [InlineData("Log10(x)", 8409, -1)]
+    public void BigDecimalTranscendentalFunctionsShouldBeBounded(string text, int mantissa, int exponent)
+    {
+        // NCALC-017: the series of ExtendedNumerics grew to tens of thousands of digits and took from seconds to minutes;
+        // with BigDecimal.AlwaysTruncate set for the call, the result has about BigDecimal.Precision digits
+        var x = new BigDecimal(new BigInteger(mantissa), exponent);
+        var expression = new Expression(text, ExpressionOptions.UseBigNumbers | ExpressionOptions.NoCache);
+        expression.Parameters["x"] = x;
+        var result = Assert.IsType<BigDecimal>(expression.Evaluate(TestContext.Current.CancellationToken));
+
+        Assert.True(BigInteger.Abs(result.Mantissa).ToString(CultureInfo.InvariantCulture).Length <= BigDecimal.Precision + 10);
+        double value = mantissa * Math.Pow(10, exponent);
+        double expected = text switch
+        {
+            "Asin(x)" => Math.Asin(value),
+            "Acos(x)" => Math.Acos(value),
+            "Ln(x)" => Math.Log(value),
+            _ => Math.Log10(value),
+        };
+        Assert.Equal(expected, MathHelper.ConvertToDouble(result, MathHelperOptions.Empty), 12);
+    }
 }

@@ -18,6 +18,42 @@ namespace NCalc.Helpers;
 /// </summary>
 public static class MathHelper
 {
+    private static readonly object TruncationLock = new();
+    private static int _truncationScopes;
+    private static bool _truncationOriginalValue;
+
+    /// <summary>
+    /// Runs a transcendental function of ExtendedNumerics with <see cref="BigDecimal.AlwaysTruncate"/> set, as suggested by the
+    /// author of the library: the intermediate results are then truncated to <see cref="BigDecimal.Precision"/> digits, so the
+    /// series used by Ln, Log, Asin, Acos, Atan, Sin, Cos and the others do not grow to tens of thousands of digits.
+    /// The setting is process-wide and makes operations on large values much slower, so it is set only for these calls
+    /// (nested and concurrent calls are counted) and the original value is restored afterwards.
+    /// </summary>
+    private static T Truncated<T>(Func<T> calculation)
+    {
+        lock (TruncationLock)
+        {
+            if (_truncationScopes++ == 0)
+            {
+                _truncationOriginalValue = BigDecimal.AlwaysTruncate;
+                BigDecimal.AlwaysTruncate = true;
+            }
+        }
+
+        try
+        {
+            return calculation();
+        }
+        finally
+        {
+            lock (TruncationLock)
+            {
+                if (--_truncationScopes == 0)
+                    BigDecimal.AlwaysTruncate = _truncationOriginalValue;
+            }
+        }
+    }
+
     enum ArithmeticOperation
     {
         Add,
@@ -2771,11 +2807,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Arccos(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Arccos(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Arccos(bdA);
+                return Truncated(() => BigDecimal.Arccos(bdA));
             }
         }
         return Math.Acos(ConvertToDouble(a, "Acos", options.CultureInfo, null));
@@ -2787,11 +2823,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Arccot(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Arccot(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Arccot(bdA);
+                return Truncated(() => BigDecimal.Arccot(bdA));
             }
         }
 
@@ -2812,11 +2848,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Arccsc(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Arccsc(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Arccsc(bdA);
+                return Truncated(() => BigDecimal.Arccsc(bdA));
             }
         }
 
@@ -2840,11 +2876,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Arcsec(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Arcsec(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Arcsec(bdA);
+                return Truncated(() => BigDecimal.Arcsec(bdA));
             }
         }
 
@@ -2868,11 +2904,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Arcsin(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Arcsin(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Arcsin(bdA);
+                return Truncated(() => BigDecimal.Arcsin(bdA));
             }
         }
 
@@ -2888,11 +2924,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Arctan(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Arctan(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Arctan(bdA);
+                return Truncated(() => BigDecimal.Arctan(bdA));
             }
         }
 
@@ -2933,11 +2969,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Cos(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Cos(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Cos(bdA);
+                return Truncated(() => BigDecimal.Cos(bdA));
             }
         }
 
@@ -2953,11 +2989,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Cosh(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Cosh(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Cosh(bdA);
+                return Truncated(() => BigDecimal.Cosh(bdA));
             }
         }
 
@@ -2973,11 +3009,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Cot(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Cot(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Cot(bdA);
+                return Truncated(() => BigDecimal.Cot(bdA));
             }
         }
 
@@ -3004,11 +3040,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Coth(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Coth(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Coth(bdA);
+                return Truncated(() => BigDecimal.Coth(bdA));
             }
         }
 
@@ -3035,11 +3071,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Csc(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Csc(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Csc(bdA);
+                return Truncated(() => BigDecimal.Csc(bdA));
             }
         }
 
@@ -3065,11 +3101,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Csch(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Csch(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Csch(bdA);
+                return Truncated(() => BigDecimal.Csch(bdA));
             }
         }
 
@@ -3095,11 +3131,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Exp(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Exp(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Exp(bdA);
+                return Truncated(() => BigDecimal.Exp(bdA));
             }
         }
 
@@ -3148,11 +3184,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Ln(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Ln(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Ln(bdA);
+                return Truncated(() => BigDecimal.Ln(bdA));
             }
         }
 
@@ -3170,11 +3206,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Log(new BigDecimal(biA), ConvertToInt(b, "Log", options.CultureInfo, null));
+                return Truncated(() => BigDecimal.Log(new BigDecimal(biA), ConvertToInt(b, "Log", options.CultureInfo, null)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Log(bdA, ConvertToInt(b, "Log", options.CultureInfo, null));
+                return Truncated(() => BigDecimal.Log(bdA, ConvertToInt(b, "Log", options.CultureInfo, null)));
             }
         }
 
@@ -3191,11 +3227,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Log2(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Log2(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Log2(bdA);
+                return Truncated(() => BigDecimal.Log2(bdA));
             }
         }
 
@@ -3212,11 +3248,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Log10(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Log10(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Log10(bdA);
+                return Truncated(() => BigDecimal.Log10(bdA));
             }
         }
 
@@ -3832,11 +3868,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Sec(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Sec(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Sec(bdA);
+                return Truncated(() => BigDecimal.Sec(bdA));
             }
         }
         if (a is ComplexNumber cnA)
@@ -3860,11 +3896,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Sech(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Sech(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Sech(bdA);
+                return Truncated(() => BigDecimal.Sech(bdA));
             }
         }
         if (a is ComplexNumber cnA)
@@ -3886,11 +3922,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Sin(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Sin(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Sin(bdA);
+                return Truncated(() => BigDecimal.Sin(bdA));
             }
         }
         if (a is ComplexNumber cnA)
@@ -3905,11 +3941,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Sinh(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Sinh(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Sinh(bdA);
+                return Truncated(() => BigDecimal.Sinh(bdA));
             }
         }
 
@@ -3928,11 +3964,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.SquareRoot(new BigDecimal(biA), BigDecimal.Precision);
+                return Truncated(() => BigDecimal.SquareRoot(new BigDecimal(biA), BigDecimal.Precision));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.SquareRoot(bdA, BigDecimal.Precision);
+                return Truncated(() => BigDecimal.SquareRoot(bdA, BigDecimal.Precision));
             }
         }
 
@@ -3953,11 +3989,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.SquareRoot(BigDecimal.SquareRoot(new BigDecimal(biA), BigDecimal.Precision), BigDecimal.Precision);
+                return Truncated(() => BigDecimal.SquareRoot(BigDecimal.SquareRoot(new BigDecimal(biA), BigDecimal.Precision), BigDecimal.Precision));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.SquareRoot(BigDecimal.SquareRoot(bdA, BigDecimal.Precision), BigDecimal.Precision);
+                return Truncated(() => BigDecimal.SquareRoot(BigDecimal.SquareRoot(bdA, BigDecimal.Precision), BigDecimal.Precision));
             }
         }
 
@@ -3979,11 +4015,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.NthRoot(new BigDecimal(biA), 3, BigDecimal.Precision);
+                return Truncated(() => BigDecimal.NthRoot(new BigDecimal(biA), 3, BigDecimal.Precision));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.NthRoot(bdA, 3, BigDecimal.Precision);
+                return Truncated(() => BigDecimal.NthRoot(bdA, 3, BigDecimal.Precision));
             }
         }
 
@@ -4002,11 +4038,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Tan(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Tan(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Tan(bdA);
+                return Truncated(() => BigDecimal.Tan(bdA));
             }
         }
 
@@ -4022,11 +4058,11 @@ public static class MathHelper
         {
             if (a is BigInteger biA)
             {
-                return BigDecimal.Tanh(new BigDecimal(biA));
+                return Truncated(() => BigDecimal.Tanh(new BigDecimal(biA)));
             }
             if (a is BigDecimal bdA)
             {
-                return BigDecimal.Tanh(bdA);
+                return Truncated(() => BigDecimal.Tanh(bdA));
             }
         }
 

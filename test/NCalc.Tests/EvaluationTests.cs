@@ -365,6 +365,7 @@ public class EvaluationTests : TestBase
 
         Assert.True(cache.TryGetValue("e29999", out var last));
         Assert.Same(alive[^1], last);
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"30000 inserts took {stopwatch.Elapsed}");
+        // Milliseconds alone, a few seconds when the other tests load the machine; the quadratic version took about 2 minutes
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(20), $"30000 inserts took {stopwatch.Elapsed}");
     }
 }

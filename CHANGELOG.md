@@ -84,6 +84,7 @@
 * `ToString()` handles a factorial with a long step, GUID values, and quotes in strings that were not read from text.
 * An ISO date-time without the `Z` designator has `DateTimeKind.Unspecified` instead of `DateTimeKind.Utc`.
 * NCalc.MemoryCache sets the size of the entries (`LogicalExpressionMemoryCacheOptions.EntrySize`), so it works with an `IMemoryCache` that has a `SizeLimit`, and its keys cannot collide with other keys in a shared cache.
+* The BigDecimal versions of `Asin`, `Acos`, `Atan`, `Ln`, `Log`, `Log10`, `Sin`, `Cos`, `Tan`, `Exp` and the other transcendental functions run with `BigDecimal.AlwaysTruncate` set (and restored afterwards), so their results have about `BigDecimal.Precision` digits and take about 0.5-2 seconds instead of growing to tens of thousands of digits for seconds or minutes.
 
 # 9.0.6.5  (Allied Bits)
 
