@@ -2091,11 +2091,7 @@ public static class MathHelper
 
     public static object? Max(object? a, object? b, MathHelperOptions options)
     {
-        int cmpResult = Compare(a, b, options, options);
-        if (cmpResult < 0)
-            return b;
-
-        return a;
+        return MaxOrMin(a, b, true, options);
 
         /*
         if (a is null && b is null)
@@ -2154,11 +2150,7 @@ public static class MathHelper
 
     public static object? Min(object? a, object? b, MathHelperOptions options)
     {
-        int cmpResult = Compare(a, b, options, options);
-        if (cmpResult > 0)
-            return b;
-
-        return a;
+        return MaxOrMin(a, b, false, options);
 
         /*if (a is null && b is null)
         {
@@ -2469,7 +2461,7 @@ public static class MathHelper
                 typesWereExpanded = true;
                 return typeCodeA;
             }
-            catch (InvalidCastException icex)
+            catch (Exception icex) when (icex is InvalidCastException or FormatException)
             {
                 throw new NCalcConversionException($"Conversion of a value '{b}' of type {typeB.Name} to type '{typeA.Name}' failed.", b.ToString() ?? "null", typeB, typeA, icex);
             }
@@ -2489,7 +2481,7 @@ public static class MathHelper
                 typesWereExpanded = true;
                 return typeCodeB;
             }
-            catch (InvalidCastException icex)
+            catch (Exception icex) when (icex is InvalidCastException or FormatException)
             {
                 throw new NCalcConversionException($"Conversion of a value '{a}' of type {typeA.Name} to type '{typeB.Name}' failed.", a.ToString() ?? "null", typeA, typeB, icex);
             }
@@ -2596,7 +2588,7 @@ public static class MathHelper
             {
                 a = Convert.ChangeType(a, result, options.CultureInfo);
             }
-            catch (InvalidCastException icex)
+            catch (Exception icex) when (icex is InvalidCastException or FormatException)
             {
                 throw new NCalcConversionException($"Conversion of a value '{a}' of type {typeA.Name} to type '{t.Name}' failed.", a.ToString() ?? "null", typeA, t, icex);
             }
@@ -2605,7 +2597,7 @@ public static class MathHelper
             {
                 b = Convert.ChangeType(b, result, options.CultureInfo);
             }
-            catch (InvalidCastException icex)
+            catch (Exception icex) when (icex is InvalidCastException or FormatException)
             {
                 throw new NCalcConversionException($"Conversion of a value '{b}' of type {typeB.Name} to type '{t.Name}' failed.", b.ToString() ?? "null", typeB, t, icex);
             }
@@ -3520,26 +3512,49 @@ public static class MathHelper
         return 0.0;
     }
 
+    /// <summary>
+    /// Rounds a value to <paramref name="b"/> decimal places. A negative number of places rounds to tens, hundreds and so on
+    /// (Round(1234, -2) is 1200) for all types, and more places than a type can hold leave the value unchanged.
+    /// </summary>
     public static object Round(object? a, object? b, MidpointRounding rounding, MathHelperOptions options)
     {
-        if (IsBoxedIntegerNumberOrBigNumber(a))
-            return a!;
-
-        if (a is BigDecimal bdA)
-            return BigDecimal.Round(bdA, ConvertToInt(b, "Round", options.CultureInfo, null), (rounding == MidpointRounding.AwayFromZero) ? RoundingStrategy.AwayFromZero : RoundingStrategy.ToEven);
-
-        if (a is ComplexNumber cnA)
-            return ComplexNumber.Round(cnA, ConvertToInt(b, "Round", options.CultureInfo, null), rounding);
-
-        if (a is NCalcVector vA)
-            return NCalcVector.Round(vA, ConvertToInt(b, "Round", options.CultureInfo, null), rounding);
+        if (!IsDefinedMidpointMode(rounding))
+            throw new NCalcEvaluationException($"The value '{rounding}' is not a defined MidpointRounding value");
 
         int precision = ConvertToInt(b, "Round", options.CultureInfo, null);
+
+        if (a is ComplexNumber cnA)
+            return ComplexNumber.Round(cnA, precision, rounding);
+
+        if (a is NCalcVector vA)
+            return NCalcVector.Round(vA, precision, rounding);
+
+        if (a is BigDecimal bdA)
+            return RoundBigDecimal(bdA, precision, rounding);
+
+        if (IsBoxedIntegerNumberOrBigNumber(a))
+        {
+            if (precision >= 0)
+                return a!;
+
+            var rounded = RoundToPowerOfTen(ConvertToBigInteger(a!), -precision, rounding);
+            // The result keeps the type of the argument when it fits
+            return NarrowToTypeOf(a!, rounded);
+        }
 
         // A decimal argument is rounded as a decimal, so that it does not lose digits through double
         if (options.DecimalAsDefault || a is decimal)
         {
             decimal decimal_a = ConvertToDecimal(a, "Round", options.CultureInfo, null);
+            if (precision < 0)
+            {
+                var roundedDecimal = RoundBigDecimal(new BigDecimal(decimal_a), precision, rounding);
+                return roundedDecimal >= (BigDecimal)decimal.MinValue && roundedDecimal <= (BigDecimal)decimal.MaxValue
+                    ? BigDecimalToDecimal(roundedDecimal)
+                    : BigDecimalToDouble(roundedDecimal);
+            }
+            if (precision > 28)
+                return decimal_a;
             // RoundToPrecision applies MidpointRounding only to exact midpoints; the legacy System.Math.Round
             // behavior (which applies it to every value) remains available via the UseSystemMathRound option.
             return options.UseSystemMathRound
@@ -3548,9 +3563,121 @@ public static class MathHelper
         }
 
         double double_a = ConvertToDouble(a, "Round", options.CultureInfo, null);
+        if (precision < 0)
+        {
+            if (double.IsNaN(double_a) || double.IsInfinity(double_a))
+                return double_a;
+            // The shortest text of the double is rounded exactly, so that e.g. 1250 is a midpoint
+            return BigDecimalToDouble(RoundBigDecimal(ToShortestBigDecimal(double_a), precision, rounding));
+        }
+        // A double has at most 15 significant decimal digits, so rounding to more places leaves it unchanged
+        if (precision > 15)
+            return double_a;
         return options.UseSystemMathRound
             ? Math.Round(double_a, precision, rounding)
             : RoundToPrecision(double_a, precision, rounding);
+    }
+
+    /// <summary>
+    /// Rounds a BigDecimal to <paramref name="digits"/> decimal places (a negative number rounds to tens, hundreds and so on),
+    /// choosing the nearest value and consulting <paramref name="mode"/> only at an exact midpoint.
+    /// </summary>
+    public static BigDecimal RoundBigDecimal(BigDecimal value, int digits, MidpointRounding mode)
+    {
+        int targetExponent = -digits;
+        if (value.Exponent >= targetExponent)
+            return value;
+
+        var shift = targetExponent - value.Exponent;
+        var rounded = RoundToPowerOfTen(value.Mantissa, shift, mode);
+        return new BigDecimal(rounded / BigInteger.Pow(10, shift), targetExponent);
+    }
+
+    private static object NarrowToTypeOf(object original, BigInteger value)
+    {
+        return original switch
+        {
+            byte when value >= byte.MinValue && value <= byte.MaxValue => (object)(byte)value,
+            sbyte when value >= sbyte.MinValue && value <= sbyte.MaxValue => (object)(sbyte)value,
+            short when value >= short.MinValue && value <= short.MaxValue => (object)(short)value,
+            ushort when value >= ushort.MinValue && value <= ushort.MaxValue => (object)(ushort)value,
+            int when value >= int.MinValue && value <= int.MaxValue => (object)(int)value,
+            uint when value >= uint.MinValue && value <= uint.MaxValue => (object)(uint)value,
+            long when value >= long.MinValue && value <= long.MaxValue => (object)(long)value,
+            ulong when value >= ulong.MinValue && value <= ulong.MaxValue => (object)(ulong)value,
+            _ => (object)value
+        };
+    }
+
+    /// <summary>
+    /// Converts a finite double to the BigDecimal of its shortest round-trip text, so that e.g. 0.1 is 0.1 and not the binary value.
+    /// </summary>
+    private static BigDecimal ToShortestBigDecimal(double value)
+    {
+        string text = value.ToString("R", CultureInfo.InvariantCulture);
+        int exponent = 0;
+        int exponentIndex = text.IndexOfAny(['E', 'e']);
+        if (exponentIndex >= 0)
+        {
+            exponent = int.Parse(text.Substring(exponentIndex + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+            text = text.Substring(0, exponentIndex);
+        }
+        int pointIndex = text.IndexOf('.');
+        if (pointIndex >= 0)
+        {
+            exponent -= text.Length - pointIndex - 1;
+            text = text.Remove(pointIndex, 1);
+        }
+        return new BigDecimal(BigInteger.Parse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), exponent);
+    }
+
+    /// <summary>
+    /// Rounds an integer to a multiple of 10 to the power of <paramref name="exponent"/>, choosing the nearest multiple and
+    /// consulting <paramref name="mode"/> only at an exact midpoint.
+    /// </summary>
+    private static BigInteger RoundToPowerOfTen(BigInteger value, int exponent, MidpointRounding mode)
+    {
+        if (exponent <= 0 || value.IsZero)
+            return value;
+
+        // A multiple that is larger than twice the value rounds it to zero, and the power is not computed
+        if (exponent > (int)Math.Ceiling(BigInteger.Log10(BigInteger.Abs(value))) + 1)
+            return BigInteger.Zero;
+
+        var factor = BigInteger.Pow(10, exponent);
+        var lower = BigInteger.Divide(value, factor);
+        var remainder = value - lower * factor;
+        if (remainder.Sign < 0)
+        {
+            // Division truncates toward zero; the lower candidate is the floor
+            lower -= 1;
+            remainder += factor;
+        }
+
+        var twice = remainder * 2;
+        BigInteger chosen;
+        if (twice < factor)
+            chosen = lower;
+        else
+        if (twice > factor)
+            chosen = lower + 1;
+        else
+        {
+            var higher = lower + 1;
+            chosen = mode switch
+            {
+                MidpointRounding.ToEven => lower.IsEven ? lower : higher,
+                MidpointRounding.AwayFromZero => value.Sign >= 0 ? higher : lower,
+#if NET
+                MidpointRounding.ToZero => value.Sign >= 0 ? lower : higher,
+                MidpointRounding.ToNegativeInfinity => lower,
+                MidpointRounding.ToPositiveInfinity => higher,
+#endif
+                _ => throw new ArgumentException($"The value '{mode}' is not a defined MidpointRounding value.", nameof(mode)),
+            };
+        }
+
+        return chosen * factor;
     }
 
     // Doubles at or above this magnitude have no fractional precision left (and may exceed the decimal range),
@@ -3999,7 +4126,7 @@ public static class MathHelper
                 _ => Convert.ToDouble(value, cultureInfo)
             };
         }
-        catch (InvalidCastException icex)
+        catch (Exception icex) when (icex is InvalidCastException or FormatException)
         {
             if (value is not null)
                 throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(double).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(double), location ?? ExpressionLocation.Empty, icex);
@@ -4035,7 +4162,7 @@ public static class MathHelper
                 _ => Convert.ToDecimal(value, cultureInfo)
             };
         }
-        catch (InvalidCastException icex)
+        catch (Exception icex) when (icex is InvalidCastException or FormatException)
         {
             if (value is not null)
                 throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(decimal).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(decimal), location ?? ExpressionLocation.Empty, icex);
@@ -4079,7 +4206,7 @@ public static class MathHelper
                 _ => Convert.ToInt32(value, cultureInfo)
             };
         }
-        catch (InvalidCastException icex)
+        catch (Exception icex) when (icex is InvalidCastException or FormatException)
         {
             if (value is not null)
                 throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(int).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(int), location ?? ExpressionLocation.Empty, icex);
@@ -4135,7 +4262,7 @@ public static class MathHelper
                 _ => Convert.ToInt64(value, cultureInfo)
             };
         }
-        catch (InvalidCastException icex)
+        catch (Exception icex) when (icex is InvalidCastException or FormatException)
         {
             if (value is not null)
                 throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(long).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(long), location ?? ExpressionLocation.Empty, icex);
@@ -4197,7 +4324,7 @@ public static class MathHelper
                 _ => Convert.ToUInt64(value, cultureInfo)
             };
         }
-        catch (InvalidCastException icex)
+        catch (Exception icex) when (icex is InvalidCastException or FormatException)
         {
             if (value is not null)
                 throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(ulong).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(ulong), location ?? ExpressionLocation.Empty, icex);
@@ -4215,7 +4342,7 @@ public static class MathHelper
             else
                 return Convert.ToBoolean(value, cultureInfo);
         }
-        catch (InvalidCastException icex)
+        catch (Exception icex) when (icex is InvalidCastException or FormatException)
         {
             if (value is not null)
                 throw new NCalcConversionException($"Conversion of a value '{value}' of type {value.GetType().Name} to type '{typeof(bool).Name}' in the '{operation}' operation failed.", value.ToString() ?? "null", value.GetType(), typeof(bool), location ?? ExpressionLocation.Empty, icex);
@@ -4536,6 +4663,54 @@ public static class MathHelper
         return value / b;
     }
 
+    /// <summary>
+    /// Returns the larger (or the smaller) of two values. Numbers are compared exactly and the result has the type of the
+    /// arithmetic on the two numbers (Max(3, 2.5) is a double whichever is larger); NaN wins, as with Math.Max and Math.Min.
+    /// A string that is a number literal takes part as a number; a number cannot be compared with a value of another kind.
+    /// Values of other kinds (strings, dates) are compared as with the comparison operators. A null argument gives null.
+    /// </summary>
+    private static object? MaxOrMin(object? a, object? b, bool max, MathHelperOptions options)
+    {
+        if (a is null || b is null)
+            return null;
+
+        string function = max ? "Max" : "Min";
+        a = ConvertNumericString(a, options);
+        b = ConvertNumericString(b, options);
+
+        bool aIsNumber = IsBoxedNumberOrBigNumber(a);
+        bool bIsNumber = IsBoxedNumberOrBigNumber(b);
+        if (aIsNumber != bIsNumber)
+            throw new NCalcEvaluationException($"{function}() cannot compare a number with a value of type {(aIsNumber ? b : a).GetType().Name}");
+
+        if (!aIsNumber)
+        {
+            int result = Compare(a, b, options, options);
+            return (max ? result < 0 : result > 0) ? b : a;
+        }
+
+        object widenedA = a;
+        object widenedB = b;
+        ConvertToHighestPrecision(ref widenedA, ref widenedB, false, options);
+
+        if (widenedA is double.NaN or float.NaN)
+            return widenedA;
+        if (widenedB is double.NaN or float.NaN)
+            return widenedB;
+
+        // The original values are compared, so that the conversion does not make different values equal
+        int comparison = Compare(a, b, options, options);
+        return (max ? comparison < 0 : comparison > 0) ? widenedB : widenedA;
+    }
+
+    private static object ConvertNumericString(object value, MathHelperOptions options)
+    {
+        if (value is string text && !options.AllOptions.HasFlag(ExpressionOptions.NoStringTypeCoercion)
+            && TypeHelper.TryConvertLiteral(text, options, out var literal) && IsBoxedNumberOrBigNumber(literal))
+            return literal!;
+        return value;
+    }
+
     public static object Max(object a, BigInteger b)
     {
         BigInteger aValue = ConvertToBigInteger(a);
@@ -4645,7 +4820,21 @@ public static class MathHelper
         if (b is null)
             return null;
         int intB = ConvertToInt(b, "Left Shift", options.CultureInfo, null);
+        CheckBigShift(a, intB);
         return a << intB;
+    }
+
+    /// <summary>
+    /// Rejects a left shift of a big integer whose result would exceed the size limit of big results
+    /// (<see cref="MaxPowResultDigits"/> decimal digits), so that e.g. 1 &lt;&lt; 2147483647 does not allocate hundreds of megabytes.
+    /// </summary>
+    private static void CheckBigShift(BigInteger a, long step)
+    {
+        if (a.IsZero || step <= 0)
+            return;
+        double digits = BigInteger.Log10(BigInteger.Abs(a)) + step * 0.30102999566398120;
+        if (digits > MaxPowResultDigits)
+            throw new NCalcEvaluationException($"The result of the shift would have about {digits:0} digits, which exceeds the limit of {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
     }
 
     public static object? LeftShift(object? a, object? b, bool reduceTypes, MathHelperOptions options)
@@ -4688,20 +4877,28 @@ public static class MathHelper
 
         ulong ula = ConvertToULong(a, "Left Shift", options.CultureInfo, null);
 
-        if (options.UseBigNumbers && (ula > UInt32.MaxValue || step > 32))
-        {
-            if (reduceTypes)
-                return ReduceNumericType((new BigInteger(ula)) << stepInt);
+        // The shift is exact: the count is not masked to the width of the type (1 << 64 is not 1). Bits shifted beyond 64 make
+        // a big integer with UseBigNumbers, an overflow with OverflowProtection, and are dropped otherwise (1 << 64 is 0)
+        if (options.UseBigNumbers)
+            CheckBigShift(ula, step);
+        BigInteger shifted = stepInt >= 128 && !options.UseBigNumbers
+            ? (ula == 0 ? BigInteger.Zero : BigInteger.One << 128)
+            : new BigInteger(ula) << stepInt;
 
-            return ((new BigInteger(ula)) << stepInt);
-        }
-        else
+        if (shifted > ulong.MaxValue)
         {
-            if (reduceTypes)
-                return ReduceNumericType(ula << stepInt);
-
-            return ula << stepInt;
+            if (options.UseBigNumbers)
+                return reduceTypes ? ReduceNumericType(shifted) : shifted;
+            if (options.OverflowProtection)
+                throw new OverflowException($"The result of shifting {a} left by {step} bits does not fit in 64 bits");
+            shifted &= ulong.MaxValue;
         }
+
+        ulong result = (ulong)shifted;
+        if (reduceTypes)
+            return ReduceNumericType(result);
+
+        return result;
     }
 
     public static BigInteger? RightShift(BigInteger a, object? b, MathHelperOptions options)
@@ -4748,14 +4945,14 @@ public static class MathHelper
         if (step > int.MaxValue || step < 0)
             throw new NCalcEvaluationException($"The value {step} cannot be used as a number of bits to shift {a}");
 
-        int stepInt = (int)step;
-
         ulong ula = ConvertToULong(a, "Right Shift", options.CultureInfo, null);
 
+        // The count is not masked to the width of the type: shifting by 64 bits or more leaves nothing
+        ulong result = step >= 64 ? 0UL : ula >> (int)step;
         if (reduceTypes)
-            return ReduceNumericType(ula >> stepInt);
+            return ReduceNumericType(result);
 
-        return ula << stepInt;
+        return result;
     }
 
     public static int Compare(object? a, object? b, ComparisonOptions comparisonOptions, MathHelperOptions mathHelperOptions)

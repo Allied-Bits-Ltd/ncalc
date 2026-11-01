@@ -46,15 +46,40 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             : text + _numberFormatInfo.NumberDecimalSeparator + "0";
 
     // Dates and times are written in the ISO form, which does not depend on the culture: #2024-01-02# or #2024-01-02T10:20:30.5#
+    /// <summary>
+    /// Escapes a string that was not read from the text of an expression (so it has no original form), so that it can be read back
+    /// as a single-quoted string.
+    /// </summary>
+    private static string EscapeString(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return string.Empty;
+
+        var builder = new StringBuilder(value!.Length + 8);
+        foreach (var c in value)
+        {
+            switch (c)
+            {
+                case '\\': builder.Append("\\\\"); break;
+                case '\'': builder.Append("\\'"); break;
+                case '\n': builder.Append("\\n"); break;
+                case '\r': builder.Append("\\r"); break;
+                case '\t': builder.Append("\\t"); break;
+                default: builder.Append(c); break;
+            }
+        }
+        return builder.ToString();
+    }
+
     private static string FormatDateTime(DateTime value)
-        => value.TimeOfDay == TimeSpan.Zero
+        => (value.TimeOfDay == TimeSpan.Zero
             ? value.ToString("yyyy'-'MM'-'dd", CultureInfo.InvariantCulture)
-            : value.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss.FFFFFFF", CultureInfo.InvariantCulture).TrimEnd('.');
+            : value.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss.FFFFFFF", CultureInfo.InvariantCulture).TrimEnd('.'))
+            + (value.Kind == DateTimeKind.Utc ? "Z" : string.Empty);
 
     public string Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         if (expression is IfStatementExpression)
         {
@@ -170,7 +195,6 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         cancellationToken.ThrowIfCancellationRequested();
-        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         bool parensNeeded = false;
         bool appendSpace = false;
@@ -202,7 +226,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                 parensNeeded = GetPrecedence(expression.LeftExpression) < PrimaryPrecedence;
                 resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, false, parensNeeded));
 
-                var step = (int)valueExpression.Value;
+                var step = Convert.ToInt32(valueExpression.Value, CultureInfo.InvariantCulture);
                 for (int i = 0; i < step; i++)
                     resultBuilder.Append('!');
                 return resultBuilder.ToString();
@@ -301,7 +325,6 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     public string Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         string result = expression.Type switch
         {
@@ -335,7 +358,6 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     public string Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         bool parensNeeded = GetPrecedence(expression.Expression) < PrimaryPrecedence;
         return EncapsulateNoValue(expression.Expression, false, parensNeeded) + "%";
@@ -344,7 +366,6 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     public string Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         bool parensNeeded = GetPrecedence(expression.Expression) < PrimaryPrecedence;
         return EncapsulateNoValue(expression.Expression, false, parensNeeded) + "i";
@@ -353,7 +374,6 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     public string Visit(VectorExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         string sep = GetListItemSeparator(context.AdvancedOptions);
 
@@ -372,8 +392,6 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(ValueExpression expression, CancellationToken cancellationToken = default)
     {
-        expression.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
-
         var value = expression.Value;
 
         return expression.Type switch
@@ -389,7 +407,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                         : value is BigDecimal bdValue
                             ? MathHelper.FormatBigDecimal(bdValue, _numberFormatInfo)
                             : FormatDouble(MathHelper.ConvertToDouble(value, context))) + " ",
-            ValueType.Char => $"'{value}' ",
+            ValueType.Char => $"'{EscapeString(Convert.ToString(value, CultureInfo.InvariantCulture))}' ",
+            // A GUID is a literal unless GUIDs are not parsed, in which case it can only be a string
+            ValueType.Guid => context.Options.HasFlag(ExpressionOptions.DontParseGuids) ? $"'{value}' " : $"{value} ",
             ValueType.String =>
                 (value is Parlot.TextSpan)
                 ? $"{value} "
@@ -399,7 +419,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                     StringKind.DoubleQuote => $"\"{expression.OriginalString}\" ",
                     StringKind.RawDoubleQuote => $"@\"{value}\" ",
                     StringKind.BackQuote => $"`{value}` ",
-                    _ => string.IsNullOrEmpty(expression.OriginalString) ? $"'{value}' " : $"'{expression.OriginalString}' ",
+                    _ => string.IsNullOrEmpty(expression.OriginalString) ? $"'{EscapeString(Convert.ToString(value, CultureInfo.InvariantCulture))}' " : $"'{expression.OriginalString}' ",
                 },
             _ => string.Empty,
         };
@@ -408,7 +428,6 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     public string Visit(FunctionCall function, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        function.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         if (context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.UseResultReference) == true && function.Identifier.Name == "@")
         {
@@ -441,7 +460,6 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     public string Visit(LogicalExpressionList list, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        list.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         string sep = GetListItemSeparator(context.AdvancedOptions);
         var resultBuilder = new StringBuilder("(");
@@ -532,7 +550,6 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     public string Visit(StatementSequence seq, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        seq.SetOptions(context.Options, context.CultureInfo, context.AdvancedOptions);
 
         var resultBuilder = new StringBuilder();
         for (var i = 0; i < seq.Count; i++)

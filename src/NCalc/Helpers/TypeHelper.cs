@@ -141,7 +141,7 @@ public static class TypeHelper
     /// in NCalc syntax, optionally with a sign, so a value that comes from the outside is never evaluated as an expression.
     /// A dedicated literal-only parser is used, and the parsed-expression cache is bypassed, as such strings are data.
     /// </summary>
-    private static bool TryConvertLiteral(string value, MathHelperOptions options, out object? result)
+    internal static bool TryConvertLiteral(string value, MathHelperOptions options, out object? result)
     {
         result = null;
         try
@@ -376,7 +376,18 @@ public static class TypeHelper
         }
         var comparer = GetStringComparer(comparisonOptions);
 
-        outcome = comparer.Compare(aValue, bValue);
+        try
+        {
+            outcome = comparer.Compare(aValue, bValue);
+        }
+        catch (ArgumentException ex) // values that do not implement IComparable, e.g. two lists
+        {
+            if (!comparisonOptions.CompareIncompatibleTypes)
+                throw new NCalcEvaluationException($"Comparison of incomparable types was attempted. The types of the operands are {a?.GetType().Name ?? "null"} and {b?.GetType().Name ?? "null"}.", ex);
+
+            outcome = -1;
+            return false;
+        }
         return result;
     }
 }

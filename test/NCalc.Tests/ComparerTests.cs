@@ -336,4 +336,37 @@ public class ComparerTests
         var percent = new Expression("Max(10%, 20%)", ExpressionOptions.NoCache) { AdvancedOptions = new AdvancedExpressionOptions(AdvExpressionOptions.CalculatePercent) };
         Assert.Equal(20, Convert.ToInt32(((Percent)percent.Evaluate(TestContext.Current.CancellationToken)!).Value, CultureInfo.InvariantCulture));
     }
+
+    [Fact]
+    public void BoxedNumberComparerHashShouldMatchEquality()
+    {
+        // NCALC-064: equal numbers of different types had different hash codes
+        var options = new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.None);
+        var comparer = new BoxedNumberComparer(options, options);
+
+        object?[] values = [1, 1.0, new BigInteger(1), 1m, 1L, (byte)1, 1.0f, new BigDecimal(1), "1", true, 2, 2.5, "abc", "ABC", -0.0, 0];
+        Assert.Single(new object?[] { 1, 1.0, new BigInteger(1), 1m }.Distinct(comparer));
+        foreach (var x in values)
+        {
+            foreach (var y in values)
+            {
+                if (comparer.Equals(x, y))
+                    Assert.True(comparer.GetHashCode(x) == comparer.GetHashCode(y), $"{x} ({x?.GetType().Name}) and {y} ({y?.GetType().Name}) are equal but have different hash codes");
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(ExpressionOptions.None)]
+    [InlineData(ExpressionOptions.UseNonRecursiveEvaluator)]
+    public async Task StrictTypeMatchingShouldMakeDifferentTypesUnequal(ExpressionOptions evaluator)
+    {
+        // NCALC-067: "!=" was false for operands of different types
+        var options = ExpressionOptions.StrictTypeMatching | evaluator;
+        foreach (var (text, expected) in new[] { ("1 != 1.0", true), ("'1' != 1", true), ("1 == 1.0", false), ("1 < 2.0", false), ("1 != 2", true) })
+        {
+            Assert.Equal(expected, new Expression(text, options).Evaluate(TestContext.Current.CancellationToken));
+            Assert.Equal(expected, await new AsyncExpression(text, options).EvaluateAsync(TestContext.Current.CancellationToken));
+        }
+    }
 }

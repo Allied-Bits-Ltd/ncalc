@@ -1,4 +1,4 @@
-using NCalc.Exceptions;
+﻿using NCalc.Exceptions;
 using NCalc.Factories;
 using NCalc.Parser;
 
@@ -103,7 +103,8 @@ public class ExceptionsTests
         }
         catch (NCalcParserException ex)
         {
-            Assert.Equal("Invalid token in expression at position (1:1)", ex.InnerException?.Message);
+            // The position of the first character that could not be parsed
+            Assert.Equal("Invalid token in expression at position (1:3)", ex.InnerException?.Message);
         }
     }
 
@@ -276,5 +277,58 @@ public class ExceptionsTests
     {
         Assert.Throws<NCalcException>(() => new Expression("").Evaluate(TestContext.Current.CancellationToken));
         Assert.Throws<NCalcException>(() => new Expression((string)null).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("1 +", "(1:4)")]
+    [InlineData("1 2", "(1:3)")]
+    [InlineData("1)", "(1:2)")]
+    [InlineData("(1 + 2", "(1:7)")]
+    public void ParseErrorShouldReportTheFurthestPosition(string text, string position)
+    {
+        // NCALC-071: the position was almost always (1:1)
+        var expression = new Expression(text);
+        Assert.True(expression.HasErrors(TestContext.Current.CancellationToken));
+        Assert.Contains(position, expression.Error!.InnerException?.Message ?? expression.Error.Message);
+    }
+
+    [Theory]
+    [InlineData("1 + + 2", ExpressionOptions.None)]
+    [InlineData("1 * * 2", ExpressionOptions.None)]
+    [InlineData("fn f() => 1; fn f() => 2; f()", ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments)]
+    [InlineData("iff('x', 1, 2)", ExpressionOptions.None)]
+    [InlineData("ifs('x', 1, 2)", ExpressionOptions.None)]
+    [InlineData("l[-1] := 9", ExpressionOptions.UseAssignments)]
+    [InlineData("a == b", ExpressionOptions.None)]
+    public async Task ErrorsShouldBeNCalcExceptions(string text, ExpressionOptions options)
+    {
+        // NCALC-072: InvalidOperationException, ArgumentException, FormatException and ArgumentOutOfRangeException escaped
+        void SetParameters(IDictionary<string, object?> parameters)
+        {
+            parameters["l"] = new List<object?> { 1, 2 };
+            parameters["a"] = new List<int> { 1 };
+            parameters["b"] = new List<int> { 2 };
+        }
+
+        var expression = new Expression(text, options);
+        SetParameters(expression.Parameters);
+        Assert.ThrowsAny<NCalcException>(() => expression.Evaluate(TestContext.Current.CancellationToken));
+
+        var asyncExpression = new AsyncExpression(text, options);
+        SetParameters(asyncExpression.Parameters);
+        await Assert.ThrowsAnyAsync<NCalcException>(async () => await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken));
+
+        if (options == ExpressionOptions.None && text.StartsWith('1'))
+            Assert.ThrowsAny<NCalcException>(() => LogicalExpressionFactory.Create(text, null, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void CancellationDuringParsingShouldNotBeASyntaxError()
+    {
+        // NCALC-085
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+        Assert.ThrowsAny<OperationCanceledException>(() => new Expression("1 + 2 * (3 - 4)", ExpressionOptions.NoCache).HasErrors(source.Token));
+        Assert.ThrowsAny<OperationCanceledException>(() => new Expression("1 + 2 * (3 - 4)", ExpressionOptions.NoCache).Evaluate(source.Token));
     }
 }

@@ -1,4 +1,7 @@
-﻿using NCalc.Factories;
+﻿using Microsoft.Extensions.DependencyInjection;
+using NCalc.Cache.Configuration;
+using NCalc.DependencyInjection;
+using NCalc.Factories;
 using NCalc.Tests.Fixtures;
 
 namespace NCalc.Tests;
@@ -24,5 +27,26 @@ public class MemoryCacheTests(FactoriesWithMemoryCacheFixture fixture) : IClassF
         Assert.Equal(true, result);
 
         Assert.NotEqual(expression.LogicalExpression, anotherExpression.LogicalExpression);
+    }
+
+    [Fact]
+    public void MemoryCacheWithSizeLimitShouldAcceptExpressions()
+    {
+        // NCALC-088: entries had no size, which a cache with SizeLimit rejects
+        var serviceProvider = new ServiceCollection()
+            .AddMemoryCache(options => options.SizeLimit = 100)
+            .AddNCalc()
+            .WithMemoryCache()
+            .Services.BuildServiceProvider();
+        var cache = serviceProvider.GetRequiredService<NCalc.Cache.ILogicalExpressionCache>();
+        var memoryCache = serviceProvider.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
+
+        var logicalExpression = new NCalc.Domain.ValueExpression(42);
+        cache.Set("1 + 1", logicalExpression);
+        Assert.True(cache.TryGetValue("1 + 1", out var cached));
+        Assert.Same(logicalExpression, cached);
+
+        // The key does not collide with a string key of another user of the same cache
+        Assert.False(memoryCache.TryGetValue("1 + 1", out _));
     }
 }

@@ -100,7 +100,12 @@ public sealed class ParameterExtractionVisitor : ILogicalExpressionVisitor<List<
     public List<string> Visit(FunctionExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        return expression.Function.Body.Accept(this, cancellationToken);
+        // The parameters of a user-defined function are its own names, not parameters of the expression
+        var function = expression.Function;
+        var parameters = function.Body.Accept(this, cancellationToken);
+        foreach (var parameter in function.Parameters)
+            parameters.RemoveAll(name => name.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase));
+        return parameters;
     }
 
     public List<string> Visit(StatementSequence seq, CancellationToken cancellationToken = default)

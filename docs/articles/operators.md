@@ -115,7 +115,7 @@ Exponential operators perform exponentiation.
 2 ^ 3
 ```
 When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operations are also supported:
-* `↑` (U+2291): Exponentiation
+* `↑` (U+2191): Exponentiation (`⊑`, U+2291, is accepted too)
 
 ## Unary
 

@@ -298,7 +298,13 @@ public static class EvaluationHelper
         if (string.IsNullOrEmpty(leftValueString))
             return false;
 
-        return rightValue.Contains(leftValueString);
+        // A substring is looked up with the same case and culture rules as the string comparison
+        ComparisonOptions options = context;
+        if (options.IsOrdinal)
+            return rightValue.IndexOf(leftValueString, options.IsCaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) >= 0;
+
+        var compareInfo = (options.CultureInfo ?? CultureInfo.CurrentCulture).CompareInfo;
+        return compareInfo.IndexOf(rightValue, leftValueString, options.IsCaseInsensitive ? CompareOptions.IgnoreCase : CompareOptions.None) >= 0;
     }
 
     private static bool Contains(object? leftValue, IEnumerable<object?> rightValue, ExpressionContextBase context)
@@ -339,27 +345,13 @@ public static class EvaluationHelper
             return false;
         }
 
-        // Cache the runtime type of leftValue once
-        var leftType = leftValue.GetType();
-
-        //ComparisonOptions options = context;
-
+        // The same equality as the "=" operator (Equals would compare strings case-sensitively and find NaN)
         foreach (var item in rightValue)
         {
             if (item is null)
                 continue;
-            var rightType = item.GetType();
-            // If the element type matches, Equals is fast and precise
-            if (rightType == leftType)
-            {
-                if (leftValue.Equals(item))
-                    return true;
-            }
-            else
             if (Compare(leftValue, item, ComparisonType.Equal, context))
-            {
                 return true;
-            }
         }
 
         return false;

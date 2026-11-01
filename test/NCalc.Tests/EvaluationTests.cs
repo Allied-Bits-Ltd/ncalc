@@ -347,4 +347,24 @@ public class EvaluationTests : TestBase
         Assert.Equal(1.0, new Expression("true ? 1 : 2.5", ExpressionOptions.NoCache).ToLambda<double>()());
         Assert.Equal(2.35m, new Expression("Round(2.345, 2)", ExpressionOptions.DecimalAsDefault | ExpressionOptions.RoundAwayFromZero | ExpressionOptions.NoCache).ToLambda<decimal>()());
     }
+
+    [Fact]
+    public void CacheInsertsShouldNotScanTheWholeCache()
+    {
+        // NCALC-063: every insert used to scan all entries, so many distinct expressions took quadratic time
+        var cache = new NCalc.Cache.LogicalExpressionCache(null);
+        var alive = new List<NCalc.Domain.LogicalExpression>();
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < 30_000; i++)
+        {
+            var expression = new NCalc.Domain.ValueExpression(i);
+            alive.Add(expression);
+            cache.Set("e" + i.ToString(CultureInfo.InvariantCulture), expression);
+        }
+        stopwatch.Stop();
+
+        Assert.True(cache.TryGetValue("e29999", out var last));
+        Assert.Same(alive[^1], last);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"30000 inserts took {stopwatch.Elapsed}");
+    }
 }

@@ -455,4 +455,65 @@ public class ParserTests
         Assert.Equal(expected.Real, result.Real, 12);
         Assert.Equal(expected.Imaginary, result.Imaginary, 12);
     }
+
+    [Fact]
+    public void PythonCommentMayEndTheText()
+    {
+        // NCALC-069: a '#' at the very end was not consumed
+        Assert.Equal(3, new Expression("1 + 2 #", ExpressionOptions.SupportPythonComments).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(3, new Expression("1 + 2 # comment", ExpressionOptions.SupportPythonComments).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("3! == 6", true)]
+    [InlineData("3! = 6", true)]
+    [InlineData("3 != 6", true)]
+    [InlineData("3! != 6", false)]
+    public void FactorialMayBeCompared(string text, bool expected)
+    {
+        // NCALC-070
+        Assert.Equal(expected, new Expression(text).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void SmallestLongShouldBeParsedExactly()
+    {
+        // NCALC-073: the magnitude was read as a double and negated
+        Assert.Equal(long.MinValue, new Expression("-9223372036854775808").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(long.MinValue, new Expression("-9223372036854775808", ExpressionOptions.UseBigNumbers).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(-9.2233720368547758E+18, new Expression("-9223372036854775808.0").Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void RangeIndexShouldAcceptOnlyValidBounds()
+    {
+        // NCALC-074: [..] is the whole value; '^' needs a bound, and an index needs a value
+        Assert.Equal("abc", new Expression("'abc'[..]").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal("bc", new Expression("'abcd'[1..^1]").Evaluate(TestContext.Current.CancellationToken));
+        foreach (var text in new[] { "'abc'[^]", "'abc'[^..1]", "'abc'[]", "'abc'[1..^]" })
+            Assert.True(new Expression(text).HasErrors(TestContext.Current.CancellationToken), text);
+    }
+
+    [Fact]
+    public void DocumentedSyntaxShouldBeAccepted()
+    {
+        // NCALC-075: the up arrow is U+2191 (U+2291 is still accepted), and an ISO date may have the 'Z' designator
+        Assert.Equal(8.0, new Expression("2 \u2191 3", ExpressionOptions.UseUnicodeCharsForOperations).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(8.0, new Expression("2 \u2291 3", ExpressionOptions.UseUnicodeCharsForOperations).Evaluate(TestContext.Current.CancellationToken));
+        var date = (DateTime)new Expression("#2001-01-01Z#").Evaluate(TestContext.Current.CancellationToken)!;
+        Assert.Equal(new DateTime(2001, 1, 1), date);
+        Assert.Equal(DateTimeKind.Utc, date.Kind);
+        Assert.Equal(-25m, Convert.ToDecimal(((NCalc.Domain.Percent)new Expression("PercentDiff(80;60)").Evaluate(TestContext.Current.CancellationToken)!).Value, CultureInfo.InvariantCulture));
+    }
+
+    [Theory]
+    [InlineData("true ? 1 : false ? 2 : 3", 1)]
+    [InlineData("false ? 1 : true ? 2 : 3", 2)]
+    [InlineData("false ? 1 : false ? 2 : 3", 3)]
+    [InlineData("true ? false ? 1 : 2 : 3", 2)]
+    public void NestedTernaryShouldNotNeedParentheses(string text, int expected)
+    {
+        // NCALC-076: the conditional operator is right-associative, as in C#
+        Assert.Equal(expected, new Expression(text).Evaluate(TestContext.Current.CancellationToken));
+    }
 }

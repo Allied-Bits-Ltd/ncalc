@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 
 using ExtendedNumerics;
 
@@ -1960,5 +1960,104 @@ public class MathsTests : TestBase
         // Non-integer exponent falls back to Math.Pow (no exact BigDecimal support for fractional exponents).
         var result = new Expression("4**0.5").Evaluate(TestContext.Current.CancellationToken);
         CheckResult(2.0, result);
+    }
+
+    [Theory]
+    [InlineData("Round(1234, -2)", 1200)]
+    [InlineData("Round(1250, -2)", 1200)]
+    [InlineData("Round(1350, -2)", 1400)]
+    [InlineData("Round(-1250, -2)", -1200)]
+    [InlineData("Round(5, -3)", 0)]
+    public void RoundToNegativeDigitsShouldWorkForIntegers(string text, int expected)
+    {
+        // NCALC-077: negative digits were ignored for integers
+        Assert.Equal(expected, new Expression(text).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void RoundShouldHandleAnyNumberOfDigitsForAllTypes()
+    {
+        // NCALC-077: doubles, decimals and big decimals threw ArgumentOutOfRangeException or ArithmeticException
+        Assert.Equal(1200.0, new Expression("Round(1234.5, -2)").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(1300.0, new Expression("Round(1250.5, -2)").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(1200m, new Expression("Round(1234.5, -2)", ExpressionOptions.DecimalAsDefault).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(1.5, new Expression("Round(1.5, 16)").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(1.5m, new Expression("Round(1.5, 40)", ExpressionOptions.DecimalAsDefault).Evaluate(TestContext.Current.CancellationToken));
+
+        var big = new Expression("Round(x, -2)");
+        big.Parameters["x"] = new BigDecimal(new BigInteger(12345), -1);
+        Assert.Equal(new BigDecimal(1200), big.Evaluate(TestContext.Current.CancellationToken));
+        var bigFraction = new Expression("Round(x, 1)", ExpressionOptions.RoundAwayFromZero);
+        bigFraction.Parameters["x"] = new BigDecimal(new BigInteger(125), -2);
+        Assert.Equal(new BigDecimal(new BigInteger(13), -1), bigFraction.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("Abs(x)")]
+    [InlineData("Sin(x)")]
+    [InlineData("Exp(x)")]
+    [InlineData("Sqrt(x)")]
+    [InlineData("Log(x, 2)")]
+    [InlineData("Log(2, x)")]
+    [InlineData("Round(1.5, x)")]
+    [InlineData("Round(x, 1)")]
+    [InlineData("Pow(x, 2)")]
+    [InlineData("Pow(2, x)")]
+    [InlineData("Max(x, 1)")]
+    [InlineData("Min(1, x)")]
+    [InlineData("Ceiling(x)")]
+    [InlineData("Truncate(x)")]
+    [InlineData("Ln(x)")]
+    [InlineData("Atan2(x, 1)")]
+    public async Task NullArgumentShouldGiveNull(string text)
+    {
+        // NCALC-078: the built-in functions handled null arguments in different ways
+        var expression = new Expression(text, ExpressionOptions.AllowNullParameter);
+        expression.Parameters["x"] = null;
+        Assert.Null(expression.Evaluate(TestContext.Current.CancellationToken));
+
+        var asyncExpression = new AsyncExpression(text, ExpressionOptions.AllowNullParameter);
+        asyncExpression.Parameters["x"] = null;
+        Assert.Null(await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void MaxAndMinShouldWidenPropagateNaNAndRejectMixedKinds()
+    {
+        // NCALC-079
+        Assert.Equal(3.0, new Expression("Max(3, 2.5)").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(2.5, new Expression("Min(3, 2.5)").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(5, new Expression("Max('5', 3)").Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal("b", new Expression("Max('a', 'b')").Evaluate(TestContext.Current.CancellationToken));
+        var nan = new Expression("Max(x, 1)");
+        nan.Parameters["x"] = double.NaN;
+        Assert.Equal(double.NaN, nan.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Throws<NCalcEvaluationException>(() => new Expression("Max(1, 'abc')").Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void VectorModuloShouldMatchScalarModulo()
+    {
+        // NCALC-080
+        var options = new AdvancedExpressionOptions(CultureInfo.InvariantCulture, AdvExpressionOptions.ParseVectors);
+        var result = (NCalc.Domain.Vector)new Expression("[5.5; 7] % 2") { AdvancedOptions = options }.Evaluate(TestContext.Current.CancellationToken)!;
+        Assert.Equal(new BigDecimal(new BigInteger(15), -1), result[0]);
+        Assert.Equal(new BigDecimal(1), result[1]);
+        result = (NCalc.Domain.Vector)new Expression("[5.5; 7] % 0.5") { AdvancedOptions = options }.Evaluate(TestContext.Current.CancellationToken)!;
+        Assert.Equal(new BigDecimal(0), result[0]);
+        Assert.Equal(new BigDecimal(0), result[1]);
+    }
+
+    [Fact]
+    public void ShiftsShouldNotMaskTheCount()
+    {
+        // NCALC-081
+        Assert.Equal(0, Convert.ToInt32(new Expression("1 << 64").Evaluate(TestContext.Current.CancellationToken), CultureInfo.InvariantCulture));
+        Assert.Equal(0, Convert.ToInt32(new Expression("1 << 100").Evaluate(TestContext.Current.CancellationToken), CultureInfo.InvariantCulture));
+        Assert.Equal(0, Convert.ToInt32(new Expression("16 >> 70").Evaluate(TestContext.Current.CancellationToken), CultureInfo.InvariantCulture));
+        Assert.Equal(BigInteger.Pow(2, 100), new Expression("1 << 100", ExpressionOptions.UseBigNumbers).Evaluate(TestContext.Current.CancellationToken));
+        Assert.ThrowsAny<OverflowException>(() => new Expression("1 << 100", ExpressionOptions.OverflowProtection).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(4UL, MathHelper.RightShift(16, 2, false, MathHelperOptions.Empty));
+        Assert.Equal(64UL, MathHelper.LeftShift(16, 2, false, MathHelperOptions.Empty));
     }
 }

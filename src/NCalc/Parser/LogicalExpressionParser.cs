@@ -24,10 +24,6 @@ namespace NCalc.Parser;
 /// </summary>
 public static class LogicalExpressionParser
 {
-    private static readonly ValueExpression True = new(true);
-    private static readonly ValueExpression False = new(false);
-    private static readonly ValueExpression Null = new();
-
     private const double MinDecDouble = (double)decimal.MinValue;
     private const double MaxDecDouble = (double)decimal.MaxValue;
 
@@ -376,7 +372,7 @@ public static class LogicalExpressionParser
                 string? strValue = x.ToString();
 
                 if (string.IsNullOrEmpty(strValue))
-                    throw new ArgumentException($"{x.ToString()} is not a valid hex number");
+                    throw new NCalcParserException($"{x.ToString()} is not a valid hex number", ctx.Scanner.Cursor.Position);
 
                 if (((LogicalExpressionParserContext)ctx).AcceptUnderscores)
                     strValue = strValue!.Replace("_", string.Empty);
@@ -414,13 +410,13 @@ public static class LogicalExpressionParser
                     // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
 
                     if (!BigIntegerParser.TryParseBigInteger(strValue!, 16, out BigInteger result))
-                        throw new ArgumentException($"{x.ToString()} is not a valid hex number");
+                        throw new NCalcParserException($"{x.ToString()} is not a valid hex number", ctx.Scanner.Cursor.Position);
 
                     return new ValueExpression((object)result).SetLocation(new ParlotExpressionLocation(ctx));
                 }
                 else
                 {
-                    throw new ArgumentException($"{x.ToString()} is not a valid hex number");
+                    throw new NCalcParserException($"{x.ToString()} is not a valid hex number", ctx.Scanner.Cursor.Position);
                 }
             });
 
@@ -435,7 +431,7 @@ public static class LogicalExpressionParser
                 string? strValue = x.ToString();
 
                 if (string.IsNullOrEmpty(strValue))
-                    throw new ArgumentException($"{x.ToString()} is not a valid octal number");
+                    throw new NCalcParserException($"{x.ToString()} is not a valid octal number", ctx.Scanner.Cursor.Position);
 
                 if (((LogicalExpressionParserContext)ctx).AcceptUnderscores)
                     strValue = strValue!.Replace("_", string.Empty);
@@ -473,12 +469,12 @@ public static class LogicalExpressionParser
                     // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
 
                     if (!BigIntegerParser.TryParseBigInteger(strValue!, 8, out BigInteger result))
-                        throw new ArgumentException($"{x.ToString()} is not a valid octal number");
+                        throw new NCalcParserException($"{x.ToString()} is not a valid octal number", ctx.Scanner.Cursor.Position);
 
                     return new ValueExpression((object)result).SetLocation(new ParlotExpressionLocation(ctx));
                 }
                 else
-                    throw new ArgumentException($"{x.ToString()} is not a valid octal number");
+                    throw new NCalcParserException($"{x.ToString()} is not a valid octal number", ctx.Scanner.Cursor.Position);
             });
 
         var binaryNumber = Terms.Text("0b")
@@ -488,7 +484,7 @@ public static class LogicalExpressionParser
                 string? strValue = x.ToString();
 
                 if (string.IsNullOrEmpty(strValue))
-                    throw new ArgumentException($"{x.ToString()} is not a valid binary number");
+                    throw new NCalcParserException($"{x.ToString()} is not a valid binary number", ctx.Scanner.Cursor.Position);
 
                 if (((LogicalExpressionParserContext)ctx).AcceptUnderscores)
                     strValue = strValue!.Replace("_", string.Empty);
@@ -526,12 +522,12 @@ public static class LogicalExpressionParser
                     // we get here only when an OverflowException happens, so there is no need to check for useBigInteger
 
                     if (!BigIntegerParser.TryParseBigInteger(strValue!, 2, out BigInteger result))
-                        throw new ArgumentException($"{x.ToString()} is not a valid binary number");
+                        throw new NCalcParserException($"{x.ToString()} is not a valid binary number", ctx.Scanner.Cursor.Position);
 
                     return new ValueExpression((object)result);
                 }
                 else
-                    throw new ArgumentException($"{x.ToString()} is not a valid binary number");
+                    throw new NCalcParserException($"{x.ToString()} is not a valid binary number", ctx.Scanner.Cursor.Position);
             });
 
         Parser<LogicalExpression> hexOctBinNumber;
@@ -748,8 +744,8 @@ public static class LogicalExpressionParser
 
         var exponent = useUnicodeForOps
             ? (useCharsForOps
-                    ? OneOf(Terms.Text("**"), Terms.Text("\u2291"))
-                    : OneOf(Terms.Text("**"), Terms.Text("^"), Terms.Text("\u2291")))
+                    ? OneOf(Terms.Text("**"), Terms.Text("\u2191"), Terms.Text("\u2291"))
+                    : OneOf(Terms.Text("**"), Terms.Text("^"), Terms.Text("\u2191"), Terms.Text("\u2291")))
             : (useCharsForOps
                     ? Terms.Text("**")
                     : OneOf(Terms.Text("**"), Terms.Text("^"))); // when useCharsForOps is true, caret is used for bitwise XOR
@@ -868,7 +864,10 @@ public static class LogicalExpressionParser
         Parser<LogicalExpression> bracketedIdentifierExpression = braceIdentifier
                 .Then<LogicalExpression>(static (ctx, x) => new Identifier(x.ToString()!).SetBracketed(true).SetLocation(new ParlotExpressionLocation(ctx)));
 
-        var rangedIndex = openBrace.SkipAnd(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).And(ZeroOrOne(rangeText)).And(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).AndSkip(closeBrace);
+        // [^][lowerBound][..][^][upperBound]: '^' must be followed by a bound, and an index without a range needs a value ([] and [^] are invalid)
+        var rangedIndex = openBrace.SkipAnd(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).And(ZeroOrOne(rangeText)).And(ZeroOrOne(fromEndText)).And(ZeroOrOne(expressionOrBracedStatementSequence)).AndSkip(closeBrace)
+            .When(static (_, x) => (x.Item1 is null || x.Item2 is not null) && (x.Item4 is null || x.Item5 is not null) && (x.Item2 is not null || x.Item3 is not null)
+                && (x.Item3 is not null || x.Item5 is null));
 
         AdvancedExpressionOptions.ListItemSeparatorKind argumentSeparator = extOptions?.ListItemSeparator ?? AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSemicolon;
 
@@ -890,7 +889,7 @@ public static class LogicalExpressionParser
         // list => "(" (expression ("," expression)*)? ")"
         var populatedList =
             Between(openParen, Separated(argumentSeparatorChar/*(decimalSeparator == ',' || decimalSeparator2 == ',' || numGroupSeparator == ',' ? semicolon : comma.Or(semicolon))*/, expressionOrBracedStatementSequence),
-                    closeParen.ElseError("Parenthesis not closed."))
+                    closeParen.ElseError("Parenthesis not closed or an argument is missing."))
                 .Then<LogicalExpression>(static (ctx, values) => new LogicalExpressionList(values).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var emptyList = openParen.AndSkip(closeParen).Then<LogicalExpression>(static _ => new LogicalExpressionList());
@@ -935,12 +934,12 @@ public static class LogicalExpressionParser
         functionOrResultRef = OneOf(funcList.ToArray());
 
         var booleanTrue = Keyword("true")
-                .Then<LogicalExpression>(True);
+                .Then<LogicalExpression>(static (ctx, _) => new ValueExpression(true).SetLocation(new ParlotExpressionLocation(ctx)));
         var booleanFalse = Keyword("false")
-            .Then<LogicalExpression>(False);
+            .Then<LogicalExpression>(static (ctx, _) => new ValueExpression(false).SetLocation(new ParlotExpressionLocation(ctx)));
 
         var theNull = Keyword("null")
-            .Then<LogicalExpression>(Null);
+            .Then<LogicalExpression>(static (ctx, _) => new ValueExpression().SetLocation(new ParlotExpressionLocation(ctx)));
 
         var singleQuotesStringValue = Terms.String(quotes: StringLiteralQuotes.Single, returnDecoded: false)
                 .Then<LogicalExpression>(static (ctx, value) =>
@@ -1127,11 +1126,14 @@ public static class LogicalExpressionParser
                     .AndSkip(hyphenChar)
                     .And(charIsNumber);
 
-            // dateIso => number-number-number
-            dateIso = dateDefinitionIso.Then<LogicalExpression>((ctx, date) =>
+            // dateIso => number-number-number['Z']
+            dateIso = dateDefinitionIso.And(ZeroOrOne(Literals.Char('Z'))).Then<LogicalExpression>((ctx, date) =>
             {
                 if (DateTime.TryParseExact($"{date.Item1}-{date.Item2}-{date.Item3}", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
                 {
+                    // Only a date with the 'Z' designator is in UTC
+                    if (date.Item4 == 'Z')
+                        result = DateTime.SpecifyKind(result, DateTimeKind.Utc);
                     return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                 }
 
@@ -1522,8 +1524,8 @@ public static class LogicalExpressionParser
                     throw new FormatException("Invalid DateTime format.");
                 });
 
-            // dateAndTimeIso => number-number-number'T'number:number:number[.number]Z
-            var dateAndTimeIso = dateDefinitionIso.AndSkip(Terms.Char('T')).And(timeDefinitionIso).AndSkip(ZeroOrOne(Terms.Char('Z'))).Then<LogicalExpression>((ctx, dateTime) =>
+            // dateAndTimeIso => number-number-number'T'number:number:number[.number]['Z']
+            var dateAndTimeIso = dateDefinitionIso.AndSkip(Terms.Char('T')).And(timeDefinitionIso).And(ZeroOrOne(Literals.Char('Z'))).Then<LogicalExpression>((ctx, dateTime) =>
                 {
                     int year = -1;
                     int month = -1;
@@ -1547,7 +1549,8 @@ public static class LogicalExpressionParser
 
                     try
                     {
-                        DateTime result = new DateTime(year, month, day, hour, minute, second, DateTimeKind.Utc).AddTicks(fractionTicks);
+                        // As in ISO 8601, a time without the 'Z' designator is not in UTC
+                        DateTime result = new DateTime(year, month, day, hour, minute, second, dateTime.Item5 == 'Z' ? DateTimeKind.Utc : DateTimeKind.Unspecified).AddTicks(fractionTicks);
                         return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                     }
                     catch
@@ -1962,7 +1965,7 @@ public static class LogicalExpressionParser
             var literal = OneOf(literalParsers.ToArray());
             var noSecondSign = Not(OneOf(minus, plus));
             var signedLiteral = OneOf(
-                minus.AndSkip(noSecondSign).SkipAnd(literal).Then<LogicalExpression>(static x => new UnaryExpression(UnaryExpressionType.Negate, x)),
+                minus.AndSkip(noSecondSign).SkipAnd(literal).Then<LogicalExpression>(static (ctx, x) => CreateNegation(ctx, x)),
                 plus.AndSkip(noSecondSign).SkipAnd(literal),
                 literal);
 
@@ -2009,6 +2012,15 @@ public static class LogicalExpressionParser
                 {
                     // there is just a primary discovered
                     return x.Item1;
+                }
+
+                if (x.Item2.Item2 is null && x.Item2.Item3 is not null && x.Item2.Item5 is null) // [..] is the whole value
+                {
+                    return new BinaryExpression(
+                        BinaryExpressionType.IndexAccess,
+                        x.Item1,
+                        new BinaryExpression(BinaryExpressionType.RangeIndex, new ValueExpression(), new ValueExpression())
+                    ).SetLocation(new ParlotExpressionLocation(ctx));
                 }
 
                 if (x.Item2.Item2 is not null && x.Item2.Item3 is null && x.Item2.Item5 is null) // only the first index is available
@@ -2075,7 +2087,8 @@ public static class LogicalExpressionParser
 
         // factorial => primary ("!")* ;
         // A factorial includes any primary
-        var factorial = indexedAccess.And(ZeroOrMany(exclamationMark.AndSkip(Not(equal))))
+        // Only a '=' directly after '!' makes it the "!=" operator; "3! == 6" and "3! = 6" compare a factorial
+        var factorial = indexedAccess.And(ZeroOrMany(exclamationMark.AndSkip(Not(Literals.Char('=')))))
             .Then((ctx, x) =>
             {
                 if (x.Item2.Count == 0)
@@ -2165,7 +2178,7 @@ public static class LogicalExpressionParser
         List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)> unaryOps =
         [
             (not, static (ctx, value) => new UnaryExpression(UnaryExpressionType.Not, value).SetLocation(new ParlotExpressionLocation(ctx))),
-            (minus, static (ctx, value)  => new UnaryExpression(UnaryExpressionType.Negate, value).SetLocation(new ParlotExpressionLocation(ctx))),
+            (minus, static (ctx, value)  => CreateNegation(ctx, value)),
             (bitwiseNot, static (ctx, value) => new UnaryExpression(UnaryExpressionType.BitwiseNot, value).SetLocation(new ParlotExpressionLocation(ctx))),
             //(returnParser, static (ctx, value) => new UnaryExpression(UnaryExpressionType.Return, value).SetLocation(new ParlotExpressionLocation(ctx))),
         ];
@@ -2285,11 +2298,13 @@ public static class LogicalExpressionParser
         */
 
         // ternary => logical("?" logical ":" logical) ?
-        var ternary = logical.And(ZeroOrOne(questionMark.SkipAnd(logical).AndSkip(colon).And(logical)))
+        // ternary => logical ( "?" ternary ":" ternary )? ; right-associative, as in C#: a ? b : c ? d : e is a ? b : (c ? d : e)
+        var ternary = Deferred<LogicalExpression>();
+        ternary.Parser = StackGuarded(logical.And(ZeroOrOne(questionMark.SkipAnd(ternary).AndSkip(colon).And(ternary)))
             .Then(static (ctx, x) =>
                 x.Item2.Item1 is null
                     ? x.Item1
-                    : new TernaryExpression(x.Item1, x.Item2.Item1, x.Item2.Item2).SetLocation(new ParlotExpressionLocation(ctx)));
+                    : new TernaryExpression(x.Item1, x.Item2.Item1, x.Item2.Item2).SetLocation(new ParlotExpressionLocation(ctx))));
 
         List<(Parser<string>, Func<ParseContext, LogicalExpression, LogicalExpression>)> returnOps =
         [
@@ -2307,7 +2322,7 @@ public static class LogicalExpressionParser
 
         var operatorSequence = @return.LeftAssociative(
             (OneOrMany(OneOf(operatorSequenceElements.ToArray())),
-                static (_, _) => throw new InvalidOperationException("Unknown operator sequence.")));
+                static (_, _) => throw new NCalcParserException("Unknown operator sequence")));
 
         List<Parser<LogicalExpression>> statements = [];
 
@@ -2352,7 +2367,7 @@ public static class LogicalExpressionParser
 
         var populatedParamList =
             Between(openParen, Separated(comma.Or(semicolon), paramName),
-                    closeParen.ElseError("Parenthesis not closed."));
+                    closeParen.ElseError("Parenthesis not closed or a parameter is missing."));
 
         Parser<IReadOnlyList<FunctionParameter>>? emptyParamList = openParen.AndSkip(closeParen).Then<IReadOnlyList<FunctionParameter>>(static _ => []);
 
@@ -2385,6 +2400,8 @@ public static class LogicalExpressionParser
                     function.Parameters.Add(param);
                     function.MandatoryParamCount = mandatoryParams;
                 }
+                if (((LogicalExpressionParserContext)ctx).UserFunctions.ContainsKey(function.Name))
+                    throw new NCalcParserException($"The function '{function.Name}' is declared more than once", ctx.Scanner.Cursor.Position);
                 ((LogicalExpressionParserContext)ctx).UserFunctions.Add(function.Name, function);
                 return new FunctionExpression(function);
             }).Named("FunctionDeclaration");
@@ -2511,6 +2528,42 @@ public static class LogicalExpressionParser
             return null;
     }
 
+    /// <summary>
+    /// Creates the negation of an operand. The magnitude of the smallest long does not fit in a long, so it is read as a larger type,
+    /// and "-9223372036854775808" is folded into a long literal (otherwise it would lose precision as a double).
+    /// "-2147483648" stays a long, so that e.g. "-2147483648 - 1" does not wrap around in 32 bits.
+    /// </summary>
+    private static LogicalExpression CreateNegation(ParseContext ctx, LogicalExpression value)
+    {
+        const string LongMinValueMagnitude = "9223372036854775808";
+
+        if (value is ValueExpression literal)
+        {
+            object? folded = literal.Value switch
+            {
+                ulong ul when ul == 9223372036854775808UL => long.MinValue,
+                BigInteger bi when bi == 9223372036854775808UL => long.MinValue,
+                // Without big numbers the magnitude is read as a double; only the integer literal is folded, not e.g. 9.223372036854775808E18
+                double d when d == 9223372036854775808.0 && EndsWithLiteral(ctx, LongMinValueMagnitude) => long.MinValue,
+                _ => null
+            };
+            if (folded is not null)
+                return new ValueExpression(folded).SetLocation(new ParlotExpressionLocation(ctx));
+        }
+
+        return new UnaryExpression(UnaryExpressionType.Negate, value).SetLocation(new ParlotExpressionLocation(ctx));
+    }
+
+    private static bool EndsWithLiteral(ParseContext ctx, string text)
+    {
+        var buffer = ctx.Scanner.Buffer;
+        var end = ctx.Scanner.Cursor.Offset;
+        var start = end - text.Length;
+        return start >= 0
+            && string.CompareOrdinal(buffer, start, text, 0, text.Length) == 0
+            && (start == 0 || !char.IsLetterOrDigit(buffer[start - 1]) && buffer[start - 1] != '.' && buffer[start - 1] != '_');
+    }
+
     private static LogicalExpression ParseBinaryExpression(ParseContext ctx, (LogicalExpression, IReadOnlyList<(BinaryExpressionType, LogicalExpression)>) x)
     {
         var result = x.Item1;
@@ -2550,6 +2603,8 @@ public static class LogicalExpressionParser
 
     public static LogicalExpression Parse(Parser<LogicalExpression> parserToUse, LogicalExpressionParserContext context)
     {
+        // The parsers check the token only now and then, so a short text would be parsed with a cancelled token
+        context.CancellationToken.ThrowIfCancellationRequested();
         try
         {
             return ParseOnCurrentThread(parserToUse, context);
@@ -2629,14 +2684,69 @@ public static class LogicalExpressionParser
         if (error is not null)
         {
             position = error.Position;
-            message = $"{error.Message} at position {position}";
+            message = error.Message ?? "Error parsing the expression";
         }
         else
         {
             position = context.Scanner.Cursor.Position;
-            message = $"Error parsing the expression at position {position}";
+            message = "Error parsing the expression";
         }
 
-        throw new NCalcParserException(message, position);
+        // An error raised after the parser has gone back to an earlier alternative is reported where that alternative started
+        // (usually the start of the text), so the position of the first character that no parser could consume is reported instead
+        var furthest = FindFurthestParsedOffset(parserToUse, context);
+        if (furthest > position.Offset)
+            position = GetTextPosition(context.Scanner.Buffer, furthest);
+
+        throw new NCalcParserException($"{message} at position {position}", position);
+    }
+
+    /// <summary>
+    /// Parses a text that could not be parsed once more, recording how far the parsers got, and returns the offset of the first
+    /// character after that point that is not whitespace. Only failed parses pay for this.
+    /// </summary>
+    private static int FindFurthestParsedOffset(Parser<LogicalExpression> parserToUse, LogicalExpressionParserContext context)
+    {
+        var buffer = context.Scanner.Buffer;
+        int furthest = 0;
+        var tracingContext = new LogicalExpressionParserContext(buffer, context.Options, context.CultureInfo, context.AdvancedOptions, context.CancellationToken)
+        {
+            OnExitParser = (parser, ctx) =>
+            {
+                if (ctx.Scanner.Cursor.Offset > furthest)
+                    furthest = ctx.Scanner.Cursor.Offset;
+            },
+        };
+
+        try
+        {
+            parserToUse.TryParse(tracingContext, out _, out _);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The offset reached before the failure is still useful
+        }
+
+        while (furthest < buffer.Length && char.IsWhiteSpace(buffer[furthest]))
+            furthest++;
+
+        return furthest;
+    }
+
+    private static TextPosition GetTextPosition(string buffer, int offset)
+    {
+        int line = 1;
+        int column = 1;
+        for (int i = 0; i < offset && i < buffer.Length; i++)
+        {
+            if (buffer[i] == '\n')
+            {
+                line++;
+                column = 1;
+            }
+            else
+                column++;
+        }
+        return new TextPosition(offset, line, column);
     }
 }

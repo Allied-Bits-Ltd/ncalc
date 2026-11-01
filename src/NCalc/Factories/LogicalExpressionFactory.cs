@@ -45,7 +45,7 @@ public sealed class LogicalExpressionFactory : ILogicalExpressionFactory
         {
             return Create(expression, expressionContext, CultureInfo.CurrentCulture, options, null);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger?.LogErrorCreatingLogicalExpression(exception, expression);
             throw new NCalcParserException("Error parsing the expression.", exception);
@@ -58,7 +58,7 @@ public sealed class LogicalExpressionFactory : ILogicalExpressionFactory
         {
             return Create(expression, expressionContext, cultureInfo, options, advancedOptions, cancellationToken);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger?.LogErrorCreatingLogicalExpression(exception, expression);
             throw new NCalcParserException("Error parsing the expression.", exception);

@@ -42,8 +42,8 @@ public class WhiteSpaceParser : Parser<TextSpan>
         while (true)
         {
             context.Scanner.SkipWhiteSpaceOrNewLine();
-            charsLeft = bufferLength - context.Scanner.Cursor.Offset - 1;
-            if (charsLeft == 0)
+            charsLeft = bufferLength - context.Scanner.Cursor.Offset;
+            if (charsLeft <= 0)
                 break;
 
             // Exclude doc comments

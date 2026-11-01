@@ -23,9 +23,8 @@ public record ExpressionContext : ExpressionContextBase
     public ExpressionContext(ExpressionOptions options, CultureInfo? cultureInfo, IDictionary<string, ExpressionParameter>? dynamicParameters = null, IDictionary<string, ExpressionFunction>? functions = null)
         : base(options, cultureInfo)
     {
-        IEqualityComparer<string> comparer = cultureInfo is not null
-            ? cultureInfo.CompareInfo.GetStringComparer(CompareOptions.None)
-            : /*Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? StringComparer.InvariantCultureIgnoreCase : */StringComparer.InvariantCulture;
+        // Names are compared ordinally: a linguistic comparer treats e.g. "ab" and "a‍b" as the same key and depends on the culture
+        IEqualityComparer<string> comparer = StringComparer.Ordinal;
 
         DynamicParameters = dynamicParameters ?? new Dictionary<string, ExpressionParameter>(comparer);
         Functions = functions ?? new Dictionary<string, ExpressionFunction>(comparer);

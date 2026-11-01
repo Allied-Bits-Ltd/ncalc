@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 
 using ExtendedNumerics;
 
+using NCalc.Domain;
+
 namespace NCalc.Helpers
 {
     public class BoxedNumberComparer : IComparer<object?>, IEqualityComparer<object?>
@@ -26,28 +28,56 @@ namespace NCalc.Helpers
             return EvaluationHelper.Compare(x, y, _comparisonOptions, _mathHelperOptions);
         }
 
+        /// <summary>
+        /// Determines whether two values are equal in the same way as the "=" operator.
+        /// </summary>
         public new bool Equals(object? x, object? y)
         {
-            return EvaluationHelper.Compare(x, y, _comparisonOptions, _mathHelperOptions) == 0;
+            return EvaluationHelper.Compare(x, y, ComparisonType.Equal, _comparisonOptions, _mathHelperOptions);
         }
 
+        /// <summary>
+        /// Returns a hash code that is the same for all values that <see cref="Equals(object?, object?)"/> considers equal:
+        /// numbers of all types (and booleans) are hashed by their value as a double, a string that is a literal by the value
+        /// of the literal, and other values by their text with the string comparer of the options.
+        /// </summary>
         public int GetHashCode(object? obj)
         {
-            if (obj is null) return 0;
+            switch (obj)
+            {
+                case null:
+                    return 0;
+                case Percent percent:
+                    return GetHashCode(percent.Value);
+                case ComplexNumber complex when complex.IsReal:
+                    return GetHashCode(MathHelper.ReduceComplexToReal(complex, _mathHelperOptions));
+                case NCalc.Domain.Vector vector:
+                    var hash = vector.Dimensions;
+                    for (var i = 0; i < vector.Dimensions; i++)
+                        hash = unchecked(hash * 31 + GetNumberHashCode(vector[i]));
+                    return hash;
+                case ComplexNumber:
+                    return obj.GetHashCode();
+                case bool boolean:
+                    return GetNumberHashCode(boolean ? 1.0 : 0.0);
+                case string text:
+                    if (!_comparisonOptions.AllOptions.HasFlag(ExpressionOptions.NoStringTypeCoercion)
+                        && TypeHelper.TryConvertLiteral(text, _mathHelperOptions, out var literal) && literal is not string)
+                        return GetHashCode(literal);
+                    return TypeHelper.GetStringComparer(_comparisonOptions).GetHashCode(text);
+            }
 
-            if (obj is BigInteger bi)
-                return bi.GetHashCode();
+            if (MathHelper.IsBoxedNumberOrBigNumber(obj))
+                return GetNumberHashCode(obj);
 
-            if (obj is BigDecimal bd)
-                return bd.GetHashCode();
+            return TypeHelper.GetStringComparer(_comparisonOptions).GetHashCode(Convert.ToString(obj, _comparisonOptions.CultureInfo) ?? string.Empty);
+        }
 
-            if (MathHelper.IsBoxedIntegerNumber(obj))
-                return MathHelper.GetBoxedIntegerNumberAsLong(obj).GetHashCode();
-
-            if (MathHelper.IsBoxedNumber(obj))
-                return MathHelper.GetBoxedNumberAsDouble(obj).GetHashCode();
-
-            return obj.GetHashCode();
+        private int GetNumberHashCode(object number)
+        {
+            var value = MathHelper.ConvertToDouble(number, _mathHelperOptions);
+            // All NaNs are alike, and 0.0 and -0.0 are equal
+            return double.IsNaN(value) ? double.NaN.GetHashCode() : (value == 0 ? 0 : value.GetHashCode());
         }
     }
 }

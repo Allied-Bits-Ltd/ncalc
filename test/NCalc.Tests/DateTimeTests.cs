@@ -267,4 +267,19 @@ public class DateTimeTests
         Assert.Equal(3, new Expression("1 + 2 # comment", ExpressionOptions.SupportPythonComments | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
         Assert.Equal(3, new Expression("1 + 2 #comment", ExpressionOptions.SupportPythonComments | ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public void IsoDateTimeShouldBeUtcOnlyWithTheDesignator()
+    {
+        // NCALC-087
+        var unspecified = (DateTime)new Expression("#2001-01-01T14:56:49#").Evaluate(TestContext.Current.CancellationToken)!;
+        Assert.Equal(DateTimeKind.Unspecified, unspecified.Kind);
+        var utc = (DateTime)new Expression("#2001-01-01T14:56:49Z#").Evaluate(TestContext.Current.CancellationToken)!;
+        Assert.Equal(DateTimeKind.Utc, utc.Kind);
+        Assert.Equal(new DateTime(2001, 1, 1, 14, 56, 49), unspecified);
+
+        // The kind survives ToString()
+        var text = new Expression("#2001-01-01T14:56:49Z#").GetLogicalExpression(TestContext.Current.CancellationToken)!.ToString();
+        Assert.Equal(DateTimeKind.Utc, ((DateTime)new Expression(text).Evaluate(TestContext.Current.CancellationToken)!).Kind);
+    }
 }

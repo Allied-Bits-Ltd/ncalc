@@ -47,93 +47,157 @@ public static class BuiltInFunctionHelper
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Abs() takes exactly 1 argument", location);
-            return MathHelper.Abs(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Abs(arg0, context);
         }
         if (functionName.Equals("Acos", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Acos() takes exactly 1 argument", location);
-            return MathHelper.Acos(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Acos(arg0, context);
         }
         if (functionName.Equals("Asin", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Asin() takes exactly 1 argument", location);
-            return MathHelper.Asin(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Asin(arg0, context);
         }
         if (functionName.Equals("Atan", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Atan() takes exactly 1 argument", location);
-            return MathHelper.Atan(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Atan(arg0, context);
         }
         if (functionName.Equals("Atan2", comparison))
         {
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("Atan2() takes exactly 2 arguments", location);
-            return MathHelper.Atan2(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            var arg1 = arguments[1].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null || arg1 is null)
+                return null;
+            return MathHelper.Atan2(arg0, arg1, context);
         }
         if (functionName.Equals("Ceiling", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Ceiling() takes exactly 1 argument", location);
-            return MathHelper.Ceiling(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Ceiling(arg0, context);
         }
         if (functionName.Equals("Cos", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Cos() takes exactly 1 argument", location);
-            return MathHelper.Cos(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Cos(arg0, context);
         }
         if (functionName.Equals("Exp", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Exp() takes exactly 1 argument", location);
-            return MathHelper.Exp(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Exp(arg0, context);
         }
         if (functionName.Equals("Floor", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Floor() takes exactly 1 argument", location);
-            return MathHelper.Floor(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Floor(arg0, context);
         }
         if (functionName.Equals("IEEERemainder", comparison))
         {
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("IEEERemainder() takes exactly 2 arguments", location);
-            return MathHelper.IEEERemainder(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            var arg1 = arguments[1].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null || arg1 is null)
+                return null;
+            return MathHelper.IEEERemainder(arg0, arg1, context);
         }
         if (functionName.Equals("Ln", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Ln() takes exactly 1 argument", location);
-            return MathHelper.Ln(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Ln(arg0, context);
         }
         if (functionName.Equals("Log", comparison))
         {
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("Log() takes exactly 2 arguments", location);
-            return MathHelper.Log(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            var arg1 = arguments[1].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null || arg1 is null)
+                return null;
+            return MathHelper.Log(arg0, arg1, context);
         }
 #if NET8_0_OR_GREATER
         if (functionName.Equals("Log2", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Log2() takes exactly 1 argument", location);
-            return MathHelper.Log2(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Log2(arg0, context);
         }
 #endif
         if (functionName.Equals("Log10", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Log10() takes exactly 1 argument", location);
-            return MathHelper.Log10(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Log10(arg0, context);
         }
         if (functionName.Equals("Pow", comparison))
         {
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("Pow() takes exactly 2 arguments", location);
-            return MathHelper.Pow(arguments[0].Evaluate(), arguments[1].Evaluate(), true, context);
+            var arg0 = arguments[0].Evaluate();
+            var arg1 = arguments[1].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null || arg1 is null)
+                return null;
+            return MathHelper.Pow(arg0, arg1, true, context);
         }
         if (functionName.Equals("Round", comparison))
         {
@@ -142,49 +206,84 @@ public static class BuiltInFunctionHelper
             var rounding = context.Options.HasFlag(ExpressionOptions.RoundAwayFromZero)
                 ? MidpointRounding.AwayFromZero
                 : MidpointRounding.ToEven;
-            return MathHelper.Round(arguments[0].Evaluate(), arguments[1].Evaluate(), rounding, context);
+            var arg0 = arguments[0].Evaluate();
+            var arg1 = arguments[1].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null || arg1 is null)
+                return null;
+            return MathHelper.Round(arg0, arg1, rounding, context);
         }
         if (functionName.Equals("Sign", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Sign() takes exactly 1 argument", location);
-            return MathHelper.Sign(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Sign(arg0, context);
         }
         if (functionName.Equals("Sin", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Sin() takes exactly 1 argument", location);
-            return MathHelper.Sin(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Sin(arg0, context);
         }
         if (functionName.Equals("Sqrt", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Sqrt() takes exactly 1 argument", location);
-            return MathHelper.Sqrt(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Sqrt(arg0, context);
         }
         if (functionName.Equals("Tan", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Tan() takes exactly 1 argument", location);
-            return MathHelper.Tan(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Tan(arg0, context);
         }
         if (functionName.Equals("Trunc", comparison) || functionName.Equals("Truncate", comparison))
         {
             if (arguments.Length != 1)
                 throw new NCalcEvaluationException("Truncate() takes exactly 1 argument", location);
-            return MathHelper.Truncate(arguments[0].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null)
+                return null;
+            return MathHelper.Truncate(arg0, context);
         }
         if (functionName.Equals("Max", comparison))
         {
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("Max() takes exactly 2 arguments", location);
-            return MathHelper.Max(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            var arg1 = arguments[1].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null || arg1 is null)
+                return null;
+            return MathHelper.Max(arg0, arg1, context);
         }
         if (functionName.Equals("Min", comparison))
         {
             if (arguments.Length != 2)
                 throw new NCalcEvaluationException("Min() takes exactly 2 arguments", location);
-            return MathHelper.Min(arguments[0].Evaluate(), arguments[1].Evaluate(), context);
+            var arg0 = arguments[0].Evaluate();
+            var arg1 = arguments[1].Evaluate();
+            // A null argument gives a null result, as with the operators
+            if (arg0 is null || arg1 is null)
+                return null;
+            return MathHelper.Min(arg0, arg1, context);
         }
         if (functionName.Equals("MakeList", comparison))
         {
@@ -242,10 +341,10 @@ public static class BuiltInFunctionHelper
             var evaluation = false;
             for (var i = 1; i < arguments.Length; i++)
             {
-                int compareResult;
                 try
                 {
-                    if (!TypeHelper.CompareUsingMostPreciseType(parameter, arguments[i].Evaluate(), context, out compareResult) || compareResult != 0)
+                    // The same equality as the "=" operator
+                    if (!EvaluationHelper.Compare(parameter, arguments[i].Evaluate(), ComparisonType.Equal, context))
                         continue;
                 }
                 catch (NCalcConversionException cex)

@@ -1281,8 +1281,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     protected bool Compare(object? a, object? b, ComparisonType comparisonType)
     {
+        // Values of different types are unequal and unordered
         if (context.Options.HasFlag(ExpressionOptions.StrictTypeMatching) && a?.GetType() != b?.GetType())
-            return false;
+            return comparisonType == ComparisonType.NotEqual;
 
         if (!context.Options.HasFlag(ExpressionOptions.CompareNullValues))
         {

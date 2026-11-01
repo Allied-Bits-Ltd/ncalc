@@ -111,6 +111,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number", binExpr.RightExpression.Location);
 
                     var index = MathHelper.ConvertToInt(indexObj, "Indexed access", context.CultureInfo, binExpr.RightExpression.Location);
+                    if (index < 0)
+                        throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} is less than zero ({index}), which is not a valid value (an index must be zero or positive)", binExpr.RightExpression.Location);
 
                     var parameterArgs = new UpdateParameterArgs(identifierName, ident.Id, index, value);
 
@@ -1275,8 +1277,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     protected bool Compare(object? a, object? b, ComparisonType comparisonType)
     {
+        // Values of different types are unequal and unordered
         if (context.Options.HasFlag(ExpressionOptions.StrictTypeMatching) && a?.GetType() != b?.GetType())
-            return false;
+            return comparisonType == ComparisonType.NotEqual;
 
         if (!context.Options.HasFlag(ExpressionOptions.CompareNullValues))
         {

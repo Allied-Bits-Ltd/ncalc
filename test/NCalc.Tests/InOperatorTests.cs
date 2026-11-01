@@ -71,4 +71,33 @@ public class InOperatorTests
             Parameters = { { "short_value", (short) 7 } }
         }.Evaluate(TestContext.Current.CancellationToken));
     }
+
+    [Theory]
+    [InlineData("1 in ('1.0', 2)", ExpressionOptions.None, true)]
+    [InlineData("in(1, '1.0')", ExpressionOptions.None, true)]
+    [InlineData("in(1, '2', 3.0)", ExpressionOptions.None, false)]
+    [InlineData("'a' in 'XAY'", ExpressionOptions.CaseInsensitiveStringComparer, true)]
+    [InlineData("'a' in 'XAY'", ExpressionOptions.None, false)]
+    [InlineData("'a' in ('A', 'B')", ExpressionOptions.CaseInsensitiveStringComparer, true)]
+    [InlineData("x in list", ExpressionOptions.None, false)]
+    [InlineData("in(x, x)", ExpressionOptions.None, false)]
+    [InlineData("'b' in list2", ExpressionOptions.CaseInsensitiveStringComparer, true)]
+    public async Task InShouldAgreeWithEquality(string text, ExpressionOptions options, bool expected)
+    {
+        // NCALC-065: "x in (...)" must be the same as "x = e1 or x = e2 ..."; NaN is not equal to NaN
+        foreach (var evaluator in new[] { ExpressionOptions.None, ExpressionOptions.UseNonRecursiveEvaluator })
+        {
+            var expression = new Expression(text, options | evaluator);
+            expression.Parameters["x"] = double.NaN;
+            expression.Parameters["list"] = new List<double> { double.NaN, 2 };
+            expression.Parameters["list2"] = new List<string> { "A", "B" };
+            Assert.Equal(expected, expression.Evaluate(TestContext.Current.CancellationToken));
+
+            var asyncExpression = new AsyncExpression(text, options | evaluator);
+            asyncExpression.Parameters["x"] = double.NaN;
+            asyncExpression.Parameters["list"] = new List<double> { double.NaN, 2 };
+            asyncExpression.Parameters["list2"] = new List<string> { "A", "B" };
+            Assert.Equal(expected, await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken));
+        }
+    }
 }

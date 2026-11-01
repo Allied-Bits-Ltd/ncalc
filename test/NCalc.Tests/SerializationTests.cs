@@ -445,4 +445,35 @@ public class SerializationTests
         var restored = JsonSerializer.Deserialize<LogicalExpression>(JsonSerializer.Serialize(logicalExpression))!;
         Assert.Equal(logicalExpression.ToString(), restored.ToString());
     }
+
+    [Fact]
+    public void ParsingAndSerializingShouldNotChangeOtherExpressions()
+    {
+        // NCALC-082: the nodes of true, false and null were shared, and serialization wrote options into the tree
+        var first = new Expression("true", ExpressionOptions.NoCache | ExpressionOptions.UseCStyleAssignments).GetLogicalExpression(TestContext.Current.CancellationToken)!;
+        var second = new Expression("true", ExpressionOptions.NoCache).GetLogicalExpression(TestContext.Current.CancellationToken)!;
+        Assert.NotSame(first, second);
+        Assert.True(first.Options.HasFlag(ExpressionOptions.UseCStyleAssignments));
+        Assert.False(second.Options.HasFlag(ExpressionOptions.UseCStyleAssignments));
+
+        var tree = new Expression("a == 1", ExpressionOptions.NoCache).GetLogicalExpression(TestContext.Current.CancellationToken)!;
+        var child = ((BinaryExpression)tree).RightExpression;
+        var before = child.Options;
+        _ = tree.ToString();
+        Assert.Equal(before, child.Options);
+    }
+
+    [Fact]
+    public void SerializerShouldHandleUnusualValues()
+    {
+        // NCALC-086
+        Assert.Equal("5!!", new BinaryExpression(BinaryExpressionType.Factorial, new ValueExpression(5), new ValueExpression(2L)).ToString().Trim());
+
+        var guid = Guid.Parse("8a4e5d1c-1b2c-4d5e-9f00-123456789abc");
+        var guidText = new ValueExpression(guid).ToString();
+        Assert.Equal(guid, new Expression(guidText).Evaluate(TestContext.Current.CancellationToken));
+
+        var quoted = new ValueExpression("it's a \\ test").ToString();
+        Assert.Equal("it's a \\ test", new Expression(quoted).Evaluate(TestContext.Current.CancellationToken));
+    }
 }

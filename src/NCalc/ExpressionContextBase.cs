@@ -42,9 +42,8 @@ public abstract record ExpressionContextBase
 
     private void CreateDictionaries(CultureInfo? cultureInfo = null)
     {
-        IEqualityComparer<string> comparer = cultureInfo is not null
-            ? cultureInfo.CompareInfo.GetStringComparer(CompareOptions.None)
-            : /*Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup) ? StringComparer.InvariantCultureIgnoreCase : */StringComparer.InvariantCulture;
+        // Names are compared ordinally: a linguistic comparer treats e.g. "ab" and "a‍b" as the same key and depends on the culture
+        IEqualityComparer<string> comparer = StringComparer.Ordinal;
 
         StaticParameters = new Dictionary<string, object?>(comparer);
 

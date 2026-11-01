@@ -94,11 +94,14 @@ Additionally, it is possible to define dates relative to current moment in a hum
 Also, ISO 8601 / XML date and date-time values are supported:
 
 ```
-#2001-01-01Z# // date
+#2001-01-01# // date
+#2001-01-01Z# // date (UTC)
 #2001-01-01T14:56:49# // datetime
 #2001-01-01T14:56:49Z# // datetime
 #2001-01-01T14:56:49.325Z# // datetime
 ```
+
+A value with the `Z` designator has the `DateTimeKind.Utc` kind; a value without it has the `DateTimeKind.Unspecified` kind.
 
 ## Time
 

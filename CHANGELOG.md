@@ -61,6 +61,29 @@
 * `IterateParameters` no longer replaces the list parameters with their last elements (a second evaluation returned a single value), does not iterate the characters of a string, handles `return`, and observes the cancellation token.
 * `Evaluate` no longer writes a `null` entry into the parameters (a read-only dictionary threw) or the static `UseNonRecursiveEvaluator` setting into `Options`.
 * Percent operations without dynamic code (as in NCalc.AOT) return the same types as with it.
+* Adding an expression to the cache no longer scans the whole cache, so caching many distinct expressions takes linear time instead of quadratic.
+* `BoxedNumberComparer` compares values as the `=` operator does, and its hash codes are equal for equal values (`1`, `1.0` and `1m`), so it works in dictionaries, sets and `Distinct()`.
+* `in` and `in()` compare the values as `=` does: `1 in ('1.0', 2)` is true, NaN is not found in a list of doubles, and a substring is found with the case and culture options (`'a' in 'XAY'` with `CaseInsensitiveStringComparer`).
+* With `StrictTypeMatching`, `!=` is true for operands of different types (it was false, as all other comparisons).
+* A Python-style comment may end the text (`1 + 2 #`).
+* A factorial may be compared: `3! == 6` and `3! = 6` are parsed (only `!` followed directly by `=` is the `!=` operator).
+* Parse errors report the position of the first character that could not be parsed instead of (1:1), and a missing argument in a function call is reported as such.
+* NCalc exceptions are thrown instead of `InvalidOperationException` (`1 + + 2`), `ArgumentException` (a function declared twice, invalid hex, octal and binary literals, comparison of two lists), `FormatException` (`iff('x', 1, 2)`) and `ArgumentOutOfRangeException` (assignment to a negative index).
+* `-9223372036854775808` is `long.MinValue` instead of a double.
+* `[..]` selects the whole value, and the invalid ranges `[]`, `[^]`, `[^..1]` and `[1..^]` are parse errors (the `^` was ignored).
+* The up arrow `↑` (U+2191) is the exponentiation operator with `UseUnicodeCharsForOperations`, as documented (`⊑` is still accepted); an ISO date may have the `Z` designator (`#2001-01-01Z#`); documentation examples are corrected.
+* The conditional operator is right-associative and needs no parentheses: `a ? b : c ? d : e`.
+* `Round()` with a negative number of digits rounds to tens, hundreds and so on for all types (`Round(1234, -2)` is 1200), and more digits than a type holds leave the value unchanged instead of throwing.
+* The built-in math functions return null for a null argument (`Abs(null)` was 0, `Exp(null)` 1, `Log(null, 2)` -infinity, and `Pow(null, 2)` threw `ArgumentNullException`).
+* `Max()` and `Min()` return the result in the type of the arithmetic on both arguments (`Max(3, 2.5)` is 3.0), return NaN for a NaN argument, take a numeric string as a number, and throw for a number and a non-numeric value.
+* Shift counts are not masked to the width of the type: `1 << 64` is 0 (a big integer with `UseBigNumbers`, an overflow with `OverflowProtection`), and `MathHelper.RightShift` shifts right.
+* Parsing no longer shares the nodes of `true`, `false` and `null` between expressions, and `ToString()` no longer writes options into the expression tree.
+* `GetParameterNames()` and `GetFunctionNames()` return each name once, do not report the parameters of user-defined functions, and return an empty list for an empty expression with `AllowNullOrEmptyExpressions`.
+* Parameter and function names are compared ordinally, independently of the culture.
+* Cancellation during parsing throws `OperationCanceledException` instead of being reported as a syntax error.
+* `ToString()` handles a factorial with a long step, GUID values, and quotes in strings that were not read from text.
+* An ISO date-time without the `Z` designator has `DateTimeKind.Unspecified` instead of `DateTimeKind.Utc`.
+* NCalc.MemoryCache sets the size of the entries (`LogicalExpressionMemoryCacheOptions.EntrySize`), so it works with an `IMemoryCache` that has a `SizeLimit`, and its keys cannot collide with other keys in a shared cache.
 
 # 9.0.6.5  (Allied Bits)
 

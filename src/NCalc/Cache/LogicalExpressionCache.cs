@@ -6,7 +6,13 @@ namespace NCalc.Cache;
 
 public sealed class LogicalExpressionCache : ILogicalExpressionCache
 {
+    private const int MinPurgeThreshold = 64;
+
     private readonly ConcurrentDictionary<string, WeakReference<LogicalExpression>> _compiledExpressions = new();
+
+    // Dead entries are removed when the cache grows past this size; the threshold is then set to
+    // twice the number of live entries, so the cost of purging is constant per insert on average.
+    private int _purgeThreshold = MinPurgeThreshold;
 
     private static readonly LogicalExpressionCache Instance;
     private readonly ILogger<LogicalExpressionCache>? logger;
@@ -50,7 +56,8 @@ public sealed class LogicalExpressionCache : ILogicalExpressionCache
     public void Set(string expression, LogicalExpression logicalExpression)
     {
         _compiledExpressions[expression] = new WeakReference<LogicalExpression>(logicalExpression);
-        ClearCache();
+        if (_compiledExpressions.Count >= Volatile.Read(ref _purgeThreshold))
+            ClearCache();
         logger?.LogAddedToCache(expression);
     }
 
@@ -66,5 +73,7 @@ public sealed class LogicalExpressionCache : ILogicalExpressionCache
                 logger?.LogRemovedFromCache(kvp.Key);
             }
         }
+
+        Volatile.Write(ref _purgeThreshold, Math.Max(MinPurgeThreshold, _compiledExpressions.Count * 2));
     }
 }

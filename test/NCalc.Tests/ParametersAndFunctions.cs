@@ -360,4 +360,15 @@ public class ParametersAndFunctions
             Expression.UseNonRecursiveEvaluator = oldStatic;
         }
     }
+
+    [Fact]
+    public void ParameterNamesShouldBeComparedOrdinally()
+    {
+        // NCALC-084: a linguistic comparer treated "ab" and "a\u200Db" (with a zero-width joiner) as the same name
+        var expression = new Expression("ab + [a\u200Db]", ExpressionOptions.None, CultureInfo.InvariantCulture);
+        expression.Parameters["ab"] = 1;
+        expression.Parameters["a\u200Db"] = 2;
+        Assert.Equal(2, expression.Parameters.Count);
+        Assert.Equal(3, expression.Evaluate(TestContext.Current.CancellationToken));
+    }
 }

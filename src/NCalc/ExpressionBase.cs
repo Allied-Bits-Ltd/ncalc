@@ -143,9 +143,13 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
     /// <returns>The list of variable names.</returns>
     public List<string> GetParameterNames(CancellationToken cancellationToken = default)
     {
+        if (LogicalExpression is null && !(ExpressionString?.Length > 0) && Options.HasFlag(ExpressionOptions.AllowNullOrEmptyExpressions))
+            return [];
+
         var parameterExtractionVisitor = new ParameterExtractionVisitor();
         LogicalExpression ??= LogicalExpressionFactory.Create(ExpressionString!, Context, CultureInfo, Context.Options, Context.AdvancedOptions, cancellationToken);
-        return LogicalExpression.Accept(parameterExtractionVisitor);
+        // Each name is reported once, in the order of its first use
+        return LogicalExpression.Accept(parameterExtractionVisitor, cancellationToken).Distinct().ToList();
     }
 
     /// <summary>
@@ -154,9 +158,13 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
     /// <returns>The list of function names.</returns>
     public List<string> GetFunctionNames(CancellationToken cancellationToken = default)
     {
+        if (LogicalExpression is null && !(ExpressionString?.Length > 0) && Options.HasFlag(ExpressionOptions.AllowNullOrEmptyExpressions))
+            return [];
+
         var functionExtractionVisitor = new FunctionCallExtractionVisitor();
         LogicalExpression ??= LogicalExpressionFactory.Create(ExpressionString!, Context, CultureInfo, Context.Options, Context.AdvancedOptions, cancellationToken);
-        return LogicalExpression.Accept(functionExtractionVisitor);
+        // Each name is reported once, in the order of its first use
+        return LogicalExpression.Accept(functionExtractionVisitor, cancellationToken).Distinct().ToList();
     }
 
     /// <summary>
@@ -184,7 +192,7 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         {
             LogicalExpression = LogicalExpressionFactory.Create(ExpressionString, Context, CultureInfo, Context.Options, Context.AdvancedOptions, cancellationToken);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             Error = exception;
             return true;
@@ -232,7 +240,7 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
             if (cacheKey is not null)
                 LogicalExpressionCache.Set(cacheKey, logicalExpression);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             Error = exception;
         }
@@ -259,7 +267,7 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
                 Context.UserFunctions[function.Name] = function;
             return logicalExpression;
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             Error = exception;
         }

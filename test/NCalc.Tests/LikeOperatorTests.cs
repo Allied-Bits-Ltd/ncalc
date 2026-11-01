@@ -122,4 +122,17 @@ public class LikeOperatorTests
         Assert.Equal(true, await new AsyncExpression("{LEP_COD_SAP_PROD} LIKE '66%'", context).EvaluateAsync(TestContext.Current.CancellationToken));
         Assert.Equal(true, await new AsyncExpression("{LEP_COD_SAP_PROD} LIKE '66abc%'", context).EvaluateAsync(TestContext.Current.CancellationToken));
     }
+
+    [Theory]
+    [InlineData("a\nb", "a%b", true)]
+    [InlineData("ab\n", "ab", false)]
+    [InlineData("a\nb", "a_b", true)]
+    public void LikeShouldHandleNewLines(string value, string pattern, bool expected)
+    {
+        // NCALC-066
+        var expression = new Expression("v LIKE p");
+        expression.Parameters["v"] = value;
+        expression.Parameters["p"] = pattern;
+        Assert.Equal(expected, expression.Evaluate(TestContext.Current.CancellationToken));
+    }
 }

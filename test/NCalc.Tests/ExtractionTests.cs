@@ -88,4 +88,16 @@ public class ExtractionTests
         Assert.Contains("if", functions);
         Assert.Contains("test", functions);
     }
+
+    [Fact]
+    public void ExtractedNamesShouldBeDistinctAndExternal()
+    {
+        // NCALC-083
+        Assert.Equal(["a"], new Expression("a + a").GetParameterNames(TestContext.Current.CancellationToken));
+        Assert.Equal(["f", "g"], new Expression("f(g()) + f(g())").GetFunctionNames(TestContext.Current.CancellationToken));
+        var withFunction = new Expression("fn f(q) => q * 2; f(r)", ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseCStyleAssignments);
+        Assert.Equal(["r"], withFunction.GetParameterNames(TestContext.Current.CancellationToken));
+        Assert.Empty(new Expression((string?)null, ExpressionOptions.AllowNullOrEmptyExpressions).GetParameterNames(TestContext.Current.CancellationToken));
+        Assert.Empty(new Expression(string.Empty, ExpressionOptions.AllowNullOrEmptyExpressions).GetFunctionNames(TestContext.Current.CancellationToken));
+    }
 }
