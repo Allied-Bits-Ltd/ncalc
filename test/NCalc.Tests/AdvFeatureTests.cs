@@ -520,10 +520,12 @@ public class AdvFeatureTests : TestBase
 
         var result = expression.Evaluate(TestContext.Current.CancellationToken);
 
-        string currentDateFormat = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern;
+        // NCALC-312: with built-in date separators, the order of the parts is the one of the culture of the expression (as without
+        // advanced options), not the one of the thread culture
+        string currentDateFormat = expression.CultureInfo.DateTimeFormat.ShortDatePattern;
 
         DateTime expectedDate =
-            (currentDateFormat.IndexOf('M') < (currentDateFormat.IndexOf('d')) // are we running this test in the US locale?
+            (currentDateFormat.IndexOf('M') < (currentDateFormat.IndexOf('d')) // is the culture of the expression a US one?
             ? new DateTime(expectedValue[0], expectedValue[2], expectedValue[1], expectedValue[3], expectedValue[4], expectedValue[5])
             : new DateTime(expectedValue[0], expectedValue[1], expectedValue[2], expectedValue[3], expectedValue[4], expectedValue[5]));
 

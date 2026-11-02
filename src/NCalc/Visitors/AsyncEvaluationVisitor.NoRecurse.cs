@@ -1228,12 +1228,16 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         // whose stack is empty, while this one waits without using a thread
         return SetTaskValue(task, EvaluationHelper.HasSufficientExecutionStack()
             ? await Visit(function, cancellationToken).ConfigureAwait(false)
-            : await Task.Run(() => Visit(function, cancellationToken).AsTask()).ConfigureAwait(false));
+            : await EvaluationHelper.EvaluateOnThreadPoolAsync(() => Visit(function, cancellationToken), function).ConfigureAwait(false));
     }
 
     public virtual async ValueTask<object?> Visit(Identifier identifier, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
     {
-        return SetTaskValue(task, await Visit(identifier, cancellationToken).ConfigureAwait(false));
+        // The value of a parameter may be an expression, and an argument of a user function is evaluated as a separate expression
+        // when its parameter is used, which uses the stack; deeply nested ones continue on a thread pool thread, as function calls do
+        return SetTaskValue(task, EvaluationHelper.HasSufficientExecutionStack()
+            ? await Visit(identifier, cancellationToken).ConfigureAwait(false)
+            : await EvaluationHelper.EvaluateOnThreadPoolAsync(() => Visit(identifier, cancellationToken), identifier).ConfigureAwait(false));
     }
 
     public virtual ValueTask<object?> Visit(LogicalExpressionList list, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)

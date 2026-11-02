@@ -1,6 +1,8 @@
 ﻿#if NET8_0_OR_GREATER
 #nullable enable
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using ExtendedNumerics;
 
 // ReSharper disable MemberCanBeProtected.Local
 
@@ -1322,6 +1324,179 @@ public class LambdaTests
         // A chain of operators is compiled without nesting, so any length works
         if (shape is "sum" or "and")
             Assert.Null(error);
+    }
+
+    public enum BindingColor
+    {
+        Red = 1,
+        Green = 2
+    }
+
+    private class BindingBase
+    {
+        public string Inh(long a) => "base-long:" + a;
+    }
+
+    private class BindingContext : BindingBase
+    {
+        public int I { get; set; } = 7;
+        public short Sh { get; set; } = 3;
+        public long L { get; set; } = 10000000000;
+        public BindingColor C { get; set; } = BindingColor.Green;
+        public decimal M { get; set; } = 1m;
+        public BigDecimal BD { get; set; } = new(new System.Numerics.BigInteger(45), -1);
+
+        // The same overloads declared in opposite orders
+        public string A1(double a) => "double";
+        public string A1(long a) => "long";
+        public string A2(long a) => "long";
+        public string A2(double a) => "double";
+        public string B1(decimal a) => "decimal";
+        public string B1(double a) => "double";
+        public string B2(double a) => "double";
+        public string B2(decimal a) => "decimal";
+        public string Fl1(double a) => "double";
+        public string Fl1(float a) => "float";
+        public string Fl2(float a) => "float";
+        public string Fl2(double a) => "double";
+        public string Il1(long a) => "long";
+        public string Il1(int a) => "int";
+        public string Il2(int a) => "int";
+        public string Il2(long a) => "long";
+
+        public string Inh(int a) => "derived-int:" + a;
+        public string En(BindingColor color) => "En:" + color;
+        public string Dec(decimal a) => "Dec:" + a.ToString(CultureInfo.InvariantCulture);
+    }
+
+    // NCALC-314: the overload does not depend on whether the argument is a literal, a typed member or a computed value, nor on
+    // the order of the declarations
+    [Theory]
+    [InlineData("A1", "1", "I", "long")]
+    [InlineData("A2", "1", "I", "long")]
+    [InlineData("B1", "1", "I", "double")]
+    [InlineData("B2", "1", "I", "double")]
+    [InlineData("Fl1", "1", "I", "float")]
+    [InlineData("Fl2", "1", "I", "float")]
+    [InlineData("Fl1", "10000000000", "L", "float")]
+    [InlineData("Fl2", "10000000000", "L", "float")]
+    [InlineData("Il1", "3", "Sh", "int")]
+    [InlineData("Il2", "3", "Sh", "int")]
+    [InlineData("Il1", "10000000000", "L", "long")]
+    [InlineData("A1", "2.5", "2.5", "double")]
+    public void LambdaShouldChooseTheSameContextOverloadForAnyFormOfTheArgument(string method, string literal, string member, string expected)
+    {
+        foreach (var input in new[] { $"{method}({literal})", $"{method}({member})", $"{method}({literal} * 1)", $"{method}(if(true, {member}, {member}))" })
+        {
+            var lambda = new Expression(input, ExpressionOptions.NoCache).ToLambda<BindingContext, object?>(TestContext.Current.CancellationToken);
+            Assert.Equal((input, expected), (input, lambda(new BindingContext())));
+        }
+    }
+
+    // NCALC-317: the overloads of the base class are candidates too; of overloads with the same cost, the derived one is chosen
+    [Theory]
+    [InlineData("Inh(L)", "base-long:10000000000")]
+    [InlineData("Inh(10000000000)", "base-long:10000000000")]
+    [InlineData("Inh(L * 1)", "base-long:10000000000")]
+    [InlineData("Inh(if(true, L, L))", "base-long:10000000000")]
+    [InlineData("Inh(5)", "derived-int:5")]
+    [InlineData("Inh(I)", "derived-int:7")]
+    [InlineData("Inh(I * 1)", "derived-int:7")]
+    [InlineData("Inh(if(true, I, I))", "derived-int:7")]
+    public void LambdaShouldConsiderTheContextOverloadsOfTheBaseClass(string input, string expected)
+    {
+        var lambda = new Expression(input, ExpressionOptions.NoCache).ToLambda<BindingContext, object?>(TestContext.Current.CancellationToken);
+        Assert.Equal(expected, lambda(new BindingContext()));
+    }
+
+    // NCALC-318: an integer converts to an enum member or parameter, and an enum to an integer member
+    [Fact]
+    public void LambdaShouldConvertIntegersToEnumsAndBack()
+    {
+        const ExpressionOptions options = ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences;
+        var token = TestContext.Current.CancellationToken;
+
+        var context = new BindingContext();
+        Assert.Equal(BindingColor.Red, new Expression("C := 1", options).ToLambda<BindingContext, object?>(token)(context));
+        Assert.Equal(BindingColor.Red, context.C);
+
+        context = new BindingContext();
+        Assert.Equal(2, new Expression("I := C", options).ToLambda<BindingContext, object?>(token)(context));
+        Assert.Equal(2, context.I);
+
+        Assert.Equal("En:Red", new Expression("En(1 + 0)", options).ToLambda<BindingContext, object?>(token)(new BindingContext()));
+        Assert.Equal("En:Red", new Expression("En(1)", options).ToLambda<BindingContext, object?>(token)(new BindingContext()));
+        Assert.Equal("En:Green", new Expression("En(C)", options).ToLambda<BindingContext, object?>(token)(new BindingContext()));
+        Assert.Equal(BindingColor.Green, new Expression("2").ToLambda<BindingColor>(token)());
+
+        // A value with a fraction is not converted
+        var fraction = new Expression("C := 1.5", options).ToLambda<BindingContext, object?>(token);
+        Assert.Throws<NCalc.Exceptions.NCalcEvaluationException>(() => fraction(new BindingContext()));
+    }
+
+    // NCALC-319: a double is converted to a decimal parameter or member only when the decimal has the same value
+    [Theory]
+    [InlineData("Dec(1e-30 * 1)")]
+    [InlineData("Dec(123456789.123456789 * 1)")]
+    [InlineData("M := 1e-30")]
+    public void LambdaShouldNotConvertDoublesToDecimalsWithLoss(string input)
+    {
+        const ExpressionOptions options = ExpressionOptions.NoCache | ExpressionOptions.UseAssignments;
+        var context = new BindingContext();
+        var lambda = new Expression(input, options).ToLambda<BindingContext, object?>(TestContext.Current.CancellationToken);
+        Assert.Throws<NCalc.Exceptions.NCalcEvaluationException>(() => lambda(context));
+        Assert.Equal(1m, context.M);
+    }
+
+    // NCALC-319
+    [Theory]
+    [InlineData("Dec(0.5 * 1)", "Dec:0.5")]
+    [InlineData("Dec(0.1 * 1)", "Dec:0.1")]
+    [InlineData("Dec(0.1 + 0.2)", "Dec:0.30000000000000004")]
+    [InlineData("Dec(1e20 * 1)", "Dec:100000000000000000000")]
+    [InlineData("Dec(I)", "Dec:7")]
+    public void LambdaShouldConvertDoublesToDecimalsWithoutLoss(string input, string expected)
+    {
+        var lambda = new Expression(input, ExpressionOptions.NoCache).ToLambda<BindingContext, object?>(TestContext.Current.CancellationToken);
+        Assert.Equal(expected, lambda(new BindingContext()));
+    }
+
+    // NCALC-320: a BigDecimal result is converted to an integer type as a cast converts a double, whatever the current culture
+    [Fact]
+    public void LambdaShouldConvertBigDecimalResultsToIntegerTypes()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var oldCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("sk-SK");
+            var bd = new BigDecimal(new System.Numerics.BigInteger(45), -1);
+            foreach (var input in new[] { "bd", "if(true, bd, 0)" })
+            {
+                var expression = new Expression(input, ExpressionOptions.NoCache);
+                expression.Parameters["bd"] = bd;
+                Assert.Equal(4, expression.ToLambda<int>(token)());
+                Assert.Equal(4L, expression.ToLambda<long>(token)());
+                Assert.Equal(4L, expression.ToLambda<long?>(token)());
+                Assert.Equal(4UL, expression.ToLambda<ulong>(token)());
+                Assert.Equal((short)4, expression.ToLambda<short>(token)());
+                Assert.Equal(new System.Numerics.BigInteger(4), expression.ToLambda<System.Numerics.BigInteger>(token)());
+                Assert.Equal(4.5, expression.ToLambda<double>(token)());
+
+                expression.Parameters["bd"] = -bd;
+                Assert.Equal(-4, expression.ToLambda<int>(token)());
+
+                expression.Parameters["bd"] = new BigDecimal(new System.Numerics.BigInteger(1), 30);
+                Assert.Throws<OverflowException>(() => expression.ToLambda<long>(token)());
+            }
+
+            Assert.Equal(4, new Expression("BD", ExpressionOptions.NoCache).ToLambda<BindingContext, int>(token)(new BindingContext()));
+            Assert.Equal(4L, new Expression("BD", ExpressionOptions.NoCache).ToLambda<BindingContext, long>(token)(new BindingContext()));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = oldCulture;
+        }
     }
 }
 #endif

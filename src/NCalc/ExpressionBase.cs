@@ -125,7 +125,12 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         SetLogicalExpressionWithoutRegistration(logicalExpression);
         _isSubExpression = true;
         _subExpressionCancellationToken = cancellationToken;
+        OuterLoopBudget = Helpers.LoopIterationBudget.Current;
     }
+
+    // The loop budget of the evaluation that this expression is a part of (an argument of a function, the body of a user function),
+    // taken when the expression is created for it; the expression uses it wherever and whenever it is evaluated
+    internal Helpers.LoopIterationBudget? OuterLoopBudget { get; set; }
 
     // Sets the tree without searching it for declared functions, e.g. for a part of a tree that is being evaluated
     private protected void SetLogicalExpressionWithoutRegistration(LogicalExpression logicalExpression)

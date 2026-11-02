@@ -187,6 +187,11 @@
             set { _cultureInfo = value; }
         }
 
+        /// <summary>
+        /// The culture of the options when one was given (<see cref="CultureInfo"/> falls back to the current culture).
+        /// </summary>
+        internal CultureInfo? OwnCultureInfo => _cultureInfo;
+
         public string DateSeparator
         {
             get => _dateSeparator;

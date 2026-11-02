@@ -180,6 +180,14 @@ public enum ExpressionOptions : long
 
     /// <summary>
     /// When set, the non-recursive evaluator is used. It is slower but enables evaluation of deeply-nested or just very long expressions.
+    /// Function arguments, bodies of user functions and expressions used as parameter values are evaluated as separate expressions, which
+    /// uses the stack; when they are nested so deeply that the stack of the thread is nearly used up, the evaluation continues on a new
+    /// thread with a stack of <see cref="Parser.LogicalExpressionParser.DeepExpressionStackSize"/> bytes (the asynchronous evaluator: on a
+    /// thread pool thread) while the calling thread waits. The handlers and functions called from that part of the evaluation then run on
+    /// the other thread: thread-local values and locks held by the calling thread are not available to them (a handler that waits for such
+    /// a lock blocks the evaluation for ever), and the asynchronous evaluator does not use the synchronization context of the caller there.
+    /// The culture, the UI culture and AsyncLocal values flow to the other thread. Set DeepExpressionStackSize to 0 to keep the evaluation on
+    /// the calling thread; such expressions then fail with an <see cref="Exceptions.NCalcEvaluationException"/>.
     /// </summary>
     UseNonRecursiveEvaluator = ((long)1) << 34,
 

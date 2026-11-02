@@ -15,6 +15,9 @@ public class WhiteSpaceParser : Parser<TextSpan>
     // The key under which the outcome of a date/time literal check is remembered per position in the parse memo
     private static readonly object DateTimeLiteralCheckKey = new();
 
+    // The key under which the outcome of a doc comment check ("///" lines before "fn") is remembered per position in the parse memo
+    private static readonly object DocCommentCheckKey = new();
+
     private Parser<TextSpan> _commentParser;
 
     public WhiteSpaceParser(ExpressionOptions expressionOptions) : base()
@@ -56,7 +59,7 @@ public class WhiteSpaceParser : Parser<TextSpan>
             if (_supportCStyleComments && charsLeft >= 3)
             {
                 nextChars = context.Scanner.Buffer.Substring(context.Scanner.Cursor.Offset, 3);
-                if (nextChars.Equals("///", StringComparison.Ordinal) && IsDocCommentOfFunction(context.Scanner.Buffer, context.Scanner.Cursor.Offset))
+                if (nextChars.Equals("///", StringComparison.Ordinal) && IsDocCommentOfFunction(context, context.Scanner.Cursor.Offset))
                     break;
             }
             if (_supportPythonComments && _parseDates && IsDateTimeLiteralStart(context.Scanner.Buffer, context.Scanner.Cursor.Offset)
@@ -82,23 +85,59 @@ public class WhiteSpaceParser : Parser<TextSpan>
 
     /// <summary>
     /// Tells whether the "///" at the offset starts a block of doc comment lines that is followed by a function declaration ("fn").
+    /// Other comments ("//" lines and "/* */" blocks) may stand between the lines and "fn", as the declaration skips them.
+    /// The outcome is the same for every "///" line of the block, and is remembered for all of them, so that a long block is scanned
+    /// once and not again from each of its lines.
     /// </summary>
-    private static bool IsDocCommentOfFunction(string buffer, int offset)
+    private static bool IsDocCommentOfFunction(ParseContext context, int offset)
     {
+        var memo = (context as LogicalExpressionParserContext)?.ParseMemo;
+        if (memo is not null && memo.TryGetValue((DocCommentCheckKey, offset), out var known))
+            return (bool)known;
+
+        string buffer = context.Scanner.Buffer;
+        List<int>? lineStarts = memo is null ? null : [];
         int position = offset;
-        while (position + 3 <= buffer.Length && string.CompareOrdinal(buffer, position, "///", 0, 3) == 0)
+        bool? result = null;
+        while (result is null)
         {
-            int lineEnd = buffer.IndexOf('\n', position);
-            if (lineEnd < 0)
-                return false;
-            position = lineEnd + 1;
+            if (string.CompareOrdinal(buffer, position, "//", 0, 2) == 0)
+            {
+                if (lineStarts is not null && string.CompareOrdinal(buffer, position, "///", 0, 3) == 0)
+                    lineStarts.Add(position);
+                int lineEnd = buffer.IndexOf('\n', position);
+                if (lineEnd < 0)
+                    result = false;
+                else
+                    position = lineEnd + 1;
+            }
+            else
+            if (string.CompareOrdinal(buffer, position, "/*", 0, 2) == 0)
+            {
+                int commentEnd = buffer.IndexOf("*/", position + 2, StringComparison.Ordinal);
+                if (commentEnd < 0)
+                    result = false;
+                else
+                    position = commentEnd + 2;
+            }
+            else
+            {
+                result = position + 2 < buffer.Length
+                    && string.CompareOrdinal(buffer, position, "fn", 0, 2) == 0
+                    && !char.IsLetterOrDigit(buffer[position + 2]) && buffer[position + 2] != '_';
+                break;
+            }
+
             while (position < buffer.Length && char.IsWhiteSpace(buffer[position]))
                 position++;
         }
 
-        return position + 2 < buffer.Length
-            && string.CompareOrdinal(buffer, position, "fn", 0, 2) == 0
-            && !char.IsLetterOrDigit(buffer[position + 2]) && buffer[position + 2] != '_';
+        if (lineStarts is not null)
+        {
+            foreach (int lineStart in lineStarts)
+                memo![(DocCommentCheckKey, lineStart)] = result.Value;
+        }
+        return result.Value;
     }
 
     /// <summary>

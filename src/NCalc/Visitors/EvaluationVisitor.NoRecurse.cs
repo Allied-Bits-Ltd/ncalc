@@ -1146,12 +1146,16 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         // The arguments are evaluated as separate expressions, which uses the stack; deeply nested calls continue on a thread with a large stack
         return SetTaskValue(task, EvaluationHelper.HasSufficientExecutionStack()
             ? Visit(function, cancellationToken)
-            : EvaluationHelper.EvaluateOnLargeStack(() => Visit(function, cancellationToken)));
+            : EvaluationHelper.EvaluateOnLargeStack(() => Visit(function, cancellationToken), function));
     }
 
     public virtual object? Visit(Identifier identifier, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
     {
-        return SetTaskValue(task, Visit(identifier, cancellationToken));
+        // The value of a parameter may be an expression, and an argument of a user function is evaluated as a separate expression
+        // when its parameter is used, which uses the stack; deeply nested ones continue on a thread with a large stack, as function calls do
+        return SetTaskValue(task, EvaluationHelper.HasSufficientExecutionStack()
+            ? Visit(identifier, cancellationToken)
+            : EvaluationHelper.EvaluateOnLargeStack(() => Visit(identifier, cancellationToken), identifier));
     }
 
     public virtual object? Visit(LogicalExpressionList list, ExpressionTask<object?> task, CancellationToken cancellationToken = default)

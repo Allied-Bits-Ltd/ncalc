@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using ExtendedNumerics;
@@ -66,12 +67,24 @@ internal sealed class RelativeDateTime
     // Shifts a moment by the period; the period is applied when the value is read, as "1 month" depends on the month
     private DateTime Shift(DateTime moment, int sign)
     {
+        try
+        {
+            return ShiftCore(moment, sign);
+        }
+        catch (ArgumentOutOfRangeException e)
+        {
+            throw new NCalcEvaluationException($"The relative date or time literal #{Text}# is out of the range of dates.", e);
+        }
+    }
+
+    private DateTime ShiftCore(DateTime moment, int sign)
+    {
         if (Years != 0)
             moment = moment.AddYears(sign * Years);
         if (Months != 0)
             moment = moment.AddMonths(sign * Months);
         if (Weeks != 0)
-            moment = moment.AddDays(sign * Weeks * 7);
+            moment = moment.AddDays(sign * Weeks * 7.0);
         if (Days != 0)
             moment = moment.AddDays(sign * Days);
         if (Hours != 0)
@@ -83,6 +96,48 @@ internal sealed class RelativeDateTime
         if (Milliseconds != 0)
             moment = moment.AddMilliseconds(sign * Milliseconds);
         return moment;
+    }
+
+    /// <summary>
+    /// Whether the description has the form that the parser creates: the text is an optional word, pairs of an integer and a word,
+    /// and an optional word, separated by single spaces, with a word before or after the pairs for any kind but a period, and the
+    /// integers of the text are the parts of the period. ToString() writes the text verbatim, so a description read from JSON is
+    /// checked, and other text (e.g. "2 days# + x + #today") cannot change the meaning of the written expression.
+    /// </summary>
+    internal bool IsWellFormed()
+    {
+        if (!Enum.IsDefined(typeof(RelativeDateTimeKind), Kind) || string.IsNullOrEmpty(Text))
+            return false;
+
+        string[] tokens = Text.Split(' ');
+        int index = 0;
+        bool hasPrefix = IsWord(tokens[0]);
+        if (hasPrefix)
+            index++;
+
+        List<int> numbers = [];
+        while (index + 1 < tokens.Length && IsWord(tokens[index + 1])
+            && int.TryParse(tokens[index], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int number))
+        {
+            if (number != 0)
+                numbers.Add(number);
+            index += 2;
+        }
+
+        bool hasSuffix = index < tokens.Length && IsWord(tokens[index]);
+        if (hasSuffix)
+            index++;
+        if (index != tokens.Length || (hasPrefix && hasSuffix))
+            return false;
+        if ((Kind == RelativeDateTimeKind.Period) == (hasPrefix || hasSuffix))
+            return false;
+        if (Kind is RelativeDateTimeKind.Now or RelativeDateTimeKind.Today or RelativeDateTimeKind.Yesterday or RelativeDateTimeKind.Tomorrow && !hasPrefix)
+            return false;
+
+        int[] parts = [Years, Months, Weeks, Days, Hours, Minutes, Seconds, Milliseconds];
+        return parts.Where(static part => part != 0).OrderBy(static part => part).SequenceEqual(numbers.OrderBy(static part => part));
+
+        static bool IsWord(string token) => token.Length > 0 && token.All(static c => char.IsLetter(c) || c == '\'');
     }
 
     /// <summary>
@@ -213,12 +268,62 @@ public sealed class ValueExpression : LogicalExpression, IJsonOnDeserialized
     // The value of a relative literal is read from JSON as the constant of the moment of writing; the literal is made relative again
     void IJsonOnDeserialized.OnDeserialized()
     {
+        if (!Enum.IsDefined(typeof(ValueType), Type) || !Enum.IsDefined(typeof(StringKind), StringKind))
+            throw new JsonException("The value node has an unknown type or string kind.");
+
         if (_relative is not null)
         {
+            // ToString() writes the text of a relative literal verbatim
+            if (!_relative.IsWellFormed())
+                throw new JsonException("The value node has an invalid relative date or time literal.");
             _value = null;
             _valueFactory = _relative.CreateValueFactory();
             Type = _relative.ValueType;
+            return;
         }
+
+        if (Type == ValueType.String && _value is string text)
+            ValidateStringForJson(text);
+    }
+
+    // ToString() writes the original text of a quoted string, and the value of a raw or back-quoted string, verbatim between the
+    // quotes; so, for a string read from JSON, that text must not end the literal early, and the original text must give the value
+    private void ValidateStringForJson(string text)
+    {
+        switch (StringKind)
+        {
+            case StringKind.SingleQuote or StringKind.DoubleQuote or StringKind.Undefined when OriginalString is not null:
+                char quote = StringKind == StringKind.DoubleQuote ? '"' : '\'';
+                if (!IsEscapedText(OriginalString, quote) || Parlot.Character.DecodeString(OriginalString).ToString() != text)
+                    throw new JsonException("The original text of the string value does not match its value.");
+                break;
+            case StringKind.SingleQuote or StringKind.DoubleQuote:
+                // Without the original text, the value is written escaped
+                StringKind = StringKind.Undefined;
+                break;
+            case StringKind.RawDoubleQuote when text.IndexOf('"') >= 0:
+            case StringKind.BackQuote when text.IndexOf('`') >= 0:
+                throw new JsonException("The string value cannot be written in the quotes of its kind.");
+        }
+    }
+
+    // Whether the text has no unescaped quote and does not end with an unpaired escape character
+    private static bool IsEscapedText(string text, char quote)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\\')
+            {
+                if (++i == text.Length)
+                    return false;
+            }
+            else
+            if (text[i] == quote)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     public ValueExpression(char value)

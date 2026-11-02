@@ -61,9 +61,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         if (advancedOptions?.Flags.HasFlag(AdvExpressionOptions.AcceptCurrencySymbol) != true || context.Options.HasFlag(ExpressionOptions.DecimalAsDefault))
             return null;
 
-        advancedOptions.GetCurrencySymbols(out string symbol, out string symbol2, out string symbol3);
-        if (string.IsNullOrEmpty(symbol))
-            symbol = !string.IsNullOrEmpty(symbol2) ? symbol2 : symbol3;
+        string symbol = GetCurrencySymbol(advancedOptions);
         string separator = advancedOptions.GetCurrencyDecimalSeparator();
         if (string.IsNullOrEmpty(symbol) || string.IsNullOrEmpty(separator))
             return null;
@@ -72,6 +70,17 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         currencyFormat.NumberDecimalSeparator = separator;
         string number = Math.Abs(value).ToString(currencyFormat);
         return (value < 0 ? "-" : string.Empty) + symbol + number;
+    }
+
+    /// <summary>
+    /// The currency symbol that a currency literal is written with (also kept in JSON with the advanced options of the expression).
+    /// </summary>
+    internal static string GetCurrencySymbol(AdvancedExpressionOptions advancedOptions)
+    {
+        advancedOptions.GetCurrencySymbols(out string symbol, out string symbol2, out string symbol3);
+        if (string.IsNullOrEmpty(symbol))
+            symbol = !string.IsNullOrEmpty(symbol2) ? symbol2 : symbol3;
+        return symbol;
     }
 
     // Dates and times are written in the ISO form, which does not depend on the culture: #2024-01-02# or #2024-01-02T10:20:30.5#

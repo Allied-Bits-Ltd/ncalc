@@ -50,7 +50,17 @@ public abstract class LogicalExpression
 
 #if NET
     /// <summary>
-    /// The parts of the advanced options that ToString() uses (the flags, the list separator and the decimal separator), kept in JSON.
+    /// The kind of the node, written first by the default JSON contract of the node's type (see <see cref="LogicalExpressionJsonConverter"/>),
+    /// so that the converter writes each node directly into the writer of its parent. It is ignored on deserialization.
+    /// </summary>
+    [JsonInclude]
+    [JsonPropertyName(LogicalExpressionJsonConverter.TypePropertyName)]
+    [JsonPropertyOrder(int.MinValue)]
+    internal string JsonTypeName => LogicalExpressionJsonConverter.GetTypeName(GetType());
+
+    /// <summary>
+    /// The parts of the advanced options that ToString() uses (the flags, the list separator, the decimal separator and, with
+    /// currency symbols, the currency symbol and decimal separator, as resolved from their culture), kept in JSON.
     /// The other advanced options (and the culture) only affect parsing and are not stored.
     /// </summary>
     [JsonInclude]
@@ -58,18 +68,47 @@ public abstract class LogicalExpression
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     internal SerializedAdvancedOptions? SerializedAdvancedOptionsForJson
     {
-        get => _advancedOptions is null ? null : new SerializedAdvancedOptions
+        get
         {
-            Flags = _advancedOptions.Flags,
-            ListItemSeparator = _advancedOptions.ListItemSeparator,
-            DecimalSeparator = _advancedOptions.GetDecimalSeparator()
-        };
-        set => _advancedOptions = value is null ? null : new AdvancedExpressionOptions(value.Flags)
+            if (_advancedOptions is null)
+                return null;
+
+            bool hasCurrency = _advancedOptions.Flags.HasFlag(AdvExpressionOptions.AcceptCurrencySymbol);
+            return new SerializedAdvancedOptions
+            {
+                Flags = _advancedOptions.Flags,
+                ListItemSeparator = _advancedOptions.ListItemSeparator,
+                DecimalSeparator = _advancedOptions.GetDecimalSeparator(),
+                CurrencySymbol = hasCurrency ? SerializationVisitor.GetCurrencySymbol(_advancedOptions) : null,
+                CurrencyDecimalSeparator = hasCurrency ? _advancedOptions.GetCurrencyDecimalSeparator() : null,
+            };
+        }
+        set
         {
-            ListItemSeparator = value.ListItemSeparator,
-            DecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom,
-            DecimalSeparator = value.DecimalSeparator ?? "."
-        };
+            if (value is null)
+            {
+                _advancedOptions = null;
+                return;
+            }
+
+            _advancedOptions = new AdvancedExpressionOptions(value.Flags)
+            {
+                ListItemSeparator = value.ListItemSeparator,
+                DecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom,
+                DecimalSeparator = value.DecimalSeparator ?? "."
+            };
+            // The currency symbol of the culture the expression was written with, not the one of the current culture
+            if (value.CurrencySymbol is not null)
+            {
+                _advancedOptions.CurrencySymbolsType = AdvancedExpressionOptions.CurrencySymbolType.Custom;
+                _advancedOptions.CurrencySymbol = value.CurrencySymbol;
+            }
+            if (!string.IsNullOrEmpty(value.CurrencyDecimalSeparator))
+            {
+                _advancedOptions.CurrencyDecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom;
+                _advancedOptions.CurrencyDecimalSeparator = value.CurrencyDecimalSeparator!;
+            }
+        }
     }
 
     internal sealed class SerializedAdvancedOptions
@@ -79,6 +118,12 @@ public abstract class LogicalExpression
         public AdvancedExpressionOptions.ListItemSeparatorKind ListItemSeparator { get; set; }
 
         public string? DecimalSeparator { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? CurrencySymbol { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? CurrencyDecimalSeparator { get; set; }
     }
 #endif
 

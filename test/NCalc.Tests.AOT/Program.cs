@@ -37,6 +37,18 @@ namespace NCalc.Tests.AOT
             tests.ShouldCalculatePercentAsPercent("%(25,50)", "50%");
             tests.ShouldCalculatePercentAsPercent("PercentDiff(80,60)", "-25%");
             tests.ShouldCalculatePercentAsPercent("PercentDiff(50,75)", "50%");
+
+            // NCALC-316: time operators that NCalc computes with dynamic operators must give the same results in NCalc.AOT
+            var mathTests = new MathsTests();
+            mathTests.TimeOperatorsShouldNotDependOnDynamicOperators().GetAwaiter().GetResult();
+            mathTests.BitwiseOperatorsWithABigIntegerShouldFollowTheOperandRules().GetAwaiter().GetResult();
+            mathTests.PercentOfALargeDecimalShouldNotOverflowInTheIntermediateProduct(ExpressionOptions.None).GetAwaiter().GetResult();
+            mathTests.PercentWithBigNumbersShouldKeepTheExactValue().GetAwaiter().GetResult();
+            mathTests.BigNumberOperationsWithNaNOrInfinityShouldBeComputedInDouble().GetAwaiter().GetResult();
+            mathTests.QuotientBelowTheResolutionOfTheDividendTypeShouldNotBecomeZero(ExpressionOptions.None).GetAwaiter().GetResult();
+            mathTests.NegationOfALargeULongShouldEqualItsSubtractionFromZero().GetAwaiter().GetResult();
+            mathTests.UnsignedProductsShouldBeWidenedWithOverflowProtection().GetAwaiter().GetResult();
+            Console.WriteLine("NCalc.Tests.AOT: all checks passed");
         }
     }
 }

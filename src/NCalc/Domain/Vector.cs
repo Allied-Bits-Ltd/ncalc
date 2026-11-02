@@ -397,6 +397,43 @@ namespace NCalc.Domain
             return new Vector(result, v._mathHelperOptions);
         }
 
+        /// <summary>Element-wise sign (-1, 0 or 1).</summary>
+        public static Vector Sign(Vector v)
+        {
+            var result = new BigDecimal[v.Dimensions];
+            for (int i = 0; i < v.Dimensions; i++)
+                result[i] = v[i].Sign;
+            return new Vector(result, v._mathHelperOptions);
+        }
+
+        /// <summary>Element-wise square root.</summary>
+        /// <exception cref="NCalcEvaluationException">A component is negative.</exception>
+        public static Vector Sqrt(Vector v)
+        {
+            var result = new BigDecimal[v.Dimensions];
+            for (int i = 0; i < v.Dimensions; i++)
+                result[i] = ToComponent(MathHelper.Sqrt(v[i], v._mathHelperOptions), "Sqrt");
+            return new Vector(result, v._mathHelperOptions);
+        }
+
+        /// <summary>Element-wise power with a scalar exponent.</summary>
+        /// <exception cref="NCalcEvaluationException">A power is not a finite real number.</exception>
+        public static Vector Pow(Vector v, object exponent)
+        {
+            var result = new BigDecimal[v.Dimensions];
+            for (int i = 0; i < v.Dimensions; i++)
+                result[i] = ToComponent(MathHelper.Pow(v[i], exponent, true, v._mathHelperOptions), "Pow");
+            return new Vector(result, v._mathHelperOptions);
+        }
+
+        // A component is a finite real number; NaN (Sqrt of a negative component) and infinities cannot be stored
+        private static BigDecimal ToComponent(object? value, string operation)
+        {
+            if (value is null or ComplexNumber || (value is double d && (double.IsNaN(d) || double.IsInfinity(d))) || (value is float f && (float.IsNaN(f) || float.IsInfinity(f))))
+                throw new NCalcEvaluationException($"{operation}() of a vector gives a component that is not a finite real number ({value ?? "null"})");
+            return MathHelper.ConvertToBigDecimal(value);
+        }
+
         /// <summary>Element-wise rounding (away from zero at midpoint).</summary>
         public static Vector Round(Vector v) => Round(v, 0, MidpointRounding.AwayFromZero);
 

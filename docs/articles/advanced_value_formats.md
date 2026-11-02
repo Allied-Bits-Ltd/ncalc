@@ -36,7 +36,7 @@ The information about Date and Time formats below is also applicable to compound
 <xref:NCalc.AdvancedExpressionOptions> let one specify, which format to use for parsing dates. 
 
 The <xref:NCalc.AdvancedExpressionOptions.DateSeparatorType> property lets you choose between 
-* `BuiltIn` : parsing of dates is done as if there were no AdvancedExpressionOptions set, i.e., dates are expected in #X/Y/Z# format where current culture defines what X, Y, and Z are (i.e., which one is day, month, and year).
+* `BuiltIn` : parsing of dates is done as if there were no AdvancedExpressionOptions set, i.e., dates are expected in #X/Y/Z# format where the culture of the expression (or of the advanced options, when they have one) defines what X, Y, and Z are (i.e., which one is day, month, and year); the Gregorian calendar is used.
 * `FromCulture` : the separator defined in the current culture (which is either CultureInfo.CurrentCulture or a custom culture that you specify in the constructor or the <xref:NCalc.AdvancedExpressionOptions.CultureInfo> property) is used.
 * `Custom` : the separator defined in the <xref:NCalc.AdvancedExpressionOptions.DateSeparator> property
 

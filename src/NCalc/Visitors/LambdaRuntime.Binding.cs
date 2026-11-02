@@ -13,9 +13,10 @@ namespace NCalc.Visitors;
 /// </summary>
 internal sealed class ContextMethodCandidate
 {
-    public ContextMethodCandidate(MethodInfo method)
+    public ContextMethodCandidate(MethodInfo method, int level)
     {
         Method = method;
+        Level = level;
         var parameters = method.GetParameters();
         ParameterTypes = parameters.Select(p => p.ParameterType).ToArray();
         if (parameters.Length > 0 && parameters[^1].IsDefined(typeof(ParamArrayAttribute)))
@@ -23,6 +24,9 @@ internal sealed class ContextMethodCandidate
     }
 
     public MethodInfo Method { get; }
+
+    /// <summary>The depth of the class that declares the method: 0 for the class of the context object, 1 for its base class, and so on.</summary>
+    public int Level { get; }
 
     /// <summary>The types of all the parameters, the params array included.</summary>
     public Type[] ParameterTypes { get; }
@@ -50,16 +54,25 @@ internal sealed class ContextMethodCall(string name, ContextMethodCandidate[] ca
 internal static partial class LambdaRuntime
 {
     // The costs of converting an argument value to the type of a parameter; the overload with the lowest total cost is chosen
-    private const int ExactCost = 0;
-    private const int ImplicitCost = 1;
-    private const int ReferenceCost = 2;
-    private const int LosslessCost = 3;
+    internal const int ExactCost = 0;
+    internal const int ImplicitCost = 1;
+    internal const int ReferenceCost = 2;
+
+    // A conversion of a number to another numeric type, or of an integer to an enum or back, that is made only when the value
+    // is not changed, so whether it can be made is known only for a value
+    internal const int LosslessCost = 3;
+
+    // The cost added for a method with a params array: as in C#, a method without one is preferred
+    internal const int ParamsCost = 1;
 
     /// <summary>
     /// Chooses the overload of a context method by the types of the argument values, as C# chooses one for arguments of these types,
     /// and converts the arguments in place to the types of its parameters (the params arguments are collected into an array).
     /// A number is converted to a parameter of another numeric type only without loss: a value with a fraction, out of the range
     /// of the type, or not a number is not converted. The arguments array has one element more than there are arguments.
+    /// The overload with the lowest total cost is chosen; of overloads with the same cost, one declared in a more derived class,
+    /// then the one with the more specific parameters (<see cref="IsBetterOverload"/>). The lambda visitor chooses an overload by
+    /// the same rule when it is compiled, when the types of the arguments decide it (NCALC-314).
     /// Returns the index of the chosen overload in <see cref="ContextMethodCall.Candidates"/>.
     /// </summary>
     internal static int BindContextMethod(object?[] arguments, ContextMethodCall call)
@@ -75,7 +88,7 @@ internal static partial class LambdaRuntime
             if (!TryBindArguments(candidates[i], arguments, argumentCount, out var converted, out var cost))
                 continue;
 
-            if (best < 0 || cost < bestCost || (cost == bestCost && IsBetterOverload(candidates[i], candidates[best], argumentCount)))
+            if (best < 0 || IsPreferred(candidates[i], cost, candidates[best], bestCost, argumentCount))
             {
                 best = i;
                 bestCost = cost;
@@ -131,11 +144,24 @@ internal static partial class LambdaRuntime
             result[fixedCount] = array;
 
             // As in C#, a method without a params array is preferred
-            cost++;
+            cost += ParamsCost;
         }
 
         converted = result;
         return true;
+    }
+
+    /// <summary>
+    /// Whether overload a, whose arguments cost aCost to convert, is chosen rather than overload b, whose arguments cost bCost:
+    /// the lower cost wins, then the overload declared in the more derived class (NCALC-317), then the more specific one.
+    /// </summary>
+    internal static bool IsPreferred(ContextMethodCandidate a, int aCost, ContextMethodCandidate b, int bCost, int argumentCount)
+    {
+        if (aCost != bCost)
+            return aCost < bCost;
+        if (a.Level != b.Level)
+            return a.Level < b.Level;
+        return IsBetterOverload(a, b, argumentCount);
     }
 
     // Whether the parameters of a are more specific than those of b. When neither is, the overloads are ordered by their signatures,
@@ -192,7 +218,9 @@ internal static partial class LambdaRuntime
 
     /// <summary>
     /// Converts a value to a type without losing information: as C# converts it implicitly, or a number to another numeric type when
-    /// the value has no fraction and is in the range of the type. Null is converted only to a reference or nullable type.
+    /// the value has no fraction and is in the range of the type (to decimal, when the decimal has the same value; to double or float,
+    /// the nearest value, as C# converts a long or a decimal to them). An enum converts as the number of its underlying type, and an
+    /// integer to an enum when it converts to its underlying type. Null is converted only to a reference or nullable type.
     /// The cost tells how good the conversion is: 0 when the value has the type already.
     /// </summary>
     internal static bool TryConvertLossless(object? value, Type type, out object? result, out int cost)
@@ -209,43 +237,71 @@ internal static partial class LambdaRuntime
 
         var target = underlyingType ?? type;
         var valueType = value.GetType();
-        if (valueType == target)
+        cost = GetConversionCost(valueType, type);
+        switch (cost)
         {
-            result = value;
-            return true;
+            case ExactCost:
+            case ReferenceCost:
+                result = value;
+                return true;
+            case ImplicitCost:
+                result = Converters.GetOrAdd(Tuple.Create(valueType, target, true), BuildConverter)(value);
+                return true;
+            case LosslessCost:
+                return TryConvertNumber(value, target, out result);
+            default:
+                return false;
         }
-
-        if (TypeHelper.ImplicitPrimitiveConversionTable.TryGetValue(valueType, out var conversions) && conversions.Contains(target))
-        {
-            result = Converters.GetOrAdd(Tuple.Create(valueType, target, true), BuildConverter)(value);
-            cost = ImplicitCost;
-            return true;
-        }
-
-        if (type.IsInstanceOfType(value))
-        {
-            result = value;
-            cost = ReferenceCost;
-            return true;
-        }
-
-        cost = LosslessCost;
-        return TryConvertNumber(value, target, out result);
     }
 
-    private static bool IsNumber(object value)
-        => value is sbyte or byte or short or ushort or int or uint or long or ulong or float or double or decimal or BigInteger or BigDecimal;
+    /// <summary>
+    /// The cost of converting a value of a type (not null) to another type by <see cref="TryConvertLossless"/>:
+    /// <see cref="LosslessCost"/> when the conversion is made only for some values, or -1 when it is never made.
+    /// </summary>
+    internal static int GetConversionCost(Type valueType, Type type)
+    {
+        var target = Nullable.GetUnderlyingType(type) ?? type;
+        if (valueType == target || valueType == type)
+            return ExactCost;
+        if (TypeHelper.ImplicitPrimitiveConversionTable.TryGetValue(valueType, out var conversions) && conversions.Contains(target))
+            return ImplicitCost;
+        if (type.IsAssignableFrom(valueType))
+            return ReferenceCost;
+        // An enum is not converted to another enum
+        return IsNumberOrEnumType(valueType) && IsNumberOrEnumType(target) && !(valueType.IsEnum && target.IsEnum) ? LosslessCost : -1;
+    }
 
     internal static bool IsNumericType(Type type)
         => type == typeof(sbyte) || type == typeof(byte) || type == typeof(short) || type == typeof(ushort) || type == typeof(int)
             || type == typeof(uint) || type == typeof(long) || type == typeof(ulong) || type == typeof(float) || type == typeof(double)
             || type == typeof(decimal) || type == typeof(BigInteger) || type == typeof(BigDecimal);
 
+    private static bool IsNumberOrEnumType(Type type)
+        => type.IsEnum || IsNumericType(type);
+
     private static bool TryConvertNumber(object value, Type target, out object? result)
     {
         result = null;
-        if (!IsNumber(value) || !IsNumericType(target))
+
+        // An enum is converted as the number of its underlying type, and a number to an enum as a number of the underlying type
+        // of the enum, as a cast converts them (NCALC-318)
+        if (value is Enum)
+            value = Convert.ChangeType(value, Enum.GetUnderlyingType(value.GetType()), CultureInfo.InvariantCulture);
+        if (target.IsEnum)
+        {
+            if (!TryConvertNumber(value, Enum.GetUnderlyingType(target), out var number))
+                return false;
+            result = Enum.ToObject(target, number!);
+            return true;
+        }
+
+        if (!IsNumericType(value.GetType()) || !IsNumericType(target))
             return false;
+        if (value.GetType() == target)
+        {
+            result = value;
+            return true;
+        }
 
         var isInfinite = value is double.PositiveInfinity or double.NegativeInfinity or float.PositiveInfinity or float.NegativeInfinity;
         var isNaN = value is double.NaN or float.NaN;
@@ -286,17 +342,7 @@ internal static partial class LambdaRuntime
             }
 
             if (target == typeof(decimal))
-            {
-                result = value switch
-                {
-                    double d => (decimal)d,
-                    float f => (decimal)f,
-                    BigDecimal bd => MathHelper.BigDecimalToDecimal(bd),
-                    BigInteger bi => (decimal)bi,
-                    _ => Convert.ToDecimal(value, CultureInfo.InvariantCulture)
-                };
-                return true;
-            }
+                return TryConvertToDecimal(value, out result);
 
             return TryGetWholeValue(value, out var whole) && TryConvertWholeValue(whole, target, out result);
         }
@@ -304,6 +350,42 @@ internal static partial class LambdaRuntime
         {
             return false;
         }
+    }
+
+    // A double or float is converted to the decimal of its shortest round-trip representation, and only when that decimal gives the
+    // same double or float back; the casts round to 15 or 7 significant digits and give 0 for values below 1E-28 (NCALC-319)
+    private static bool TryConvertToDecimal(object value, out object? result)
+    {
+        result = null;
+        decimal m;
+        switch (value)
+        {
+            case double d:
+                if (!decimal.TryParse(d.ToString("R", CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out m) || (double)m != d)
+                    return false;
+                break;
+            case float f:
+                if (!decimal.TryParse(f.ToString("R", CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out m) || (float)m != f)
+                    return false;
+                break;
+            case BigDecimal bd:
+                // An exponent this large gives a value out of the range of decimal, or one that decimal cannot hold exactly
+                if (Math.Abs((long)bd.Exponent) > MathHelper.MaxPowResultDigits)
+                    return false;
+                m = MathHelper.BigDecimalToDecimal(bd);
+                if (new BigDecimal(m).CompareTo(bd) != 0)
+                    return false;
+                break;
+            case BigInteger bi:
+                m = (decimal)bi;
+                break;
+            default:
+                m = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                break;
+        }
+
+        result = m;
+        return true;
     }
 
     private static bool TryGetWholeValue(object value, out BigInteger whole)

@@ -541,6 +541,102 @@ namespace NCalc.Tests
             }
         }
 
+        // NCALC-304: the loop budget of an evaluation leaked through the execution context into the work started during it (a task, a timer),
+        // so that later, unrelated evaluations there ran their loops 0 times; unrelated evaluations that a handler ran meanwhile shared it
+        [Fact]
+        public async Task LoopBudgetShouldNotLeakIntoWorkStartedDuringAnEvaluation()
+        {
+            var token = TestContext.Current.CancellationToken;
+            const string child = "j := 0; while (j < 10) { j := j + 1 }; j";
+            // Uses up the whole budget before it calls f()
+            const string parent = "i := 0; while (true) { i := i + 1 }; f()";
+            foreach (var nonRecursive in new[] { false, true })
+            {
+                var o = ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseLoops | ExpressionOptions.NoCache
+                    | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+                foreach (var asyncParent in new[] { false, true })
+                {
+                    var parentDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var timerResult = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var later = new List<Task<object?>>();
+                    var meanwhile = new List<object?>();
+                    Timer? timer = null;
+
+                    void StartWork()
+                    {
+                        later.Add(Task.Run(async () => { await parentDone.Task; return new Expression(child, o).Evaluate(token); }, token));
+                        later.Add(Task.Run(async () => { await parentDone.Task; return await new AsyncExpression(child, o).EvaluateAsync(token); }, token));
+                        timer = new Timer(_ =>
+                        {
+                            try
+                            {
+                                timerResult.TrySetResult(new Expression(child, o).Evaluate(token));
+                            }
+                            catch (Exception ex)
+                            {
+                                timerResult.TrySetException(ex);
+                            }
+                        }, null, Timeout.Infinite, Timeout.Infinite);
+                        var parallel = Enumerable.Range(0, 4).Select(_ => Task.Run(() => new Expression(child, o).Evaluate(token), token)).ToArray();
+                        Task.WaitAll(parallel, token);
+                        meanwhile.AddRange(parallel.Select(t => t.Result));
+                        meanwhile.Add(new Expression(child, o).Evaluate(token));
+                    }
+
+                    if (asyncParent)
+                    {
+                        var expression = new AsyncExpression(parent, o);
+                        expression.EvaluateFunctionAsync += (_, args, _) => { StartWork(); args.Result = 1; return ValueTask.CompletedTask; };
+                        await expression.EvaluateAsync(token);
+                    }
+                    else
+                    {
+                        var expression = new Expression(parent, o);
+                        expression.EvaluateFunction += (_, args) => { StartWork(); args.Result = 1; };
+                        expression.Evaluate(token);
+                    }
+
+                    parentDone.SetResult(true);
+                    using (timer)
+                    {
+                        timer!.Change(0, Timeout.Infinite);
+                        var results = (await Task.WhenAll(later)).Concat(meanwhile).Append(await timerResult.Task.WaitAsync(TimeSpan.FromSeconds(30), token));
+                        Assert.All(results, r => Assert.Equal(10, Convert.ToInt32(r, System.Globalization.CultureInfo.InvariantCulture)));
+                    }
+                }
+            }
+        }
+
+        // NCALC-304: the parts of an evaluation that a function evaluates in parallel draw from the budget of the evaluation together
+        [Fact]
+        public async Task LoopBudgetShouldBeSharedSafelyByArgumentsEvaluatedInParallel()
+        {
+            var token = TestContext.Current.CancellationToken;
+            const string text = "fn w() { j := 0; while (true) { j := j + 1 }; j }; f(w(), w(), w(), w())";
+            foreach (var nonRecursive in new[] { false, true })
+            {
+                var o = ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseLoops | ExpressionOptions.NoCache
+                    | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+
+                var expression = new Expression(text, o);
+                expression.EvaluateFunction += (name, args) =>
+                {
+                    if (name == "f")
+                        args.Result = Task.WhenAll(args.Parameters.Select(p => Task.Run(() => Convert.ToInt64(p.Evaluate(), System.Globalization.CultureInfo.InvariantCulture))))
+                            .GetAwaiter().GetResult().Sum();
+                };
+                Assert.Equal(Expression.MaxLoopIterations, Convert.ToInt64(expression.Evaluate(token), System.Globalization.CultureInfo.InvariantCulture));
+
+                var asyncExpression = new AsyncExpression(text, o);
+                asyncExpression.EvaluateFunctionAsync += async (name, args, ct) =>
+                {
+                    if (name == "f")
+                        args.Result = (await Task.WhenAll(args.Parameters.Select(p => Task.Run(async () => Convert.ToInt64(await p.EvaluateAsync(ct), System.Globalization.CultureInfo.InvariantCulture), ct)))).Sum();
+                };
+                Assert.Equal(AsyncExpression.MaxLoopIterations, Convert.ToInt64(await asyncExpression.EvaluateAsync(token), System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+
         // NCALC-133
         [Fact]
         public async Task InvertedRangeErrorShouldShowTheBoundaries()

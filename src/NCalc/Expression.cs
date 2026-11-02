@@ -95,8 +95,14 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     internal object? EvaluateAsParameter(ExpressionContextBase outerContext, CancellationToken cancellationToken)
     {
         // An expression that shares the context of the outer one has its parameters and handlers already
+        // Its loops draw from the budget of the outer evaluation
+        var outerLoopBudget = LoopIterationBudget.Current;
         if (ReferenceEquals(Context, outerContext))
-            return Evaluate(cancellationToken);
+        {
+            cancellationToken = GetEvaluationCancellationToken(cancellationToken);
+            LogicalExpression ??= GetLogicalExpression(cancellationToken);
+            return InternalEvaluate(cancellationToken, outerLoopBudget);
+        }
 
         LogicalExpression ??= GetLogicalExpression(cancellationToken);
         if (Error is not null)
@@ -122,7 +128,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         // The functions declared in the tree are in the shared UserFunctions of the copied context already
         var nested = new Expression(nestedContext, EvaluationVisitorFactory);
         nested.SetLogicalExpressionWithoutRegistration(LogicalExpression);
-        return nested.InternalEvaluate(cancellationToken);
+        return nested.InternalEvaluate(cancellationToken, outerLoopBudget);
     }
 
     public Expression(
@@ -198,7 +204,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         cancellationToken = GetEvaluationCancellationToken(cancellationToken);
         LogicalExpression ??= GetLogicalExpression(cancellationToken);
 
-        return InternalEvaluate(cancellationToken);
+        return InternalEvaluate(cancellationToken, OuterLoopBudget);
     }
 
     /// <summary>
@@ -220,10 +226,11 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     {
         LogicalExpression = GetLogicalExpression(parser, parserContext);
 
-        return InternalEvaluate(cancellationToken);
+        return InternalEvaluate(cancellationToken, OuterLoopBudget);
     }
 
-    private object? InternalEvaluate(CancellationToken cancellationToken = default)
+    // outerLoopBudget: the loop budget of the evaluation that this one is a part of, if any
+    private object? InternalEvaluate(CancellationToken cancellationToken, LoopIterationBudget? outerLoopBudget)
     {
         if (Error is not null)
             throw Error;
@@ -234,16 +241,16 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         // If array evaluation, execute the same expression multiple times. The arguments of functions are not iterated again:
         // the outer evaluation has put the current elements into the parameters
         if (Options.HasFlag(ExpressionOptions.IterateParameters) && !IsSubExpression)
-            return IterateParameters(cancellationToken);
+            return IterateParameters(cancellationToken, outerLoopBudget);
 
-        return EvaluateOnce(EvaluationVisitorFactory.Create(Context), cancellationToken);
+        return EvaluateOnce(EvaluationVisitorFactory.Create(Context), cancellationToken, outerLoopBudget);
     }
 
     // The static UseNonRecursiveEvaluator setting selects the evaluator for this evaluation without changing Options
-    private object? EvaluateOnce(Visitors.EvaluationVisitor evaluationVisitor, CancellationToken cancellationToken)
+    private object? EvaluateOnce(Visitors.EvaluationVisitor evaluationVisitor, CancellationToken cancellationToken, LoopIterationBudget? outerLoopBudget)
     {
         // MaxLoopIterations limits the iterations of all loops of the evaluation together
-        var loopBudget = Options.HasFlag(ExpressionOptions.UseLoops) ? LoopIterationBudget.Begin(MaxLoopIterations) : null;
+        var loopBudget = LoopIterationBudget.Enter(Options.HasFlag(ExpressionOptions.UseLoops), MaxLoopIterations, outerLoopBudget);
         try
         {
             if (UseNonRecursiveEvaluator || Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
@@ -259,11 +266,11 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         }
         finally
         {
-            loopBudget?.End();
+            loopBudget.Exit();
         }
     }
 
-    private object? IterateParameters(CancellationToken cancellationToken)
+    private object? IterateParameters(CancellationToken cancellationToken, LoopIterationBudget? outerLoopBudget)
     {
         var parameterEnumerators = ParametersHelper.GetEnumerators(Parameters, out var size);
 
@@ -273,7 +280,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
             return null;
 
         if (size is null)
-            return EvaluateOnce(evaluationVisitor, cancellationToken);
+            return EvaluateOnce(evaluationVisitor, cancellationToken, outerLoopBudget);
 
         // The current elements are put into a layer over Parameters for each evaluation; Parameters itself is not changed
         // (it may be read-only), so that the next evaluation iterates the lists again
@@ -292,7 +299,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
                     iteratedParameters.SetCurrent(kvp.Key, kvp.Value.Current);
                 }
 
-                results.Add(EvaluateOnce(evaluationVisitor, cancellationToken));
+                results.Add(EvaluateOnce(evaluationVisitor, cancellationToken, outerLoopBudget));
             }
 
             return results;

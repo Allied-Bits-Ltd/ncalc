@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.Runtime.CompilerServices;
+using ExtendedNumerics;
 
 using NCalc.Domain;
 using NCalc.Exceptions;
@@ -292,6 +293,12 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         if (functionName.Equals("in", comparison))
             return InFunction(function, cancellationToken);
 
+        // A wrong number of arguments of a built-in function is reported before the arguments are visited, as the evaluators do
+        // (Pow(null) said that the parameter null is not defined; NCALC-331), unless the context has a method of that name
+        var contextComparison = ignoreIdentifierCase ? StringComparison.InvariantCultureIgnoreCase : StringComparison.InvariantCulture;
+        if (GetArgumentCountError(functionName, parameters.Count, comparison) is { } countError && !HasContextMethod(functionName, contextComparison))
+            return ThrowEvaluationException(countError, function.Location);
+
         var args = new LinqExpression[parameters.Count];
         for (var i = 0; i < parameters.Count; i++)
         {
@@ -299,7 +306,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         }
 
         //Context methods take precedence over built-in functions because they're user-customizable.
-        var contextCall = CallContextMethod(functionName, args, ignoreIdentifierCase ? StringComparison.InvariantCultureIgnoreCase : StringComparison.InvariantCulture, function);
+        var contextCall = CallContextMethod(functionName, args, contextComparison, function);
         if (contextCall != null)
             return contextCall;
 
@@ -477,8 +484,9 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         if (body.Type == resultType)
             return body;
 
-        // A value whose type is known only when the lambda runs is converted as a cast converts it
-        if (body.Type == typeof(object))
+        // A value whose type is known only when the lambda runs is converted as a cast converts it; so is a BigDecimal, whose explicit
+        // conversions depend on the current culture or do not exist for some types (NCALC-320)
+        if (body.Type == typeof(object) || body.Type == typeof(BigDecimal))
             return ConvertAtRuntime(body, resultType);
 
         // With OverflowProtection, a result that does not fit in the result type throws instead of being truncated
@@ -654,38 +662,129 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
     private static Linq.MethodCallExpression CallRuntime(string name, params LinqExpression[] arguments)
         => LinqExpression.Call(typeof(LambdaRuntime).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!, arguments);
 
-    // A call of a method of the context object, or null when the context has no method of that name that can take the arguments
+    // The message of the evaluators for a built-in function with a fixed number of arguments that is called with another number,
+    // or null
+    private static string? GetArgumentCountError(string functionName, int count, StringComparison comparison)
+    {
+        if (functionName.Equals("%", StringComparison.Ordinal) || functionName.Equals("PercentOf", comparison))
+            return count == 2 ? null : "PercentOf() takes exactly 2 arguments";
+        if (functionName.Equals("PercentDiff", comparison))
+            return count == 2 ? null : "PercentDiff() takes exactly 2 arguments";
+        foreach (var unaryFunction in LambdaRuntime.UnaryFunctions)
+        {
+            if (functionName.Equals(unaryFunction.Key, comparison))
+                return count == 1 ? null : $"{(unaryFunction.Key == "Trunc" ? "Truncate" : unaryFunction.Key)}() takes exactly 1 argument";
+        }
+        foreach (var binaryFunction in LambdaRuntime.BinaryFunctions)
+        {
+            if (functionName.Equals(binaryFunction.Key, comparison))
+                return count == 2 ? null : $"{binaryFunction.Key}() takes exactly 2 arguments";
+        }
+        if (functionName.Equals("MakeList", comparison))
+            return count is 1 or 2 ? null : "MakeList() takes 1 or 2 arguments";
+        if (functionName.Equals("MakeStr", comparison) || functionName.Equals("MakeString", comparison))
+            return count == 2 ? null : "MakeStr() takes exactly 2 arguments";
+        return null;
+    }
+
+    private bool HasContextMethod(string methodName, StringComparison stringComparison)
+        => _context is not null
+            && _context.Type.GetMethods(BindingFlags.Public | BindingFlags.Instance).Any(m => m.Name.Equals(methodName, stringComparison));
+
+    // A call of a method of the context object, or null when the context has no method of that name that can take the arguments.
+    // The overload is chosen by one rule (LambdaRuntime.BindContextMethod), whatever the form of the arguments (NCALC-314): when the
+    // lambda is compiled if the types of the arguments decide it, otherwise when it runs, by the types of the values, which are
+    // converted without loss (NCALC-203). The methods of the base classes are candidates too (NCALC-317).
     private LinqExpression? CallContextMethod(string methodName, LinqExpression[] args, StringComparison stringComparison, FunctionCall function)
     {
         if (_context is null)
             return null;
 
-        // Arguments whose types match the parameters exactly or by an implicit conversion are bound when the lambda is compiled
-        var hasObjectArguments = args.Any(a => a.Type == typeof(object));
-        if (!hasObjectArguments && FindMethod(methodName, args, stringComparison) is { } method)
-            return LinqExpression.Call(_context, method.MethodInfo, method.PreparedArguments);
-
-        // The value of an operator or of a function is known only when the lambda runs: the overload is chosen then, by the types of
-        // the values, and they are converted without loss (NCALC-203)
-        var contextType = _context.Type;
-        do
+        var candidates = new List<ContextMethodCandidate>();
+        var level = 0;
+        for (var contextType = _context.Type; contextType != null && contextType != typeof(object); contextType = contextType.BaseType)
         {
-            var candidates = contextType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+            var depth = level++;
+            candidates.AddRange(contextType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                 .Where(m => m.Name.Equals(methodName, stringComparison) && !m.ContainsGenericParameters && CanBindWhenRunning(m.GetParameters(), args))
-                .ToArray();
-
-            if (candidates.Length == 1 && hasObjectArguments
-                && LinqUtils.PrepareMethodArgumentsIfValid(candidates[0].GetParameters(), args) is { Item1: 0 } exactMatch)
-                return LinqExpression.Call(_context, candidates[0], exactMatch.Item2);
-
-            if (candidates.Length > 0)
-                return CallBoundWhenRunning(candidates, args, function);
-
-            contextType = contextType.BaseType;
+                .Select(m => new ContextMethodCandidate(m, depth)));
         }
-        while (contextType != null && contextType != typeof(object));
 
-        return null;
+        if (candidates.Count == 0)
+            return null;
+
+        return ChooseWhenCompiling(candidates, args) is { } method
+            ? CallWhenCompiled(method, args)
+            : CallBoundWhenRunning(candidates.ToArray(), args, function);
+    }
+
+    // The overload that LambdaRuntime.BindContextMethod chooses for any values of the arguments, or null when the choice depends on the values
+    private static ContextMethodCandidate? ChooseWhenCompiling(List<ContextMethodCandidate> candidates, LinqExpression[] args)
+    {
+        // A value of a non-nullable value type has the type of the argument; a value of another type can have a more derived type
+        // or be null, and so change the costs of the conversions
+        if (candidates.Count != 1 && !args.All(a => a.Type.IsValueType && Nullable.GetUnderlyingType(a.Type) is null))
+            return null;
+
+        ContextMethodCandidate? best = null;
+        var bestCost = 0;
+        foreach (var candidate in candidates)
+        {
+            var cost = GetConversionCost(candidate, args, out var dependsOnValues);
+            if (!dependsOnValues && (best is null || LambdaRuntime.IsPreferred(candidate, cost, best, bestCost, args.Length)))
+            {
+                best = candidate;
+                bestCost = cost;
+            }
+        }
+
+        if (best is null)
+            return null;
+
+        // An overload whose arguments are converted only for some values is chosen for them when it is preferred, so then the
+        // choice is left to the values
+        foreach (var candidate in candidates)
+        {
+            var cost = GetConversionCost(candidate, args, out var dependsOnValues);
+            if (dependsOnValues && LambdaRuntime.IsPreferred(candidate, cost, best, bestCost, args.Length))
+                return null;
+        }
+
+        return best;
+    }
+
+    // The total cost of converting the arguments to the parameters of an overload, as LambdaRuntime.BindContextMethod computes it
+    private static int GetConversionCost(ContextMethodCandidate candidate, LinqExpression[] args, out bool dependsOnValues)
+    {
+        dependsOnValues = false;
+        var total = candidate.ParamsElementType is null ? 0 : LambdaRuntime.ParamsCost;
+        for (var i = 0; i < args.Length; i++)
+        {
+            var cost = LambdaRuntime.GetConversionCost(args[i].Type, candidate.GetArgumentType(i));
+            if (cost is < 0 or LambdaRuntime.LosslessCost)
+                dependsOnValues = true;
+            total += Math.Max(cost, 0);
+        }
+
+        return total;
+    }
+
+    private Linq.MethodCallExpression CallWhenCompiled(ContextMethodCandidate method, LinqExpression[] args)
+    {
+        static LinqExpression ConvertTo(LinqExpression argument, Type type)
+            => argument.Type == type ? argument : LinqExpression.Convert(argument, type);
+
+        var fixedCount = method.FixedParameterCount;
+        var arguments = new LinqExpression[method.ParameterTypes.Length];
+        for (var i = 0; i < fixedCount; i++)
+        {
+            arguments[i] = ConvertTo(args[i], method.ParameterTypes[i]);
+        }
+
+        if (method.ParamsElementType is { } elementType)
+            arguments[fixedCount] = LinqExpression.NewArrayInit(elementType, args.Skip(fixedCount).Select(a => ConvertTo(a, elementType)));
+
+        return LinqExpression.Call(_context!, method.Method, arguments);
     }
 
     // Whether the method can take arguments of these types: an argument of type object can have a value of any type
@@ -708,22 +807,16 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     private static bool CanConvertWhenRunning(Type from, Type to)
     {
-        if (from == typeof(object) || from == to || to.IsAssignableFrom(from))
+        // A number may be converted to another numeric type, or an enum, without loss
+        if (from == typeof(object) || LambdaRuntime.GetConversionCost(from, to) >= 0)
             return true;
-        if (Nullable.GetUnderlyingType(from) is { } underlyingType)
-            return CanConvertWhenRunning(underlyingType, to);
-        if (TypeHelper.ImplicitPrimitiveConversionTable.TryGetValue(from, out var conversions) && conversions.Contains(to))
-            return true;
-
-        // A number may be converted to another numeric type without loss
-        return LambdaRuntime.IsNumericType(from) && LambdaRuntime.IsNumericType(Nullable.GetUnderlyingType(to) ?? to);
+        return Nullable.GetUnderlyingType(from) is { } underlyingType && CanConvertWhenRunning(underlyingType, to);
     }
 
     // Chooses the overload by the values of the arguments and calls it:
     // arguments = [args..., null]; overload = BindContextMethod(arguments, call); overload == 0 ? ctx.M0((T)arguments[0], ...) : ...
-    private LinqExpression CallBoundWhenRunning(MethodInfo[] methods, LinqExpression[] args, FunctionCall function)
+    private LinqExpression CallBoundWhenRunning(ContextMethodCandidate[] candidates, LinqExpression[] args, FunctionCall function)
     {
-        var candidates = methods.Select(m => new ContextMethodCandidate(m)).ToArray();
         var call = new ContextMethodCall(function.Identifier.Name, candidates, function);
         var arguments = LinqExpression.Variable(typeof(object[]), "arguments");
         var overload = LinqExpression.Variable(typeof(int), "overload");
@@ -745,49 +838,6 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             LinqExpression.Assign(arguments, LinqExpression.NewArrayInit(typeof(object), args.Select(Box).Append(NullConstant))),
             LinqExpression.Assign(overload, CallRuntime(nameof(LambdaRuntime.BindContextMethod), arguments, LinqExpression.Constant(call))),
             result!);
-    }
-
-    // The overload whose parameters match the types of the arguments exactly or by implicit conversions
-    private ExtendedMethodInfo? FindMethod(string methodName, LinqExpression[] methodArgs, StringComparison stringComparison)
-    {
-        var contextType = _context!.Type;
-        var objectType = typeof(object);
-
-        do
-        {
-            var methods = contextType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-                .Where(m => m.Name.Equals(methodName, stringComparison));
-
-            var candidates = new List<ExtendedMethodInfo>();
-
-            foreach (var potentialMethod in methods)
-            {
-                var preparedArguments = LinqUtils.PrepareMethodArgumentsIfValid(potentialMethod.GetParameters(), methodArgs);
-
-                if (preparedArguments != null)
-                {
-                    var candidate = new ExtendedMethodInfo
-                    {
-                        MethodInfo = potentialMethod,
-                        PreparedArguments = preparedArguments.Item2,
-                        Score = preparedArguments.Item1
-                    };
-
-                    if (candidate.Score == 0)
-                        return candidate;
-
-                    candidates.Add(candidate);
-                }
-            }
-
-            if (candidates.Count != 0)
-                return candidates.OrderBy(method => method.Score).First();
-
-            contextType = contextType.BaseType;
-        }
-        while (contextType != null && contextType != objectType);
-
-        return null;
     }
 
     public LinqExpression ConvertDoubleIfNoFraction(LinqExpression originalExpression)

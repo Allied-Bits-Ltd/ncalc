@@ -234,7 +234,7 @@ public static class TypeHelper
             }
         }
 
-        outcome = MathHelper.ConvertToBigDecimal(a).CompareTo(MathHelper.ConvertToBigDecimal(b));
+        outcome = MathHelper.CompareBigDecimals(MathHelper.ConvertToBigDecimal(a), MathHelper.ConvertToBigDecimal(b));
         return true;
     }
 

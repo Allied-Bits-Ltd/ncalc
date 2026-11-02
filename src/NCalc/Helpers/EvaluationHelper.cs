@@ -38,20 +38,7 @@ public static class EvaluationHelper
 #endif
     }
 
-    private const string ExpressionTooDeepNonRecursiveMessage = "The expression is nested too deeply to be evaluated: function calls or expressions used as parameter values are nested too deeply, which ExpressionOptions.UseNonRecursiveEvaluator does not avoid.";
-
-    /// <summary>
-    /// Like <see cref="EnsureSufficientExecutionStack(LogicalExpression)"/>, but with a message that does not advise the non-recursive
-    /// evaluator when it is the one in use.
-    /// </summary>
-    internal static void EnsureSufficientExecutionStack(LogicalExpression expression, bool nonRecursive)
-    {
-        if (!nonRecursive)
-            EnsureSufficientExecutionStack(expression);
-        else
-        if (!HasSufficientExecutionStack())
-            throw new NCalcEvaluationException(ExpressionTooDeepNonRecursiveMessage, expression.Location);
-    }
+    private const string ExpressionTooDeepNonRecursiveMessage = "The expression is nested too deeply to be evaluated: function calls or expressions used as parameter values are nested too deeply for the stack of the thread. The non-recursive evaluator continues them on threads with a larger stack unless LogicalExpressionParser.DeepExpressionStackSize is 0.";
 
     internal static bool HasSufficientExecutionStack()
     {
@@ -72,11 +59,13 @@ public static class EvaluationHelper
 
     /// <summary>
     /// Runs a part of a non-recursive evaluation that needs the stack (a function call, whose arguments are evaluated as separate
-    /// expressions) on a new thread with a stack of <see cref="Parser.LogicalExpressionParser.DeepExpressionStackSize"/> bytes,
-    /// once the stack of the current thread is nearly used up. Each such thread provides room for thousands of further levels of
-    /// nested function calls. When the size is 0 or the platform cannot start a thread, the evaluation continues on the current thread.
+    /// expressions, or a parameter whose value is evaluated as an expression) on a new thread with a stack of
+    /// <see cref="Parser.LogicalExpressionParser.DeepExpressionStackSize"/> bytes, once the stack of the current thread is nearly used up.
+    /// Each such thread provides room for thousands of further levels of nested function calls. The calling thread waits meanwhile, and
+    /// the handlers called during that part run on the new thread. When the size is 0 or the platform cannot start a thread,
+    /// throws an <see cref="NCalcEvaluationException"/>.
     /// </summary>
-    internal static T EvaluateOnLargeStack<T>(Func<T> evaluate)
+    internal static T EvaluateOnLargeStack<T>(Func<T> evaluate, LogicalExpression expression)
     {
         var stackSize = Parser.LogicalExpressionParser.DeepExpressionStackSize;
 #if NET
@@ -84,7 +73,7 @@ public static class EvaluationHelper
             stackSize = 0;
 #endif
         if (stackSize <= 0)
-            return evaluate();
+            throw new NCalcEvaluationException(ExpressionTooDeepNonRecursiveMessage, expression.Location);
 
         // The values may be formatted or parsed with the current culture, which a new thread would not have
         var culture = CultureInfo.CurrentCulture;
@@ -112,12 +101,45 @@ public static class EvaluationHelper
         }
         catch (Exception ex) when (ex is PlatformNotSupportedException or OutOfMemoryException)
         {
-            return evaluate();
+            throw new NCalcEvaluationException(ExpressionTooDeepNonRecursiveMessage, expression.Location, ex);
         }
         thread.Join();
 
         error?.Throw();
         return result;
+    }
+
+    /// <summary>
+    /// Like <see cref="EvaluateOnLargeStack{T}(Func{T}, LogicalExpression)"/>, for the asynchronous non-recursive evaluator: continues
+    /// the part on a thread pool thread, whose stack is empty, while the calling one waits without using a thread. The handlers called
+    /// during that part run on the thread pool thread, without the synchronization context of the caller. When
+    /// <see cref="Parser.LogicalExpressionParser.DeepExpressionStackSize"/> is 0, throws an <see cref="NCalcEvaluationException"/>.
+    /// </summary>
+    internal static async ValueTask<object?> EvaluateOnThreadPoolAsync(Func<ValueTask<object?>> evaluate, LogicalExpression expression)
+    {
+        if (Parser.LogicalExpressionParser.DeepExpressionStackSize <= 0)
+            throw new NCalcEvaluationException(ExpressionTooDeepNonRecursiveMessage, expression.Location);
+
+        return await Task.Run(() => evaluate().AsTask()).ConfigureAwait(false);
+    }
+
+    // The number of asynchronous evaluations that an exception has come out of
+    private static readonly ConditionalWeakTable<Exception, StrongBox<int>> AsyncEvaluationExits = new();
+
+    // An exception that comes out of this many nested asynchronous evaluations keeps its whole stack trace
+    private const int EvaluationsWithFullStackTrace = 32;
+
+    /// <summary>
+    /// Called when an exception comes out of an asynchronous evaluation. Each await on the way of an exception appends the stack trace
+    /// so far to the exception once more, so an exception coming out of deeply nested evaluations (function arguments, bodies of user
+    /// functions, expressions used as parameters) would take time that grows with the square of the depth. Returns true when the
+    /// exception has come out of more than 32 evaluations, for every 4th one: the evaluation throws the exception anew, which starts a new
+    /// stack trace. The stack trace of such an exception shows the outer evaluations only.
+    /// </summary>
+    internal static bool ShouldRestartStackTrace(Exception exception)
+    {
+        var exits = Interlocked.Increment(ref AsyncEvaluationExits.GetOrCreateValue(exception).Value);
+        return exits > EvaluationsWithFullStackTrace && exits % 4 == 0;
     }
 
     private const string ExpressionTooDeepToVisitMessage = "The expression is nested too deeply to be processed";
@@ -1162,13 +1184,17 @@ internal class ArgumentStateBase
 /// <summary>
 /// The loop iterations that an evaluation may still run. The MaxLoopIterations limit applies to all the loops of one evaluation together,
 /// including nested loops and the loops in function arguments, in the bodies of user functions and in expressions used as parameters.
+/// Any other evaluation, also one started by a handler or by work that an evaluation started (a task, a timer), has a budget of its own.
 /// </summary>
 internal sealed class LoopIterationBudget
 {
-    // The budget of the evaluation in progress (per thread and async flow)
-    private static readonly AsyncLocal<LoopIterationBudget?> Current = new();
+    // The budget of the evaluation in progress in this thread and async flow, for its visitor. Work started during an evaluation captures
+    // it with the execution context, so the parts of an evaluation get the budget explicitly (OuterLoopBudget of the expressions created
+    // for them), and a budget that has ended is never used again
+    private static readonly AsyncLocal<LoopIterationBudget?> CurrentBudget = new();
 
     private int _remaining;
+    private volatile bool _ended;
 
     private LoopIterationBudget(int limit)
     {
@@ -1176,40 +1202,64 @@ internal sealed class LoopIterationBudget
     }
 
     /// <summary>
-    /// Starts the budget of an evaluation, unless the evaluation is a part of another one, which has its budget already.
-    /// Returns the budget to end, or null.
+    /// The budget of the evaluation in progress in this thread and async flow, or null.
     /// </summary>
-    internal static LoopIterationBudget? Begin(int limit)
-    {
-        if (Current.Value is not null)
-            return null;
+    internal static LoopIterationBudget? Current => CurrentBudget.Value is { _ended: false } budget ? budget : null;
 
-        var budget = new LoopIterationBudget(limit);
-        Current.Value = budget;
-        return budget;
+    /// <summary>
+    /// Enters an evaluation, which uses the budget of the evaluation that it is a part of (<paramref name="outer"/>), or, when it has
+    /// none or that one has ended, a new budget of <paramref name="limit"/> iterations if <paramref name="useLoops"/> is set.
+    /// </summary>
+    internal static Scope Enter(bool useLoops, int limit, LoopIterationBudget? outer)
+    {
+        if (outer is { _ended: true })
+            outer = null;
+        var owned = outer is null && useLoops ? new LoopIterationBudget(limit) : null;
+        var budget = outer ?? owned;
+        var previous = CurrentBudget.Value;
+        if (!ReferenceEquals(previous, budget))
+            CurrentBudget.Value = budget;
+        return new Scope(previous, owned);
     }
 
-    internal void End()
+    internal readonly struct Scope
     {
-        if (ReferenceEquals(Current.Value, this))
-            Current.Value = null;
+        private readonly LoopIterationBudget? _previous;
+        private readonly LoopIterationBudget? _owned;
+
+        internal Scope(LoopIterationBudget? previous, LoopIterationBudget? owned)
+        {
+            _previous = previous;
+            _owned = owned;
+        }
+
+        /// <summary>
+        /// Leaves the evaluation: the budget that it started ends, and the budget that was current before is current again.
+        /// </summary>
+        internal void Exit()
+        {
+            if (_owned is not null)
+                _owned._ended = true;
+            if (!ReferenceEquals(CurrentBudget.Value, _previous))
+                CurrentBudget.Value = _previous;
+        }
     }
 
     /// <summary>
     /// The budget for a loop: that of the evaluation, or, for a visitor used without an expression, one for this loop alone.
     /// </summary>
-    internal static LoopIterationBudget ForLoop(int limit) => Current.Value ?? new LoopIterationBudget(limit);
+    internal static LoopIterationBudget ForLoop(int limit) => Current ?? new LoopIterationBudget(limit);
 
     /// <summary>
     /// Takes one iteration; returns false when the evaluation has run all the iterations it may run.
+    /// The parts of an evaluation may run in parallel (e.g. arguments that a function evaluates on several threads).
     /// </summary>
     internal bool TryTake()
     {
-        if (_remaining <= 0)
+        if (Volatile.Read(ref _remaining) <= 0)
             return false;
 
-        _remaining--;
-        return true;
+        return Interlocked.Decrement(ref _remaining) >= 0;
     }
 }
 
@@ -1232,6 +1282,8 @@ internal sealed class ArgumentFlowControl(NCalcFlowControl flowControl, object? 
 internal sealed class ParameterOverlay<TValue>(IDictionary<string, TValue> own, IDictionary<string, TValue> outer) : IDictionary<string, TValue>
 {
     private readonly Dictionary<string, TValue> _local = new(StringComparer.Ordinal);
+    private readonly IDictionary<string, TValue> _own = own;
+    private readonly IDictionary<string, TValue> _outer = outer;
 
     public TValue this[string key]
     {
@@ -1290,7 +1342,7 @@ internal sealed class ParameterOverlay<TValue>(IDictionary<string, TValue> own, 
     public bool Contains(KeyValuePair<string, TValue> item)
         => TryGetValue(item.Key, out var value) && EqualityComparer<TValue>.Default.Equals(value, item.Value);
 
-    public bool ContainsKey(string key) => _local.ContainsKey(key) || own.ContainsKey(key) || outer.ContainsKey(key);
+    public bool ContainsKey(string key) => TryGetValue(key, out _);
 
     public void CopyTo(KeyValuePair<string, TValue>[] array, int arrayIndex)
     {
@@ -1303,9 +1355,19 @@ internal sealed class ParameterOverlay<TValue>(IDictionary<string, TValue> own, 
 
     public bool Remove(KeyValuePair<string, TValue> item) => Contains(item) && _local.Remove(item.Key);
 
+    // The overlays of deeply nested evaluations form long chains, which are walked in a loop, not by recursion
     public bool TryGetValue(string key, out TValue value)
     {
-        if (_local.TryGetValue(key, out value!) || own.TryGetValue(key, out value!) || outer.TryGetValue(key, out value!))
+        var overlay = this;
+        while (true)
+        {
+            if (overlay._local.TryGetValue(key, out value!) || overlay._own.TryGetValue(key, out value!))
+                return true;
+            if (overlay._outer is not ParameterOverlay<TValue> next)
+                break;
+            overlay = next;
+        }
+        if (overlay._outer.TryGetValue(key, out value!))
             return true;
         value = default!;
         return false;
@@ -1316,14 +1378,14 @@ internal sealed class ParameterOverlay<TValue>(IDictionary<string, TValue> own, 
     {
         foreach (var pair in _local)
             yield return pair;
-        foreach (var pair in own)
+        foreach (var pair in _own)
         {
             if (!_local.ContainsKey(pair.Key))
                 yield return pair;
         }
-        foreach (var pair in outer)
+        foreach (var pair in _outer)
         {
-            if (!_local.ContainsKey(pair.Key) && !own.ContainsKey(pair.Key))
+            if (!_local.ContainsKey(pair.Key) && !_own.ContainsKey(pair.Key))
                 yield return pair;
         }
     }

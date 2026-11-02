@@ -750,6 +750,126 @@ public class SerializationTests
         Assert.Equal("Max(1; 2)", Assert.IsType<FunctionCall>(oldCall).ToString());
     }
 
+    // NCALC-301: each node was serialized by a nested SerializeToElement call, which did not count the depth, so a deep tree (from
+    // about 250 levels, e.g. a flat sum) crashed the process with a stack overflow, and each level copied its whole subtree again
+    [Fact]
+    public void DeepExpressionsShouldFailWithJsonExceptionInsteadOfCrashing()
+    {
+        var culture = CultureInfo.InvariantCulture;
+        var sum = LogicalExpressionFactory.Create(string.Join(" + ", Enumerable.Range(0, 1000)), null, culture);
+        var calls = LogicalExpressionFactory.Create(string.Concat(Enumerable.Repeat("Max(1, ", 400)) + "1" + new string(')', 400), null, culture);
+        var sequence = LogicalExpressionFactory.Create("x := " + string.Join(" + ", Enumerable.Range(0, 400)) + "; x", null, culture,
+            ExpressionOptions.UseStatementSequences | ExpressionOptions.UseAssignments);
+        foreach (var tree in new[] { sum, calls, sequence })
+            Assert.Throws<System.Text.Json.JsonException>(() => JsonSerializer.Serialize(tree));
+
+        // Too deep a document is rejected on read as well
+        string deepJson = string.Concat(Enumerable.Repeat("""{"$type":"unary","Type":0,"Expression":""", 1000)) + """{"$type":"value","Value":1,"Type":1}""" + new string('}', 1000);
+        Assert.Throws<System.Text.Json.JsonException>(() => JsonSerializer.Deserialize<LogicalExpression>(deepJson));
+
+        // With a larger MaxDepth, the trees are written and read back in linear time on a thread with enough stack
+        var options = new System.Text.Json.JsonSerializerOptions { MaxDepth = 5000 };
+        List<string> expected = [], results = [];
+        Exception? error = null;
+        long elapsed = 0;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                foreach (var tree in new[] { sum, calls, sequence })
+                {
+                    expected.Add(tree.ToString());
+                    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                    var restored = JsonSerializer.Deserialize<LogicalExpression>(JsonSerializer.Serialize(tree, options), options)!;
+                    elapsed += stopwatch.ElapsedMilliseconds;
+                    results.Add(restored.ToString());
+                }
+            }
+            catch (Exception e)
+            {
+                error = e;
+            }
+        }, 256 * 1024 * 1024);
+        thread.Start();
+        thread.Join();
+        Assert.Null(error);
+        Assert.Equal(expected, results);
+        Assert.True(elapsed < 10_000, $"Serialization took {elapsed} ms");
+
+        // On a small stack, a tree within MaxDepth but too deep for the stack fails with a JsonException, not a stack overflow
+        // (and so does an invalid node deep in a document)
+        Exception? writeError = null, readError = null, invalidError = null;
+        string sumJson = JsonSerializer.Serialize(LogicalExpressionFactory.Create(string.Join(" + ", Enumerable.Range(0, 50)), null, culture));
+        string invalidJson = string.Concat(Enumerable.Repeat("""{"$type":"unary","Type":0,"Expression":""", 150)) + """{"$type":"unknown"}""" + new string('}', 150);
+        var smallThread = new Thread(() =>
+        {
+            try { JsonSerializer.Serialize(sum, options); }
+            catch (Exception e) { writeError = e; }
+            try { JsonSerializer.Deserialize<LogicalExpression>(deepJson, options); }
+            catch (Exception e) { readError = e; }
+            try { JsonSerializer.Deserialize<LogicalExpression>(invalidJson, options); }
+            catch (Exception e) { invalidError = e; }
+        }, 1024 * 1024);
+        smallThread.Start();
+        smallThread.Join();
+        Assert.IsType<System.Text.Json.JsonException>(writeError);
+        Assert.IsType<System.Text.Json.JsonException>(readError);
+        Assert.Contains("unknown", Assert.IsType<System.Text.Json.JsonException>(invalidError).Message, StringComparison.Ordinal);
+
+        // A tree within the default depth is still written and read back
+        Assert.Equal(string.Join(" + ", Enumerable.Range(0, 50)), JsonSerializer.Deserialize<LogicalExpression>(sumJson)!.ToString());
+    }
+
+    // NCALC-336: a hostile document was read, and then written by ToString() as another expression (the text of a relative literal
+    // and the original text of a string are written verbatim), or failed later with a .NET exception; it is now rejected on read
+    [Theory]
+    [InlineData("""{"$type":"value","Relative":{"Text":"2 days ago# + Sqrt(-1) + #today","Kind":5,"Days":2}}""")]
+    [InlineData("""{"$type":"value","Relative":{}}""")]
+    [InlineData("""{"$type":"value","Relative":{"Text":"2 days ago","Kind":5,"Days":3}}""")]
+    [InlineData("""{"$type":"value","Relative":{"Text":"2 days","Kind":5,"Days":2}}""")]
+    [InlineData("""{"$type":"value","Relative":{"Text":"2 days ago","Kind":99,"Days":2}}""")]
+    [InlineData("""{"$type":"value","Relative":{"Text":"2  days ago","Kind":5,"Days":2}}""")]
+    [InlineData("""{"$type":"value","Value":"a' + Sqrt(-1) + 'b","Type":2,"StringKind":1,"OriginalString":"a' + Sqrt(-1) + 'b"}""")]
+    [InlineData("""{"$type":"value","Value":"a","Type":2,"StringKind":1,"OriginalString":"b"}""")]
+    [InlineData("""{"$type":"value","Value":"a\\","Type":2,"StringKind":2,"OriginalString":"a\\"}""")]
+    [InlineData("""{"$type":"value","Value":"a\" + x + @\"b","Type":2,"StringKind":4}""")]
+    [InlineData("""{"$type":"value","Value":"a` + x + `b","Type":2,"StringKind":3}""")]
+    [InlineData("""{"$type":"value","Value":"a","Type":2,"StringKind":99}""")]
+    [InlineData("""{"$type":"value","Value":1,"Type":9999}""")]
+    [InlineData("""{"$type":"value","Value":{"$type":"Int32","$value":"abc"},"Type":1}""")]
+    [InlineData("""{"$type":"value","Value":{"$type":"Int32","$value":"99999999999"},"Type":1}""")]
+    [InlineData("""{"$type":"binary"}""")]
+    [InlineData("""{"$type":"binary","LeftExpression":{"$type":"value","Value":1,"Type":1},"RightExpression":null,"Type":0}""")]
+    [InlineData("""{"$type":"binary","LeftExpression":{"$type":"value","Value":1,"Type":1},"RightExpression":{"$type":"value","Value":1,"Type":1},"Type":9999}""")]
+    [InlineData("""{"$type":"unary","Type":0}""")]
+    [InlineData("""{"$type":"unary","Type":9999,"Expression":{"$type":"value","Value":1,"Type":1}}""")]
+    [InlineData("""{"$type":"ternary","LeftExpression":{"$type":"value","Value":1,"Type":1}}""")]
+    [InlineData("""{"$type":"function","Identifier":{"Name":"Max"},"Parameters":[null]}""")]
+    [InlineData("""{"$type":"function","Parameters":[]}""")]
+    [InlineData("""{"$type":"function","Identifier":{},"Parameters":[]}""")]
+    [InlineData("""{"$type":"identifier"}""")]
+    [InlineData("""{"$type":"statements","$values":[null]}""")]
+    public void HostileJsonShouldBeRejectedOnRead(string json)
+    {
+        Assert.Throws<System.Text.Json.JsonException>(() => JsonSerializer.Deserialize<LogicalExpression>(json));
+    }
+
+    // NCALC-336: valid relative literals and strings are still read, and a relative literal out of the range of dates is an NCalc error
+    [Fact]
+    public void ValidRelativeLiteralsAndStringsShouldStillBeReadFromJson()
+    {
+        var advancedOptions = new AdvancedExpressionOptions(CultureInfo.InvariantCulture, AdvExpressionOptions.ParseHumanePeriods);
+        foreach (var text in new[] { "#today#", "#in 3 hours#", "#2 days ago#", "#1 month 2 days#", "#0 days 1 hour#", "'it\\'s' + \"a\\\"b\"", "@\"raw\" + `back`" })
+        {
+            var tree = LogicalExpressionFactory.Create(text, null, CultureInfo.InvariantCulture, ExpressionOptions.None, advancedOptions);
+            Assert.Equal(tree.ToString(), JsonSerializer.Deserialize<LogicalExpression>(JsonSerializer.Serialize(tree))!.ToString());
+        }
+
+        var farAway = JsonSerializer.Deserialize<LogicalExpression>("""{"$type":"value","Relative":{"Text":"2147483647 months ago","Kind":5,"Months":2147483647}}""")!;
+        Assert.Equal("#2147483647 months ago#", farAway.ToString());
+        Assert.Throws<NCalc.Exceptions.NCalcEvaluationException>(() => new Expression(farAway).Evaluate(TestContext.Current.CancellationToken));
+    }
+
     // NCALC-206: relative date and time literals were frozen at the moment of writing by ToString() and JSON
     [Theory]
     [InlineData("#today#")]
@@ -797,6 +917,43 @@ public class SerializationTests
 
         tree = LogicalExpressionFactory.Create("-$5 + $1.25", null, enUS, ExpressionOptions.None, advancedOptions);
         Assert.Equal(-3.75m, new Expression(tree.ToString(), ExpressionOptions.NoCache, enUS) { AdvancedOptions = advancedOptions }.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    // NCALC-335: after JSON, a currency literal was written with the currency symbol of the thread culture ("€0.1" under sk-SK)
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("ja-JP")]
+    [InlineData("sk-SK")]
+    public void CurrencyLiteralsShouldKeepTheirSymbolInJson(string cultureName)
+    {
+        var culture = CultureInfo.GetCultureInfo(cultureName);
+        string symbol = culture.NumberFormat.CurrencySymbol, separator = culture.NumberFormat.CurrencyDecimalSeparator;
+        string expression = $"{symbol}0{separator}1 + {symbol}0{separator}2 = {symbol}0{separator}3";
+        var advancedOptions = new AdvancedExpressionOptions(culture, AdvExpressionOptions.AcceptCurrencySymbol)
+        {
+            CurrencySymbolsType = AdvancedExpressionOptions.CurrencySymbolType.FromCulture,
+            CurrencyDecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.FromCulture,
+        };
+        var tree = LogicalExpressionFactory.Create(expression, null, culture, ExpressionOptions.None, advancedOptions);
+        string json = JsonSerializer.Serialize(tree);
+
+        var oldCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            foreach (var threadCulture in new[] { "sk-SK", "en-US", "ja-JP" })
+            {
+                CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(threadCulture);
+                Assert.Equal(tree.ToString(), JsonSerializer.Deserialize<LogicalExpression>(json)!.ToString());
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = oldCulture;
+        }
+
+        // The written text is read back with the original options
+        Assert.Equal(new Expression(expression, ExpressionOptions.NoCache, culture) { AdvancedOptions = advancedOptions }.Evaluate(TestContext.Current.CancellationToken),
+            new Expression(tree.ToString(), ExpressionOptions.NoCache, culture) { AdvancedOptions = advancedOptions }.Evaluate(TestContext.Current.CancellationToken));
     }
 
     // NCALC-230: the description of a function is written as "///" lines, from which the parser reads it back

@@ -54,6 +54,41 @@ public static class LogicalExpressionParser
     }
 
     /// <summary>
+    /// Creates the format with which the date and time literals are read under advanced options (with their separators): the patterns,
+    /// separators and designators of the advanced options' format (the date patterns and separator from <paramref name="dateSource"/>),
+    /// in the Gregorian calendar. The format of a Thai, Persian or Saudi culture would otherwise read #1/2/2024# in its own calendar.
+    /// </summary>
+    private static DateTimeFormatInfo CreateAdvancedLiteralDateTimeFormat(DateTimeFormatInfo format, DateTimeFormatInfo dateSource)
+    {
+        var result = (DateTimeFormatInfo)CultureInfo.InvariantCulture.DateTimeFormat.Clone();
+        result.DateSeparator = dateSource.DateSeparator;
+        result.ShortDatePattern = dateSource.ShortDatePattern;
+        result.LongDatePattern = dateSource.LongDatePattern;
+        result.MonthDayPattern = dateSource.MonthDayPattern;
+        result.YearMonthPattern = dateSource.YearMonthPattern;
+        result.TimeSeparator = format.TimeSeparator;
+        result.ShortTimePattern = format.ShortTimePattern;
+        result.LongTimePattern = format.LongTimePattern;
+        result.FullDateTimePattern = dateSource.LongDatePattern + " " + format.LongTimePattern;
+        result.AMDesignator = format.AMDesignator;
+        result.PMDesignator = format.PMDesignator;
+        return result;
+    }
+
+    /// <summary>
+    /// Returns the masks of a date of three parts separated by "/" (with a four- or a two-digit year), in the order of the date pattern.
+    /// </summary>
+    private static string[] CreateDateMasks(string datePattern)
+    {
+        return (datePattern.Length > 0 ? datePattern[0] : 'd') switch
+        {
+            'M' => ["M/d/yyyy", "M/d/yy"],
+            'y' => ["yyyy/M/d", "yy/M/d"],
+            _ => ["d/M/yyyy", "d/M/yy"],
+        };
+    }
+
+    /// <summary>
     /// Creates the error for a date or time literal that has the shape of one but is not valid (#2024-13-01#). It stays a
     /// FormatException, as before, and tells where the literal is.
     /// </summary>
@@ -1144,7 +1179,16 @@ public static class LogicalExpressionParser
 
         if (!options.HasFlag(ExpressionOptions.DontParseDates))
         {
-            DateTimeFormatInfo dateTimeFormat = extOptions?.GetFormat(typeof(DateTimeFormatInfo)) as DateTimeFormatInfo ?? cultureInfo.DateTimeFormat;
+            DateTimeFormatInfo dateTimeFormat = cultureInfo.DateTimeFormat;
+            if (extOptions?.GetFormat(typeof(DateTimeFormatInfo)) is DateTimeFormatInfo advancedFormat)
+            {
+                // With built-in separators, the advanced options give the format of the thread culture, but dates are read as without
+                // advanced options: in the order of the parts of the culture of the options, or else of the expression
+                dateTimeFormat = CreateAdvancedLiteralDateTimeFormat(advancedFormat,
+                    extOptions.DateSeparatorType == AdvancedExpressionOptions.SeparatorType.BuiltIn
+                        ? (extOptions.OwnCultureInfo ?? cultureInfo).DateTimeFormat
+                        : advancedFormat);
+            }
             DateTimeFormatInfo literalDateTimeFormat = CreateLiteralDateTimeFormat(dateTimeFormat);
 
             Sequence<TextSpan, TextSpan, TextSpan> dateDefinition;
@@ -1252,12 +1296,19 @@ public static class LogicalExpressionParser
                     .And(charIsNumber);
             }
 
+            string[] customDateMasks = CreateDateMasks(dateTimeFormat.ShortDatePattern);
+
             DateTime? ParseDate((TextSpan, TextSpan, TextSpan) date)
             {
                 string customDateSepForDT = dateTimeFormat.DateSeparator;
                 if (useSecondDate || onlyCustomDateTranslation)
                 {
-                    if (DateTime.TryParse($"{date.Item1}{customDateSepForDT}{date.Item2}{customDateSepForDT}{date.Item3}", dateTimeFormat, DateTimeStyles.None, out var result))
+                    // The parts in the order of the date pattern of the advanced options; then other forms that the format accepts,
+                    // but not a time of day, which DateTime.TryParse also reads where '.' separates both (fi-FI: "10.30.00")
+                    if (DateTime.TryParseExact($"{date.Item1}/{date.Item2}/{date.Item3}", customDateMasks, literalDateTimeFormat, DateTimeStyles.None, out var exact))
+                        return exact;
+                    if (DateTime.TryParse($"{date.Item1}{customDateSepForDT}{date.Item2}{customDateSepForDT}{date.Item3}", dateTimeFormat, DateTimeStyles.NoCurrentDateDefault, out var result)
+                        && result.TimeOfDay == TimeSpan.Zero && result != DateTime.MinValue)
                         return result;
                 }
                 if (useSecondDate || !onlyCustomDateTranslation)
@@ -1528,7 +1579,11 @@ public static class LogicalExpressionParser
                     }
                 }
 
-                throw InvalidLiteralFormat("TimeSpan", ctx);
+                // Where the date separator is also the time separator (fi-FI: "."), an invalid date (#29.02.2023#) comes here:
+                // three parts with a year of four digits are reported as a date
+                bool hasShapeOfDate = (builtInDateSep == builtInTimeSep || customDateSep == builtInTimeSep)
+                    && time.Item1 != "-" && time.Item2.Length == 0 && time.Item6.Length == 0 && time.Item5.Length == 4;
+                throw InvalidLiteralFormat(hasShapeOfDate ? "DateTime" : "TimeSpan", ctx);
             });
 
             var shortTime = shortTimeSpanDefinition.Then<LogicalExpression>((ctx, time) =>
@@ -2614,7 +2669,7 @@ public static class LogicalExpressionParser
                     // Only a name or an element of a named list or string can be assigned to: "5 = x" or "Abs(x) := 7" must not
                     // silently return the right-hand side. A comparison such as "5 == x" never gets here, as "= x" is not an expression
                     if (!IsAssignmentTarget(x.Item1))
-                        throw new NCalcParserException("The left side of an assignment must be a variable or an indexed variable", ctx.Scanner.Cursor.Position);
+                        throw new NCalcParserException($"The left side of an assignment must be a variable or an indexed variable at position {ctx.Scanner.Cursor.Position}", ctx.Scanner.Cursor.Position);
 
                     return (BinaryExpression)new BinaryExpression(expressionType, x.Item1, x.Item3/*[0]*/).SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
                 }
@@ -2776,6 +2831,10 @@ public static class LogicalExpressionParser
     /// The stack size, in bytes, of the thread on which an expression that is nested too deeply to be parsed on the calling thread
     /// is parsed once more. The default is 16 MB; 0 turns the second attempt off.
     /// The resulting expression tree is as deep as its text, so evaluating it may require <see cref="ExpressionOptions.UseNonRecursiveEvaluator"/>.
+    /// The non-recursive evaluators use this size too, for the threads on which they continue the evaluation of deeply nested function calls
+    /// and expressions used as parameter values (the asynchronous evaluator continues on thread pool threads); handlers called there run on
+    /// those threads. 0 turns this off as well: the evaluation stays on the calling thread and fails with an
+    /// <see cref="Exceptions.NCalcEvaluationException"/> when its stack is used up.
     /// </summary>
     public static int DeepExpressionStackSize
     {

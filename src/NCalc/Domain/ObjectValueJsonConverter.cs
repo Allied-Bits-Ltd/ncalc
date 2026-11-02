@@ -27,7 +27,15 @@ public sealed class ObjectValueJsonConverter : JsonConverter<object?>
 
     public override object? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        return ReadValue(ref reader);
+        // A malformed payload (e.g. {"$type": "Int32", "$value": "abc"}) is reported as invalid JSON, not with the exception of the parsing method
+        try
+        {
+            return ReadValue(ref reader);
+        }
+        catch (Exception e) when (e is FormatException or OverflowException or ArgumentException or InvalidOperationException or InvalidCastException)
+        {
+            throw new JsonException($"The value is not valid: {e.Message}", e);
+        }
     }
 
     public override void Write(Utf8JsonWriter writer, object? value, JsonSerializerOptions options)

@@ -228,22 +228,6 @@ public class ExceptionsTests
     }
 
     [Fact]
-    public void DeeplyNestedExpressionShouldThrowParserExceptionWhenLargerStackIsOff()
-    {
-        var expression = new string('(', LargeStackDepth) + "1" + new string(')', LargeStackDepth);
-        var stackSize = LogicalExpressionParser.DeepExpressionStackSize;
-        LogicalExpressionParser.DeepExpressionStackSize = 0;
-        try
-        {
-            Assert.Throws<NCalcParserException>(() => new Expression(expression, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
-        }
-        finally
-        {
-            LogicalExpressionParser.DeepExpressionStackSize = stackSize;
-        }
-    }
-
-    [Fact]
     public void LongChainShouldThrowEvaluationExceptionInRecursiveEvaluator()
     {
         var expression = string.Join("+", Enumerable.Repeat("1", ExcessiveDepth));
@@ -355,5 +339,27 @@ public class ExceptionsTests
         source.Cancel();
         Assert.ThrowsAny<OperationCanceledException>(() => new Expression("1 + 2 * (3 - 4)", ExpressionOptions.NoCache).HasErrors(source.Token));
         Assert.ThrowsAny<OperationCanceledException>(() => new Expression("1 + 2 * (3 - 4)", ExpressionOptions.NoCache).Evaluate(source.Token));
+    }
+}
+
+// Changes LogicalExpressionParser.DeepExpressionStackSize, which the non-recursive evaluators read too, so no other test runs meanwhile
+[Trait("Category", "Exceptions")]
+[Collection(nameof(DeepExpressionStackSizeCollection))]
+public class DeepExpressionStackSizeExceptionsTests
+{
+    [Fact]
+    public void DeeplyNestedExpressionShouldThrowParserExceptionWhenLargerStackIsOff()
+    {
+        var expression = new string('(', 1000) + "1" + new string(')', 1000);
+        var stackSize = LogicalExpressionParser.DeepExpressionStackSize;
+        LogicalExpressionParser.DeepExpressionStackSize = 0;
+        try
+        {
+            Assert.Throws<NCalcParserException>(() => new Expression(expression, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            LogicalExpressionParser.DeepExpressionStackSize = stackSize;
+        }
     }
 }

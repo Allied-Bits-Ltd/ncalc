@@ -1051,9 +1051,15 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(FunctionCall functionCall, CancellationToken cancellationToken = default)
     {
-        // The non-recursive evaluator calls this method too; the message does not advise it when it is in use
-        if (Expression.CheckExecutionStack)
-            EvaluationHelper.EnsureSufficientExecutionStack(functionCall, Expression.UseNonRecursiveEvaluator || context.Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator));
+        // The non-recursive evaluator calls this method too, after checking the stack; when this call crosses the limit, it continues
+        // on another thread as well (the non-recursive evaluator does not depend on CheckExecutionStack)
+        if (Expression.UseNonRecursiveEvaluator || context.Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+        {
+            if (!EvaluationHelper.HasSufficientExecutionStack())
+                return EvaluationHelper.EvaluateOnLargeStack(() => Visit(functionCall, cancellationToken), functionCall);
+        }
+        else
+            EnsureSufficientExecutionStack(functionCall);
         cancellationToken.ThrowIfCancellationRequested();
         var argsCount = functionCall.Parameters.Count;
 
@@ -1103,7 +1109,15 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
-        EnsureSufficientExecutionStack(identifier);
+        // The non-recursive evaluator calls this method too, after checking the stack; when this call crosses the limit, it continues
+        // on another thread as well (the non-recursive evaluator does not depend on CheckExecutionStack)
+        if (Expression.UseNonRecursiveEvaluator || context.Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+        {
+            if (!EvaluationHelper.HasSufficientExecutionStack())
+                return EvaluationHelper.EvaluateOnLargeStack(() => Visit(identifier, cancellationToken), identifier);
+        }
+        else
+            EnsureSufficientExecutionStack(identifier);
         cancellationToken.ThrowIfCancellationRequested();
         object? result = null;
         var identifierName = identifier.Name;
@@ -1338,6 +1352,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
         var expression = new Expression(userFunction.Body, context.Options, context.CultureInfo);
         expression.AdvancedOptions = context.AdvancedOptions;
+        // The loops of the body draw from the budget of the calling evaluation
+        expression.OuterLoopBudget = LoopIterationBudget.Current;
 
         bool ignoreCase = context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);
 

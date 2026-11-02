@@ -39,6 +39,15 @@ public sealed class LogicalExpressionFactory : ILogicalExpressionFactory
 
     public static LogicalExpressionFactory GetInstance() => Instance;
 
+    // The error of the parser (e.g. "Unknown operator sequence at position (1:6)") is the message of the exception, which is also
+    // the Error of an Expression; the original exception is kept as the inner exception
+    private static NCalcParserException CreateParserException(Exception exception) => exception switch
+    {
+        NCalcParserException parserException => new NCalcParserException(parserException.Message, exception, parserException.Position) { IsNestedTooDeeply = parserException.IsNestedTooDeeply },
+        FormatException => new NCalcParserException(exception.Message, exception),
+        _ => new NCalcParserException($"Error parsing the expression: {exception.Message}", exception),
+    };
+
     public LogicalExpression Create(string expression, ExpressionContextBase? expressionContext = null, ExpressionOptions options = ExpressionOptions.None)
     {
         try
@@ -48,7 +57,7 @@ public sealed class LogicalExpressionFactory : ILogicalExpressionFactory
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger?.LogErrorCreatingLogicalExpression(exception, expression);
-            throw new NCalcParserException("Error parsing the expression.", exception);
+            throw CreateParserException(exception);
         }
     }
 
@@ -61,7 +70,7 @@ public sealed class LogicalExpressionFactory : ILogicalExpressionFactory
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger?.LogErrorCreatingLogicalExpression(exception, expression);
-            throw new NCalcParserException("Error parsing the expression.", exception);
+            throw CreateParserException(exception);
         }
     }
 

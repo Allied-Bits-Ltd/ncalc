@@ -465,4 +465,215 @@ public class EvaluationTests : TestBase
         Assert.False(asyncExpression.HasErrors(token));
         Assert.Equal(1, Convert.ToInt32(await Task.Run(async () => await asyncExpression.EvaluateAsync(token), token), CultureInfo.InvariantCulture));
     }
+
+    private const ExpressionOptions DeepOptions = ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator | ExpressionOptions.UseStatementSequences;
+
+    private static string Nest(string function, int depth, string inner) => string.Concat(Enumerable.Repeat(function + "(", depth)) + inner + new string(')', depth);
+
+    // Calls of user functions, of handlers and Functions that evaluate their argument, or a chain of expressions used as parameter values
+    private static Expression CreateDeepExpression(string kind, int depth)
+    {
+        var expression = new Expression(kind switch
+        {
+            "fn" => "fn g(a) => a; " + Nest("g", depth, "1"),
+            "handler" => Nest("id", depth, "1"),
+            "functions" => Nest("fid", depth, "1"),
+            _ => "p0"
+        }, DeepOptions);
+        expression.EvaluateFunction += (name, args) =>
+        {
+            if (name == "id")
+                args.Result = args.Parameters[0].Evaluate();
+        };
+        expression.Functions["fid"] = data => data[0].Evaluate();
+        for (var i = 0; i < depth; i++)
+            expression.Parameters["p" + i] = new Expression("p" + (i + 1), DeepOptions);
+        expression.Parameters["p" + depth] = 1;
+        return expression;
+    }
+
+    private static AsyncExpression CreateDeepAsyncExpression(string kind, int depth)
+    {
+        var expression = new AsyncExpression(kind switch
+        {
+            "fn" => "fn g(a) => a; " + Nest("g", depth, "1"),
+            "handler" => Nest("id", depth, "1"),
+            "functions" => Nest("fid", depth, "1"),
+            _ => "p0"
+        }, DeepOptions);
+        expression.EvaluateFunctionAsync += async (name, args, ct) =>
+        {
+            if (name == "id")
+                args.Result = await args.Parameters[0].EvaluateAsync(ct);
+        };
+        expression.Functions["fid"] = async (data, ct) => await data[0].EvaluateAsync(ct);
+        for (var i = 0; i < depth; i++)
+            expression.Parameters["p" + i] = new AsyncExpression("p" + (i + 1), DeepOptions);
+        expression.Parameters["p" + depth] = 1;
+        return expression;
+    }
+
+    // NCALC-305: nested calls of user functions, of handlers that evaluate their argument and chains of expressions used as parameter values
+    // still stopped at a few hundred levels under the non-recursive evaluators, with a message that advised the option in use
+    [Theory]
+    [InlineData("fn")]
+    [InlineData("handler")]
+    [InlineData("functions")]
+    [InlineData("parameters")]
+    public async Task DeeplyNestedCallsThatEvaluateTheirArgumentsShouldBeEvaluatedByTheNonRecursiveEvaluator(string kind)
+    {
+        const int depth = 1000;
+        var token = TestContext.Current.CancellationToken;
+
+        // Parsed first, on a thread with a large stack if needed, so that only the evaluation runs on the thread pool thread
+        var expression = CreateDeepExpression(kind, depth);
+        Assert.False(expression.HasErrors(token), expression.Error?.Message);
+        Assert.Equal(1, Convert.ToInt32(await Task.Run(() => expression.Evaluate(token), token), CultureInfo.InvariantCulture));
+
+        var asyncExpression = CreateDeepAsyncExpression(kind, depth);
+        Assert.False(asyncExpression.HasErrors(token), asyncExpression.Error?.Message);
+        Assert.Equal(1, Convert.ToInt32(await Task.Run(async () => await asyncExpression.EvaluateAsync(token), token), CultureInfo.InvariantCulture));
+    }
+
+    // NCALC-306: an error or "return" coming out of deeply nested calls took seconds in the asynchronous non-recursive evaluator,
+    // as the stack trace of the exception grew at each level and was copied at each await
+    [Theory]
+    [InlineData("throw()")]
+    [InlineData("1 % 0")]
+    [InlineData("return 5")]
+    public async Task ErrorOrReturnOutOfDeeplyNestedCallsShouldBeFast(string inner)
+    {
+        const int depth = 1000;
+        var token = TestContext.Current.CancellationToken;
+        var text = Nest("Abs", depth, inner) + "; 7";
+        var options = DeepOptions | ExpressionOptions.UseAssignments;
+
+        var asyncExpression = new AsyncExpression(text, options);
+        asyncExpression.EvaluateFunctionAsync += (name, _, _) => name == "throw" ? throw new InvalidOperationException("thrown") : ValueTask.CompletedTask;
+        Assert.False(asyncExpression.HasErrors(token), asyncExpression.Error?.Message);
+        var expression = new Expression(text, options);
+        expression.EvaluateFunction += (name, _) =>
+        {
+            if (name == "throw")
+                throw new InvalidOperationException("thrown");
+        };
+
+        // Once without timing, so that the code is compiled
+        Check(await Record.ExceptionAsync(() => Task.Run(() => expression.Evaluate(token), token)));
+        Check(await Record.ExceptionAsync(() => Task.Run(async () => await asyncExpression.EvaluateAsync(token), token)));
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        Check(await Record.ExceptionAsync(() => Task.Run(() => expression.Evaluate(token), token)));
+        var syncTime = stopwatch.ElapsedMilliseconds;
+        stopwatch.Restart();
+        Check(await Record.ExceptionAsync(() => Task.Run(async () => await asyncExpression.EvaluateAsync(token), token)));
+        var asyncTime = stopwatch.ElapsedMilliseconds;
+        // Compared with the synchronous evaluator, as both are slower on a loaded machine
+        // About 0.2 s, a few times as long as in the synchronous evaluator; it took 5 s
+        Assert.True(asyncTime <= 1000 + 8 * syncTime, $"asynchronous: {asyncTime} ms, synchronous: {syncTime} ms");
+        if (inner == "return 5")
+        {
+            Assert.Equal(5, Convert.ToInt32(await Task.Run(() => expression.Evaluate(token), token), CultureInfo.InvariantCulture));
+            Assert.Equal(5, Convert.ToInt32(await Task.Run(async () => await asyncExpression.EvaluateAsync(token), token), CultureInfo.InvariantCulture));
+        }
+
+        void Check(Exception? exception)
+        {
+            if (inner == "return 5")
+                Assert.Null(exception);
+            else
+                Assert.IsType(inner == "throw()" ? typeof(InvalidOperationException) : typeof(DivideByZeroException), exception);
+        }
+    }
+}
+
+// The tests of this collection change LogicalExpressionParser.DeepExpressionStackSize, so no other test runs meanwhile
+[CollectionDefinition(nameof(DeepExpressionStackSizeCollection), DisableParallelization = true)]
+public sealed class DeepExpressionStackSizeCollection;
+
+[Trait("Category", "Evaluations")]
+[Collection(nameof(DeepExpressionStackSizeCollection))]
+public class DeepEvaluationThreadTests
+{
+    private const ExpressionOptions DeepOptions = ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator;
+
+    private static readonly string Text = string.Concat(Enumerable.Repeat("id(", 500)) + "1" + new string(')', 500);
+
+    // Runs the action on a thread with a small stack, so that the evaluation needs another thread after a few levels
+    private static void RunOnSmallStack(Action action)
+    {
+        Exception? error = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+        }, 256 * 1024);
+        thread.Start();
+        thread.Join();
+        if (error is not null)
+            throw new Xunit.Sdk.XunitException(error.ToString());
+    }
+
+    // NCALC-337: under the non-recursive evaluators, deeply nested calls continue on another thread, and so do the handlers called there;
+    // DeepExpressionStackSize = 0 keeps the evaluation on the calling thread, which then fails with an exception (NCALC-305: whose message
+    // does not advise the option in use)
+    [Fact]
+    public void DeepExpressionStackSizeShouldDecideWhetherHandlersOfDeeplyNestedCallsRunOnAnotherThread()
+    {
+        var token = TestContext.Current.CancellationToken;
+        foreach (var stackSize in new[] { Parser.LogicalExpressionParser.DeepExpressionStackSize, 0 })
+        {
+            var threads = new System.Collections.Concurrent.ConcurrentDictionary<int, bool>();
+            var expression = new Expression(Text, DeepOptions);
+            expression.EvaluateFunction += (_, args) =>
+            {
+                threads[Environment.CurrentManagedThreadId] = true;
+                args.Result = args.Parameters[0].Evaluate();
+            };
+            var asyncExpression = new AsyncExpression(Text, DeepOptions);
+            asyncExpression.EvaluateFunctionAsync += async (_, args, ct) =>
+            {
+                threads[Environment.CurrentManagedThreadId] = true;
+                args.Result = await args.Parameters[0].EvaluateAsync(ct);
+            };
+            // Parsed here, so that only the evaluation runs on the small stack
+            Assert.False(expression.HasErrors(token));
+            Assert.False(asyncExpression.HasErrors(token));
+
+            var defaultSize = Parser.LogicalExpressionParser.DeepExpressionStackSize;
+            Parser.LogicalExpressionParser.DeepExpressionStackSize = stackSize;
+            try
+            {
+                RunOnSmallStack(() =>
+                {
+                    var caller = Environment.CurrentManagedThreadId;
+                    foreach (var evaluate in new Func<object?>[] { () => expression.Evaluate(token), () => asyncExpression.EvaluateAsync(token).AsTask().GetAwaiter().GetResult() })
+                    {
+                        threads.Clear();
+                        var exception = Record.Exception(() => Assert.Equal(1, Convert.ToInt32(evaluate(), CultureInfo.InvariantCulture)));
+                        if (stackSize > 0)
+                        {
+                            Assert.Null(exception);
+                            Assert.Contains(threads.Keys, thread => thread != caller);
+                        }
+                        else
+                        {
+                            var evaluationException = Assert.IsType<NCalcEvaluationException>(exception);
+                            Assert.DoesNotContain("Use ExpressionOptions.UseNonRecursiveEvaluator", evaluationException.Message);
+                            Assert.All(threads.Keys, thread => Assert.Equal(caller, thread));
+                        }
+                    }
+                });
+            }
+            finally
+            {
+                Parser.LogicalExpressionParser.DeepExpressionStackSize = defaultSize;
+            }
+        }
+    }
 }

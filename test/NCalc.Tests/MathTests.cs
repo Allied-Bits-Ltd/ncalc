@@ -783,8 +783,10 @@ public class MathsTests : TestBase
     [Theory]
     [InlineData("2 ** 200000", ExpressionOptions.UseBigNumbers)]
     [InlineData("Pow(1.5, 20000)", ExpressionOptions.DecimalAsDefault)]
+    [InlineData("1.5 ** 20000", ExpressionOptions.UseBigNumbers)]
     [InlineData("2 ** 2000000", ExpressionOptions.UseBigNumbers)]
     [InlineData("Pow(1.5, 100000)", ExpressionOptions.DecimalAsDefault)]
+    [InlineData("1.5 ** 100000", ExpressionOptions.UseBigNumbers)]
     [InlineData("10 ** 5000000000", ExpressionOptions.UseBigNumbers)]
     [InlineData("1 ** 5000000000", ExpressionOptions.UseBigNumbers)]
     [InlineData("(-1) ** 5000000001", ExpressionOptions.UseBigNumbers)]
@@ -806,8 +808,13 @@ public class MathsTests : TestBase
             case "2 ** 200000":
                 Assert.Equal(BigInteger.Pow(2, 200000), result);
                 break;
-            case "Pow(1.5, 20000)":
+            case "1.5 ** 20000":
                 Assert.Equal(new BigDecimal(BigInteger.Pow(15, 20000), -20000), result);
+                break;
+            // NCALC-321: without UseBigNumbers, a decimal base gives a double when the result does not fit in decimal
+            case "Pow(1.5, 20000)":
+            case "Pow(1.5, 100000)":
+                Assert.Equal(double.PositiveInfinity, result);
                 break;
             case "1 ** 5000000000":
                 Assert.Equal(1, result);
@@ -2155,8 +2162,12 @@ public class MathsTests : TestBase
         Assert.Equal(-1, EvaluateWith("Min(a, b)", ExpressionOptions.None, ("a", ulong.MaxValue), ("b", -1)));
 
         // Without big numbers, a ulong product wraps around as in C#; with OverflowProtection it overflows
-        Assert.Equal(ulong.MaxValue - 1, EvaluateWith("a * 2", ExpressionOptions.None, ("a", ulong.MaxValue)));
-        Assert.Throws<OverflowException>(() => EvaluateWith("a * 2", ExpressionOptions.OverflowProtection, ("a", ulong.MaxValue)));
+        Assert.Equal(ulong.MaxValue - 1, EvaluateWith("a * b", ExpressionOptions.None, ("a", ulong.MaxValue), ("b", 2UL)));
+        Assert.Throws<OverflowException>(() => EvaluateWith("a * b", ExpressionOptions.OverflowProtection, ("a", ulong.MaxValue), ("b", 2UL)));
+
+        // NCALC-315: a ulong and a signed integer have no common 64-bit type; their product is exact
+        Assert.Equal(new BigInteger(ulong.MaxValue) * 2, EvaluateWith("a * 2", ExpressionOptions.None, ("a", ulong.MaxValue)));
+        Assert.Equal(new BigInteger(ulong.MaxValue) * 2, EvaluateWith("a * 2", ExpressionOptions.OverflowProtection, ("a", ulong.MaxValue)));
     }
 
     // NCALC-109
@@ -2366,8 +2377,11 @@ public class MathsTests : TestBase
         var c2 = new ComplexNumber(new BigDecimal(3), new BigDecimal(4), MathHelperOptions.Empty);
         Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("Max(a, b)", ExpressionOptions.None, ("a", c1), ("b", c2)));
         Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("Min(a, 2)", ExpressionOptions.None, ("a", c1)));
-        Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("Max(a, b)", ExpressionOptions.None,
-            ("a", new Domain.Vector(new BigDecimal[] { 1, 2 })), ("b", new Domain.Vector(new BigDecimal[] { 3, 4 }))));
+        // Two vectors give the element-wise maximum (NCALC-331); a vector and a scalar cannot be ordered
+        Assert.Equal(new Domain.Vector(new BigDecimal[] { 3, 4 }), EvaluateWith("Max(a, b)", ExpressionOptions.None,
+            ("a", new Domain.Vector(new BigDecimal[] { 1, 4 })), ("b", new Domain.Vector(new BigDecimal[] { 3, 2 }))));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("Max(a, 2)", ExpressionOptions.None,
+            ("a", new Domain.Vector(new BigDecimal[] { 1, 2 }))));
 
         // NaN wins and an infinity is compared with a big number without being converted to it
         var big = BigInteger.Pow(10, 400);
@@ -2659,7 +2673,8 @@ public class MathsTests : TestBase
             Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("(2 ** 1100)!", ExpressionOptions.UseBigNumbers));
             Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("a!", ExpressionOptions.UseBigNumbers, ("a", BigInteger.Pow(10, 400))));
             Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("0.1 ** 3000000", ExpressionOptions.UseBigNumbers));
-            Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("0.1 ** 3000000", ExpressionOptions.DecimalAsDefault));
+            // NCALC-321: without UseBigNumbers, the power is computed in double instead of exactly and is 0 as a decimal
+            Assert.Equal(0m, EvaluateWith("0.1 ** 3000000", ExpressionOptions.DecimalAsDefault));
             Assert.Equal(0.001, MathHelper.ConvertToDouble(EvaluateWith("0.1 ** 3", ExpressionOptions.UseBigNumbers), MathHelperOptions.Empty), 15);
         }, TestContext.Current.CancellationToken);
     }
@@ -2730,6 +2745,263 @@ public class MathsTests : TestBase
     {
         var ex = Assert.ThrowsAny<NCalcException>(() => MathHelper.Negate('a', false, MathHelperOptions.Empty));
         Assert.Contains("Unsupported type Char", ex.Message);
+    }
+
+    // NCALC-303: the size estimates of powers and products counted the decimal places of a fractional number twice,
+    // so the digit limit triggered at about half the real size
+    [Fact(Timeout = 60000)]
+    public async Task PowersAndProductsOfFractionsShouldNotCountDecimalPlacesTwice()
+    {
+        await Task.Run(() =>
+        {
+            // 58,805 digits (the old estimate was 108,805)
+            Assert.IsType<BigDecimal>(EvaluateWith("1.5 ** 50000", ExpressionOptions.UseBigNumbers));
+            var power = EvaluateWith("Pow(1.000001, 10000)", ExpressionOptions.DecimalAsDefault);
+            Assert.IsType<decimal>(power);
+            Assert.Equal(1.01005016203392, MathHelper.ConvertToDouble(power, MathHelperOptions.Empty), 13);
+            var compound = EvaluateWith("Pow(1 + rate, 1825)", ExpressionOptions.None, ("rate", 0.05m / 365m));
+            Assert.IsType<decimal>(compound);
+            Assert.Equal(1.28400343214708, MathHelper.ConvertToDouble(compound, MathHelperOptions.Empty), 13);
+
+            // A product of fractions with 35,000 significant digits and 30,000 decimal places each has about 70,000 digits
+            var fraction = new BigDecimal(BigInteger.Pow(15, 30000), -30000);
+            Assert.Equal(new BigDecimal(BigInteger.Pow(15, 60000), -60000), EvaluateWith("x * x", ExpressionOptions.None, ("x", fraction)));
+
+            // Powers and products whose digits or decimal places exceed the limit are still rejected
+            Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("1.5 ** 90000", ExpressionOptions.UseBigNumbers));
+            Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("0.1 ** 3000000", ExpressionOptions.UseBigNumbers));
+            Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("s * s", ExpressionOptions.None, ("s", new BigDecimal(BigInteger.One, -60000))));
+        }, TestContext.Current.CancellationToken);
+    }
+
+    // NCALC-321: an exact power of a decimal base threw the digit limit where the double result is finite, and big results came back
+    // as BigDecimal without UseBigNumbers
+    [Theory]
+    [InlineData(ExpressionOptions.None)]
+    [InlineData(ExpressionOptions.DecimalAsDefault)]
+    public async Task PowerOfADecimalBaseShouldGiveADecimalOrADouble(ExpressionOptions options)
+    {
+        (string, object)[] parameters = [("m", 2.5m), ("one", 1.0000001m)];
+        foreach (var r in await EvaluateInAllEvaluators("Pow(one, 1000000)", options, AdvExpressionOptions.None, parameters))
+        {
+            Assert.IsType<decimal>(r);
+            Assert.Equal(1.10517091261432, MathHelper.ConvertToDouble(r, MathHelperOptions.Empty), 13);
+        }
+        foreach (var r in await EvaluateInAllEvaluators("Pow(1.0000001, 1000000)", options, AdvExpressionOptions.None, parameters))
+        {
+            Assert.IsType(options == ExpressionOptions.DecimalAsDefault ? typeof(decimal) : typeof(double), r);
+            Assert.Equal(1.10517091261432, MathHelper.ConvertToDouble(r, MathHelperOptions.Empty), 13);
+        }
+        Assert.All(await EvaluateInAllEvaluators("Pow(m, 100000)", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(double.PositiveInfinity, r));
+        Assert.All(await EvaluateInAllEvaluators("m ** 100000", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(double.PositiveInfinity, r));
+        Assert.All(await EvaluateInAllEvaluators("Pow(m, 80)", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(Math.Pow(2.5, 80), r));
+        Assert.All(await EvaluateInAllEvaluators("Pow(m, 3)", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(15.625m, r));
+    }
+
+    // NCALC-307: a quotient computed in double was narrowed back to the type of the dividend, so 2.5m / 1e300 was silently 0
+    [Theory]
+    [InlineData(ExpressionOptions.None)]
+    [InlineData(ExpressionOptions.DecimalAsDefault)]
+    [InlineData(ExpressionOptions.ReduceArithmeticResultType)]
+    [InlineData(ExpressionOptions.OverflowProtection)]
+    public async Task QuotientBelowTheResolutionOfTheDividendTypeShouldNotBecomeZero(ExpressionOptions options)
+    {
+        (string, object)[] parameters = [("m", 2.5m), ("d", 1e300), ("f", 2.5f), ("fm", float.MaxValue), ("x", 1e-20), ("y", 1e20)];
+        Assert.All(await EvaluateInAllEvaluators("m / d", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(2.5e-300, r));
+        Assert.All(await EvaluateInAllEvaluators("f / d", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(2.5e-300, r));
+        Assert.All(await EvaluateInAllEvaluators("m / fm", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(2.5 / float.MaxValue, (double)r!, 1e-50));
+        Assert.All(await EvaluateInAllEvaluators("x / y", options | ExpressionOptions.DecimalAsDefault, AdvExpressionOptions.None, parameters), r => Assert.Equal(1e-40, r));
+
+        // Quotients in the range of the dividend type keep it
+        Assert.All(await EvaluateInAllEvaluators("m / 4", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(0.625m, r));
+
+        foreach (var expression in new[] { "m / d", "f / d" })
+            Assert.All(await EvaluateInAllEvaluators(expression, options | ExpressionOptions.UseBigNumbers, AdvExpressionOptions.None, parameters),
+                r => Assert.Equal(2.5e-300, MathHelper.ConvertToDouble(r, MathHelperOptions.Empty), 1e-310));
+    }
+
+    // NCALC-308: with UseBigNumbers or a big-number operand, *, / and // with NaN or an infinity threw .NET exceptions,
+    // while + and - returned NaN or infinity; n + 10% threw InvalidOperationException
+    [Fact]
+    public async Task BigNumberOperationsWithNaNOrInfinityShouldBeComputedInDouble()
+    {
+        (string, object)[] parameters = [("n", double.NaN), ("i", double.PositiveInfinity), ("bi", new BigInteger(3)), ("bd", new BigDecimal(new BigInteger(15), -1))];
+        foreach (var expression in new[] { "Sqrt(-1) * 2", "n * 2", "n / 2", "2 / n", "n // 2", "n % 2" })
+            Assert.All(await EvaluateInAllEvaluators(expression, ExpressionOptions.UseBigNumbers, AdvExpressionOptions.None, parameters), r => Assert.True(double.IsNaN((double)r!), expression));
+        foreach (var expression in new[] { "i * 2", "i / 2", "i + 1" })
+            Assert.All(await EvaluateInAllEvaluators(expression, ExpressionOptions.UseBigNumbers, AdvExpressionOptions.None, parameters), r => Assert.Equal(double.PositiveInfinity, r));
+        Assert.All(await EvaluateInAllEvaluators("2 / i", ExpressionOptions.UseBigNumbers, AdvExpressionOptions.None, parameters), r => Assert.Equal(0.0, MathHelper.ConvertToDouble(r, MathHelperOptions.Empty)));
+
+        // A big-number operand without options
+        foreach (var expression in new[] { "bi * n", "bd + n", "bi % n" })
+            Assert.All(await EvaluateInAllEvaluators(expression, ExpressionOptions.None, AdvExpressionOptions.None, parameters), r => Assert.True(double.IsNaN((double)r!), expression));
+        Assert.All(await EvaluateInAllEvaluators("bd * i", ExpressionOptions.None, AdvExpressionOptions.None, parameters), r => Assert.Equal(double.PositiveInfinity, r));
+        Assert.All(await EvaluateInAllEvaluators("bi / i", ExpressionOptions.None, AdvExpressionOptions.None, parameters), r => Assert.Equal(0.0, MathHelper.ConvertToDouble(r, MathHelperOptions.Empty)));
+
+        // Percent, with and without UseBigNumbers
+        foreach (var options in new[] { ExpressionOptions.None, ExpressionOptions.UseBigNumbers })
+        {
+            Assert.All(await EvaluateInAllEvaluators("n + 10%", options, AdvExpressionOptions.CalculatePercent, parameters), r => Assert.True(double.IsNaN((double)r!)));
+            Assert.All(await EvaluateInAllEvaluators("i * 10%", options, AdvExpressionOptions.CalculatePercent, parameters), r => Assert.Equal(double.PositiveInfinity, r));
+        }
+    }
+
+    // NCALC-309: division had no result-size check, so repeated division by a small fraction doubled the number of digits
+    [Fact(Timeout = 60000)]
+    public async Task DivisionShouldRespectTheDigitLimit()
+    {
+        var options = ExpressionOptions.UseBigNumbers | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences;
+        await AssertThrowsInAllEvaluators<NCalcEvaluationException>("a := 10 ** 60000; a / (1 / a)", options);
+        await AssertThrowsInAllEvaluators<NCalcEvaluationException>("(10 ** 99999) / 0.1", options);
+
+        // Quotients within the limit are still computed
+        Assert.Equal(BigInteger.Pow(10, 1001), AsBigInteger(EvaluateWith("(10 ** 1000) / 0.1", options)));
+        Assert.Equal(new BigDecimal(BigInteger.One, -1000), EvaluateWith("1 / (10 ** 1000)", options));
+    }
+
+    // NCALC-315: the ulong rules contradicted each other: -a, 0 - a and a * -1 gave different values for a = ulong.MaxValue
+    [Fact]
+    public async Task NegationOfALargeULongShouldEqualItsSubtractionFromZero()
+    {
+        foreach (var value in new[] { (1UL << 63) + 1, ulong.MaxValue })
+        {
+            foreach (var options in new[] { ExpressionOptions.None, ExpressionOptions.OverflowProtection, ExpressionOptions.UseBigNumbers })
+            {
+                foreach (var expression in new[] { "-a", "0 - a", "a * -1", "a * b" })
+                {
+                    var results = await EvaluateInAllEvaluators(expression, options, AdvExpressionOptions.None, ("a", value), ("b", -1L));
+                    Assert.All(results, r => Assert.Equal(-new BigInteger(value), r));
+                }
+                Assert.All(await EvaluateInAllEvaluators("a - (-1)", options, AdvExpressionOptions.None, ("a", ulong.MaxValue)), r => Assert.Equal(new BigInteger(ulong.MaxValue) + 1, r));
+            }
+        }
+    }
+
+    // NCALC-316: TimeSpan / TimeSpan (and other time operators that .NET defines) worked in NCalc but threw in NCalc.AOT
+    [Fact]
+    public async Task TimeOperatorsShouldNotDependOnDynamicOperators()
+    {
+        (string, object)[] parameters = [("t", new TimeSpan(1, 2, 3)), ("u", new TimeSpan(0, 0, 30)), ("d1", new DateTime(2020, 1, 2)), ("d2", new DateTime(2020, 1, 1))];
+        foreach (var options in new[] { ExpressionOptions.None, ExpressionOptions.SupportTimeOperations, ExpressionOptions.AvoidDynamicFunctions })
+        {
+            Assert.All(await EvaluateInAllEvaluators("t / u", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(124.1, (double)r!, 12));
+            Assert.All(await EvaluateInAllEvaluators("t + u", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(new TimeSpan(1, 2, 33), r));
+            Assert.All(await EvaluateInAllEvaluators("t - u", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(new TimeSpan(1, 1, 33), r));
+            Assert.All(await EvaluateInAllEvaluators("d1 - d2", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(TimeSpan.FromDays(1), r));
+        }
+    }
+
+    // NCALC-324: bitwise operators with a BigInteger operand rejected whole floating values and truncated fractional shift counts
+    [Fact]
+    public async Task BitwiseOperatorsWithABigIntegerShouldFollowTheOperandRules()
+    {
+        (string, object)[] parameters = [("bi", new BigInteger(12)), ("w", 4.0), ("wm", 6m), ("f", 1.5), ("nan", double.NaN)];
+        Assert.All(await EvaluateInAllEvaluators("bi & w", ExpressionOptions.None, AdvExpressionOptions.None, parameters), r => Assert.Equal(new BigInteger(4), r));
+        Assert.All(await EvaluateInAllEvaluators("bi & 4.0", ExpressionOptions.None, AdvExpressionOptions.None, parameters), r => Assert.Equal(new BigInteger(4), r));
+        Assert.All(await EvaluateInAllEvaluators("bi ^ wm", ExpressionOptions.None, AdvExpressionOptions.None, parameters), r => Assert.Equal(new BigInteger(10), r));
+        Assert.All(await EvaluateInAllEvaluators("bi << 2.0", ExpressionOptions.None, AdvExpressionOptions.None, parameters), r => Assert.Equal(new BigInteger(48), r));
+        var assignments = ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences;
+        Assert.All(await EvaluateInAllEvaluators("x := bi; x |= w; x", assignments, AdvExpressionOptions.None, parameters), r => Assert.Equal(new BigInteger(12), r));
+
+        foreach (var expression in new[] { "bi & 1.5", "bi | nan", "bi << f", "1 << f", "bi << nan" })
+            await AssertThrowsInAllEvaluators<NCalcEvaluationException>(expression, ExpressionOptions.None, parameters);
+        await AssertThrowsInAllEvaluators<NCalcEvaluationException>("x := bi; x &= f; x", assignments, parameters);
+    }
+
+    // NCALC-325: a percent of a large decimal overflowed in the intermediate product and threw a .NET OverflowException
+    [Theory]
+    [InlineData(ExpressionOptions.None)]
+    [InlineData(ExpressionOptions.AvoidDynamicFunctions)]
+    [InlineData(ExpressionOptions.UseBigNumbers)]
+    public async Task PercentOfALargeDecimalShouldNotOverflowInTheIntermediateProduct(ExpressionOptions options)
+    {
+        (string, object)[] parameters = [("m", 70000000000000000000000000000m), ("mx", decimal.MaxValue)];
+        Assert.All(await EvaluateInAllEvaluators("m * 10%", options, AdvExpressionOptions.CalculatePercent, parameters), r => Assert.Equal(7000000000000000000000000000m, r));
+        Assert.All(await EvaluateInAllEvaluators("m + 10%", options, AdvExpressionOptions.CalculatePercent, parameters), r => Assert.Equal(77000000000000000000000000000m, r));
+        Assert.All(await EvaluateInAllEvaluators("m - 10%", options, AdvExpressionOptions.CalculatePercent, parameters), r => Assert.Equal(63000000000000000000000000000m, r));
+        Assert.All(await EvaluateInAllEvaluators("m / 1000%", options, AdvExpressionOptions.CalculatePercent, parameters), r => Assert.Equal(7000000000000000000000000000m, r));
+        Assert.All(await EvaluateInAllEvaluators("70000000000000000000000000000 * 10%", options | ExpressionOptions.DecimalAsDefault, AdvExpressionOptions.CalculatePercent, parameters),
+            r => Assert.Equal(7000000000000000000000000000m, MathHelper.ConvertToDecimal(r, MathHelperOptions.Empty)));
+
+        // A result beyond the range of decimal throws an NCalc exception (with UseBigNumbers, it is a big number)
+        if (options != ExpressionOptions.UseBigNumbers)
+        {
+            var percent = new Expression("mx + 10%", options | ExpressionOptions.NoCache, CultureInfo.InvariantCulture)
+            {
+                AdvancedOptions = new AdvancedExpressionOptions(CultureInfo.InvariantCulture, AdvExpressionOptions.CalculatePercent),
+                Parameters = { ["mx"] = decimal.MaxValue }
+            };
+            Assert.Throws<NCalcEvaluationException>(() => percent.Evaluate(TestContext.Current.CancellationToken));
+        }
+    }
+
+    // NCALC-326: under UseBigNumbers, the precision and type of a percent depended on the type of the intermediate result
+    [Fact]
+    public async Task PercentWithBigNumbersShouldKeepTheExactValue()
+    {
+        (string, object)[] parameters = [("u", ulong.MaxValue), ("l", long.MaxValue)];
+        var options = ExpressionOptions.UseBigNumbers;
+        Assert.All(await EvaluateInAllEvaluators("u + 10%", options, AdvExpressionOptions.CalculatePercent, parameters),
+            r => Assert.Equal(BigDecimal.Parse("20291418481080506776.5", CultureInfo.InvariantCulture), r));
+        Assert.All(await EvaluateInAllEvaluators("u * 10%", options, AdvExpressionOptions.CalculatePercent, parameters),
+            r => Assert.Equal(BigDecimal.Parse("1844674407370955161.5", CultureInfo.InvariantCulture), r));
+        Assert.All(await EvaluateInAllEvaluators("u - 10%", options, AdvExpressionOptions.CalculatePercent, parameters),
+            r => Assert.Equal(BigDecimal.Parse("16602069666338596453.5", CultureInfo.InvariantCulture), r));
+        Assert.All(await EvaluateInAllEvaluators("l + 1%", options, AdvExpressionOptions.CalculatePercent, parameters),
+            r => Assert.Equal(BigDecimal.Parse("9315605757223323565.07", CultureInfo.InvariantCulture), r));
+
+        // Results that a double holds exactly are still doubles
+        Assert.All(await EvaluateInAllEvaluators("1 + 10%", options, AdvExpressionOptions.CalculatePercent, parameters), r => Assert.Equal(1.1, r));
+        Assert.All(await EvaluateInAllEvaluators("3 * 10%", options, AdvExpressionOptions.CalculatePercent, parameters), r => Assert.Equal(0.3, r));
+    }
+
+    // NCALC-327: uint * uint with OverflowProtection threw although the product fits in ulong
+    [Fact]
+    public async Task UnsignedProductsShouldBeWidenedWithOverflowProtection()
+    {
+        (string, object)[] parameters = [("ui", uint.MaxValue), ("us", ushort.MaxValue)];
+        foreach (var options in new[] { ExpressionOptions.None, ExpressionOptions.OverflowProtection })
+        {
+            Assert.All(await EvaluateInAllEvaluators("ui * ui", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(18446744065119617025UL, r));
+            Assert.All(await EvaluateInAllEvaluators("us * us", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(4294836225U, r));
+        }
+    }
+
+    // NCALC-328: BigDecimal values with a huge exponent made Floor, Truncate, &, !, comparisons and hashing run for seconds
+    [Fact(Timeout = 60000)]
+    public async Task BigDecimalsWithAHugeExponentShouldBeHandledQuickly()
+    {
+        await Task.Run(() =>
+        {
+            (string, object)[] parameters = [("x", new BigDecimal(BigInteger.One, 300000)), ("y", new BigDecimal(BigInteger.One, 1000000)), ("t", new BigDecimal(BigInteger.One, -1000000))];
+            foreach (var (expression, expected) in new (string, object?)[]
+            {
+                ("Floor(x)", null), ("Truncate(x)", null), ("Ceiling(x)", null), ("y & 1", null), ("y!", null), ("Floor(y)", null),
+                ("x = 1", false), ("x < 1", false), ("x > y", false), ("t < 1", true), ("t = 0", false), ("x in (1, 2)", false),
+                ("x + x", new BigDecimal(new BigInteger(2), 300000)), ("t + t", new BigDecimal(new BigInteger(2), -1000000))
+            })
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                object? result = null;
+                try
+                {
+                    result = EvaluateWith(expression, ExpressionOptions.None, parameters);
+                }
+                catch (NCalcEvaluationException)
+                {
+                    Assert.Null(expected);
+                }
+                Assert.True(watch.ElapsedMilliseconds < 2000, $"{expression} took {watch.ElapsedMilliseconds} ms");
+                if (expected is not null)
+                    Assert.Equal(expected, result);
+            }
+
+            var comparer = new BoxedNumberComparer(new ComparisonOptions(CultureInfo.InvariantCulture, ExpressionOptions.None), new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.None));
+            var hashWatch = System.Diagnostics.Stopwatch.StartNew();
+            comparer.GetHashCode(new BigDecimal(BigInteger.One, 1000000));
+            Assert.False(comparer.Equals(new BigDecimal(BigInteger.One, 1000000), 1));
+            Assert.True(hashWatch.ElapsedMilliseconds < 2000, $"hashing took {hashWatch.ElapsedMilliseconds} ms");
+        }, TestContext.Current.CancellationToken);
     }
 
     private static void AssertCloseTo(double expected, object? actual)
@@ -2943,5 +3215,220 @@ public class MathsTests : TestBase
                 await Assert.ThrowsAsync<NCalcEvaluationException>(async () => await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken));
             }
         }
+    }
+
+    // NCALC-310: the series of ExtendedNumerics for Arcsin was wrong in the 7th digit for ±0.7
+    [Theory]
+    [InlineData("Asin(x)", "0.7")]
+    [InlineData("Asin(x)", "-0.7")]
+    [InlineData("Acos(x)", "0.7")]
+    [InlineData("Acos(x)", "-0.7")]
+    [InlineData("Asin(x)", "0.99")]
+    [InlineData("Acos(x)", "0.24")]
+    public void BigNumberAsinAndAcosShouldBeAccurate(string expression, string x)
+    {
+        double value = double.Parse(x, CultureInfo.InvariantCulture);
+        double expected = expression.StartsWith("Asin", StringComparison.Ordinal) ? Math.Asin(value) : Math.Acos(value);
+        var result = EvaluateWith(expression, ExpressionOptions.UseBigNumbers, ("x", ParseBigNumber(x)));
+        Assert.IsType<BigDecimal>(result);
+        AssertCloseTo(expected, result);
+    }
+
+    // NCALC-311: a double below the resolution of decimal became 0 in the rounding functions with DecimalAsDefault
+    [Fact]
+    public async Task RoundingFunctionsShouldNotZeroTinyDoublesWithDecimalAsDefault()
+    {
+        const ExpressionOptions options = ExpressionOptions.DecimalAsDefault;
+        Assert.All(await EvaluateInAllEvaluators("Sign(Exp(-100))", options), r => Assert.Equal(1, r));
+        Assert.All(await EvaluateInAllEvaluators("Ceiling(Exp(-100))", options), r => Assert.Equal(1.0, r));
+        Assert.All(await EvaluateInAllEvaluators("Floor(-Exp(-100))", options), r => Assert.Equal(-1.0, r));
+        Assert.Equal(Math.Exp(-100), EvaluateWith("Abs(-Exp(-100))", options));
+        Assert.Equal(true, EvaluateWith("Abs(t) > 0", options, ("t", 1e-30)));
+        Assert.Equal(1e-30, EvaluateWith("Round(t, 30)", options, ("t", 1e-30)));
+        Assert.Equal(3e-29, EvaluateWith("Round(t, 29)", options, ("t", 3e-29)));
+        Assert.Equal(-1, EvaluateWith("Sign(t)", options, ("t", -1e-30f)));
+        // Digits beyond the 28 places of decimal were cut: 1.234E-27 became 1E-27
+        Assert.Equal(1.234e-27, EvaluateWith("Round(t, 30)", options, ("t", 1.234e-27)));
+        Assert.Equal(1.234e-27, new Expression("Abs(t)", options | ExpressionOptions.NoCache) { Parameters = { ["t"] = -1.234e-27 } }.ToLambda<object>(TestContext.Current.CancellationToken)());
+
+        // Other doubles are still computed as decimals
+        Assert.Equal(0.25m, EvaluateWith("Abs(t)", options, ("t", -0.25)));
+        Assert.Equal(1E-20m, EvaluateWith("Abs(t)", options, ("t", 1e-20)));
+    }
+
+    // NCALC-322: a big argument with a fractional base was converted to double and gave ±∞
+    [Fact]
+    public async Task LogOfABigArgumentShouldAcceptAFractionalBase()
+    {
+        var huge = BigInteger.Pow(10, 400);
+        double ln = 400 * Math.Log(10);
+        AssertCloseTo(ln / Math.Log(2.5), EvaluateWith("Log(x, 2.5)", ExpressionOptions.UseBigNumbers, ("x", huge)));
+        AssertCloseTo(ln / Math.Log(0.5), EvaluateWith("Log(x, 0.5)", ExpressionOptions.UseBigNumbers, ("x", huge)));
+        AssertCloseTo(ln / Math.Log(0.5), EvaluateWith("Log(x, half)", ExpressionOptions.UseBigNumbers, ("x", huge), ("half", new BigDecimal(5, -1))));
+        AssertCloseTo(-ln / Math.Log(2.5), EvaluateWith("Log(x, 2.5)", ExpressionOptions.UseBigNumbers, ("x", new BigDecimal(BigInteger.One, -400))));
+        Assert.All(await EvaluateInAllEvaluators("Log(x, 2.5)", ExpressionOptions.UseBigNumbers, ("x", huge)), r => AssertCloseTo(ln / Math.Log(2.5), r));
+
+        // A big argument within the range of double is as accurate as Math.Log
+        Assert.Equal(Math.Log(1.0000001, 2.5), EvaluateWith("Log(x, 2.5)", ExpressionOptions.UseBigNumbers, ("x", new BigDecimal(10000001, -7))));
+        Assert.Equal(double.NaN, EvaluateWith("Log(x, -2.5)", ExpressionOptions.UseBigNumbers, ("x", huge)));
+    }
+
+    // NCALC-323: BCL exceptions escaped from Factorial and Round
+    [Fact]
+    public async Task FactorialAndRoundShouldNotThrowBclExceptions()
+    {
+        var complex = new ComplexNumber(BigDecimal.Zero, new BigDecimal(2), MathHelperOptions.Empty);
+        await AssertThrowsInAllEvaluators<NCalcEvaluationException>("c!", ExpressionOptions.None, ("c", complex));
+
+        // A whole number beyond the range of long gives infinity, as the same value as a double does
+        Assert.Equal(double.PositiveInfinity, EvaluateWith("x!", ExpressionOptions.None, ("x", BigInteger.Pow(10, 30))));
+        Assert.Equal(double.PositiveInfinity, EvaluateWith("x!", ExpressionOptions.None, ("x", 1e25m)));
+        Assert.Equal(double.PositiveInfinity, EvaluateWith("(2 ** 70)!", ExpressionOptions.DecimalAsDefault));
+        Assert.Equal(double.PositiveInfinity, EvaluateWith("(10 ** 30)!", ExpressionOptions.DecimalAsDefault));
+        Assert.Equal(double.PositiveInfinity, EvaluateWith("x!", ExpressionOptions.None, ("x", 1e21)));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("x!", ExpressionOptions.None, ("x", -BigInteger.Pow(10, 30))));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("x!", ExpressionOptions.DecimalAsDefault, ("x", -1e25m)));
+
+        // A number of places beyond the range of int is clamped, as a double one is
+        Assert.All(await EvaluateInAllEvaluators("Round(2.345, 2147483648)", ExpressionOptions.None), r => Assert.Equal(2.345, r));
+        Assert.Equal(2.345, EvaluateWith("Round(2.345, d)", ExpressionOptions.None, ("d", BigInteger.Pow(10, 20))));
+        Assert.Equal(0.0, EvaluateWith("Round(2.345, d)", ExpressionOptions.None, ("d", -BigInteger.Pow(10, 30))));
+        Assert.Equal(1234, EvaluateWith("Round(1234, d)", ExpressionOptions.None, ("d", long.MaxValue)));
+        Assert.Equal(0, EvaluateWith("Round(1234, d)", ExpressionOptions.None, ("d", long.MinValue)));
+        Assert.Equal(2.345, EvaluateWith("Round(2.345, d)", ExpressionOptions.None, ("d", new BigDecimal(BigInteger.Pow(10, 20)))));
+        Assert.Equal(2.345m, EvaluateWith("Round(2.345, d)", ExpressionOptions.DecimalAsDefault, ("d", 1e20m)));
+    }
+
+    // NCALC-338: the casts of a double to int or long are unspecified for NaN and out-of-range values (net8 and earlier gave
+    // int.MinValue, so Round(2.345, 1e10) was 0 and (2 ** 70)! was "not defined for negative numbers")
+    [Fact]
+    public void ConversionsOfDoublesToIntegersShouldNotDependOnTheTargetFramework()
+    {
+        Assert.Equal(2.345, EvaluateWith("Round(2.345, 1e10)", ExpressionOptions.None));
+        Assert.Equal(2.345, EvaluateWith("Round(2.345, d)", ExpressionOptions.None, ("d", double.PositiveInfinity)));
+        Assert.Equal(0.0, EvaluateWith("Round(2.345, -1e10)", ExpressionOptions.None));
+        Assert.Equal(0.0, EvaluateWith("Round(2.345, d)", ExpressionOptions.None, ("d", float.NegativeInfinity)));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("Round(2.345, Sqrt(-1))", ExpressionOptions.None));
+        Assert.Equal(double.PositiveInfinity, EvaluateWith("(2 ** 70)!", ExpressionOptions.None));
+
+        Assert.Throws<NCalcConversionException>(() => MathHelper.ConvertToInt(1e10, "Test", CultureInfo.InvariantCulture, null));
+        Assert.Throws<NCalcConversionException>(() => MathHelper.ConvertToInt(double.NaN, "Test", CultureInfo.InvariantCulture, null));
+        Assert.Throws<NCalcConversionException>(() => MathHelper.ConvertToInt(-3e9f, "Test", CultureInfo.InvariantCulture, null));
+        Assert.Throws<NCalcConversionException>(() => MathHelper.ConvertToLong(1e19, "Test", CultureInfo.InvariantCulture, null));
+        Assert.Throws<NCalcConversionException>(() => MathHelper.ConvertToLong(double.NaN, "Test", CultureInfo.InvariantCulture, null));
+        Assert.Throws<NCalcConversionException>(() => MathHelper.ConvertToLong(BigInteger.Pow(10, 30), "Test", CultureInfo.InvariantCulture, null));
+        Assert.Throws<OverflowException>(() => MathHelper.ConvertToInt(double.NaN, MathHelperOptions.Empty));
+        Assert.Throws<OverflowException>(() => MathHelper.ConvertToLong(9.3e18, MathHelperOptions.Empty));
+        Assert.Equal(long.MinValue, MathHelper.ConvertToLong(-9.2233720368547758E18, "Test", CultureInfo.InvariantCulture, null));
+        Assert.Equal(int.MaxValue, MathHelper.ConvertToInt(2147483647.9, "Test", CultureInfo.InvariantCulture, null));
+        Assert.Equal(-3, MathHelper.ConvertToInt(-3.7, "Test", CultureInfo.InvariantCulture, null));
+    }
+
+    // NCALC-329: after one call with a huge argument, π was cut from thousands of digits on every call
+    [Fact]
+    public void BigNumberTrigonometryShouldStayCorrectAfterAHugeArgument()
+    {
+        var x = new BigDecimal(15, -1);
+        AssertCloseTo(Math.Sin(1.5), EvaluateWith("Sin(x)", ExpressionOptions.UseBigNumbers, ("x", x)));
+        EvaluateWith("Sin(x)", ExpressionOptions.UseBigNumbers, ("x", new BigDecimal(BigInteger.One, 5000)));
+        for (int i = 0; i < 3; i++)
+        {
+            AssertCloseTo(Math.Sin(1.5), EvaluateWith("Sin(x)", ExpressionOptions.UseBigNumbers, ("x", x)));
+            AssertCloseTo(Math.Cos(1.5), EvaluateWith("Cos(x)", ExpressionOptions.UseBigNumbers, ("x", x)));
+            AssertCloseTo(Math.Atan(1.5), EvaluateWith("Atan(x)", ExpressionOptions.UseBigNumbers, ("x", x)));
+        }
+    }
+
+    // NCALC-330: the fixed point of the big-number trigonometric functions made arguments below 1E-110 zero
+    [Theory]
+    [InlineData("Sin(x)", 1, -101, 1E-101)]
+    [InlineData("Sin(x)", -1, -150, -1E-150)]
+    [InlineData("Tan(x)", 1, -120, 1E-120)]
+    [InlineData("Asin(x)", 1, -200, 1E-200)]
+    [InlineData("Atan(x)", -1, -150, -1E-150)]
+    [InlineData("Cos(x)", 1, -150, 1.0)]
+    [InlineData("Acos(x)", 1, -150, Math.PI / 2)]
+    public void BigNumberTrigonometryShouldKeepTinyArguments(string expression, int mantissa, int exponent, double expected)
+    {
+        var argument = new BigDecimal(mantissa, exponent);
+        var result = Assert.IsType<BigDecimal>(EvaluateWith(expression, ExpressionOptions.UseBigNumbers, ("x", argument)));
+        Assert.Equal(expected, MathHelper.ConvertToDouble(result, MathHelperOptions.Empty), Math.Abs(expected) * 1e-14);
+        Assert.NotEqual(BigDecimal.Zero, result);
+    }
+
+    // NCALC-330: Csc and Cot of a tiny argument threw "undefined for this argument"
+    [Fact]
+    public void BigNumberCscAndCotShouldAcceptTinyArguments()
+    {
+        var options = new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.UseBigNumbers);
+        var tiny = new BigDecimal(2, -150);
+        Assert.Equal(5E149, MathHelper.ConvertToDouble(MathHelper.Csc(tiny, options), MathHelperOptions.Empty), 1E136);
+        Assert.Equal(5E149, MathHelper.ConvertToDouble(MathHelper.Cot(tiny, options), MathHelperOptions.Empty), 1E136);
+    }
+
+    // NCALC-331: Convert.ToBoolean does not know big numbers
+    [Theory]
+    [InlineData("if(x, 1, 2)")]
+    [InlineData("ifs(x, 1, true, 2)")]
+    [InlineData("x ? 1 : 2")]
+    [InlineData("if(not x, 2, 1)")]
+    [InlineData("if(x and true, 1, 2)")]
+    public async Task BigNumbersShouldBeConditions(string text)
+    {
+        foreach (var (value, expected) in new (object, int)[] { (BigInteger.Pow(2, 70), 1), (BigInteger.Zero, 2), (new BigDecimal(5, -1), 1), (BigDecimal.Zero, 2) })
+        {
+            Assert.All(await EvaluateInAllEvaluators(text, ExpressionOptions.UseBigNumbers, ("x", value)), r => Assert.Equal(expected, r));
+            var lambda = new Expression(text, ExpressionOptions.UseBigNumbers | ExpressionOptions.NoCache) { Parameters = { ["x"] = value } };
+            Assert.Equal(expected, lambda.ToLambda<object>(TestContext.Current.CancellationToken)());
+        }
+        Assert.All(await EvaluateInAllEvaluators("if(2 ** 70, 1, 2)", ExpressionOptions.UseBigNumbers), r => Assert.Equal(1, r));
+    }
+
+    // NCALC-331: ToLambda visited the arguments first and reported "Parameter null is not defined"
+    [Theory]
+    [InlineData("Pow(null)", "Pow() takes exactly 2 arguments")]
+    [InlineData("Atan2(null)", "Atan2() takes exactly 2 arguments")]
+    [InlineData("Max(null)", "Max() takes exactly 2 arguments")]
+    [InlineData("Log(null)", "Log() takes exactly 2 arguments")]
+    [InlineData("MakeStr(null)", "MakeStr() takes exactly 2 arguments")]
+    [InlineData("Abs(null, null)", "Abs() takes exactly 1 argument")]
+    [InlineData("PercentOf(null)", "PercentOf() takes exactly 2 arguments")]
+    public void LambdaShouldReportTheArgumentCountLikeTheEvaluators(string text, string message)
+    {
+        var evaluatorError = Assert.Throws<NCalcEvaluationException>(() => new Expression(text, ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(message, evaluatorError.Message);
+        var lambdaError = Assert.Throws<NCalcEvaluationException>(() => new Expression(text, ExpressionOptions.NoCache).ToLambda<object>(TestContext.Current.CancellationToken)());
+        Assert.Equal(message, lambdaError.Message);
+    }
+
+    // NCALC-331: Round to 15 or fewer places read only 15 significant digits of the double
+    [Fact]
+    public async Task RoundShouldReadAllDigitsOfADouble()
+    {
+        Assert.All(await EvaluateInAllEvaluators("Round(t, 11)", ExpressionOptions.None, ("t", 123456.78901234567)), r => Assert.Equal(123456.78901234567, r));
+        Assert.Equal(123456.7890123457, EvaluateWith("Round(t, 10)", ExpressionOptions.None, ("t", 123456.78901234567)));
+        // 2.4999999999999996 was read as the midpoint 2.5
+        Assert.Equal(2.0, EvaluateWith("Round(t, 0)", ExpressionOptions.RoundAwayFromZero, ("t", 2.4999999999999996)));
+        Assert.Equal(2.0, new Expression("Round(t, 0)", ExpressionOptions.RoundAwayFromZero | ExpressionOptions.NoCache) { Parameters = { ["t"] = 2.4999999999999996 } }.ToLambda<object>(TestContext.Current.CancellationToken)());
+
+        // Decimal midpoints are still honored
+        Assert.Equal(1.6, EvaluateWith("Round(1.55, 1)", ExpressionOptions.RoundAwayFromZero));
+        Assert.Equal(2.68, EvaluateWith("Round(2.675, 2)", ExpressionOptions.None));
+        Assert.Equal(Math.Round(2.675, 2), EvaluateWith("Round(2.675, 2)", ExpressionOptions.UseSystemMathRound));
+        Assert.Equal(-0.5, EvaluateWith("Round(-0.45, 1)", ExpressionOptions.RoundAwayFromZero));
+    }
+
+    // NCALC-331: Sign, Sqrt, Pow, Max and Min of vectors threw
+    [Fact]
+    public void VectorFunctionsShouldWorkElementWise()
+    {
+        Assert.Equal(new Domain.Vector(new BigDecimal[] { -1, 0, 1 }), EvalVec("Sign([-2.5; 0; 3])"));
+        Assert.Equal(new Domain.Vector(new BigDecimal[] { 2, 3 }), EvalVec("Sqrt([4; 9])"));
+        Assert.Equal(new Domain.Vector(new BigDecimal[] { 4, 9 }), EvalVec("Pow([2; 3], 2)"));
+        Assert.Equal(new Domain.Vector(new BigDecimal[] { 8, 27 }), EvalVec("[2; 3] ** 3"));
+        Assert.Equal(new Domain.Vector(new BigDecimal[] { 1, 2 }), EvalVec("Min([1; 5], [3; 2])"));
+        Assert.Equal(new Domain.Vector(new BigDecimal[] { 3, 5 }), EvalVec("Max([1; 5], [3; 2])"));
+        Assert.Throws<NCalcEvaluationException>(() => EvalVec("Sqrt([-4; 9])"));
+        Assert.Throws<NCalcEvaluationException>(() => EvalVec("Max([1; 5], [3; 2; 1])"));
     }
 }

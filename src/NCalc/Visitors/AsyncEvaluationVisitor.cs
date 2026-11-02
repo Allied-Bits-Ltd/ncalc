@@ -1046,9 +1046,15 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(FunctionCall functionCall, CancellationToken cancellationToken = default)
     {
-        // The non-recursive evaluator calls this method too; the message does not advise it when it is in use
-        if (AsyncExpression.CheckExecutionStack)
-            EvaluationHelper.EnsureSufficientExecutionStack(functionCall, AsyncExpression.UseNonRecursiveEvaluator || context.Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator));
+        // The non-recursive evaluator calls this method too, after checking the stack; when this call crosses the limit, it continues
+        // on another thread as well (the non-recursive evaluator does not depend on CheckExecutionStack)
+        if (AsyncExpression.UseNonRecursiveEvaluator || context.Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+        {
+            if (!EvaluationHelper.HasSufficientExecutionStack())
+                return await EvaluationHelper.EvaluateOnThreadPoolAsync(() => Visit(functionCall, cancellationToken), functionCall).ConfigureAwait(false);
+        }
+        else
+            EnsureSufficientExecutionStack(functionCall);
         cancellationToken.ThrowIfCancellationRequested();
         var argsCount = functionCall.Parameters.Count;
 
@@ -1100,7 +1106,15 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
-        EnsureSufficientExecutionStack(identifier);
+        // The non-recursive evaluator calls this method too, after checking the stack; when this call crosses the limit, it continues
+        // on another thread as well (the non-recursive evaluator does not depend on CheckExecutionStack)
+        if (AsyncExpression.UseNonRecursiveEvaluator || context.Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
+        {
+            if (!EvaluationHelper.HasSufficientExecutionStack())
+                return await EvaluationHelper.EvaluateOnThreadPoolAsync(() => Visit(identifier, cancellationToken), identifier).ConfigureAwait(false);
+        }
+        else
+            EnsureSufficientExecutionStack(identifier);
         cancellationToken.ThrowIfCancellationRequested();
         object? result = null;
         var identifierName = identifier.Name;
@@ -1331,7 +1345,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
         var expression = new AsyncExpression(userFunction.Body, context.Options, context.CultureInfo)
         {
-            AdvancedOptions = context.AdvancedOptions
+            AdvancedOptions = context.AdvancedOptions,
+            // The loops of the body draw from the budget of the calling evaluation
+            OuterLoopBudget = LoopIterationBudget.Current
         };
 
         bool ignoreCase = context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);

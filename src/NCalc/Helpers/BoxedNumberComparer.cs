@@ -154,6 +154,11 @@ namespace NCalc.Helpers
             return unchecked((mantissa.GetHashCode() * 397) ^ exponent);
         }
 
-        private static bool IsInFloatRange(BigDecimal value) => value >= new BigDecimal(-float.MaxValue) && value <= new BigDecimal(float.MaxValue);
+        // Compared by magnitude first, so that a value with a huge exponent (1E+1000000) is not aligned with float.MaxValue
+        private static bool IsInFloatRange(BigDecimal value)
+            => value.Mantissa.IsZero
+            || (MathHelper.DecimalMagnitude(value) <= 40
+                && MathHelper.CompareBigDecimals(value, new BigDecimal(-float.MaxValue)) >= 0
+                && MathHelper.CompareBigDecimals(value, new BigDecimal(float.MaxValue)) <= 0);
     }
 }

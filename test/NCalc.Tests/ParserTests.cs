@@ -791,6 +791,106 @@ public class ParserTests
         Assert.True(new Expression("#13.13.2222#", ExpressionOptions.NoCache, fi).HasErrors(TestContext.Current.CancellationToken));
     }
 
+    // NCALC-312: with advanced options (any of them), date literals were read in the calendar and the date order of the thread culture
+    [Theory]
+    [InlineData("th-TH")]
+    [InlineData("ar-SA")]
+    [InlineData("sk-SK")]
+    [InlineData("fa-IR")]
+    [InlineData("en-US")]
+    public void DateLiteralsShouldNotDependOnTheThreadCultureWithAdvancedOptions(string threadCulture)
+    {
+        var invariant = CultureInfo.InvariantCulture;
+        var enUS = CultureInfo.GetCultureInfo("en-US");
+        var th = CultureInfo.GetCultureInfo("th-TH");
+        var fa = CultureInfo.GetCultureInfo("fa-IR");
+        var cases = new (string Text, CultureInfo Culture, AdvancedExpressionOptions Options, DateTime Expected)[]
+        {
+            ("#1/2/2024#", invariant, new AdvancedExpressionOptions(invariant, AdvExpressionOptions.CalculatePercent), new DateTime(2024, 1, 2)),
+            ("#1/2/2024 10:30#", invariant, new AdvancedExpressionOptions(invariant, AdvExpressionOptions.CalculatePercent), new DateTime(2024, 1, 2, 10, 30, 0)),
+            ("#1/2/2024 10:30:15#", invariant, new AdvancedExpressionOptions(invariant, AdvExpressionOptions.CalculatePercent), new DateTime(2024, 1, 2, 10, 30, 15)),
+            ("#1/2/2024#", enUS, new AdvancedExpressionOptions(enUS), new DateTime(2024, 1, 2)),
+            ("#2/1/2024#", th, new AdvancedExpressionOptions(th) { DateSeparatorType = AdvancedExpressionOptions.SeparatorType.FromCulture }, new DateTime(2024, 1, 2)),
+            ("#2/1/2024 10:30:15#", th, new AdvancedExpressionOptions(th) { DateSeparatorType = AdvancedExpressionOptions.SeparatorType.FromCulture }, new DateTime(2024, 1, 2, 10, 30, 15)),
+            ("#2024/1/2#", fa, new AdvancedExpressionOptions(fa) { DateSeparatorType = AdvancedExpressionOptions.SeparatorType.FromCulture }, new DateTime(2024, 1, 2)),
+        };
+
+        var oldCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(threadCulture);
+            foreach (var (text, culture, advancedOptions, expected) in cases)
+            {
+                var expression = new Expression(text, ExpressionOptions.NoCache, culture) { AdvancedOptions = advancedOptions };
+                Assert.Equal(expected, expression.Evaluate(TestContext.Current.CancellationToken));
+
+                // The value that ToString() writes (and JSON stores) is the same date
+                var tree = LogicalExpressionFactory.Create(text, null, culture, ExpressionOptions.None, advancedOptions, TestContext.Current.CancellationToken);
+                Assert.Equal(expected, Assert.IsType<ValueExpression>(tree).Value);
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = oldCulture;
+        }
+    }
+
+    // NCALC-313: with the separators of a culture whose date and time separators are both '.', #10.30.00# was today's date at 10:30
+    [Theory]
+    [InlineData("fi-FI")]
+    [InlineData("da-DK")]
+    public void TimeSpansAndDatesShouldBeToldApartWithSeparatorsFromTheCulture(string cultureName)
+    {
+        var culture = CultureInfo.GetCultureInfo(cultureName);
+        Assert.Equal(culture.DateTimeFormat.DateSeparator, culture.DateTimeFormat.TimeSeparator);
+        var advancedOptions = new AdvancedExpressionOptions(culture)
+        {
+            TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.FromCulture,
+            DateSeparatorType = AdvancedExpressionOptions.SeparatorType.FromCulture,
+        };
+
+        foreach (var options in new AdvancedExpressionOptions?[] { advancedOptions, null })
+        {
+            object? Evaluate(string text) => new Expression(text, ExpressionOptions.NoCache, culture) { AdvancedOptions = options }.Evaluate(TestContext.Current.CancellationToken);
+
+            Assert.Equal(new TimeSpan(10, 30, 0), Evaluate("#10.30.00#"));
+            Assert.Equal(new TimeSpan(10, 30, 0), Evaluate("#10.30#"));
+            Assert.Equal(new TimeSpan(25, 0, 0), Evaluate("#25.00.00#"));
+            Assert.Equal(new DateTime(2030, 10, 1), Evaluate("#1.10.30#"));
+            Assert.Equal(new DateTime(2024, 1, 2), Evaluate("#02.01.2024#"));
+            Assert.Equal(new DateTime(2024, 1, 2, 10, 30, 0), Evaluate("#02.01.2024 10.30.00#"));
+        }
+    }
+
+    // NCALC-334: an invalid date of fi-FI was reported as an invalid time span, the error of an assignment target had no position,
+    // and the Error of an Expression did not tell what was wrong
+    [Fact]
+    public void ParserErrorsShouldTellWhatIsWrong()
+    {
+        var fi = CultureInfo.GetCultureInfo("fi-FI");
+        var advancedOptions = new AdvancedExpressionOptions(fi)
+        {
+            TimeSeparatorType = AdvancedExpressionOptions.SeparatorType.FromCulture,
+            DateSeparatorType = AdvancedExpressionOptions.SeparatorType.FromCulture,
+        };
+        foreach (var options in new AdvancedExpressionOptions?[] { null, advancedOptions })
+        {
+            foreach (var text in new[] { "#29.02.2023#", "#13.13.2222#", "#32.13.2024#" })
+            {
+                var error = Assert.ThrowsAny<Exception>(() => LogicalExpressionFactory.Create(text, null, fi, ExpressionOptions.None, options, TestContext.Current.CancellationToken));
+                Assert.Contains("Invalid DateTime format at position", error.Message, StringComparison.Ordinal);
+            }
+        }
+
+        var assignment = Assert.Throws<NCalcParserException>(() => LogicalExpressionFactory.Create("5 := 7", null, CultureInfo.InvariantCulture, ExpressionOptions.UseAssignments, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Contains("must be a variable or an indexed variable at position", assignment.Message, StringComparison.Ordinal);
+
+        var expression = new Expression("1 + * 2", ExpressionOptions.NoCache);
+        Assert.True(expression.HasErrors(TestContext.Current.CancellationToken));
+        Assert.Contains("Unknown operator sequence at position (1:6)", expression.Error!.Message, StringComparison.Ordinal);
+        Assert.IsType<NCalcParserException>(expression.Error);
+    }
+
     // NCALC-231: "///" that is not a description of a function is an ordinary comment
     [Theory]
     [InlineData("1 + 2 /// c")]
@@ -802,6 +902,46 @@ public class ParserTests
     {
         var e = new Expression(expression, ExpressionOptions.NoCache | ExpressionOptions.SupportCStyleComments | ExpressionOptions.UseStatementSequences);
         Assert.Equal(3, e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    // NCALC-332: another comment between the "///" lines and "fn" dropped the description of the function
+    [Theory]
+    [InlineData("/// d\n// e\nfn f() => 1; f()", "/// d\nfn f() => 1; f()")]
+    [InlineData("/// d\n/* e */ fn f() => 1; f()", "/// d\nfn f() => 1; f()")]
+    [InlineData("/// d\n/* e\n */\n// g\n\nfn f() => 1; f()", "/// d\nfn f() => 1; f()")]
+    [InlineData("/// a\n// x\n/// b\nfn f() => 1; f()", "/// a\n/// b\nfn f() => 1; f()")]
+    [InlineData("1; /// a\n/* x */ /// b\n  // y\nfn f() => 1; f()", "1; /// a\n/// b\nfn f() => 1; f()")]
+    public void DescriptionShouldBeKeptWhenOtherCommentsStandBeforeFn(string expression, string withoutOtherComments)
+    {
+        const ExpressionOptions options = ExpressionOptions.SupportCStyleComments | ExpressionOptions.UseStatementSequences;
+        static string? GetDescription(string text)
+            => ((StatementSequence)LogicalExpressionFactory.Create(text, null, CultureInfo.InvariantCulture, options, cancellationToken: TestContext.Current.CancellationToken))
+                .OfType<FunctionExpression>().Single().Function.Description;
+
+        string? expected = GetDescription(withoutOtherComments);
+        Assert.False(string.IsNullOrEmpty(expected));
+        Assert.Equal(expected, GetDescription(expression));
+    }
+
+    // NCALC-333: each "///" line scanned the rest of its block, so a long block took quadratic time
+    [Fact]
+    public void LongBlocksOfTripleSlashCommentsShouldParseInLinearTime()
+    {
+        const ExpressionOptions options = ExpressionOptions.SupportCStyleComments | ExpressionOptions.UseStatementSequences | ExpressionOptions.NoCache;
+        static long Measure(string text, object expected)
+        {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            Assert.Equal(expected, new Expression(text, options).Evaluate(TestContext.Current.CancellationToken));
+            return stopwatch.ElapsedMilliseconds;
+        }
+
+        string Block(string comment) => string.Concat(Enumerable.Repeat(comment + " c\n", 16_000));
+        Measure("1 +\n" + Block("//") + "1", 2);
+        long plain = Measure("1 +\n" + Block("//") + "1", 2);
+        long tripleSlash = Measure("1 +\n" + Block("///") + "1", 2);
+        long description = Measure(Block("///") + "fn f() => 1; f()", 1);
+        Assert.True(tripleSlash < 10 * plain + 3000, $"'///' lines: {tripleSlash} ms, '//' lines: {plain} ms");
+        Assert.True(description < 10 * plain + 3000, $"'///' lines before fn: {description} ms, '//' lines: {plain} ms");
     }
 
     // NCALC-243: the errors of an unknown operator sequence and of an invalid date literal tell where they are

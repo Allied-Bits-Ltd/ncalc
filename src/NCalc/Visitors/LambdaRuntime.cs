@@ -379,6 +379,14 @@ internal static partial class LambdaRuntime
                 value = LinqExpression.Call(typeof(MathHelper).GetMethod(nameof(MathHelper.BigDecimalToSingle), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!, value);
             else if (target == typeof(decimal))
                 value = LinqExpression.Call(typeof(MathHelper).GetMethod(nameof(MathHelper.BigDecimalToDecimal), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!, value);
+            else if ((target.IsEnum ? Enum.GetUnderlyingType(target) : target) is var integerType && IsIntegerType(integerType))
+            {
+                // To an integer type, the whole part, as a cast of a double gives it (NCALC-320); a value out of the range of the type
+                // throws OverflowException
+                value = LinqExpression.Call(typeof(LambdaRuntime).GetMethod(nameof(TruncateBigDecimal), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!, value);
+                if (integerType != typeof(BigInteger))
+                    value = LinqExpression.Convert(value, integerType);
+            }
         }
 
         LinqExpression body;
@@ -392,6 +400,23 @@ internal static partial class LambdaRuntime
         }
 
         return LinqExpression.Lambda<Func<object, object?>>(LinqExpression.Convert(body, typeof(object)), parameter).Compile();
+    }
+
+    private static bool IsIntegerType(Type type)
+        => type == typeof(sbyte) || type == typeof(byte) || type == typeof(short) || type == typeof(ushort) || type == typeof(int)
+            || type == typeof(uint) || type == typeof(long) || type == typeof(ulong) || type == typeof(BigInteger);
+
+    // The whole part of a BigDecimal; one too large for any integer type throws OverflowException without being computed
+    private static BigInteger TruncateBigDecimal(BigDecimal value)
+    {
+        if (value.Exponent > MathHelper.MaxPowResultDigits)
+            throw new OverflowException("The value is too large for an integer type.");
+
+        // A value with fewer digits than decimal places is below 1
+        if (value.Exponent < -MathHelper.MaxPowResultDigits && (value.Mantissa.IsZero || BigInteger.Log10(BigInteger.Abs(value.Mantissa)) < -(double)value.Exponent - 1))
+            return BigInteger.Zero;
+
+        return MathHelper.GetWholeValue(value);
     }
 
     // The arithmetic, bitwise and other operations of the evaluators (EvaluationVisitor.Visit(BinaryExpression)) on non-null operands
