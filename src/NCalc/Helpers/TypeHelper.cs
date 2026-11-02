@@ -247,8 +247,9 @@ public static class TypeHelper
 
     private static bool IsOutsideDecimalRange(object? value) => value switch
     {
-        double d => double.IsInfinity(d) || d < (double)decimal.MinValue || d > (double)decimal.MaxValue,
-        float f => float.IsInfinity(f) || f < (float)decimal.MinValue || f > (float)decimal.MaxValue,
+        // The nearest double (and float) to decimal.MaxValue is 2^96, which is itself beyond the range of decimal
+        double d => double.IsInfinity(d) || d <= (double)decimal.MinValue || d >= (double)decimal.MaxValue,
+        float f => float.IsInfinity(f) || f <= (float)decimal.MinValue || f >= (float)decimal.MaxValue,
         _ => false
     };
 

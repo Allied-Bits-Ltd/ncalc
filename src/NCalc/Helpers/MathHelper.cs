@@ -4,8 +4,6 @@ using System.Reflection;
 
 using ExtendedNumerics;
 
-using Microsoft.CSharp.RuntimeBinder;
-
 using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Parser;
@@ -44,6 +42,11 @@ public static class MathHelper
         {
             return calculation();
         }
+        catch (Exception ex) when (ex is ArithmeticException or ArgumentException)
+        {
+            // ExtendedNumerics reports arguments it cannot handle with .NET exceptions (DivideByZeroException, ArgumentException ...)
+            throw new NCalcEvaluationException("The big-number function cannot be computed for this argument: " + ex.Message, ex);
+        }
         finally
         {
             lock (TruncationLock)
@@ -52,6 +55,280 @@ public static class MathHelper
                     BigDecimal.AlwaysTruncate = _truncationOriginalValue;
             }
         }
+    }
+
+    // The big-number transcendental functions below guard the domain and reduce the arguments before calling ExtendedNumerics,
+    // whose functions return wrong values for some arguments (Exp(-100) was negative, Atan(1) was 0.7866, Sin(100) had the wrong
+    // sign, Ln(-1) was 0), throw .NET exceptions for others (Asin(1), Sqrt(-4), Ln(0), Sin(1E+30)), or do not finish (Exp(1E+400)).
+    // Where System.Math returns NaN or an infinity, so do they (as a double). The trigonometric functions are computed here.
+
+    /// <summary>
+    /// The maximum number of integer digits of a big-number argument of Sin, Cos, Tan, Sec, Csc and Cot. The argument is reduced
+    /// modulo 2π, which needs π to that many digits more than <see cref="BigDecimal.Precision"/>; a larger argument throws
+    /// <see cref="NCalcEvaluationException"/>.
+    /// </summary>
+    private const int MaxBigTrigArgumentDigits = 10_000;
+
+    private static readonly BigDecimal BigQuarter = new(new BigInteger(25), -2);
+
+    private sealed class PiDigits(int digits, BigInteger value)
+    {
+        public int Digits { get; } = digits;
+
+        public BigInteger Value { get; } = value;
+    }
+
+    private static PiDigits? _piDigits;
+
+    /// <summary>Returns π multiplied by 10^<paramref name="digits"/> and truncated, computed with Machin's formula and cached.</summary>
+    private static BigInteger GetScaledPi(int digits)
+    {
+        var cached = Volatile.Read(ref _piDigits);
+        if (cached is null || cached.Digits < digits)
+        {
+            // π = 16 atan(1/5) - 4 atan(1/239), in fixed point with 10 guard digits
+            BigInteger unity = BigInteger.Pow(10, digits + 10);
+            BigInteger pi = (16 * ArctanOfInverse(5, unity) - 4 * ArctanOfInverse(239, unity)) / BigInteger.Pow(10, 10);
+            cached = new PiDigits(digits, pi);
+            Volatile.Write(ref _piDigits, cached);
+        }
+
+        return cached.Digits == digits ? cached.Value : cached.Value / BigInteger.Pow(10, cached.Digits - digits);
+    }
+
+    // atan(1 / x) * unity in fixed point
+    private static BigInteger ArctanOfInverse(int x, BigInteger unity)
+    {
+        BigInteger xSquared = x * x;
+        BigInteger power = unity / x;
+        BigInteger sum = power;
+        int sign = -1;
+        for (int n = 3; !power.IsZero; n += 2)
+        {
+            power /= xSquared;
+            sum += sign * (power / n);
+            sign = -sign;
+        }
+        return sum;
+    }
+
+    private static BigDecimal GetBigPi() => new(GetScaledPi(BigDecimal.Precision), -BigDecimal.Precision);
+
+    // The number of digits of the integer part of |value| (zero or less for |value| < 1), possibly one too many
+    private static int GetIntegerDigits(BigDecimal value)
+        => value.Mantissa.IsZero ? 0 : (int)Math.Floor(BigInteger.Log10(BigInteger.Abs(value.Mantissa))) + 1 + value.Exponent;
+
+    private static double SaturatingToDouble(BigDecimal value)
+    {
+        try
+        {
+            return BigDecimalToDouble(value);
+        }
+        catch (OverflowException)
+        {
+            return value.Sign * double.MaxValue;
+        }
+    }
+
+    // Keeps the first digits of the mantissa, so that repeated multiplication does not grow the number
+    private static BigDecimal TruncateMantissa(BigDecimal value, int digits)
+    {
+        int excess = GetIntegerDigits(new BigDecimal(value.Mantissa, 0)) - digits;
+        return excess <= 0 ? value : new BigDecimal(value.Mantissa / BigInteger.Pow(10, excess), value.Exponent + excess);
+    }
+
+    // value * 10^scale, truncated
+    private static BigInteger ToFixedPoint(BigDecimal value, int scale)
+        => value.Exponent + scale >= 0
+            ? value.Mantissa * BigInteger.Pow(10, value.Exponent + scale)
+            : value.Mantissa / BigInteger.Pow(10, -(value.Exponent + scale));
+
+    private static BigInteger FloorDivide(BigInteger dividend, BigInteger divisor)
+    {
+        BigInteger quotient = BigInteger.DivRem(dividend, divisor, out BigInteger remainder);
+        return remainder.Sign != 0 && (remainder.Sign < 0) != (divisor.Sign < 0) ? quotient - 1 : quotient;
+    }
+
+    private enum BigTrigFunction
+    {
+        Sin,
+        Cos,
+        Tan,
+        Sec,
+        Csc,
+        Cot
+    }
+
+    /// <summary>
+    /// Computes a trigonometric function of a big number in fixed point with <see cref="BigDecimal.Precision"/> decimal places.
+    /// The argument is reduced by the nearest multiple of π/2, with enough digits of π for its integer part, to |t| &lt;= π/4,
+    /// where the Taylor series of sin and cos converge quickly. (The functions of ExtendedNumerics give the wrong sign for
+    /// many arguments, such as Sin(2), Cos(0.3) and Tan(1), and throw for Tan(0) and arguments beyond the range of int.)
+    /// </summary>
+    private static object BigTrigonometric(BigDecimal x, BigTrigFunction function)
+    {
+        int digits = BigDecimal.Precision + 10;
+        int integerDigits = Math.Max(GetIntegerDigits(x), 0);
+        if (integerDigits > MaxBigTrigArgumentDigits)
+            throw new NCalcEvaluationException($"The argument of {function}() has more than {MaxBigTrigArgumentDigits} integer digits");
+
+        int scale = digits + integerDigits;
+        BigInteger scaled = ToFixedPoint(x, scale);
+        BigInteger halfPi = GetScaledPi(scale) / 2;
+        BigInteger multiple = FloorDivide(scaled + halfPi / 2, halfPi);
+        BigInteger t = (scaled - multiple * halfPi) / BigInteger.Pow(10, integerDigits);
+
+        BigInteger unity = BigInteger.Pow(10, digits);
+        BigInteger tSquared = t * t / unity;
+        BigInteger sinT = t;
+        BigInteger cosT = unity;
+        BigInteger sinTerm = t;
+        BigInteger cosTerm = unity;
+        for (int n = 1; !sinTerm.IsZero || !cosTerm.IsZero; n++)
+        {
+            sinTerm = -sinTerm * tSquared / unity / (2 * n * (2 * n + 1));
+            cosTerm = -cosTerm * tSquared / unity / ((2 * n - 1) * 2 * n);
+            sinT += sinTerm;
+            cosT += cosTerm;
+        }
+
+        int quadrant = (int)(((multiple % 4) + 4) % 4);
+        BigInteger sin = quadrant switch { 0 => sinT, 1 => cosT, 2 => -sinT, _ => -cosT };
+        BigInteger cos = quadrant switch { 0 => cosT, 1 => -sinT, 2 => -cosT, _ => sinT };
+        (BigInteger numerator, BigInteger denominator) = function switch
+        {
+            BigTrigFunction.Sin => (sin, unity),
+            BigTrigFunction.Cos => (cos, unity),
+            BigTrigFunction.Tan => (sin, cos),
+            BigTrigFunction.Sec => (unity, cos),
+            BigTrigFunction.Csc => (unity, sin),
+            _ => (cos, sin)
+        };
+        if (denominator.IsZero)
+            throw new NCalcEvaluationException($"{function}() is undefined for this argument");
+
+        return new BigDecimal(numerator * BigInteger.Pow(10, BigDecimal.Precision) / denominator, -BigDecimal.Precision);
+    }
+
+    private static BigDecimal ToBigDecimalArgument(object a) => a is BigInteger biA ? new BigDecimal(biA) : (BigDecimal)a;
+
+    private static object BigExp(BigDecimal x)
+    {
+        if (x.IsZero())
+            return BigDecimal.One;
+
+        // The result has about |x| * log10(e) digits before (or zeros after) the decimal point
+        double digits = Math.Abs(SaturatingToDouble(x)) * 0.43429448190325182;
+        if (digits > MaxPowResultDigits)
+        {
+            // As Math.Exp, a result too small to be represented is zero
+            if (x.Sign < 0)
+                return BigDecimal.Zero;
+            throw new NCalcEvaluationException($"The result of Exp would have more than {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
+        }
+
+        BigDecimal magnitude = Truncated(() =>
+        {
+            // e^|x| = (e^(|x| / 2^k))^(2^k) with |x| / 2^k <= 1, where the series of ExtendedNumerics is fast and exact
+            BigDecimal reduced = x.Sign < 0 ? -x : x;
+            int halvings = 0;
+            while (reduced > BigDecimal.One)
+            {
+                reduced *= BigDecimal.OneHalf;
+                halvings++;
+            }
+
+            BigDecimal result = BigDecimal.Exp(reduced);
+            for (int i = 0; i < halvings; i++)
+                result = TruncateMantissa(result * result, BigDecimal.Precision + 10);
+
+            return result;
+        });
+
+        // e^-|x| = 1 / e^|x|
+        return x.Sign < 0 ? Reciprocal(magnitude) : magnitude;
+    }
+
+    // 1 / value with about BigDecimal.Precision significant digits: 1 / (m * 10^e) = (10^k / m) * 10^(-k - e). The division of
+    // ExtendedNumerics keeps a fixed number of decimal places, so 1 / e^1000 would be zero. (With AlwaysTruncate set, a BigDecimal
+    // below 10^-Precision is zero, so a tiny result must be created outside Truncated.)
+    private static BigDecimal Reciprocal(BigDecimal value)
+    {
+        int k = BigDecimal.Precision + GetIntegerDigits(new BigDecimal(value.Mantissa, 0));
+        return new BigDecimal(BigInteger.Pow(10, k) / value.Mantissa, -k - value.Exponent);
+    }
+
+    // Asin and Acos of ±1 are exact (ExtendedNumerics divided by zero), and of |x| > 1 NaN
+    private static object BigArcsin(BigDecimal x)
+    {
+        BigDecimal magnitude = BigDecimal.Abs(x);
+        if (magnitude > BigDecimal.One)
+            return double.NaN;
+        if (magnitude < BigDecimal.One)
+            return Truncated(() => BigDecimal.Arcsin(x));
+        BigDecimal halfPi = GetBigPi() * BigDecimal.OneHalf;
+        return x.Sign < 0 ? -halfPi : halfPi;
+    }
+
+    private static object BigArccos(BigDecimal x)
+    {
+        BigDecimal magnitude = BigDecimal.Abs(x);
+        if (magnitude > BigDecimal.One)
+            return double.NaN;
+        // acos(x) = π/2 - asin(x); Arccos of ExtendedNumerics divides by zero for 0
+        BigDecimal halfPi = GetBigPi() * BigDecimal.OneHalf;
+        if (magnitude < BigDecimal.One)
+            return Truncated(() => halfPi - BigDecimal.Arcsin(x));
+        return x.Sign > 0 ? BigDecimal.Zero : GetBigPi();
+    }
+
+    private static object BigArctan(BigDecimal x)
+    {
+        return Truncated(() =>
+        {
+            // The series of ExtendedNumerics is inaccurate near ±1, so the argument is reduced first: atan(x) = ±π/2 - atan(1/x)
+            // for |x| > 1, then atan(x) = 2 atan(x / (1 + sqrt(1 + x²))) until |x| <= 1/4
+            BigDecimal offset = BigDecimal.Zero;
+            BigDecimal reduced = x;
+            if (BigDecimal.Abs(x) > BigDecimal.One)
+            {
+                offset = GetBigPi() * BigDecimal.OneHalf;
+                if (x.Sign < 0)
+                    offset = -offset;
+                reduced = -Reciprocal(x);
+            }
+
+            int factor = 1;
+            while (BigDecimal.Abs(reduced) > BigQuarter)
+            {
+                reduced /= BigDecimal.One + BigDecimal.SquareRoot(BigDecimal.One + reduced * reduced, BigDecimal.Precision);
+                factor *= 2;
+            }
+            return offset + BigDecimal.Arctan(reduced) * factor;
+        });
+    }
+
+    // The logarithm of zero or a negative number is -∞ or NaN, as with Math.Log
+    private static object BigLogarithm(BigDecimal x, Func<BigDecimal, BigDecimal> logarithm)
+    {
+        if (x.Sign < 0)
+            return double.NaN;
+        if (x.IsZero())
+            return double.NegativeInfinity;
+        return Truncated(() => logarithm(x));
+    }
+
+    private static object BigLog(BigDecimal x, BigDecimal newBase)
+    {
+        // Zero or negative numbers, and a base of one, follow Math.Log (NaN, -∞ or +∞)
+        if (x.Sign <= 0 || newBase.Sign <= 0 || (newBase - BigDecimal.One).IsZero())
+            return Math.Log(SaturatingToDouble(x), SaturatingToDouble(newBase));
+
+        if (newBase > int.MaxValue)
+            return Truncated(() => BigDecimal.Ln(x) / BigDecimal.Ln(newBase));
+
+        int intBase = (int)GetWholeValue(newBase);
+        return Truncated(() => BigDecimal.Log(x, intBase));
     }
 
     enum ArithmeticOperation
@@ -74,16 +351,6 @@ public static class MathHelper
     private static object DynamicMultiplyFunc(dynamic a, dynamic b) => unchecked(a * b);
     private static object DynamicDivideFunc(dynamic a, dynamic b) => unchecked(a / b);
     private static object DynamicModuloFunc(dynamic a, dynamic b) => unchecked(a % b);
-
-    private static object DynamicAddPercentDecFunc(dynamic a, dynamic b) => unchecked(a * (100m + b) / 100m); // a / (a * b/100);
-    private static object DynamicSubtractPercentDecFunc(dynamic a, dynamic b) => unchecked(a * (100m - b) / 100m); //a - (a * b / 100);
-    private static object DynamicMultiplyPercentDecFunc(dynamic a, dynamic b) => unchecked(a * b / 100m);
-    private static object DynamicDividePercentDecFunc(dynamic a, dynamic b) => unchecked(100m * a / b);
-
-    private static object DynamicAddPercentDoubleFunc(dynamic a, dynamic b) => unchecked(a * (100.0 + b) / 100.0); // a / (a * b/100);
-    private static object DynamicSubtractPercentDoubleFunc(dynamic a, dynamic b) => unchecked(a * (100.0 - b) / 100.0); //a - (a * b / 100);
-    private static object DynamicMultiplyPercentDoubleFunc(dynamic a, dynamic b) => unchecked(a * b / 100.0);
-    private static object DynamicDividePercentDoubleFunc(dynamic a, dynamic b) => unchecked(100.0 * a / b);
 #endif
 
 #if AOT_COMPILATION
@@ -240,39 +507,108 @@ public static class MathHelper
     };
 #endif
 
-#if !AOT_COMPILATION
-    // The dynamic percent formulas cannot mix a big number with their double or decimal constants, nor a float or double with the
-    // decimal ones. Such operands go through the implementation without dynamic code, which NCalc.AOT always uses, so that
-    // NCalc and NCalc.AOT (or AvoidDynamicFunctions) give the same result.
-    private static bool CanUseDynamicPercentFunc(object a, object b, MathHelperOptions options)
-    {
-        bool decimalFormula = (options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal);
-        return !IsBigNumber(a) && !IsBigNumber(b) && !(decimalFormula && (a is float or double || b is float or double));
-    }
-#endif
+    // The result type of a percent operation: decimal when DecimalAsDefault is set or an operand is a decimal, double otherwise
+    // (big numbers, complex numbers and vectors stay as they are)
+    private static bool IsDecimalPercentResult(object a, object b, MathHelperOptions options)
+        => (options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal);
 
-    // The result type of a percent operation without dynamic code is the same as with it: decimal when DecimalAsDefault is set
-    // or an operand is a decimal, double otherwise (big numbers stay as they are)
     private static object ToPercentResultType(object result, object a, object b, MathHelperOptions options)
     {
         if (IsBigNumber(result) || result is ComplexNumber || result is NCalcVector)
             return result;
-        if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
+        if (IsDecimalPercentResult(a, b, options))
             return ConvertToDecimal(result, options);
         return ConvertToDouble(result, options);
     }
 
+    // a + b% = a * (100 + b) / 100, a - b% = a * (100 - b) / 100, a * b% = a * b / 100 and a / b% = 100 * a / b.
+    // NCalc and NCalc.AOT (or AvoidDynamicFunctions) use this same implementation, so that they give the same results.
+    // Ordinary numbers are converted to the result type (double or decimal) before the formula is applied, so that an integer
+    // product such as 300000000 * 10 cannot wrap around in the operand type. Big numbers (and every operand with UseBigNumbers),
+    // complex numbers and vectors are computed exactly with the arithmetic operations and converted to the result type afterwards.
+    private static object PercentFunc(object a, object b, ArithmeticOperation operation, MathHelperOptions options)
+    {
+        if (a is TimeSpan timeSpan && IsBoxedNumber(b))
+            return PercentOfTimeSpan(timeSpan, ConvertToDouble(b, options), operation);
+
+        if (options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b) || a is ComplexNumber or NCalcVector || b is ComplexNumber or NCalcVector)
+        {
+            return operation switch
+            {
+                ArithmeticOperation.AddPercent => AddPercentFunc(a, b, options),
+                ArithmeticOperation.SubtractPercent => SubtractPercentFunc(a, b, options),
+                ArithmeticOperation.MultiplyPercent => MultiplyPercentFunc(a, b, options),
+                _ => DividePercentFunc(a, b, options)
+            };
+        }
+
+        if (!IsBoxedNumber(a) || !IsBoxedNumber(b))
+            throw new InvalidOperationException($"The percent operation is not implemented for operands of types {a.GetType()} and {b.GetType()}");
+
+        // A double or float beyond the range of decimal (or NaN) cannot be converted to decimal; such a pair is computed in double
+        if (IsDecimalPercentResult(a, b, options) && !IsOutsideDecimalRange(a) && !IsOutsideDecimalRange(b))
+        {
+            decimal decA = Convert.ToDecimal(a, options.CultureInfo);
+            decimal decB = Convert.ToDecimal(b, options.CultureInfo);
+            return operation switch
+            {
+                ArithmeticOperation.AddPercent => decA * (100m + decB) / 100m,
+                ArithmeticOperation.SubtractPercent => decA * (100m - decB) / 100m,
+                ArithmeticOperation.MultiplyPercent => decA * decB / 100m,
+                _ => 100m * decA / decB
+            };
+        }
+
+        double doubleA = Convert.ToDouble(a, options.CultureInfo);
+        double doubleB = Convert.ToDouble(b, options.CultureInfo);
+        double result = PercentOfDouble(doubleA, doubleB, operation);
+        if (options.OverflowProtection && !double.IsInfinity(doubleA) && !double.IsInfinity(doubleB))
+            CheckOverflow(result);
+        return result;
+    }
+
+    private static double PercentOfDouble(double a, double b, ArithmeticOperation operation)
+    {
+        double result = operation switch
+        {
+            ArithmeticOperation.AddPercent => a * (100.0 + b) / 100.0,
+            ArithmeticOperation.SubtractPercent => a * (100.0 - b) / 100.0,
+            ArithmeticOperation.MultiplyPercent => a * b / 100.0,
+            _ => 100.0 * a / b
+        };
+
+        // The product of the formula can overflow although the result is in range (1e308 * 10% is 1e307)
+        if (double.IsInfinity(result) && !double.IsInfinity(a) && !double.IsInfinity(b) && !double.IsNaN(a) && !double.IsNaN(b))
+        {
+            result = operation switch
+            {
+                ArithmeticOperation.AddPercent => a * ((100.0 + b) / 100.0),
+                ArithmeticOperation.SubtractPercent => a * ((100.0 - b) / 100.0),
+                ArithmeticOperation.MultiplyPercent => a * (b / 100.0),
+                _ => a / b * 100.0
+            };
+        }
+        return result;
+    }
+
+    // A percent of a time span (01:00:00 + 10% is 01:06:00) is computed on its ticks, rounded to the nearest tick
+    private static TimeSpan PercentOfTimeSpan(TimeSpan timeSpan, double percent, ArithmeticOperation operation)
+    {
+        double factor = operation switch
+        {
+            ArithmeticOperation.AddPercent => (100.0 + percent) / 100.0,
+            ArithmeticOperation.SubtractPercent => (100.0 - percent) / 100.0,
+            ArithmeticOperation.MultiplyPercent => percent / 100.0,
+            _ => 100.0 / percent
+        };
+        double ticks = Math.Round(timeSpan.Ticks * factor);
+        if (double.IsNaN(ticks) || ticks < long.MinValue || ticks >= long.MaxValue)
+            throw new NCalcEvaluationException($"The result of the percent operation on the time span {timeSpan} is not a valid time span");
+        return TimeSpan.FromTicks((long)ticks);
+    }
+
     private static object AddPercentFunc(object a, object b, MathHelperOptions options)
     {
-#if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions && CanUseDynamicPercentFunc(a, b, options))
-        {
-            if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
-                return options.OverflowProtection ? AddPercentDecFuncChecked(a, b) : DynamicAddPercentDecFunc(a, b);
-            else
-                return options.OverflowProtection ? AddPercentDoubleFuncChecked(a, b) : DynamicAddPercentDoubleFunc(a, b);
-        }
-#endif
         object? im1 = Add(100m, b, false, options);
         if (im1 is null)
             throw new InvalidOperationException($"No addition was possible for a number and an object of type '{b.GetType()}'");
@@ -287,24 +623,6 @@ public static class MathHelper
 
         return ToPercentResultType(result, a, b, options);
     }
-
-#if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> AddPercentDecFuncChecked = (a, b) =>
-    {
-        var res = checked(a * (100m + b) / 100m); //checked(a + (a * b / 100));
-        CheckOverflow(res);
-
-        return res;
-    };
-
-    private static readonly Func<dynamic, dynamic, object> AddPercentDoubleFuncChecked = (a, b) =>
-    {
-        var res = checked(a * (100.0 + b) / 100.0); //checked(a + (a * b / 100));
-        CheckOverflow(res);
-
-        return res;
-    };
-#endif
 
     private static object? SubtractFunc(object a, object b, MathHelperOptions options)
     {
@@ -452,15 +770,6 @@ public static class MathHelper
 
     private static object SubtractPercentFunc(object a, object b, MathHelperOptions options)
     {
-#if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions && CanUseDynamicPercentFunc(a, b, options))
-        {
-            if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
-                return options.OverflowProtection ? SubtractPercentDecFuncChecked(a, b) : DynamicSubtractPercentDecFunc(a, b);
-            else
-                return options.OverflowProtection ? SubtractPercentDoubleFuncChecked(a, b) : DynamicSubtractPercentDoubleFunc(a, b);
-        }
-#endif
         object? im1 = Subtract(100m, b, false, options);
         if (im1 is null)
             throw new InvalidOperationException($"No subtraction was possible for a number and an '{b.GetType()}' object");
@@ -476,23 +785,6 @@ public static class MathHelper
         return ToPercentResultType(result, a, b, options);
     }
 
-#if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> SubtractPercentDecFuncChecked = (a, b) =>
-    {
-        var res = checked(a * (100m - b) / 100m);
-        CheckOverflow(res);
-
-        return res;
-    };
-
-    private static readonly Func<dynamic, dynamic, object> SubtractPercentDoubleFuncChecked = (a, b) =>
-    {
-        var res = checked(a * (100.0 - b) / 100.0);
-        CheckOverflow(res);
-
-        return res;
-    };
-#endif
     private static object? MultiplyFunc(object a, object b, MathHelperOptions options)
     {
         object? result = null;
@@ -641,15 +933,6 @@ public static class MathHelper
 #endif
     private static object MultiplyPercentFunc(object a, object b, MathHelperOptions options)
     {
-#if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions && CanUseDynamicPercentFunc(a, b, options))
-        {
-            if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
-                return options.OverflowProtection ? MultiplyPercentDecFuncChecked(a, b) : DynamicMultiplyPercentDecFunc(a, b);
-            else
-                return options.OverflowProtection ? MultiplyPercentDoubleFuncChecked(a, b) : DynamicMultiplyPercentDoubleFunc(a, b);
-        }
-#endif
         object? im2 = Multiply(a, b, false, options);
         if (im2 is null)
             throw new InvalidOperationException($"No multiplication was possible for objects of types '{a.GetType()}' and '{b.GetType()}'");
@@ -660,24 +943,6 @@ public static class MathHelper
 
         return ToPercentResultType(result, a, b, options);
     }
-
-#if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> MultiplyPercentDecFuncChecked = (a, b) =>
-    {
-        var res = checked(a * b / 100m);
-        CheckOverflow(res);
-
-        return res;
-    };
-
-    private static readonly Func<dynamic, dynamic, object> MultiplyPercentDoubleFuncChecked = (a, b) =>
-    {
-        var res = checked(a * b / 100.0);
-        CheckOverflow(res);
-
-        return res;
-    };
-#endif
 
     private static object? DivideFunc(object a, object b, MathHelperOptions options)
     {
@@ -824,15 +1089,6 @@ public static class MathHelper
 #endif
     private static object DividePercentFunc(object a, object b, MathHelperOptions options)
     {
-#if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions && CanUseDynamicPercentFunc(a, b, options))
-        {
-            if ((options.DecimalAsDefault && !(a is double || b is double)) || (a is decimal || b is decimal))
-                return options.OverflowProtection ? DividePercentDecFuncChecked(a, b) : DynamicDividePercentDecFunc(a, b);
-            else
-                return options.OverflowProtection ? DividePercentDoubleFuncChecked(a, b) : DynamicDividePercentDoubleFunc(a, b);
-        }
-#endif
         object? im2 = Multiply(a, 100m, false, options);
         if (im2 is null)
             throw new InvalidOperationException($"No multiplication was possible for an '{a.GetType()}' object and a number");
@@ -843,24 +1099,6 @@ public static class MathHelper
 
         return ToPercentResultType(result, a, b, options);
     }
-
-#if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> DividePercentDecFuncChecked = (a, b) =>
-    {
-        var res = checked(100m * a / b);
-        CheckOverflow(res);
-
-        return res;
-    };
-
-    private static readonly Func<dynamic, dynamic, object> DividePercentDoubleFuncChecked = (a, b) =>
-    {
-        var res = checked(100.0 * a / b);
-        CheckOverflow(res);
-
-        return res;
-    };
-#endif
 
     private static object? ModuloFunc(object a, object b, MathHelperOptions options)
     {
@@ -1024,6 +1262,9 @@ public static class MathHelper
         a = ConvertIfNeeded(a, "+", options);
         b = ConvertIfNeeded(b, "+", options);
 
+        if (TryComputeULongWithSignedInteger(a, b, ArithmeticOperation.Add, options, out var mixedResult))
+            return ReduceNumericType(mixedResult, reduceTypes ? null : t, options);
+
         TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
 
         if (typeCode == TypeCode.Empty)
@@ -1049,6 +1290,7 @@ public static class MathHelper
 
             if (options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b))
             {
+                CheckBigSumSize(a, b, "addition");
                 if (a is BigDecimal bdA)
                 {
                     return ReduceNumericType(Add(bdA, b), reduceTypes ? null : t, options);
@@ -1145,6 +1387,9 @@ public static class MathHelper
         a = ConvertIfNeeded(a, "-", options);
         b = ConvertIfNeeded(b, "-", options);
 
+        if (TryComputeULongWithSignedInteger(a, b, ArithmeticOperation.Subtract, options, out var mixedResult))
+            return ReduceNumericType(mixedResult, reduceTypes ? null : t, options);
+
         TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
 
         if (typeCode == TypeCode.Empty)
@@ -1170,6 +1415,7 @@ public static class MathHelper
 
             if (options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b))
             {
+                CheckBigSumSize(a, b, "subtraction");
                 BigInteger? result = null;
                 BigDecimal? bdResult = null;
 
@@ -1260,6 +1506,75 @@ public static class MathHelper
         }
     }
 
+    // The number of decimal digits of a big number (0 for other values), counting the trailing zeros or the decimal places that the
+    // exponent of a BigDecimal stands for, as for the result of a power
+    private static double BigNumberDigits(object value) => value switch
+    {
+        BigInteger bi when !bi.IsZero => BigInteger.Log10(BigInteger.Abs(bi)) + 1,
+        BigDecimal bd when !bd.Mantissa.IsZero => BigInteger.Log10(BigInteger.Abs(bd.Mantissa)) + 1 + Math.Abs((double)bd.Exponent),
+        _ => 0
+    };
+
+    /// <summary>
+    /// Rejects a product of big numbers that would have more than <see cref="MaxPowResultDigits"/> digits: the digits of a product
+    /// are the sum of the digits of its factors, so repeated squaring (x = x * x in a loop or in nested function calls) would otherwise
+    /// double the size of the value at each step.
+    /// </summary>
+    private static void CheckBigProductSize(object a, object b)
+    {
+        double digits = BigNumberDigits(a) + BigNumberDigits(b);
+        if (digits > MaxPowResultDigits)
+            throw new NCalcEvaluationException($"The result of the multiplication would have about {digits:0} digits, which exceeds the limit of {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
+    }
+
+    /// <summary>
+    /// Rejects a sum or difference of two BigDecimals that would have more than <see cref="MaxPowResultDigits"/> digits: the digits of
+    /// the result span from the most significant digit of the larger operand down to the smallest exponent (1E+1000000 + 1E-1000000).
+    /// </summary>
+    private static void CheckBigSumSize(object a, object b, string operation)
+    {
+        if (a is not BigDecimal bdA || b is not BigDecimal bdB || bdA.Mantissa.IsZero || bdB.Mantissa.IsZero || bdA.Exponent == bdB.Exponent)
+            return;
+        double digits = Math.Max(DecimalMagnitude(bdA), DecimalMagnitude(bdB)) - Math.Min(bdA.Exponent, bdB.Exponent);
+        if (digits > MaxPowResultDigits)
+            throw new NCalcEvaluationException($"The result of the {operation} would have about {digits:0} digits, which exceeds the limit of {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
+    }
+
+    // A ulong and a signed integer have no common 64-bit type, so their sum, difference or product is computed exactly as a big integer,
+    // whatever the width of the signed operand: 5UL - 7 is -2, as 5UL - 7L and 5UL + (-7) are. The result is a ulong when it is not
+    // negative and fits, a long when it is negative and fits. A result beyond both ranges is a BigInteger with UseBigNumbers, an
+    // OverflowException with OverflowProtection, and otherwise wraps around as a ulong operation does in C# (ulong.MaxValue * 2).
+    private static bool TryComputeULongWithSignedInteger(object a, object b, ArithmeticOperation operation, MathHelperOptions options, out object result)
+    {
+        result = null!;
+        if (!((a is ulong && b is sbyte or short or int or long) || (b is ulong && a is sbyte or short or int or long)))
+            return false;
+
+        BigInteger valueA = ConvertToBigInteger(a);
+        BigInteger valueB = ConvertToBigInteger(b);
+        BigInteger exact = operation switch
+        {
+            ArithmeticOperation.Add => valueA + valueB,
+            ArithmeticOperation.Subtract => valueA - valueB,
+            _ => valueA * valueB
+        };
+
+        if (exact.Sign >= 0 && exact <= ulong.MaxValue)
+            result = (ulong)exact;
+        else
+        if (exact.Sign < 0 && exact >= long.MinValue)
+            result = (long)exact;
+        else
+        if (options.UseBigNumbers)
+            result = exact;
+        else
+        if (options.OverflowProtection)
+            throw new OverflowException("Arithmetic operation resulted in an overflow.");
+        else
+            result = (ulong)(exact & ulong.MaxValue);
+        return true;
+    }
+
     // With UseBigNumbers, an integer sum or difference that wrapped around in the operand type is replaced with the exact value,
     // as products and powers are promoted to BigInteger with this option
     private static bool TryPromoteWrappedInteger(object a, object b, object result, bool subtract, MathHelperOptions options, out BigInteger exact)
@@ -1298,6 +1613,9 @@ public static class MathHelper
 
         a = ConvertIfNeeded(a, "*", options);
         b = ConvertIfNeeded(b, "*", options);
+
+        if (TryComputeULongWithSignedInteger(a, b, ArithmeticOperation.Multiply, options, out var mixedResult))
+            return ReduceNumericType(mixedResult, reduceTypes ? null : t, options);
 
         TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
 
@@ -1343,6 +1661,7 @@ public static class MathHelper
 
             if (options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b))
             {
+                CheckBigProductSize(a, b);
                 if (a is BigDecimal bdA)
                 {
                     return ReduceNumericType(Multiply(bdA, b), reduceTypes ? null : t, options);
@@ -1814,8 +2133,9 @@ public static class MathHelper
 
         if ((options.UseBigNumbers || IsBigNumber(a) || IsBigNumber(b)) && typeCode == TypeCode.Object)
         {
+            // The quotient is floored exactly (FloorDivide); a division with the limited precision of BigDecimal followed by a floor
+            // would lose the last digits of a quotient with more than BigDecimal.Precision digits
             BigInteger? biResult = null;
-            BigDecimal? bdResult = null;
             if (a is BigDecimal bdA)
             {
                 if (truncateFirst)
@@ -1831,7 +2151,7 @@ public static class MathHelper
                 }
                 else
                 {
-                    bdResult = Divide(bdA, b);
+                    biResult = FloorDivide(bdA, ConvertToBigDecimal(b));
                 }
             }
             else
@@ -1847,7 +2167,7 @@ public static class MathHelper
                 }
                 else
                 {
-                    bdResult = Divide(a, bdB);
+                    biResult = FloorDivide(ConvertToBigDecimal(a), bdB);
                 }
             }
             else
@@ -1861,7 +2181,7 @@ public static class MathHelper
                 }
                 else
                 {
-                    bdResult = Divide(new BigDecimal(biA), b);
+                    biResult = FloorDivide(new BigDecimal(biA), ConvertToBigDecimal(b));
                 }
             }
             else
@@ -1875,7 +2195,7 @@ public static class MathHelper
                 }
                 else
                 {
-                    bdResult = Divide(a, new BigDecimal(biB));
+                    biResult = FloorDivide(ConvertToBigDecimal(a), new BigDecimal(biB));
                 }
             }
             else
@@ -1891,7 +2211,7 @@ public static class MathHelper
                     if (truncateFirst)
                         biResult = IntegerDivide(biResult.Value, b);
                     else
-                        bdResult = Divide(new BigDecimal(biResult.Value), b);
+                        biResult = FloorDivide(new BigDecimal(biResult.Value), ConvertToBigDecimal(b));
                 }
                 else
                 {
@@ -1903,17 +2223,8 @@ public static class MathHelper
                     if (truncateFirst)
                         biResult = IntegerDivide(a, biResult.Value);
                     else
-                        bdResult = Divide(a, new BigDecimal(biResult.Value));
+                        biResult = FloorDivide(ConvertToBigDecimal(a), new BigDecimal(biResult.Value));
                 }
-            }
-
-            if (bdResult is not null)
-            {
-                // The quotient is floored exactly; going through double would lose digits and give a double
-                BigInteger floored = GetWholeValue(bdResult.Value);
-                if (bdResult.Value.Sign < 0 && !IsWholeNumber(bdResult.Value))
-                    floored -= 1;
-                return ReduceNumericType(floored, reduceTypes ? null : t, options);
             }
 
             if (biResult is not null)
@@ -2327,8 +2638,9 @@ public static class MathHelper
             byte b => (object)(-b),
             ushort us => (object)(-us),
             uint ui => (object)(-(long)ui),
-            // 2^63 is the negation of long.MinValue, so negating it gives long.MinValue back
-            ulong ul => options.UseBigNumbers ? (object)(-(new BigInteger(ul))) : (ul == (1UL << 63) ? (object)long.MinValue : (object)checked(-(long)ul)),
+            // 2^63 is the negation of long.MinValue, so negating it gives long.MinValue back; the negation of a larger ulong
+            // is beyond the range of long and becomes a BigInteger
+            ulong ul => options.UseBigNumbers || ul > (1UL << 63) ? (object)(-(new BigInteger(ul))) : (ul == (1UL << 63) ? (object)long.MinValue : (object)(-(long)ul)),
 
             // IEEE 754: -0.0f and -0.0d are distinct bit patterns from +0
             float f => (object)(-f),   // correctly produces -0f when f == +0f
@@ -2347,7 +2659,7 @@ public static class MathHelper
             ComplexNumber complex => (object)(-complex),
             Percent percent when percent.Value is not null => (object)new Percent(Negate(percent.Value, reduceType, options)!),
 
-            _ => throw new NCalcEvaluationException($"Unsupported type ${value.GetType().Name} in the negate operation"),
+            _ => throw new NCalcEvaluationException($"Unsupported type {value.GetType().Name} in the negate operation"),
         };
 
         if (result is NCalcVector or ComplexNumber or Percent)
@@ -2521,6 +2833,22 @@ public static class MathHelper
                 a = ConvertToBigDecimal(a);
                 return TypeCode.Object;
             }
+        }
+
+        // A double or float beyond the range of decimal (or NaN, or an infinity) cannot be converted to decimal, so a decimal and such a value
+        // are computed in double, as they are compared; with UseBigNumbers, a finite value is computed exactly as a BigDecimal
+        if ((typeCodeA == TypeCode.Decimal && IsOutsideDecimalRange(b)) || (typeCodeB == TypeCode.Decimal && IsOutsideDecimalRange(a)))
+        {
+            typesWereExpanded = true;
+            if (options.UseBigNumbers && !IsNaNOrInfinity(a) && !IsNaNOrInfinity(b))
+            {
+                a = ConvertToBigDecimal(a);
+                b = ConvertToBigDecimal(b);
+                return TypeCode.Object;
+            }
+            a = Convert.ToDouble(a, options.CultureInfo);
+            b = Convert.ToDouble(b, options.CultureInfo);
+            return TypeCode.Double;
         }
 
         // When one operand is floating-point and the other is an integer, the integer is converted to the floating-point type, whatever the bit sizes are.
@@ -2709,6 +3037,20 @@ public static class MathHelper
         return result;
     }
 
+    /// <summary>
+    /// Tells whether a value is a double or float that cannot be converted to decimal: NaN, an infinity or a value whose magnitude is at least
+    /// 2^96 (the nearest double to <see cref="decimal.MaxValue"/> is 2^96 itself, which is beyond the range of decimal).
+    /// </summary>
+    internal static bool IsOutsideDecimalRange(object? value) => value switch
+    {
+        double d => double.IsNaN(d) || double.IsInfinity(d) || d <= (double)decimal.MinValue || d >= (double)decimal.MaxValue,
+        float f => float.IsNaN(f) || float.IsInfinity(f) || f <= (float)decimal.MinValue || f >= (float)decimal.MaxValue,
+        _ => false
+    };
+
+    private static bool IsNaNOrInfinity(object value)
+        => value is double d ? double.IsNaN(d) || double.IsInfinity(d) : value is float f && (float.IsNaN(f) || float.IsInfinity(f));
+
     private static bool IsUnsignedTypeCode(TypeCode typeCode) => typeCode is TypeCode.Byte or TypeCode.UInt16 or TypeCode.UInt32 or TypeCode.UInt64;
 
     private static int? TypeCodeBitSize(TypeCode typeCode, out bool floatingPoint)
@@ -2862,10 +3204,31 @@ public static class MathHelper
         if (a is not null && IsBoxedIntegerNumber(a))
             return ConvertToBigInteger(a).Sign < 0 ? Negate(a, false, options)! : a;
 
-        if (options.DecimalAsDefault || a is decimal)
+        if (UseDecimalArithmetic(a, options))
             return Math.Abs(ConvertToDecimal(a, "Abs", options.CultureInfo, null));
 
         return Math.Abs(ConvertToDouble(a, "Abs", options.CultureInfo, null));
+    }
+
+    /// <summary>
+    /// Whether a rounding function (Abs, Ceiling, Floor, Round, Sign, Truncate) computes its argument as a decimal: a decimal
+    /// argument always, and any other one with DecimalAsDefault, except a double or float that decimal cannot hold
+    /// (NaN, infinity, or a magnitude of 7.9E+28 or more), which is computed as a double, as without the option.
+    /// </summary>
+    private static bool UseDecimalArithmetic(object? a, MathHelperOptions options)
+    {
+        if (a is decimal)
+            return true;
+        if (!options.DecimalAsDefault)
+            return false;
+
+        return a switch
+        {
+            // (double)decimal.MaxValue rounds up to 2^96, which is already outside the range of decimal
+            double d => !double.IsNaN(d) && Math.Abs(d) < (double)decimal.MaxValue,
+            float f => !float.IsNaN(f) && Math.Abs(f) < (float)decimal.MaxValue,
+            _ => true
+        };
     }
 
     public static object Acos(object? a, MathHelperOptions options)
@@ -2877,14 +3240,8 @@ public static class MathHelper
 
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Arccos(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Arccos(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigArccos(ToBigDecimalArgument(a));
         }
         return Math.Acos(ConvertToDouble(a, "Acos", options.CultureInfo, null));
     }
@@ -2974,14 +3331,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Arcsin(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Arcsin(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigArcsin(ToBigDecimalArgument(a));
         }
 
         if (a is ComplexNumber cnA)
@@ -2994,14 +3345,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Arctan(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Arctan(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigArctan(ToBigDecimalArgument(a));
         }
 
         if (a is ComplexNumber cnA)
@@ -3036,7 +3381,7 @@ public static class MathHelper
         if (a is NCalcVector vA)
             return NCalcVector.Ceiling(vA);
 
-        if (options.DecimalAsDefault || a is decimal)
+        if (UseDecimalArithmetic(a, options))
             return Math.Ceiling(ConvertToDecimal(a, "Ceiling", options.CultureInfo, null));
 
         return Math.Ceiling(ConvertToDouble(a, "Ceiling", options.CultureInfo, null));
@@ -3046,14 +3391,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Cos(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Cos(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigTrigonometric(ToBigDecimalArgument(a), BigTrigFunction.Cos);
         }
 
         if (a is ComplexNumber cnA)
@@ -3086,14 +3425,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Cot(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Cot(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigTrigonometric(ToBigDecimalArgument(a), BigTrigFunction.Cot);
         }
 
         if (a is ComplexNumber cnA)
@@ -3148,14 +3481,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Csc(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Csc(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigTrigonometric(ToBigDecimalArgument(a), BigTrigFunction.Csc);
         }
 
         if (a is ComplexNumber cnA)
@@ -3208,14 +3535,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Exp(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Exp(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigExp(ToBigDecimalArgument(a));
         }
 
         if (a is ComplexNumber cnA)
@@ -3249,7 +3570,7 @@ public static class MathHelper
         if (a is NCalcVector vA)
             return NCalcVector.Floor(vA);
 
-        if (options.DecimalAsDefault || a is decimal)
+        if (UseDecimalArithmetic(a, options))
             return Math.Floor(ConvertToDecimal(a, "Floor", options.CultureInfo, null));
 
         return Math.Floor(ConvertToDouble(a, "Floor", options.CultureInfo, null));
@@ -3259,7 +3580,7 @@ public static class MathHelper
     public static object IEEERemainder(object? a, object? b, MathHelperOptions options)
     {
         if (a is ComplexNumber)
-            throw new InvalidOperationException($"The IEEERemainder function is not defined for complex numbers");
+            throw new NCalcEvaluationException("The IEEERemainder function is not defined for complex numbers");
 
         return Math.IEEERemainder(ConvertToDouble(a, "IEEERemainder", options.CultureInfo, null), ConvertToDouble(b, "IEEEReminder", options.CultureInfo, null));
     }
@@ -3268,14 +3589,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Ln(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Ln(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigLogarithm(ToBigDecimalArgument(a), BigDecimal.Ln);
         }
 
         if (a is ComplexNumber cnA)
@@ -3287,18 +3602,13 @@ public static class MathHelper
     public static object Log(object? a, object? b, MathHelperOptions options)
     {
         // BigDecimal.Log takes an integer base; a fractional base (Log(x, 2.5)) is computed in double instead of being truncated to 2
-        bool integralBase = b is not null && (IsBoxedIntegerNumber(b) || b is BigInteger || (b is BigDecimal bdB && IsWholeNumber(bdB)) || IsBoxedFloatingNumberInteger(b) == true);
-        if (options.UseBigNumbers && integralBase)
-        {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Log(new BigDecimal(biA), ConvertToInt(b, "Log", options.CultureInfo, null)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Log(bdA, ConvertToInt(b, "Log", options.CultureInfo, null)));
-            }
-        }
+        bool integralBase = b is not null && (IsBoxedIntegerNumber(b) || b is BigInteger || (b is BigDecimal bdB && IsWholeNumber(bdB)) || IsBoxedFloatingNumberInteger(b) == true)
+            && b is not (double.PositiveInfinity or double.NegativeInfinity or float.PositiveInfinity or float.NegativeInfinity);
+        // A big base is also used exactly with an integer or decimal argument (Log(8, 10 ** 400)), as double would make it infinite
+        bool bigArgument = a is BigInteger or BigDecimal
+            || (b is BigInteger or BigDecimal && a is not null && (IsBoxedIntegerNumber(a) || a is decimal));
+        if (options.UseBigNumbers && integralBase && bigArgument)
+            return BigLog(ConvertToBigDecimal(a!), ConvertToBigDecimal(b!));
 
         if (a is ComplexNumber cnA && MathHelper.IsBoxedNumberOrBigNumber(b))
             return ComplexNumber.Log(cnA, MathHelper.ConvertToBigDecimal(b!), options);
@@ -3311,14 +3621,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Log2(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Log2(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigLogarithm(ToBigDecimalArgument(a), BigDecimal.Log2);
         }
 
         if (a is ComplexNumber cnA)
@@ -3332,14 +3636,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Log10(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Log10(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigLogarithm(ToBigDecimalArgument(a), BigDecimal.Log10);
         }
 
         if (a is ComplexNumber cnA)
@@ -3379,13 +3677,17 @@ public static class MathHelper
         // options request big-number arithmetic.  Non-integer exponents always fall back to
         // Math.Pow — exact fractional-exponent support via BigDecimal is not feasible with the
         // ExtendedNumerics library.
-        bool tryBigDecimalPath = a is BigDecimal || a is BigInteger || a is decimal
-            || options.DecimalAsDefault || options.UseBigNumbers;
+        // A NaN or infinite base has no exact value and is raised in double, as Math.Pow does
+        bool tryBigDecimalPath = (a is BigDecimal || a is BigInteger || a is decimal
+            || options.DecimalAsDefault || options.UseBigNumbers)
+            && a is not (double.NaN or double.PositiveInfinity or double.NegativeInfinity)
+            && a is not (float.NaN or float.PositiveInfinity or float.NegativeInfinity);
 
-        if (tryBigDecimalPath && TryGetBigIntegerExponent(b, out BigInteger bigExp))
+        BigInteger bigExp = BigInteger.Zero;
+        // Zero raised to a negative power is infinite, as 1 / 0 is under the same options; it is computed in double below
+        if (tryBigDecimalPath && TryGetBigIntegerExponent(b, out bigExp) && !(bigExp.Sign < 0 && ConvertToBigDecimal(a).IsZero()))
         {
-            BigDecimal @base = ConvertToBigDecimal(a);
-            BigDecimal bdResult = BigDecimalPow(@base, bigExp);
+            BigDecimal bdResult = BigDecimalPow(ConvertToBigDecimal(a), bigExp);
 
             // A decimal base gives a decimal (rounded to the precision of decimal) when the result fits in it
             if (a is decimal && !options.UseBigNumbers && bdResult >= decimal.MinValue && bdResult <= decimal.MaxValue)
@@ -3501,7 +3803,10 @@ public static class MathHelper
     /// <summary>
     /// The maximum number of significant digits of an exact (big-number or decimal) integer power or big-number factorial.
     /// A power or factorial whose result would have more digits throws <see cref="NCalcEvaluationException"/> before it is computed,
-    /// so that a short expression such as "2 ** 2000000" or "1000000!" cannot occupy the CPU for a long time. The default is 100,000.
+    /// so that a short expression such as "2 ** 2000000" or "1000000!" cannot occupy the CPU for a long time. The same limit applies to
+    /// big-number shifts, products (the digits of the factors are added up, so repeated squaring cannot build unbounded values), sums of
+    /// BigDecimals with very different exponents, and to the quotient computed by % and // of big numbers. The digits of a BigDecimal
+    /// include the trailing zeros or decimal places that its exponent stands for. The default is 100,000.
     /// </summary>
     public static int MaxPowResultDigits { get; set; } = 100_000;
 
@@ -3519,7 +3824,7 @@ public static class MathHelper
         {
             if (exponent > BigInteger.Zero)
                 return BigDecimal.Zero;
-            throw new DivideByZeroException("Zero cannot be raised to a negative power.");
+            throw new NCalcEvaluationException("Zero cannot be raised to a negative power exactly.");
         }
 
         BigInteger mantissa = baseValue.Mantissa;
@@ -3532,8 +3837,9 @@ public static class MathHelper
 
         // The result has about n * log10|mantissa| significant digits, and its scale is n * scale. A positive scale adds trailing zeros
         // that are stored in the exponent but become digits when the result is converted to an integer (10 is stored as 1E1,
-        // and 10 ** 200000 would become a 200,000-digit BigInteger), so it counts towards the limit too.
-        double digits = (double)n * (BigInteger.Log10(BigInteger.Abs(mantissa)) + Math.Max(scale, 0));
+        // and 10 ** 200000 would become a 200,000-digit BigInteger), so it counts towards the limit too. A negative scale adds
+        // as many decimal places, which become digits when the result is reduced or compared (0.1 ** 3000000 has 3,000,000 of them).
+        double digits = (double)n * (BigInteger.Log10(BigInteger.Abs(mantissa)) + Math.Abs(scale));
         double resultScale = (double)n * scale;
         if (digits > MaxPowResultDigits)
             throw new NCalcEvaluationException($"The result of the power operation would have about {digits:0} digits, which exceeds the limit of {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
@@ -3583,10 +3889,11 @@ public static class MathHelper
         if (bigValue <= 1)
             return 1;
 
-        // log10(n!) by Stirling's formula; a multifactorial with step k has about 1/k of these digits
+        // log10(n!) by Stirling's formula; a multifactorial with step k has about 1/k of these digits.
+        // A number beyond the range of double gives an infinite (or NaN) estimate, which is beyond the limit as well.
         double n2 = (double)bigValue;
         double digits = (n2 * Math.Log(n2) - n2 + 0.5 * Math.Log(2 * Math.PI * n2)) / Math.Log(10) / step;
-        if (digits > MaxPowResultDigits)
+        if (double.IsNaN(digits) || digits > MaxPowResultDigits)
             throw new NCalcEvaluationException($"The result of the factorial would have about {digits:0} digits, which exceeds the limit of {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
 
         var product = bigValue;
@@ -3681,7 +3988,7 @@ public static class MathHelper
         }
 
         // A decimal argument is rounded as a decimal, so that it does not lose digits through double
-        if (options.DecimalAsDefault || a is decimal)
+        if (UseDecimalArithmetic(a, options))
         {
             decimal decimal_a = ConvertToDecimal(a, "Round", options.CultureInfo, null);
             if (precision < 0)
@@ -3708,9 +4015,15 @@ public static class MathHelper
             // The shortest text of the double is rounded exactly, so that e.g. 1250 is a midpoint
             return BigDecimalToDouble(RoundBigDecimal(ToShortestBigDecimal(double_a), precision, rounding));
         }
-        // A double has at most 15 significant decimal digits, so rounding to more places leaves it unchanged
+        // Math.Round and RoundToPrecision accept at most 15 places. More places can still cut digits of a small double
+        // (Round(1.23E-17, 16) is 0), so the shortest text of the double is rounded exactly; a place beyond its last digit
+        // leaves it unchanged.
         if (precision > 15)
-            return double_a;
+        {
+            if (double.IsNaN(double_a) || double.IsInfinity(double_a))
+                return double_a;
+            return BigDecimalToDouble(RoundBigDecimal(ToShortestBigDecimal(double_a), precision, rounding));
+        }
         return options.UseSystemMathRound
             ? Math.Round(double_a, precision, rounding)
             : RoundToPrecision(double_a, precision, rounding);
@@ -3976,9 +4289,9 @@ public static class MathHelper
         }
 
         if (a is ComplexNumber)
-            throw new InvalidOperationException($"The Sign function is not defined for complex numbers");
+            throw new NCalcEvaluationException("The Sign function is not defined for complex numbers");
 
-        if (options.DecimalAsDefault || a is decimal)
+        if (UseDecimalArithmetic(a, options))
             return Math.Sign(ConvertToDecimal(a, "Sign", options.CultureInfo, null));
 
         double d = ConvertToDouble(a, "Sign", options.CultureInfo, null);
@@ -3992,14 +4305,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Sec(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Sec(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigTrigonometric(ToBigDecimalArgument(a), BigTrigFunction.Sec);
         }
         if (a is ComplexNumber cnA)
             return ComplexNumber.Sec(cnA, options);
@@ -4046,14 +4353,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Sin(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Sin(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigTrigonometric(ToBigDecimalArgument(a), BigTrigFunction.Sin);
         }
         if (a is ComplexNumber cnA)
             return ComplexNumber.Sin(cnA, options);
@@ -4092,12 +4393,12 @@ public static class MathHelper
 
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
+            // The square root of a negative number is NaN, as with Math.Sqrt
+            if (a is BigInteger or BigDecimal)
             {
-                return Truncated(() => BigDecimal.SquareRoot(new BigDecimal(biA), BigDecimal.Precision));
-            }
-            if (a is BigDecimal bdA)
-            {
+                BigDecimal bdA = ToBigDecimalArgument(a);
+                if (bdA.Sign < 0)
+                    return double.NaN;
                 return Truncated(() => BigDecimal.SquareRoot(bdA, BigDecimal.Precision));
             }
         }
@@ -4117,12 +4418,11 @@ public static class MathHelper
 
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
+            if (a is BigInteger or BigDecimal)
             {
-                return Truncated(() => BigDecimal.SquareRoot(BigDecimal.SquareRoot(new BigDecimal(biA), BigDecimal.Precision), BigDecimal.Precision));
-            }
-            if (a is BigDecimal bdA)
-            {
+                BigDecimal bdA = ToBigDecimalArgument(a);
+                if (bdA.Sign < 0)
+                    return double.NaN;
                 return Truncated(() => BigDecimal.SquareRoot(BigDecimal.SquareRoot(bdA, BigDecimal.Precision), BigDecimal.Precision));
             }
         }
@@ -4143,13 +4443,13 @@ public static class MathHelper
 
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
+            // The cube root of a negative number is negative, as with Math.Cbrt (ExtendedNumerics accepts only positive numbers)
+            if (a is BigInteger or BigDecimal)
             {
-                return Truncated(() => BigDecimal.NthRoot(new BigDecimal(biA), 3, BigDecimal.Precision));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.NthRoot(bdA, 3, BigDecimal.Precision));
+                BigDecimal bdA = ToBigDecimalArgument(a);
+                if (bdA.IsZero())
+                    return BigDecimal.Zero;
+                return Truncated(() => bdA.Sign < 0 ? -BigDecimal.NthRoot(-bdA, 3, BigDecimal.Precision) : BigDecimal.NthRoot(bdA, 3, BigDecimal.Precision));
             }
         }
 
@@ -4166,14 +4466,8 @@ public static class MathHelper
     {
         if (options.UseBigNumbers)
         {
-            if (a is BigInteger biA)
-            {
-                return Truncated(() => BigDecimal.Tan(new BigDecimal(biA)));
-            }
-            if (a is BigDecimal bdA)
-            {
-                return Truncated(() => BigDecimal.Tan(bdA));
-            }
+            if (a is BigInteger or BigDecimal)
+                return BigTrigonometric(ToBigDecimalArgument(a), BigTrigFunction.Tan);
         }
 
         if (a is ComplexNumber cnA)
@@ -4222,13 +4516,17 @@ public static class MathHelper
         else
         if (a is BigDecimal bdA)
         {
-            return GetWholeValue(bdA);
+            // A BigDecimal stays a BigDecimal, as with Floor and Ceiling
+            return new BigDecimal(GetWholeValue(bdA));
         }
 
         if (a is ComplexNumber cnA)
             return ComplexNumber.Truncate(cnA);
 
-        if (options.DecimalAsDefault || a is decimal)
+        if (a is NCalcVector vA)
+            return NCalcVector.Truncate(vA);
+
+        if (UseDecimalArithmetic(a, options))
             return Math.Truncate(ConvertToDecimal(a, "Truncate", options.CultureInfo, null));
 
         return Math.Truncate(ConvertToDouble(a, "Truncate", options.CultureInfo, null));
@@ -4558,17 +4856,10 @@ public static class MathHelper
                     result = ModuloFunc(a, b, options);
                     break;
                 case ArithmeticOperation.AddPercent:
-                    result = AddPercentFunc(a, b, options);
-                    break;
-
                 case ArithmeticOperation.SubtractPercent:
-                    result = SubtractPercentFunc(a, b, options);
-                    break;
                 case ArithmeticOperation.MultiplyPercent:
-                    result = MultiplyPercentFunc(a, b, options);
-                    break;
                 case ArithmeticOperation.DividePercent:
-                    result = DividePercentFunc(a, b, options);
+                    result = PercentFunc(a, b, operation, options);
                     break;
             }
             if (result is null)
@@ -4576,12 +4867,9 @@ public static class MathHelper
 
             return result;
         }
-        catch(Exception ex) when (ex is not OverflowException and not DivideByZeroException)
+        catch(Exception ex) when (ex is not OverflowException and not DivideByZeroException && !(ex is NCalcException && operation is ArithmeticOperation.AddPercent or ArithmeticOperation.SubtractPercent or ArithmeticOperation.MultiplyPercent or ArithmeticOperation.DividePercent))
         {
-            if (ex is RuntimeBinderException && (operation == ArithmeticOperation.AddPercent || operation == ArithmeticOperation.SubtractPercent || operation == ArithmeticOperation.MultiplyPercent || operation == ArithmeticOperation.DividePercent))
-                throw new InvalidOperationException($"The operation '{operation}' contained double or decimal operands which conflicted with the UseDecimalAsDefault setting and with each other", ex);
-            else
-                throw new InvalidOperationException($"Operator '{operatorName}' is not implemented for operands of types {origA.GetType()} and {origB.GetType()}", ex);
+            throw new InvalidOperationException($"Operator '{operatorName}' is not implemented for operands of types {origA.GetType()} and {origB.GetType()}", ex);
         }
     }
 
@@ -4732,7 +5020,59 @@ public static class MathHelper
     {
         if (b.IsZero())
             throw new DivideByZeroException();
-        return a - b * BigDecimal.Truncate(BigDecimal.Divide(a, b));
+
+        // A dividend smaller than the divisor is the remainder itself (the truncated quotient is 0)
+        if (a.IsZero() || HasSmallerMagnitude(a, b, "remainder"))
+            return a;
+
+        // The remainder is computed exactly on the mantissas aligned to a common exponent; BigDecimal.Divide rounds the quotient
+        // to BigDecimal.Precision digits, so a - b * Truncate(a / b) is wrong for a quotient with more digits (10^206 % 7)
+        int exponent = AlignExponents(a, b, out BigInteger mantissaA, out BigInteger mantissaB);
+        return new BigDecimal(BigInteger.Remainder(mantissaA, mantissaB), exponent);
+    }
+
+    /// <summary>
+    /// Returns the largest integer that is not greater than a / b, computed exactly.
+    /// </summary>
+    internal static BigInteger FloorDivide(BigDecimal a, BigDecimal b)
+    {
+        if (b.IsZero())
+            throw new DivideByZeroException();
+
+        if (a.IsZero())
+            return BigInteger.Zero;
+        if (HasSmallerMagnitude(a, b, "integer division"))
+            return a.Sign == b.Sign ? BigInteger.Zero : BigInteger.MinusOne;
+
+        AlignExponents(a, b, out BigInteger mantissaA, out BigInteger mantissaB);
+        BigInteger quotient = BigInteger.DivRem(mantissaA, mantissaB, out BigInteger remainder);
+        if (!remainder.IsZero && (mantissaA.Sign < 0) != (mantissaB.Sign < 0))
+            quotient -= BigInteger.One;
+        return quotient;
+    }
+
+    // The position of the most significant digit of a BigDecimal: |value| is in [10^(m-1), 10^m) for the returned m (give or take one,
+    // as the digit count is computed with a logarithm)
+    private static double DecimalMagnitude(BigDecimal value)
+        => value.Exponent + Math.Floor(BigInteger.Log10(BigInteger.Abs(value.Mantissa))) + 1;
+
+    // Tells whether |a| < |b| for certain, from the magnitudes of the values. Throws if the integer quotient of a and b would have more
+    // than MaxPowResultDigits digits, which would take a long time to compute.
+    private static bool HasSmallerMagnitude(BigDecimal a, BigDecimal b, string operation)
+    {
+        double difference = DecimalMagnitude(a) - DecimalMagnitude(b);
+        if (difference > MaxPowResultDigits)
+            throw new NCalcEvaluationException($"The quotient of the {operation} would have about {difference:0} digits, which exceeds the limit of {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
+        return difference < -1;
+    }
+
+    // Writes a and b as mantissaA * 10^exponent and mantissaB * 10^exponent, exactly, and returns the common exponent
+    private static int AlignExponents(BigDecimal a, BigDecimal b, out BigInteger mantissaA, out BigInteger mantissaB)
+    {
+        int exponent = Math.Min(a.Exponent, b.Exponent);
+        mantissaA = a.Mantissa * BigInteger.Pow(10, a.Exponent - exponent);
+        mantissaB = b.Mantissa * BigInteger.Pow(10, b.Exponent - exponent);
+        return exponent;
     }
 
     public static BigInteger IntegerDivide(BigInteger a, object b)
@@ -5035,6 +5375,123 @@ public static class MathHelper
         BigInteger valueA = ConvertToBigInteger(a);
         return ~valueA;
     }
+
+    /// <summary>
+    /// Computes a &amp; b as the &amp; operator does. Non-negative integers are combined as 64-bit unsigned integers; a negative integer
+    /// is used in two's complement, as by the shift operators and for BigInteger operands (-1 &amp; 3 is 3, -8 | 1 is -7).
+    /// A floating-point operand must be a whole number. A BigInteger operand gives a BigInteger result.
+    /// </summary>
+    public static object? BitwiseAnd(object? a, object? b, string operation, CultureInfo cultureInfo, ExpressionLocation? locationA, ExpressionLocation? locationB)
+        => BitwiseOperation(a, b, '&', operation, cultureInfo, locationA, locationB);
+
+    /// <summary>
+    /// Computes a | b as the | operator does; see <see cref="BitwiseAnd(object?, object?, string, CultureInfo, ExpressionLocation?, ExpressionLocation?)"/>.
+    /// </summary>
+    public static object? BitwiseOr(object? a, object? b, string operation, CultureInfo cultureInfo, ExpressionLocation? locationA, ExpressionLocation? locationB)
+        => BitwiseOperation(a, b, '|', operation, cultureInfo, locationA, locationB);
+
+    /// <summary>
+    /// Computes a ^ b as the ^ operator does; see <see cref="BitwiseAnd(object?, object?, string, CultureInfo, ExpressionLocation?, ExpressionLocation?)"/>.
+    /// </summary>
+    public static object? BitwiseXOr(object? a, object? b, string operation, CultureInfo cultureInfo, ExpressionLocation? locationA, ExpressionLocation? locationB)
+        => BitwiseOperation(a, b, '^', operation, cultureInfo, locationA, locationB);
+
+    /// <summary>
+    /// Computes ~a as the ~ operator does: a non-negative integer is complemented as a 64-bit unsigned integer (~5 is 18446744073709551610),
+    /// a negative integer in two's complement (~-1 is 0, ~-6 is 5), and a BigInteger as a BigInteger reduced to ulong when it fits.
+    /// </summary>
+    public static object? BitwiseNot(object? a, string operation, CultureInfo cultureInfo, ExpressionLocation? location)
+    {
+        if (a is BigInteger bigA)
+            return TryReduceToUInt64(~bigA);
+
+        object operand = ToBitwiseOperand(a, operation, cultureInfo, location);
+        return operand is ulong unsignedOperand ? ~unsignedOperand : ReduceBitwiseResult(~(BigInteger)operand);
+    }
+
+    private static object? BitwiseOperation(object? a, object? b, char operatorChar, string operation, CultureInfo cultureInfo, ExpressionLocation? locationA, ExpressionLocation? locationB)
+    {
+        if (a is BigInteger || b is BigInteger)
+        {
+            return operatorChar switch
+            {
+                '&' => BitwiseAnd(a, b),
+                '|' => BitwiseOr(a, b),
+                _ => BitwiseXOr(a, b)
+            };
+        }
+
+        object operandA = ToBitwiseOperand(a, operation, cultureInfo, locationA);
+        object operandB = ToBitwiseOperand(b, operation, cultureInfo, locationB);
+        if (operandA is ulong unsignedA && operandB is ulong unsignedB)
+        {
+            return operatorChar switch
+            {
+                '&' => unsignedA & unsignedB,
+                '|' => unsignedA | unsignedB,
+                _ => unsignedA ^ unsignedB
+            };
+        }
+
+        BigInteger bigA = operandA is ulong ulA ? new BigInteger(ulA) : (BigInteger)operandA;
+        BigInteger bigB = operandB is ulong ulB ? new BigInteger(ulB) : (BigInteger)operandB;
+        return ReduceBitwiseResult(operatorChar switch
+        {
+            '&' => bigA & bigB,
+            '|' => bigA | bigB,
+            _ => bigA ^ bigB
+        });
+    }
+
+    // A non-negative result is a ulong, as for non-negative operands; a negative result is a long (a BigInteger beyond the range of long)
+    private static object ReduceBitwiseResult(BigInteger value)
+    {
+        if (value.Sign >= 0)
+            return value <= ulong.MaxValue ? (object)(ulong)value : value;
+        return value >= long.MinValue ? (object)(long)value : value;
+    }
+
+    // Converts an operand of a bitwise operator to a ulong (a non-negative integer) or a BigInteger (a negative integer, or a whole
+    // number beyond the range of ulong). A fraction, NaN or an infinity has no bits and is rejected.
+    private static object ToBitwiseOperand(object? value, string operation, CultureInfo cultureInfo, ExpressionLocation? location)
+    {
+        BigInteger whole;
+        switch (value)
+        {
+            case sbyte or short or int or long:
+                long signedValue = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                return signedValue >= 0 ? (object)(ulong)signedValue : new BigInteger(signedValue);
+            case double or float:
+                double doubleValue = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+                if (double.IsNaN(doubleValue) || double.IsInfinity(doubleValue) || Math.Floor(doubleValue) != doubleValue)
+                    throw NonIntegralBitwiseOperand(value, operation, location);
+                whole = new BigInteger(doubleValue);
+                break;
+            case decimal decimalValue:
+                if (decimal.Truncate(decimalValue) != decimalValue)
+                    throw NonIntegralBitwiseOperand(value, operation, location);
+                whole = new BigInteger(decimalValue);
+                break;
+            case BigDecimal bigDecimalValue:
+                if (!IsWholeNumber(bigDecimalValue))
+                    throw NonIntegralBitwiseOperand(value, operation, location);
+                whole = GetWholeValue(bigDecimalValue);
+                break;
+            default:
+                try
+                {
+                    return ConvertToULong(value, operation, cultureInfo, location);
+                }
+                catch (OverflowException ex)
+                {
+                    throw new NCalcConversionException($"Conversion of a value '{value}' of type {value?.GetType().Name} to type 'UInt64' in the '{operation}' operation failed.", value?.ToString() ?? "null", value?.GetType() ?? typeof(object), typeof(ulong), location ?? ExpressionLocation.Empty, ex);
+                }
+        }
+        return whole.Sign >= 0 && whole <= ulong.MaxValue ? (object)(ulong)whole : whole;
+    }
+
+    private static NCalcEvaluationException NonIntegralBitwiseOperand(object value, string operation, ExpressionLocation? location)
+        => new($"The '{operation}' operation requires integer operands, but the value '{Convert.ToString(value, CultureInfo.InvariantCulture)}' of type {value.GetType().Name} is not a whole number.", location ?? ExpressionLocation.Empty);
 
     public static BigInteger? LeftShift(BigInteger a, object? b, MathHelperOptions options)
     {
@@ -5754,9 +6211,17 @@ public static class MathHelper
                 return biResult;
         }
 
-        if (((restrictToType is null && (options.Value.DecimalAsDefault)) || restrictToType == typeof(decimal)) && (value >= decimal.MinValue && value <= decimal.MaxValue))
+        if (restrictToType == typeof(decimal) && value >= decimal.MinValue && value <= decimal.MaxValue)
         {
             return BigDecimalToDecimal(value);
+        }
+
+        // With DecimalAsDefault, the value is narrowed to decimal only if no digits are lost, as it is narrowed to double otherwise
+        if (restrictToType is null && options.Value.DecimalAsDefault && value >= decimal.MinValue && value <= decimal.MaxValue)
+        {
+            decimal decimalValue = BigDecimalToDecimal(value);
+            if (new BigDecimal(decimalValue) == value)
+                return decimalValue;
         }
 
         if (restrictToType == typeof(float) && (value >= float.MinValue && value <= float.MaxValue))

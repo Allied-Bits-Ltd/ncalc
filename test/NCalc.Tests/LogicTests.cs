@@ -441,6 +441,106 @@ namespace NCalc.Tests
             Assert.Equal(0, calls);
         }
 
+        // NCALC-223: cancel() cancels the token of the evaluation; the recursive evaluators went on with the other operand
+        [Theory]
+        [InlineData("cancel() + p1")]
+        [InlineData("cancel() ? p1 : 0")]
+        [InlineData("cancel() == 1")]
+        [InlineData("-cancel()")]
+        [InlineData("cancel() in (p1, p2)")]
+        public async Task EvaluatorsShouldStopAfterAnOperandCancelsTheToken(string expression)
+        {
+            int parameterCalls = 0;
+            foreach (var nonRecursive in new[] { false, true })
+            {
+                var o = ExpressionOptions.NoCache | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+
+                using (var source = new CancellationTokenSource())
+                {
+                    var e = new Expression(expression, o);
+                    e.EvaluateFunction += (_, args) => { source.Cancel(); args.Result = 1; };
+                    e.EvaluateParameter += (_, args) => { parameterCalls++; args.Result = 10; };
+                    Assert.ThrowsAny<OperationCanceledException>(() => e.Evaluate(source.Token));
+                }
+
+                using (var source = new CancellationTokenSource())
+                {
+                    var asyncExpression = new AsyncExpression(expression, o);
+                    asyncExpression.EvaluateFunctionAsync += (_, args, _) => { source.Cancel(); args.Result = 1; return ValueTask.CompletedTask; };
+                    asyncExpression.EvaluateParameterAsync += (_, args, _) => { parameterCalls++; args.Result = 10; return ValueTask.CompletedTask; };
+                    await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await asyncExpression.EvaluateAsync(source.Token));
+                }
+            }
+            Assert.Equal(0, parameterCalls);
+        }
+
+        // NCALC-224: "return" in an argument returned from the argument only
+        [Theory]
+        [InlineData("Abs(return -3) + 100", -3L)]
+        [InlineData("if(true, return 4, 5) + 100", 4L)]
+        [InlineData("Max(return 1, 2) + 100", 1L)]
+        [InlineData("fn g(a) => a * 2; g(return 5) + 100", 5L)]
+        [InlineData("fn g(a) => Abs(a) * 2; g(return 5) + 100", 5L)]
+        [InlineData("fn h(b) { Abs(return b + 1); 50 }; h(1) + 100", 102L)]
+        [InlineData("a := 0; while (a < 3) { a += 1; Abs(return a) }; 100", 1L)]
+        public async Task ReturnInAFunctionArgumentShouldReturnFromTheExpression(string expression, long expected)
+        {
+            var results = await EvaluateInAllEvaluators(
+                o => new Expression(expression, o),
+                o => new AsyncExpression(expression, o),
+                ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseLoops);
+            Assert.All(results, r => Assert.Equal(expected, Convert.ToInt64(r, System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        // NCALC-209: an indexed assignment replaced the whole argument with the element value
+        [Theory]
+        [InlineData("fn g(a) { a[1] := 5; a }; g(lst)", "1,5,3")]
+        [InlineData("fn g(a) { a[1] := 5; a[0] }; g(lst)", "1")]
+        [InlineData("fn g(s) { s[0] := 'X'; s }; g('abc')", "Xbc")]
+        [InlineData("fn g(a) { a[1] += 5; a }; g(lst)", "1,7,3")]
+        public async Task IndexedAssignmentToAFunctionArgumentShouldChangeTheElement(string expression, string expected)
+        {
+            static string Format(object? result) => result is IEnumerable<object?> items
+                ? string.Join(",", items.Select(item => Convert.ToString(item, System.Globalization.CultureInfo.InvariantCulture)))
+                : Convert.ToString(result, System.Globalization.CultureInfo.InvariantCulture)!;
+
+            var lists = new List<List<object?>>();
+            List<object?> NewList()
+            {
+                var list = new List<object?> { 1, 2, 3 };
+                lists.Add(list);
+                return list;
+            }
+
+            var results = await EvaluateInAllEvaluators(
+                o => { var e = new Expression(expression, o); e.Parameters["lst"] = NewList(); return e; },
+                o => { var e = new AsyncExpression(expression, o); e.Parameters["lst"] = NewList(); return e; },
+                ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+            Assert.All(results, r => Assert.Equal(expected, Format(r)));
+
+            // Assignments to arguments are local to the function: the list of the caller is not changed
+            Assert.All(lists, list => Assert.Equal([1, 2, 3], list));
+        }
+
+        // NCALC-240: the limit applied to each loop separately, so nested loops multiplied it
+        [Theory]
+        [InlineData("n := 0; i := 0; while (i < 1000) { i += 1; j := 0; while (j < 1000) { j += 1; n += 1 } }; n")]
+        [InlineData("fn f() { j := 0; while (j < 1000) { j += 1 }; j }; n := 0; i := 0; while (i < 1000) { i += 1; n += f() }; n")]
+        public async Task MaxLoopIterationsShouldLimitAllLoopsOfAnEvaluationTogether(string expression)
+        {
+            // Not EvaluateInAllEvaluators: 65536 iterations in each evaluator may take seconds on a loaded machine
+            var token = TestContext.Current.CancellationToken;
+            foreach (var nonRecursive in new[] { false, true })
+            {
+                var o = ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.UseLoops | ExpressionOptions.NoCache
+                    | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+                var n = Convert.ToInt64(await Task.Run(() => new Expression(expression, o).Evaluate(token), token), System.Globalization.CultureInfo.InvariantCulture);
+                Assert.InRange(n, 60_000, Expression.MaxLoopIterations);
+                n = Convert.ToInt64(await new AsyncExpression(expression, o).EvaluateAsync(token), System.Globalization.CultureInfo.InvariantCulture);
+                Assert.InRange(n, 60_000, AsyncExpression.MaxLoopIterations);
+            }
+        }
+
         // NCALC-133
         [Fact]
         public async Task InvertedRangeErrorShouldShowTheBoundaries()

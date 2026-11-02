@@ -348,8 +348,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue), cancellationToken));
 
-                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.ConvertToULong(leftValue, "And with assignment", context.CultureInfo, expression.LeftExpression.Location) &
-                            MathHelper.ConvertToULong(rightValue, "And with assignment", context.CultureInfo, expression.RightExpression.Location), cancellationToken));
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseAnd(leftValue, rightValue, "And with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location), cancellationToken));
 
                 case BinaryExpressionType.OrAssignment:
                     if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
@@ -362,8 +361,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken));
 
-                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.ConvertToULong(leftValue, "Or with assignment", context.CultureInfo, expression.LeftExpression.Location) |
-                            MathHelper.ConvertToULong(rightValue, "Or with assignment", context.CultureInfo, expression.RightExpression.Location), cancellationToken));
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue, "Or with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location), cancellationToken));
 
                 case BinaryExpressionType.XOrAssignment:
                     if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
@@ -376,8 +374,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken));
 
-                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.ConvertToULong(leftValue, "Xor with assignment", context.CultureInfo, expression.LeftExpression.Location) ^
-                            MathHelper.ConvertToULong(rightValue, "XOr with assignment", context.CultureInfo, expression.RightExpression.Location), cancellationToken));
+                    return SetTaskValue(task, UpdateParameter(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue, "Xor with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location), cancellationToken));
 
                 case BinaryExpressionType.And:
                     if (!ExpressionEvaluated(task, 0, expression.LeftExpression))
@@ -737,8 +734,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, MathHelper.BitwiseAnd(leftValue, rightValue));
-                    return SetTaskValue(task, MathHelper.ConvertToULong(leftValue, "Bitwise And", context.CultureInfo, expression.LeftExpression.Location) &
-                            MathHelper.ConvertToULong(rightValue, "Bitwise And", context.CultureInfo, expression.RightExpression.Location));
+                    return SetTaskValue(task, MathHelper.BitwiseAnd(leftValue, rightValue, "Bitwise And", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location));
 
                 case BinaryExpressionType.BitwiseOr:
                     if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
@@ -755,8 +751,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, MathHelper.BitwiseOr(leftValue, rightValue));
-                    return SetTaskValue(task, MathHelper.ConvertToULong(leftValue, "Bitwise Or", context.CultureInfo, expression.LeftExpression.Location) |
-                            MathHelper.ConvertToULong(rightValue, "Bitwise Or", context.CultureInfo, expression.RightExpression.Location));
+                    return SetTaskValue(task, MathHelper.BitwiseOr(leftValue, rightValue, "Bitwise Or", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location));
 
                 case BinaryExpressionType.BitwiseXOr:
                     if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
@@ -773,8 +768,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, MathHelper.BitwiseXOr(leftValue, rightValue));
-                    return SetTaskValue(task, MathHelper.ConvertToULong(leftValue, "Bitwise XOr", context.CultureInfo, expression.LeftExpression.Location) ^
-                            MathHelper.ConvertToULong(rightValue, "Bitwise XOr", context.CultureInfo, expression.RightExpression.Location));
+                    return SetTaskValue(task, MathHelper.BitwiseXOr(leftValue, rightValue, "Bitwise XOr", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location));
 
                 case BinaryExpressionType.LeftShift:
                     if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
@@ -1021,12 +1015,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 {
                     object? result = null;
 
-                    int ctr = 0;
+                    // The iterations are counted for the whole evaluation, so nested loops do not multiply the limit
+                    var loopBudget = LoopIterationBudget.ForLoop(Expression.MaxLoopIterations);
 
-                    while (ctr < Expression.MaxLoopIterations)
+                    while (loopBudget.TryTake())
                     {
-                        ctr++;
-
                         if (!TryGetValueOrNull(EvaluateNoRecurse(expression.LeftExpression, cancellationToken), out leftValue))
                             break;
 
@@ -1150,7 +1143,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(FunctionCall function, ExpressionTask<object?> task, CancellationToken cancellationToken = default)
     {
-        return SetTaskValue(task, Visit(function, cancellationToken));
+        // The arguments are evaluated as separate expressions, which uses the stack; deeply nested calls continue on a thread with a large stack
+        return SetTaskValue(task, EvaluationHelper.HasSufficientExecutionStack()
+            ? Visit(function, cancellationToken)
+            : EvaluationHelper.EvaluateOnLargeStack(() => Visit(function, cancellationToken)));
     }
 
     public virtual object? Visit(Identifier identifier, ExpressionTask<object?> task, CancellationToken cancellationToken = default)

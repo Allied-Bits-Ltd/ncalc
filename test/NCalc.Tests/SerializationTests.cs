@@ -628,4 +628,192 @@ public class SerializationTests
         options.ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.Comma;
         Assert.Equal("Max(1; 2)", direct.ToString());
     }
+
+    // NCALC-205 (list and sequence roots in JSON), NCALC-226 (unsigned literals), NCALC-227 (fractions in index boundaries),
+    // NCALC-228 (Space-separated items that start with an operator), NCALC-230 (fn declarations)
+    [Fact]
+    public void ToStringAndJsonShouldRoundTripListsSequencesLiteralsAndFunctionDeclarations()
+    {
+        var culture = CultureInfo.GetCultureInfo("sk-SK");
+        AdvancedExpressionOptions Advanced(AdvExpressionOptions flags = AdvExpressionOptions.None,
+            AdvancedExpressionOptions.ListItemSeparatorKind separator = AdvancedExpressionOptions.ListItemSeparatorKind.CommaOrSemicolon,
+            bool decimalSeparatorFromCulture = false)
+            => new(culture, flags)
+            {
+                ListItemSeparator = separator,
+                DecimalSeparatorType = decimalSeparatorFromCulture ? AdvancedExpressionOptions.SeparatorType.FromCulture : AdvancedExpressionOptions.SeparatorType.BuiltIn
+            };
+
+        const ExpressionOptions Statements = ExpressionOptions.UseStatementSequences | ExpressionOptions.UseAssignments;
+        const ExpressionOptions CStyle = Statements | ExpressionOptions.UseCStyleAssignments;
+        var parameters = new Dictionary<string, object?> { ["s"] = "abcdefgh", ["x"] = 2 };
+        var rows = new (string Text, ExpressionOptions Options, Func<AdvancedExpressionOptions?> AdvancedOptions)[]
+        {
+            // NCALC-205: the options of a list or sequence root were lost in JSON, so "==" came back as the assignment "="
+            ("x == 1; 2", CStyle, () => null),
+            ("(x == 1, 2)", CStyle, () => null),
+            ("(7 mod 3, 1)", ExpressionOptions.None, () => Advanced(AdvExpressionOptions.CalculatePercent)),
+            ("(6 bit_and 3, 1)", ExpressionOptions.SkipLogicalAndBitwiseOpChars, () => null),
+            ("(Max(1,5; 2), 1)", ExpressionOptions.None, () => Advanced(decimalSeparatorFromCulture: true)),
+            ("(3 (-1))", ExpressionOptions.None, () => Advanced(separator: AdvancedExpressionOptions.ListItemSeparatorKind.Space)),
+            ("x := 1; x + 1;", Statements, () => null),
+            // NCALC-226
+            ("0xFF - 0x100", ExpressionOptions.HexBinOctAreUnsigned, () => null),
+            ("0xFFFFFFFF + 0xFFFFFFFF", ExpressionOptions.HexBinOctAreUnsigned, () => null),
+            ("0x7FFFFFFFFFFFFFFF + 0x7FFFFFFFFFFFFFFF", ExpressionOptions.HexBinOctAreUnsigned, () => null),
+            // NCALC-227
+            ("s[^((2147483647.0 + 1) / 268435456)]", ExpressionOptions.None, () => null),
+            ("s[1..((2147483647.0 + 1) / 536870912)]", ExpressionOptions.None, () => null),
+            ("s[1..3] + s[^2..]", ExpressionOptions.None, () => null),
+            // NCALC-228
+            ("if(true (!false) 2)", ExpressionOptions.None, () => Advanced(separator: AdvancedExpressionOptions.ListItemSeparatorKind.Space)),
+            ("if(true (not false) 2)", ExpressionOptions.SkipLogicalAndBitwiseOpChars, () => Advanced(separator: AdvancedExpressionOptions.ListItemSeparatorKind.Space)),
+            ("Max(1 (~2))", ExpressionOptions.None, () => Advanced(separator: AdvancedExpressionOptions.ListItemSeparatorKind.Space)),
+            // NCALC-230
+            ("fn f(a, b) => a + b; f(1: 2)", Statements, () => Advanced(separator: AdvancedExpressionOptions.ListItemSeparatorKind.Colon)),
+            ("fn f(a, b) => a + b; f(1 2)", Statements, () => Advanced(separator: AdvancedExpressionOptions.ListItemSeparatorKind.Space)),
+            ("fn f(a; b = 1,5) => a + b; f(1)", Statements, () => Advanced(decimalSeparatorFromCulture: true)),
+            ("fn f(a = null) => a; f()", Statements | ExpressionOptions.AllowNullParameter, () => null),
+        };
+
+        Expression Create(string text, ExpressionOptions options, Func<AdvancedExpressionOptions?> advancedOptions)
+            => new(text, options | ExpressionOptions.NoCache, culture) { AdvancedOptions = advancedOptions(), Parameters = new Dictionary<string, object?>(parameters) };
+        string Evaluate(Expression expression)
+        {
+            try
+            {
+                var result = expression.Evaluate(TestContext.Current.CancellationToken);
+                return result is System.Collections.IEnumerable items and not string
+                    ? string.Join("; ", items.Cast<object?>().Select(item => $"{Convert.ToString(item, CultureInfo.InvariantCulture)} {item?.GetType().Name}"))
+                    : $"{Convert.ToString(result, CultureInfo.InvariantCulture)} {result?.GetType().Name}";
+            }
+            catch (Exception ex)
+            {
+                return ex.GetType().Name;
+            }
+        }
+
+        var failures = new List<string>();
+        foreach (var (text, options, advancedOptions) in rows)
+        {
+            var original = Create(text, options, advancedOptions);
+            var tree = original.GetLogicalExpression(TestContext.Current.CancellationToken);
+            if (tree is null)
+            {
+                failures.Add($"{text}: does not parse");
+                continue;
+            }
+
+            string expected = Evaluate(original);
+            string written = tree.ToString();
+            var reparsed = Create(written, options, advancedOptions);
+            if (reparsed.HasErrors(TestContext.Current.CancellationToken))
+                failures.Add($"{text} -> {written}: does not parse");
+            else
+            if (Evaluate(reparsed) != expected)
+                failures.Add($"{text} = {expected}, {written} = {Evaluate(reparsed)}");
+
+            var restored = JsonSerializer.Deserialize<LogicalExpression>(JsonSerializer.Serialize(tree))!;
+            if (restored.ToString() != written)
+                failures.Add($"{text}: JSON -> {restored}");
+            var fromJson = new Expression(restored, options | ExpressionOptions.NoCache, culture) { AdvancedOptions = advancedOptions(), Parameters = new Dictionary<string, object?>(parameters) };
+            if (Evaluate(fromJson) != expected)
+                failures.Add($"{text} = {expected}, from JSON = {Evaluate(fromJson)}");
+        }
+
+        Assert.Empty(failures);
+    }
+
+    // NCALC-205: a list or a sequence keeps its options and its trailing separator in JSON, also as a function argument list,
+    // and JSON written before (plain arrays) is still read
+    [Fact]
+    public void JsonShouldKeepTheOptionsOfListsAndSequences()
+    {
+        var sequence = LogicalExpressionFactory.Create("x == 1; 2;", null, CultureInfo.InvariantCulture,
+            ExpressionOptions.UseStatementSequences | ExpressionOptions.UseAssignments | ExpressionOptions.UseCStyleAssignments);
+        var restored = Assert.IsType<StatementSequence>(JsonSerializer.Deserialize<LogicalExpression>(JsonSerializer.Serialize(sequence)));
+        Assert.True(restored.EndsWithSeparator);
+        Assert.True(restored.Options.HasFlag(ExpressionOptions.UseCStyleAssignments));
+        Assert.Equal("x == 1; 2;", restored.ToString());
+
+        var list = LogicalExpressionFactory.Create("(7 mod 3, 1)", null, CultureInfo.InvariantCulture, ExpressionOptions.None,
+            new AdvancedExpressionOptions(CultureInfo.InvariantCulture, AdvExpressionOptions.CalculatePercent));
+        Assert.Equal("(7 mod 3; 1)", JsonSerializer.Deserialize<LogicalExpression>(JsonSerializer.Serialize(list))!.ToString());
+
+        // A list without options is written as before
+        var call = LogicalExpressionFactory.Create("Max(1, 2)", null, CultureInfo.InvariantCulture);
+        Assert.Contains("\"Parameters\":[", JsonSerializer.Serialize(call), StringComparison.Ordinal);
+
+        var oldSequence = JsonSerializer.Deserialize<LogicalExpression>("""{"$type":"statements","$values":[{"$type":"value","Value":1,"Type":1},{"$type":"value","Value":2,"Type":1}]}""");
+        Assert.Equal("1; 2", Assert.IsType<StatementSequence>(oldSequence).ToString());
+        var oldCall = JsonSerializer.Deserialize<LogicalExpression>("""{"$type":"function","Identifier":{"Name":"Max"},"Parameters":[{"$type":"value","Value":1,"Type":1},{"$type":"value","Value":2,"Type":1}]}""");
+        Assert.Equal("Max(1; 2)", Assert.IsType<FunctionCall>(oldCall).ToString());
+    }
+
+    // NCALC-206: relative date and time literals were frozen at the moment of writing by ToString() and JSON
+    [Theory]
+    [InlineData("#today#")]
+    [InlineData("#2 days ago#")]
+    [InlineData("#yesterday# < #today#")]
+    [InlineData("#in 3 hours# > #now#")]
+    [InlineData("#1 month 2 days#")]
+    public void RelativeDateLiteralsShouldStayRelative(string expression)
+    {
+        var advancedOptions = new AdvancedExpressionOptions(CultureInfo.InvariantCulture, AdvExpressionOptions.ParseHumanePeriods);
+        var tree = LogicalExpressionFactory.Create(expression, null, CultureInfo.InvariantCulture, ExpressionOptions.None, advancedOptions);
+        Assert.Equal(expression, tree.ToString());
+
+        var restored = JsonSerializer.Deserialize<LogicalExpression>(JsonSerializer.Serialize(tree))!;
+        Assert.Equal(expression, restored.ToString());
+    }
+
+    // NCALC-206: a deserialized relative literal is computed when it is evaluated, not taken from the value stored in the JSON
+    [Fact]
+    public void DeserializedRelativeDateLiteralShouldBeComputedWhenEvaluated()
+    {
+        var advancedOptions = new AdvancedExpressionOptions(CultureInfo.InvariantCulture, AdvExpressionOptions.ParseHumanePeriods);
+        var tree = LogicalExpressionFactory.Create("#today#", null, CultureInfo.InvariantCulture, ExpressionOptions.None, advancedOptions);
+        var json = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(tree))!;
+        json["Value"] = System.Text.Json.Nodes.JsonNode.Parse("""{"$type":"DateTime","$value":"2000-01-01T00:00:00.0000000"}""");
+
+        var restored = Assert.IsType<ValueExpression>(JsonSerializer.Deserialize<LogicalExpression>(json.ToJsonString()));
+        Assert.Equal(DateTime.Today, restored.Value);
+
+        // A constant assigned later is not written as the relative literal
+        restored.Value = new DateTime(2000, 1, 1);
+        Assert.Equal("#2000-01-01#", restored.ToString());
+    }
+
+    // NCALC-226: a currency literal is a decimal, and is written with the currency symbol so that it is read back as a decimal
+    [Fact]
+    public void CurrencyLiteralsShouldBeWrittenAsCurrency()
+    {
+        var enUS = CultureInfo.GetCultureInfo("en-US");
+        var advancedOptions = new AdvancedExpressionOptions(enUS, AdvExpressionOptions.AcceptCurrencySymbol) { CurrencySymbolsType = AdvancedExpressionOptions.CurrencySymbolType.FromCulture };
+        var tree = LogicalExpressionFactory.Create("$0.1 + $0.2 = $0.3", null, enUS, ExpressionOptions.None, advancedOptions);
+        string written = tree.ToString();
+        Assert.Equal("$0.1 + $0.2 = $0.3", written);
+        Assert.Equal(true, new Expression(written, ExpressionOptions.NoCache, enUS) { AdvancedOptions = advancedOptions }.Evaluate(TestContext.Current.CancellationToken));
+
+        tree = LogicalExpressionFactory.Create("-$5 + $1.25", null, enUS, ExpressionOptions.None, advancedOptions);
+        Assert.Equal(-3.75m, new Expression(tree.ToString(), ExpressionOptions.NoCache, enUS) { AdvancedOptions = advancedOptions }.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    // NCALC-230: the description of a function is written as "///" lines, from which the parser reads it back
+    [Theory]
+    [InlineData(ExpressionOptions.None)]
+    [InlineData(ExpressionOptions.SupportCStyleComments)]
+    [InlineData(ExpressionOptions.SupportPythonComments)]
+    public void FunctionDescriptionShouldSurviveToString(ExpressionOptions commentOptions)
+    {
+        var options = commentOptions | ExpressionOptions.UseStatementSequences;
+        foreach (var text in new[] { "/// Doubles a\nfn f(a) => a * 2; f(3)", "/// line 1\n///  line 2\nfn f(a) => a * 2; f(3)" })
+        {
+            var tree = (StatementSequence)LogicalExpressionFactory.Create(text, null, CultureInfo.InvariantCulture, options);
+            string description = ((FunctionExpression)tree[0]).Function.Description!;
+            var reparsed = (StatementSequence)LogicalExpressionFactory.Create(tree.ToString(), null, CultureInfo.InvariantCulture, options);
+            Assert.Equal(description, ((FunctionExpression)reparsed[0]).Function.Description);
+            Assert.Equal(tree.ToString(), reparsed.ToString());
+        }
+    }
 }

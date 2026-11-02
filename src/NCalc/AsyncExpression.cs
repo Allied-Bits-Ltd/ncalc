@@ -108,6 +108,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         {
             StaticParameters = new ParameterOverlay<object?>(ownContext.StaticParameters, outerContext.StaticParameters),
             DynamicParameters = new ParameterOverlay<AsyncExpressionParameter>(ownContext.DynamicParameters, outerContext.DynamicParameters),
+            Functions = new ParameterOverlay<AsyncExpressionFunction>(ownContext.Functions, outerContext.Functions),
             AsyncEvaluateFunctionHandler = EvaluationHelper.CombineHandlers(ownContext.AsyncEvaluateFunctionHandler, outerContext.AsyncEvaluateFunctionHandler),
             AsyncEvaluateParameterHandler = EvaluationHelper.CombineHandlers(ownContext.AsyncEvaluateParameterHandler, outerContext.AsyncEvaluateParameterHandler),
             AsyncUpdateParameterHandler = EvaluationHelper.CombineHandlers(ownContext.AsyncUpdateParameterHandler, outerContext.AsyncUpdateParameterHandler),
@@ -229,6 +230,8 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     // The static UseNonRecursiveEvaluator setting selects the evaluator for this evaluation without changing Options
     private async ValueTask<object?> EvaluateOnceAsync(Visitors.AsyncEvaluationVisitor evaluationVisitor, CancellationToken cancellationToken)
     {
+        // MaxLoopIterations limits the iterations of all loops of the evaluation together
+        var loopBudget = Options.HasFlag(ExpressionOptions.UseLoops) ? LoopIterationBudget.Begin(MaxLoopIterations) : null;
         try
         {
             if (UseNonRecursiveEvaluator || Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
@@ -236,12 +239,15 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
             else
                 return await LogicalExpression!.Accept(evaluationVisitor, cancellationToken).ConfigureAwait(false);
         }
-        catch (NCalcFlowControl flex)
+        // "return" in an argument of a function returns from the whole expression (or from the function in whose body it is),
+        // as "return" elsewhere does, so the expression that evaluates the argument passes it on
+        catch (NCalcFlowControl flex) when (flex.Type == NCalcFlowControl.FlowControlType.Return && !IsSubExpression)
         {
-            if (flex.Type == NCalcFlowControl.FlowControlType.Return)
-                return flex.ReturnValue;
-            else
-                throw;
+            return flex.ReturnValue;
+        }
+        finally
+        {
+            loopBudget?.End();
         }
     }
 
@@ -257,9 +263,11 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         if (size is null)
             return await EvaluateOnceAsync(evaluationVisitor, cancellationToken).ConfigureAwait(false);
 
-        // Each element is put into Parameters for one evaluation; the lists are put back afterwards,
-        // so that the next evaluation iterates them again
-        var originalValues = parameterEnumerators.Keys.ToDictionary(key => key, key => Parameters[key]);
+        // The current elements are put into a layer over Parameters for each evaluation; Parameters itself is not changed
+        // (it may be read-only), so that the next evaluation iterates the lists again
+        var parameters = Parameters;
+        var iteratedParameters = new IteratedParameters(parameters, parameterEnumerators.Keys);
+        Parameters = iteratedParameters;
         try
         {
             var results = new List<object?>();
@@ -269,7 +277,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
                 foreach (var kvp in parameterEnumerators)
                 {
                     kvp.Value.MoveNext();
-                    Parameters[kvp.Key] = kvp.Value.Current;
+                    iteratedParameters.SetCurrent(kvp.Key, kvp.Value.Current);
                 }
 
                 results.Add(await EvaluateOnceAsync(evaluationVisitor, cancellationToken).ConfigureAwait(false));
@@ -279,8 +287,9 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         }
         finally
         {
-            foreach (var original in originalValues)
-                Parameters[original.Key] = original.Value;
+            // Unless a handler has replaced the parameters meanwhile
+            if (ReferenceEquals(Parameters, iteratedParameters))
+                Parameters = parameters;
         }
     }
 }

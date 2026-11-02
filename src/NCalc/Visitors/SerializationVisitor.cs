@@ -51,6 +51,29 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             ? text
             : text + _numberFormatInfo.NumberDecimalSeparator + "0";
 
+    /// <summary>
+    /// Writes a decimal as a currency literal ("$0.1"), when the expression accepts currency symbols and a plain number would not be read
+    /// back as a decimal. Returns null when it is not needed or not possible.
+    /// </summary>
+    private string? FormatCurrency(decimal value)
+    {
+        var advancedOptions = context.AdvancedOptions;
+        if (advancedOptions?.Flags.HasFlag(AdvExpressionOptions.AcceptCurrencySymbol) != true || context.Options.HasFlag(ExpressionOptions.DecimalAsDefault))
+            return null;
+
+        advancedOptions.GetCurrencySymbols(out string symbol, out string symbol2, out string symbol3);
+        if (string.IsNullOrEmpty(symbol))
+            symbol = !string.IsNullOrEmpty(symbol2) ? symbol2 : symbol3;
+        string separator = advancedOptions.GetCurrencyDecimalSeparator();
+        if (string.IsNullOrEmpty(symbol) || string.IsNullOrEmpty(separator))
+            return null;
+
+        var currencyFormat = (NumberFormatInfo)_numberFormatInfo.Clone();
+        currencyFormat.NumberDecimalSeparator = separator;
+        string number = Math.Abs(value).ToString(currencyFormat);
+        return (value < 0 ? "-" : string.Empty) + symbol + number;
+    }
+
     // Dates and times are written in the ISO form, which does not depend on the culture: #2024-01-02# or #2024-01-02T10:20:30.5#
     /// <summary>
     /// Escapes a string that was not read from the text of an expression (so it has no original form), so that it can be read back
@@ -108,7 +131,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             else
             {
                 resultBuilder.Append("{ ");
-                resultBuilder.Append(EncapsulateNoValue(expression.MiddleExpression));
+                resultBuilder.Append(EncapsulateNoValue(expression.MiddleExpression, false));
                 resultBuilder.Append(" }");
             }
 
@@ -122,7 +145,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
                 else
                 {
                     resultBuilder.Append("{ ");
-                    resultBuilder.Append(EncapsulateNoValue(expression.RightExpression));
+                    resultBuilder.Append(EncapsulateNoValue(expression.RightExpression, false));
                     resultBuilder.Append(" }");
                 }
             }
@@ -189,19 +212,22 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         => value.Type is ValueType.Integer or ValueType.Float && value.Accept(this).StartsWith("-", StringComparison.Ordinal);
 
     public string Visit(BinaryExpression expression, CancellationToken cancellationToken = default)
-    {
-        if (expression.Type != BinaryExpressionType.RangeIndex || _inIndex)
-            return VisitBinary(expression, cancellationToken);
+        => VisitBinary(expression, cancellationToken);
 
-        // The boundaries of a range are positions, written as integers
-        _inIndex = true;
+    // The boundaries of a range and the position of a from-end index are positions: a literal that is itself the boundary is written
+    // as an integer ("s[1..3]"). A literal inside a computed boundary keeps its fraction ("s[^((2147483647.0 + 1) / 268435456)]"),
+    // as it would be read back as an integer and change the result
+    private string EncapsulateBoundary(LogicalExpression boundary, bool appendSpace = true, bool parensNeeded = false)
+    {
+        bool wasInIndex = _inIndex;
+        _inIndex = boundary is ValueExpression;
         try
         {
-            return VisitBinary(expression, cancellationToken);
+            return EncapsulateNoValue(boundary, appendSpace, parensNeeded);
         }
         finally
         {
-            _inIndex = false;
+            _inIndex = wasInIndex;
         }
     }
 
@@ -266,7 +292,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
             }
 
             appendSpace = expression.Type != BinaryExpressionType.IndexAccess && expression.Type != BinaryExpressionType.RangeIndex;
-            resultBuilder.Append(EncapsulateNoValue(expression.LeftExpression, appendSpace, parensNeeded));
+            resultBuilder.Append(expression.Type == BinaryExpressionType.RangeIndex
+                ? EncapsulateBoundary(expression.LeftExpression, appendSpace, parensNeeded)
+                : EncapsulateNoValue(expression.LeftExpression, appendSpace, parensNeeded));
 
             resultBuilder.Append(expression.Type switch
             {
@@ -327,11 +355,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         if (expression.Type == BinaryExpressionType.IndexAccess)
             appendSpace = false;
 
-        resultBuilder.Append(
-            EncapsulateNoValue(
-                expression.RightExpression,
-                appendSpace,//expression.Type != BinaryExpressionType.IndexAccess && expression.Type != BinaryExpressionType.RangeIndex && expression.Type != BinaryExpressionType.StatementSequence,
-                parensNeeded));
+        resultBuilder.Append(expression.Type == BinaryExpressionType.RangeIndex
+            ? EncapsulateBoundary(expression.RightExpression, appendSpace, parensNeeded)
+            : EncapsulateNoValue(expression.RightExpression, appendSpace, parensNeeded));
         if (expression.Type == BinaryExpressionType.IndexAccess)
             resultBuilder.Append(']');
 
@@ -359,16 +385,9 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         };
 
         bool parensNeeded = !(expression.Expression is Identifier || (expression.Expression is ValueExpression value && !IsNegativeNumber(value)));
-        bool wasInIndex = _inIndex;
-        _inIndex |= expression.Type == UnaryExpressionType.FromEnd;
-        try
-        {
-            result += EncapsulateNoValue(expression.Expression, parensNeeded: parensNeeded);
-        }
-        finally
-        {
-            _inIndex = wasInIndex;
-        }
+        result += expression.Type == UnaryExpressionType.FromEnd
+            ? EncapsulateBoundary(expression.Expression, parensNeeded: parensNeeded)
+            : EncapsulateNoValue(expression.Expression, parensNeeded: parensNeeded);
         return result;
     }
 
@@ -398,12 +417,23 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
 
     public string Visit(ValueExpression expression, CancellationToken cancellationToken = default)
     {
+        // A relative date or time literal (#today#, #2 days ago#) is written as it was written, so that it stays relative
+        if (expression.Relative is { } relative)
+            return $"#{relative.Text}# ";
+
         var value = expression.Value;
 
         return expression.Type switch
         {
-            // A ulong above long.MaxValue is written in hexadecimal, which is read back as a ulong (decimal digits would give a double)
-            ValueType.Integer when value is ulong ulongValue && ulongValue > long.MaxValue => $"0x{ulongValue.ToString("X", CultureInfo.InvariantCulture)} ",
+            // A ulong above long.MaxValue is written in hexadecimal, which is read back as a ulong (decimal digits would give a double).
+            // When hexadecimal literals are unsigned, every uint and ulong is written in hexadecimal, so that "0xFF - 0x100" is not read
+            // back as the signed "255 - 256"
+            ValueType.Integer when value is ulong ulongValue && (ulongValue > long.MaxValue || context.Options.HasFlag(ExpressionOptions.HexBinOctAreUnsigned))
+                => $"0x{ulongValue.ToString("X", CultureInfo.InvariantCulture)} ",
+            ValueType.Integer when value is uint uintValue && context.Options.HasFlag(ExpressionOptions.HexBinOctAreUnsigned)
+                => $"0x{uintValue.ToString("X", CultureInfo.InvariantCulture)} ",
+            // A decimal is read back as a decimal only with a currency symbol, unless decimals are the default ("$0.1 + $0.2 = $0.3")
+            ValueType.Float when value is decimal currencyValue && FormatCurrency(currencyValue) is string currencyText => currencyText + " ",
             ValueType.Boolean or ValueType.Integer => $"{Convert.ToString(value, CultureInfo.InvariantCulture)} ",
             ValueType.DateTime => value is DateTime dateTime ? $"#{FormatDateTime(dateTime)}# " : $"#{value}# ",
             ValueType.TimeSpan => value is TimeSpan timeSpan ? $"#{FormatTimeSpan(timeSpan)}# " : $"#{Convert.ToString(value, CultureInfo.InvariantCulture)}# ",
@@ -472,37 +502,24 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         StringBuilder resultBuilder = new();
         Function function = expression.Function;
+        // The description is written as "///" lines, the only form from which the parser takes it. Each line is written as it is,
+        // after "///", so that the description is read back unchanged (the parser trims only the whole description)
         if (!string.IsNullOrEmpty(function.Description))
         {
-            string desc = function.Description!;
-            if (context.Options.HasFlag(ExpressionOptions.SupportCStyleComments))
+            bool firstLine = true;
+            foreach (var line in function.Description!.Split('\n'))
             {
-                resultBuilder.Append("/* ");
-                resultBuilder.Append(desc);
-                resultBuilder.AppendLine(" */");
-            }
-            else
-            if (context.Options.HasFlag(ExpressionOptions.SupportPythonComments))
-            {
-                if (desc.Contains('\n'))
-                {
-                    foreach (var line in desc.Split('\n'))
-                    {
-                        resultBuilder.Append("# ");
-                        resultBuilder.AppendLine(line);
-                    }
-                }
-                else
-                {
-                    resultBuilder.Append("# ");
-                    resultBuilder.AppendLine(desc);
-                }
+                resultBuilder.Append(firstLine ? "/// " : "///");
+                resultBuilder.Append(line);
+                resultBuilder.Append('\n');
+                firstLine = false;
             }
         }
         resultBuilder.Append("fn ");
         resultBuilder.Append(function.Name);
         resultBuilder.Append('(');
-        string fnSep = GetListItemSeparator(context.AdvancedOptions);
+        // The parameters are separated with a comma or a semicolon, whatever the list separator is, as the parser accepts only these
+        string fnSep = GetListItemSeparator(context.AdvancedOptions) == ", " ? ", " : "; ";
         bool paramAdded = false;
         foreach (var param in function.Parameters)
         {
@@ -596,8 +613,11 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
     // A default value of a parameter is written as a literal (a string in quotes, a number with the separator of the parser)
     private string FormatDefaultValue(object? value)
     {
-        if (value is null)
+        if (value is null or ValueExpression { Type: ValueType.NoValue })
             return "null";
+        // The parser stores the literal itself
+        if (value is LogicalExpression literal)
+            return literal.Accept(this).TrimEnd();
         try
         {
             return new ValueExpression(value).Accept(this).TrimEnd();
@@ -631,9 +651,25 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         return separator + " ";
     }
 
+    // Tells whether the text of a list item starts with an operator rather than with an operand: a sign, "!" (which would be read
+    // as a factorial of the item before it), "~", "^", a root sign, or the words "not", "bit_not" and "return"
+    private static bool StartsWithOperator(string text)
+    {
+        if (text.Length == 0)
+            return false;
+        if ("-+!~^¬√∛∜".IndexOf(text[0]) >= 0)
+            return true;
+        return StartsWithWord(text, "not") || StartsWithWord(text, "bit_not") || StartsWithWord(text, "return");
+
+        static bool StartsWithWord(string text, string word)
+            => text.StartsWith(word, StringComparison.OrdinalIgnoreCase)
+                && (text.Length == word.Length || !(char.IsLetterOrDigit(text[word.Length]) || text[word.Length] == '_'));
+    }
+
     // Writes the items of a list or of the arguments of a function. When the items are separated by spaces only, an item that starts
-    // with a sign is parenthesized ("1 (-2)", not "1 -2", which is a subtraction), and so is an item followed by a parenthesis or
-    // a bracket ("(a) (-2)", not "a (-2)", which is a function call, or "a [b]", which is an index).
+    // with an operator is parenthesized ("1 (-2)", not "1 -2", which is a subtraction, and "3 (!False)", not "3 !False", which is
+    // a factorial), and so is an item followed by a parenthesis or a bracket ("(a) (-2)", not "a (-2)", which is a function call,
+    // or "a [b]", which is an index).
     private string JoinListItems(IList<LogicalExpression> items, CancellationToken cancellationToken)
     {
         string separator = GetListItemSeparator(context.AdvancedOptions);
@@ -648,7 +684,7 @@ public class SerializationVisitor(SerializationContext context) : ILogicalExpres
         {
             for (int i = 0; i < texts.Length; i++)
             {
-                if (texts[i].StartsWith("-", StringComparison.Ordinal) || texts[i].StartsWith("+", StringComparison.Ordinal))
+                if (StartsWithOperator(texts[i]))
                     texts[i] = "(" + texts[i] + ")";
             }
             // From the end, as a wrapped item makes the one before it need parentheses too

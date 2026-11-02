@@ -322,6 +322,31 @@ public class ExceptionsTests
             Assert.ThrowsAny<NCalcException>(() => LogicalExpressionFactory.Create(text, null, CultureInfo.InvariantCulture));
     }
 
+    // NCALC-239: the asynchronous ifs/if reported the location of the function instead of the condition, and the non-recursive
+    // evaluators gave no location to an error thrown inside a built-in function
+    [Theory]
+    [InlineData("1 + ifs(false, 1, 'x', 2, 3)")]
+    [InlineData("1 + if('x', 1, 2)")]
+    [InlineData("1 + Round(1.5, 'x')")]
+    [InlineData("1 + Max(1, 'x')")]
+    [InlineData("2 * (1 + Abs(Round(1.5, 'x')))")]
+    public async Task ErrorLocationsShouldBeTheSameInAllEvaluators(string text)
+    {
+        var locations = new List<string>();
+        foreach (var nonRecursive in new[] { false, true })
+        {
+            var options = ExpressionOptions.NoCache | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+            var syncError = Assert.ThrowsAny<NCalcEvaluationException>(() => new Expression(text, options).Evaluate(TestContext.Current.CancellationToken));
+            var asyncError = await Assert.ThrowsAnyAsync<NCalcEvaluationException>(async () => await new AsyncExpression(text, options).EvaluateAsync(TestContext.Current.CancellationToken));
+            foreach (var error in new[] { syncError, asyncError })
+            {
+                Assert.NotEqual(-1, error.Location.Column);
+                locations.Add($"{error.Location.Row}:{error.Location.Column}:{error.Location.Offset}");
+            }
+        }
+        Assert.Single(locations.Distinct());
+    }
+
     [Fact]
     public void CancellationDuringParsingShouldNotBeASyntaxError()
     {

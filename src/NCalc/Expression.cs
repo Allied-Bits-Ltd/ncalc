@@ -112,6 +112,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         if (outerContext is ExpressionContext outer)
         {
             nestedContext.DynamicParameters = new ParameterOverlay<ExpressionParameter>(ownContext.DynamicParameters, outer.DynamicParameters);
+            nestedContext.Functions = new ParameterOverlay<ExpressionFunction>(ownContext.Functions, outer.Functions);
             nestedContext.EvaluateFunctionHandler = EvaluationHelper.CombineHandlers(ownContext.EvaluateFunctionHandler, outer.EvaluateFunctionHandler);
             nestedContext.EvaluateParameterHandler = EvaluationHelper.CombineHandlers(ownContext.EvaluateParameterHandler, outer.EvaluateParameterHandler);
             nestedContext.UpdateParameterHandler = EvaluationHelper.CombineHandlers(ownContext.UpdateParameterHandler, outer.UpdateParameterHandler);
@@ -241,6 +242,8 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     // The static UseNonRecursiveEvaluator setting selects the evaluator for this evaluation without changing Options
     private object? EvaluateOnce(Visitors.EvaluationVisitor evaluationVisitor, CancellationToken cancellationToken)
     {
+        // MaxLoopIterations limits the iterations of all loops of the evaluation together
+        var loopBudget = Options.HasFlag(ExpressionOptions.UseLoops) ? LoopIterationBudget.Begin(MaxLoopIterations) : null;
         try
         {
             if (UseNonRecursiveEvaluator || Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator))
@@ -248,12 +251,15 @@ public partial class Expression : ExpressionBase<ExpressionContext>
             else
                 return LogicalExpression!.Accept(evaluationVisitor, cancellationToken);
         }
-        catch (NCalcFlowControl flex)
+        // "return" in an argument of a function returns from the whole expression (or from the function in whose body it is),
+        // as "return" elsewhere does, so the expression that evaluates the argument passes it on
+        catch (NCalcFlowControl flex) when (flex.Type == NCalcFlowControl.FlowControlType.Return && !IsSubExpression)
         {
-            if (flex.Type == NCalcFlowControl.FlowControlType.Return)
-                return flex.ReturnValue;
-            else
-                throw;
+            return flex.ReturnValue;
+        }
+        finally
+        {
+            loopBudget?.End();
         }
     }
 
@@ -269,9 +275,11 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         if (size is null)
             return EvaluateOnce(evaluationVisitor, cancellationToken);
 
-        // Each element is put into Parameters for one evaluation; the lists are put back afterwards,
-        // so that the next evaluation iterates them again
-        var originalValues = parameterEnumerators.Keys.ToDictionary(key => key, key => Parameters[key]);
+        // The current elements are put into a layer over Parameters for each evaluation; Parameters itself is not changed
+        // (it may be read-only), so that the next evaluation iterates the lists again
+        var parameters = Parameters;
+        var iteratedParameters = new IteratedParameters(parameters, parameterEnumerators.Keys);
+        Parameters = iteratedParameters;
         try
         {
             var results = new List<object?>();
@@ -281,7 +289,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
                 foreach (var kvp in parameterEnumerators)
                 {
                     kvp.Value.MoveNext();
-                    Parameters[kvp.Key] = kvp.Value.Current;
+                    iteratedParameters.SetCurrent(kvp.Key, kvp.Value.Current);
                 }
 
                 results.Add(EvaluateOnce(evaluationVisitor, cancellationToken));
@@ -291,8 +299,9 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         }
         finally
         {
-            foreach (var original in originalValues)
-                Parameters[original.Key] = original.Value;
+            // Unless a handler has replaced the parameters meanwhile
+            if (ReferenceEquals(Parameters, iteratedParameters))
+                Parameters = parameters;
         }
     }
 }

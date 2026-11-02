@@ -39,22 +39,34 @@ public static class LogicalExpressionParser
     const string errUnrecognizedTimeRelationIndicator = "Unrecognized time relation indicator '{0}' in the date/time definition.";
     const string errDuplicateTimeRelationIndicators = "A date/time may contain only one time relation indicator, but two ('{0}' and '{1}') were specified.";
 
-    class CurrentCultureDateTimeFormatProvider : IFormatProvider
+    /// <summary>
+    /// Creates the format with which the parts of a date literal, already arranged by the masks of the expression culture, are converted
+    /// to a date. It uses the Gregorian calendar and the separators "/" and ":" (which the masks contain as placeholders), and never the
+    /// culture of the current thread: under a Thai or Saudi thread culture, #1/2/2024# would otherwise be read in the Buddhist or the
+    /// Um Al-Qura calendar. Only the AM and PM designators are taken from the format of the expression.
+    /// </summary>
+    private static DateTimeFormatInfo CreateLiteralDateTimeFormat(DateTimeFormatInfo expressionFormat)
     {
-        public object GetFormat(Type? formatType)
-        {
-            if (formatType?.Equals(typeof(DateTimeFormatInfo)) == true)
-            {
-                return CultureInfo.CurrentCulture.DateTimeFormat;
-            }
-            else
-            {
-                return null!;
-            }
-        }
+        var format = (DateTimeFormatInfo)CultureInfo.InvariantCulture.DateTimeFormat.Clone();
+        format.AMDesignator = expressionFormat.AMDesignator;
+        format.PMDesignator = expressionFormat.PMDesignator;
+        return format;
     }
 
-    private static IFormatProvider _currentCultureFormatProvider = new CurrentCultureDateTimeFormatProvider();
+    /// <summary>
+    /// Creates the error for a date or time literal that has the shape of one but is not valid (#2024-13-01#). It stays a
+    /// FormatException, as before, and tells where the literal is.
+    /// </summary>
+    private static FormatException InvalidLiteralFormat(string kind, ParseContext ctx)
+        => new($"Invalid {kind} format at position {ctx.Scanner.Cursor.Position}.");
+
+    /// <summary>
+    /// Returns the part of a cache key that stands for the culture of the current thread. Only advanced options refer to it
+    /// (separators, currency symbols or the 12-hour format "from the culture" without a culture of their own); without them,
+    /// parsing does not depend on the thread culture.
+    /// </summary>
+    internal static string GetCurrentCultureCacheKey(AdvancedExpressionOptions? extOptions)
+        => extOptions is null ? string.Empty : GetCultureCacheKey(CultureInfo.CurrentCulture);
 
     private const string ExpressionTooDeepMessage = "The expression is nested too deeply to be parsed";
 
@@ -101,6 +113,13 @@ public static class LogicalExpressionParser
     /// The levels are listed from the tightest to the loosest and are tried in this order at every position.
     /// A level whose operator matches but is not followed by an operand gives way to the next level, as the nested parsers did.
     /// </summary>
+    /// <summary>
+    /// Tells whether an expression can be the target of an assignment: a name, or an index access on a name ("x", "l[1]").
+    /// </summary>
+    private static bool IsAssignmentTarget(LogicalExpression target)
+        => target is Identifier
+            || (target is BinaryExpression { Type: BinaryExpressionType.IndexAccess, LeftExpression: Identifier });
+
     /// <summary>
     /// Tells whether a run of 32 hex characters is a number with an exponent rather than a GUID without hyphens.
     /// </summary>
@@ -313,7 +332,7 @@ public static class LogicalExpressionParser
     {
         const string separator = "\u001F";
         return string.Concat(((long)options).ToString(CultureInfo.InvariantCulture), separator, GetCultureCacheKey(cultureInfo), separator,
-            GetCultureCacheKey(CultureInfo.CurrentCulture), separator, extOptions?.GetCacheKey() ?? string.Empty);
+            GetCurrentCultureCacheKey(extOptions), separator, extOptions?.GetCacheKey() ?? string.Empty);
     }
 
     private static readonly ConditionalWeakTable<CultureInfo, string> ReadOnlyCultureCacheKeys = new();
@@ -671,10 +690,13 @@ public static class LogicalExpressionParser
         NumberOptions useNumberGroupSeparatorFlag = ((extOptions is not null) && (numGroupSeparator != '\0')) ? NumberOptions.AllowGroupSeparators : NumberOptions.None;
         NumberOptions useUnderscoreFlag = acceptUnderscores ? NumberOptions.AllowUnderscore : NumberOptions.None;
 
+        // The exclusions must match right after the digits (Literals, not Terms): a separator or a word such as "else" after whitespace does not make the literal fractional.
+        // An exponent is "E" followed by a digit or a sign.
+        Parser<string> exponentStart = Literals.Text("E", true).AndSkip(Literals.Pattern(static c => (c >= '0' && c <= '9') || c == '+' || c == '-', 1, 1));
         Parser<string>[] floatNumExclusions =
             (decimalSeparator2 != '\0')
-            ? [Terms.Text(decimalSeparator.ToString()), Terms.Text(decimalSeparator2.ToString()), Terms.Text("E", true)]
-            : [Terms.Text(decimalSeparator.ToString()), Terms.Text("E", true)];
+            ? [Literals.Text(decimalSeparator.ToString()), Literals.Text(decimalSeparator2.ToString()), exponentStart]
+            : [Literals.Text(decimalSeparator.ToString()), exponentStart];
 
         //var intNumberParser
         var intNumber = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
@@ -1123,6 +1145,7 @@ public static class LogicalExpressionParser
         if (!options.HasFlag(ExpressionOptions.DontParseDates))
         {
             DateTimeFormatInfo dateTimeFormat = extOptions?.GetFormat(typeof(DateTimeFormatInfo)) as DateTimeFormatInfo ?? cultureInfo.DateTimeFormat;
+            DateTimeFormatInfo literalDateTimeFormat = CreateLiteralDateTimeFormat(dateTimeFormat);
 
             Sequence<TextSpan, TextSpan, TextSpan> dateDefinition;
             Sequence<TextSpan, TextSpan, TextSpan> dateDefinitionIso;
@@ -1229,28 +1252,35 @@ public static class LogicalExpressionParser
                     .And(charIsNumber);
             }
 
-            // date => number/number/number or custom
-            date = dateDefinition.Then<LogicalExpression>((ctx, date) =>
+            DateTime? ParseDate((TextSpan, TextSpan, TextSpan) date)
             {
                 string customDateSepForDT = dateTimeFormat.DateSeparator;
                 if (useSecondDate || onlyCustomDateTranslation)
                 {
                     if (DateTime.TryParse($"{date.Item1}{customDateSepForDT}{date.Item2}{customDateSepForDT}{date.Item3}", dateTimeFormat, DateTimeStyles.None, out var result))
-                    {
-                        return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
-                    }
+                        return result;
                 }
                 if (useSecondDate || !onlyCustomDateTranslation)
                 {
-                    // Use the existing ncalc approach with the current culture
-                    if (DateTime.TryParseExact($"{date.Item1}{builtInDateSep}{date.Item2}{builtInDateSep}{date.Item3}", ncalcDateMasks, _currentCultureFormatProvider, DateTimeStyles.None, out var result))
-                    {
-                        return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
-                    }
+                    // The masks follow the order of the parts in the culture of the expression
+                    if (DateTime.TryParseExact($"{date.Item1}{builtInDateSep}{date.Item2}{builtInDateSep}{date.Item3}", ncalcDateMasks, literalDateTimeFormat, DateTimeStyles.None, out var result))
+                        return result;
                 }
+                return null;
+            }
 
-                throw new FormatException("Invalid DateTime format.");
-            });
+            // Where the date separator is also the time separator (fi-FI: "."), "10.30.00" may be a time span, and "1.10.30" may be
+            // the days and the hours of "1.10.30.00": three numbers are a date only when they make a valid date and the literal ends
+            // after them; otherwise they are read as a time span
+            Parser<(TextSpan, TextSpan, TextSpan)> dateParts = (builtInDateSep == builtInTimeSep || customDateSep == builtInTimeSep)
+                ? dateDefinition.When((_, date) => ParseDate(date) is not null).AndSkip(Not(Not(Literals.Char('#'))))
+                : dateDefinition;
+
+            // date => number/number/number or custom
+            date = dateParts.Then<LogicalExpression>((ctx, date) =>
+                ParseDate(date) is DateTime result
+                    ? new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx))
+                    : throw InvalidLiteralFormat("DateTime", ctx));
 
             dateDefinitionIso = charIsNumber
                     .AndSkip(hyphenChar)
@@ -1269,7 +1299,7 @@ public static class LogicalExpressionParser
                     return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                 }
 
-                throw new FormatException("Invalid DateTime format.");
+                throw InvalidLiteralFormat("DateTime", ctx);
             });
 
             Sequence<TextSpan, TextSpan, TextSpan, string>? time12Definition = null;
@@ -1339,6 +1369,8 @@ public static class LogicalExpressionParser
             }
 
             var secondTimeSep = Terms.Text(customTimeSep); // this may be a custom separator or ":"
+            var colonText = Terms.Text(":");
+            Parser<string> timeSpanSeparator;
             if (useSecondTime)
             {
                 if (customTimeSep.Contains(' '))
@@ -1368,14 +1400,7 @@ public static class LogicalExpressionParser
                     shortTimeDefinition = charIsNumber
                         .AndSkip(OneOf(divided, secondTimeSep, thirdTimeSep))
                         .And(charIsNumber);
-                    timeSpanDefinition = ZeroOrOne(minus).And(ZeroOrOne(charIsNumber.AndSkip(dotChar))).And(charIsNumber)
-                        .AndSkip(OneOf(divided, secondTimeSep, thirdTimeSep))
-                        .And(charIsNumber)
-                        .AndSkip(OneOf(divided, secondTimeSep, thirdTimeSep))
-                        .And(charIsNumber);
-                    shortTimeSpanDefinition = ZeroOrOne(minus).And(ZeroOrOne(charIsNumber.AndSkip(dotChar))).And(charIsNumber)
-                        .AndSkip(OneOf(divided, secondTimeSep, thirdTimeSep))
-                        .And(charIsNumber);
+                    timeSpanSeparator = OneOf(divided, secondTimeSep, thirdTimeSep, colonText);
                 }
                 else
                 {
@@ -1403,15 +1428,7 @@ public static class LogicalExpressionParser
                         .AndSkip(OneOf(divided, secondTimeSep))
                         .And(charIsNumber);
 
-                    timeSpanDefinition = ZeroOrOne(minus).And(ZeroOrOne((charIsNumber).AndSkip(dotChar))).And(charIsNumber)
-                        .AndSkip(OneOf(divided, secondTimeSep))
-                        .And(charIsNumber)
-                        .AndSkip(OneOf(divided, secondTimeSep))
-                        .And(charIsNumber);
-
-                    shortTimeSpanDefinition = ZeroOrOne(minus).And(ZeroOrOne(charIsNumber.AndSkip(dotChar))).And(charIsNumber)
-                        .AndSkip(OneOf(divided, secondTimeSep))
-                        .And(charIsNumber);
+                    timeSpanSeparator = OneOf(divided, secondTimeSep, colonText);
                 }
             }
             else
@@ -1440,17 +1457,25 @@ public static class LogicalExpressionParser
                     .AndSkip(secondTimeSep)
                     .And(charIsNumber);
 
-                // timeSpan => [[-]number.]number:number:number
-                timeSpanDefinition = ZeroOrOne(minus).And(ZeroOrOne((charIsNumber).AndSkip(dotChar))).And(charIsNumber)
-                    .AndSkip(secondTimeSep)
-                    .And(charIsNumber)
-                    .AndSkip(secondTimeSep)
-                    .And(charIsNumber);
-
-                shortTimeSpanDefinition = ZeroOrOne(minus).And(ZeroOrOne(charIsNumber.AndSkip(dotChar))).And(charIsNumber)
-                    .AndSkip(secondTimeSep)
-                    .And(charIsNumber);
+                timeSpanSeparator = customTimeSep == ":" ? secondTimeSep : OneOf(secondTimeSep, colonText);
             }
+
+            // timeSpan => [[-]number.]number:number:number
+            // A time span always accepts ':' (ToString() writes #hh:mm:ss#), also where the time separator of the culture is '.' (fi-FI).
+            // The days ("1." in #1.10:30:00#) are taken only when the rest of the time span follows them, so that #10.30.00# is not
+            // read as 10 days followed by an incomplete time
+            var timeSpanRest = charIsNumber.AndSkip(timeSpanSeparator).And(charIsNumber).AndSkip(timeSpanSeparator).And(charIsNumber);
+            var shortTimeSpanRest = charIsNumber.AndSkip(timeSpanSeparator).And(charIsNumber);
+
+            timeSpanDefinition = ZeroOrOne(minus).And(ZeroOrOne(charIsNumber.AndSkip(dotChar).AndSkip(Not(Not(timeSpanRest))))).And(charIsNumber)
+                .AndSkip(timeSpanSeparator)
+                .And(charIsNumber)
+                .AndSkip(timeSpanSeparator)
+                .And(charIsNumber);
+
+            shortTimeSpanDefinition = ZeroOrOne(minus).And(ZeroOrOne(charIsNumber.AndSkip(dotChar).AndSkip(Not(Not(shortTimeSpanRest))))).And(charIsNumber)
+                .AndSkip(timeSpanSeparator)
+                .And(charIsNumber);
 
             timeDefinitionIso = charIsNumber
                     .AndSkip(colon)
@@ -1503,7 +1528,7 @@ public static class LogicalExpressionParser
                     }
                 }
 
-                throw new FormatException("Invalid TimeSpan format.");
+                throw InvalidLiteralFormat("TimeSpan", ctx);
             });
 
             var shortTime = shortTimeSpanDefinition.Then<LogicalExpression>((ctx, time) =>
@@ -1547,7 +1572,7 @@ public static class LogicalExpressionParser
                     }
                 }
 
-                throw new FormatException("Invalid TimeSpan format.");
+                throw InvalidLiteralFormat("TimeSpan", ctx);
             });
 
             if (use12HourTime)
@@ -1582,7 +1607,7 @@ public static class LogicalExpressionParser
                         }
                     }
 
-                    throw new FormatException("Invalid TimeSpan format.");
+                    throw InvalidLiteralFormat("TimeSpan", ctx);
                 });
 
                 shortTime12 = shortTime12Definition!.Then<LogicalExpression>((ctx, time) =>
@@ -1610,7 +1635,7 @@ public static class LogicalExpressionParser
                         }
                     }
 
-                    throw new FormatException("Invalid TimeSpan format.");
+                    throw InvalidLiteralFormat("TimeSpan", ctx);
                 });
             }
 
@@ -1649,14 +1674,14 @@ public static class LogicalExpressionParser
                         if (useSecondTime || !onlyCustomTimeTranslation)
                         {
                             // Use the existing approach
-                            if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}{builtInTimeSep}{dateTime.Item4.Item3}", ncalcDateTimeMasks, _currentCultureFormatProvider, DateTimeStyles.None, out var result))
+                            if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}{builtInTimeSep}{dateTime.Item4.Item3}", ncalcDateTimeMasks, literalDateTimeFormat, DateTimeStyles.None, out var result))
                             {
                                 return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
                         }
                     }
 
-                    throw new FormatException("Invalid DateTime format.");
+                    throw InvalidLiteralFormat("DateTime", ctx);
                 });
 
             // dateAndTimeIso => number-number-number'T'number:number:number[.number]['Z']
@@ -1690,7 +1715,7 @@ public static class LogicalExpressionParser
                     }
                     catch
                     {
-                        throw new FormatException("Invalid DateTime format.");
+                        throw InvalidLiteralFormat("DateTime", ctx);
                     }
                 });
 
@@ -1728,14 +1753,14 @@ public static class LogicalExpressionParser
                         if (useSecondTime || !onlyCustomTimeTranslation)
                         {
                             // Use the existing approach
-                            if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}", ncalcDateShortTimeMasks, _currentCultureFormatProvider, DateTimeStyles.None, out var result))
+                            if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}", ncalcDateShortTimeMasks, literalDateTimeFormat, DateTimeStyles.None, out var result))
                             {
                                 return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
                         }
                     }
 
-                    throw new FormatException("Invalid DateTime format.");
+                    throw InvalidLiteralFormat("DateTime", ctx);
                 });
 
             Parser<LogicalExpression>? dateAndTime12 = null;
@@ -1789,14 +1814,14 @@ public static class LogicalExpressionParser
                             if (useSecondTime || !onlyCustomTimeTranslation)
                             {
                                 // Use the existing approach
-                                if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}{builtInTimeSep}{dateTime.Item4.Item3} {amPMValue}", ncalcDateTime12Masks, _currentCultureFormatProvider, DateTimeStyles.None, out var result))
+                                if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2}{builtInTimeSep}{dateTime.Item4.Item3} {amPMValue}", ncalcDateTime12Masks, literalDateTimeFormat, DateTimeStyles.None, out var result))
                                 {
                                     return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
                             }
                         }
 
-                        throw new FormatException("Invalid DateTime format.");
+                        throw InvalidLiteralFormat("DateTime", ctx);
                     });
 
                 dateAndShortTime12 = dateDefinition.AndSkip(Literals.WhiteSpace()).And(shortTime12Definition!).Then<LogicalExpression>((ctx, dateTime) =>
@@ -1840,14 +1865,14 @@ public static class LogicalExpressionParser
                             if (useSecondTime || !onlyCustomTimeTranslation)
                             {
                                 // Use the existing approach
-                                if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2} {amPMValue}", ncalcDateShortTime12Masks, _currentCultureFormatProvider, DateTimeStyles.None, out var result))
+                                if (DateTime.TryParseExact($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{builtInTimeSep}{dateTime.Item4.Item2} {amPMValue}", ncalcDateShortTime12Masks, literalDateTimeFormat, DateTimeStyles.None, out var result))
                                 {
                                     return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
                             }
                         }
 
-                        throw new FormatException("Invalid DateTime format.");
+                        throw InvalidLiteralFormat("DateTime", ctx);
                     });
             }
 
@@ -1948,36 +1973,40 @@ public static class LogicalExpressionParser
                         }
                     }
 
-                    // Shifts a moment by the period; the period is applied when the value is read, as "1 month" depends on the month
-                    DateTime Shift(DateTime dt, int sign)
+                    // The text of the literal is kept, so that ToString() writes it as it was written (with the same indicator words)
+                    var text = new StringBuilder();
+                    if (!string.IsNullOrEmpty(prefix))
+                        text.Append(prefix);
+                    foreach (var entry in val.Item2)
                     {
-                        if (yearValue != 0)
-                            dt = dt.AddYears(sign * yearValue);
-                        if (monthValue != 0)
-                            dt = dt.AddMonths(sign * monthValue);
-                        if (weekValue != 0)
-                            dt = dt.AddDays(sign * weekValue * 7);
-                        if (dayValue != 0)
-                            dt = dt.AddDays(sign * dayValue);
-                        if (hourValue != 0)
-                            dt = dt.AddHours(sign * hourValue);
-                        if (minuteValue != 0)
-                            dt = dt.AddMinutes(sign * minuteValue);
-                        if (secondValue != 0)
-                            dt = dt.AddSeconds(sign * secondValue);
-                        if (msecValue != 0)
-                            dt = dt.AddMilliseconds(sign * msecValue);
-                        return dt;
+                        if (text.Length > 0)
+                            text.Append(' ');
+                        text.Append(entry.Item1.ToString(CultureInfo.InvariantCulture)).Append(' ').Append(entry.Item2);
+                    }
+                    if (!string.IsNullOrEmpty(suffix))
+                    {
+                        if (text.Length > 0)
+                            text.Append(' ');
+                        text.Append(suffix);
                     }
 
-                    // The values below depend on the current time, so they are computed whenever the expression is evaluated, not when it is parsed
+                    var relative = new RelativeDateTime
+                    {
+                        Text = text.ToString(),
+                        Years = yearValue,
+                        Months = monthValue,
+                        Weeks = weekValue,
+                        Days = dayValue,
+                        Hours = hourValue,
+                        Minutes = minuteValue,
+                        Seconds = secondValue,
+                        Milliseconds = msecValue,
+                    };
+
+                    // The values depend on the current time, so they are computed whenever the expression is evaluated, not when it is parsed
                     if (string.IsNullOrEmpty(prefix) && string.IsNullOrEmpty(suffix))
                     {
-                        return new ValueExpression(() =>
-                        {
-                            DateTime current = DateTime.UtcNow;
-                            return Shift(current, 1) - current;
-                        }, NCalc.Domain.ValueType.TimeSpan).SetLocation(new ParlotExpressionLocation(ctx));
+                        relative.Kind = RelativeDateTimeKind.Period;
                     }
                     else
                     {
@@ -1990,31 +2019,30 @@ public static class LogicalExpressionParser
                         suffix = suffix?.ToLowerInvariant();
 
                         // people are interested in local time now, today, before, or after current moment
-                        Func<DateTime, DateTime> fromNow;
                         if (prefix is not null && extOptions.PeriodNowIndicators.Contains(prefix))
-                            fromNow = static now => now;
+                            relative.Kind = RelativeDateTimeKind.Now;
                         else
                         if (prefix is not null && extOptions.PeriodTodayIndicators.Contains(prefix))
-                            fromNow = static now => now.Date;
+                            relative.Kind = RelativeDateTimeKind.Today;
                         else
                         if (prefix is not null && extOptions.PeriodYesterdayIndicators.Contains(prefix))
-                            fromNow = static now => now.Date.AddDays(-1);
+                            relative.Kind = RelativeDateTimeKind.Yesterday;
                         else
                         if (prefix is not null && extOptions.PeriodTomorrowIndicators.Contains(prefix))
-                            fromNow = static now => now.Date.AddDays(1);
+                            relative.Kind = RelativeDateTimeKind.Tomorrow;
                         else
                         if ((prefix is not null && extOptions.PeriodPastIndicators.Contains(prefix)) || (suffix is not null && extOptions.PeriodPastIndicators.Contains(suffix)))
-                            fromNow = now => Shift(now, -1);
+                            relative.Kind = RelativeDateTimeKind.Past;
                         else
                         if ((prefix is not null && extOptions.PeriodFutureIndicators.Contains(prefix)) || (suffix is not null && extOptions.PeriodFutureIndicators.Contains(suffix)))
-                            fromNow = now => Shift(now, 1);
+                            relative.Kind = RelativeDateTimeKind.Future;
                         else
                         {
                             throw new FormatException(string.Format(errUnrecognizedTimeRelationIndicator, prefix));
                         }
-
-                        return new ValueExpression(() => fromNow(DateTime.Now), NCalc.Domain.ValueType.DateTime).SetLocation(new ParlotExpressionLocation(ctx));
                     }
+
+                    return ValueExpression.CreateRelative(relative).SetLocation(new ParlotExpressionLocation(ctx));
                 });
             }
             List<Parser<LogicalExpression>> timeParts = use12HourTime
@@ -2463,9 +2491,19 @@ public static class LogicalExpressionParser
         if (!options.HasFlag(ExpressionOptions.SupportCStyleComments))
             operatorSequenceElements.Insert(0, intDivP);
 
+        // The position after the operators is remembered, as the error is raised only after the operand that follows them
         var operatorSequence = @return.LeftAssociative(
-            (OneOrMany(OneOf(operatorSequenceElements.ToArray())),
-                static (_, _) => throw new NCalcParserException("Unknown operator sequence")));
+            (OneOrMany(OneOf(operatorSequenceElements.ToArray()))
+                .Then(static (ctx, ops) =>
+                {
+                    ((LogicalExpressionParserContext)ctx).OperatorSequencePosition = ctx.Scanner.Cursor.Position;
+                    return ops;
+                }),
+                static (ctx, _, _) =>
+                {
+                    var position = ((LogicalExpressionParserContext)ctx).OperatorSequencePosition;
+                    throw new NCalcParserException($"Unknown operator sequence at position {position}", position);
+                }));
 
         List<Parser<LogicalExpression>> statements = [];
 
@@ -2572,6 +2610,11 @@ public static class LogicalExpressionParser
                         _ => BinaryExpressionType.Assignment,
                     };
                     ExpressionLocation loc = new ParlotExpressionLocation(ctx);
+
+                    // Only a name or an element of a named list or string can be assigned to: "5 = x" or "Abs(x) := 7" must not
+                    // silently return the right-hand side. A comparison such as "5 == x" never gets here, as "= x" is not an expression
+                    if (!IsAssignmentTarget(x.Item1))
+                        throw new NCalcParserException("The left side of an assignment must be a variable or an indexed variable", ctx.Scanner.Cursor.Position);
 
                     return (BinaryExpression)new BinaryExpression(expressionType, x.Item1, x.Item3/*[0]*/).SetLocation(loc).SetOptions(((LogicalExpressionParserContext)ctx).Options, ((LogicalExpressionParserContext)ctx).CultureInfo, ((LogicalExpressionParserContext)ctx).AdvancedOptions);
                 }

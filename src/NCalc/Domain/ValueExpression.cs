@@ -18,7 +18,103 @@ internal enum StringKind
     RawDoubleQuote,
 }
 
-public sealed class ValueExpression : LogicalExpression
+/// <summary>
+/// The kind of a relative date or time literal.
+/// </summary>
+internal enum RelativeDateTimeKind
+{
+    // A period without a relation (#2 days#): a time span, computed from the current moment, as "1 month" depends on the month
+    Period,
+    Now,
+    Today,
+    Yesterday,
+    Tomorrow,
+    // A moment before or after the current one by the period (#2 days ago#, #in 3 hours#)
+    Past,
+    Future,
+}
+
+/// <summary>
+/// Describes a relative date or time literal (#today#, #now#, #2 days ago#), so that it stays relative when the expression is written
+/// by ToString() or stored in JSON, instead of being frozen at the moment of writing.
+/// </summary>
+internal sealed class RelativeDateTime
+{
+    // The text of the literal between the '#' characters, as it was written, so that ToString() uses the same indicator words
+    public string Text { get; set; } = string.Empty;
+
+    public RelativeDateTimeKind Kind { get; set; }
+
+    public int Years { get; set; }
+
+    public int Months { get; set; }
+
+    public int Weeks { get; set; }
+
+    public int Days { get; set; }
+
+    public int Hours { get; set; }
+
+    public int Minutes { get; set; }
+
+    public int Seconds { get; set; }
+
+    public int Milliseconds { get; set; }
+
+    internal ValueType ValueType => Kind == RelativeDateTimeKind.Period ? ValueType.TimeSpan : ValueType.DateTime;
+
+    // Shifts a moment by the period; the period is applied when the value is read, as "1 month" depends on the month
+    private DateTime Shift(DateTime moment, int sign)
+    {
+        if (Years != 0)
+            moment = moment.AddYears(sign * Years);
+        if (Months != 0)
+            moment = moment.AddMonths(sign * Months);
+        if (Weeks != 0)
+            moment = moment.AddDays(sign * Weeks * 7);
+        if (Days != 0)
+            moment = moment.AddDays(sign * Days);
+        if (Hours != 0)
+            moment = moment.AddHours(sign * Hours);
+        if (Minutes != 0)
+            moment = moment.AddMinutes(sign * Minutes);
+        if (Seconds != 0)
+            moment = moment.AddSeconds(sign * Seconds);
+        if (Milliseconds != 0)
+            moment = moment.AddMilliseconds(sign * Milliseconds);
+        return moment;
+    }
+
+    /// <summary>
+    /// Creates the function that computes the value at the moment of evaluation.
+    /// </summary>
+    internal Func<object> CreateValueFactory()
+    {
+        switch (Kind)
+        {
+            case RelativeDateTimeKind.Period:
+                return () =>
+                {
+                    DateTime current = DateTime.UtcNow;
+                    return Shift(current, 1) - current;
+                };
+            case RelativeDateTimeKind.Now:
+                return static () => DateTime.Now;
+            case RelativeDateTimeKind.Today:
+                return static () => DateTime.Now.Date;
+            case RelativeDateTimeKind.Yesterday:
+                return static () => DateTime.Now.Date.AddDays(-1);
+            case RelativeDateTimeKind.Tomorrow:
+                return static () => DateTime.Now.Date.AddDays(1);
+            case RelativeDateTimeKind.Past:
+                return () => Shift(DateTime.Now, -1);
+            default:
+                return () => Shift(DateTime.Now, 1);
+        }
+    }
+}
+
+public sealed class ValueExpression : LogicalExpression, IJsonOnDeserialized
 {
     // Included in JSON, so that a deserialized string literal is written back with its quotes and escapes
     [JsonInclude]
@@ -28,6 +124,19 @@ public sealed class ValueExpression : LogicalExpression
 
     private object? _value;
     private Func<object>? _valueFactory;
+    private RelativeDateTime? _relative;
+
+    /// <summary>
+    /// The description of a relative date or time literal, or null for a constant value (also after a constant was assigned to
+    /// <see cref="Value"/>). It is kept in JSON, from which the function that computes the value is created again.
+    /// </summary>
+    [JsonInclude]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    internal RelativeDateTime? Relative
+    {
+        get => _valueFactory is null ? null : _relative;
+        private set => _relative = value;
+    }
 
     [JsonConverter(typeof(ObjectValueJsonConverter))]
     public object? Value
@@ -96,6 +205,20 @@ public sealed class ValueExpression : LogicalExpression
     {
         _valueFactory = valueFactory;
         Type = type;
+    }
+
+    internal static ValueExpression CreateRelative(RelativeDateTime relative)
+        => new(relative.CreateValueFactory(), relative.ValueType) { _relative = relative };
+
+    // The value of a relative literal is read from JSON as the constant of the moment of writing; the literal is made relative again
+    void IJsonOnDeserialized.OnDeserialized()
+    {
+        if (_relative is not null)
+        {
+            _value = null;
+            _valueFactory = _relative.CreateValueFactory();
+            Type = _relative.ValueType;
+        }
     }
 
     public ValueExpression(char value)

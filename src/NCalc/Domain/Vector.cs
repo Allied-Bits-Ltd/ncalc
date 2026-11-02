@@ -388,6 +388,15 @@ namespace NCalc.Domain
             return new Vector(result, v._mathHelperOptions);
         }
 
+        /// <summary>Element-wise truncation toward zero.</summary>
+        public static Vector Truncate(Vector v)
+        {
+            var result = new BigDecimal[v.Dimensions];
+            for (int i = 0; i < v.Dimensions; i++)
+                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Truncate(v[i], v._mathHelperOptions));
+            return new Vector(result, v._mathHelperOptions);
+        }
+
         /// <summary>Element-wise rounding (away from zero at midpoint).</summary>
         public static Vector Round(Vector v) => Round(v, 0, MidpointRounding.AwayFromZero);
 

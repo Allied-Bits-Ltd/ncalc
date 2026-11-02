@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Runtime.CompilerServices;
 
 using NCalc.Domain;
 using NCalc.Exceptions;
@@ -30,6 +31,13 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
     private static readonly LinqExpression NullConstant = LinqExpression.Constant(null, typeof(object));
 
+    private int _depth;
+
+    /// <summary>
+    /// The greatest depth of nesting of the visited expression, which tells how deeply the compiler of the lambda recurses.
+    /// </summary>
+    internal int MaxDepth { get; private set; }
+
     public LambdaExpressionVisitor(LinqParameterExpression? context, ExpressionContext? expressionContext, IDictionary<string, object?>? parameters, ExpressionOptions options)
     {
         if (context != null)
@@ -47,9 +55,9 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
     public LinqExpression Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        var conditional = Box(expression.LeftExpression.Accept(this, cancellationToken));
-        var ifTrue = Box(expression.MiddleExpression.Accept(this, cancellationToken));
-        var ifFalse = Box(expression.RightExpression.Accept(this, cancellationToken));
+        var conditional = Box(VisitChild(expression.LeftExpression, cancellationToken));
+        var ifTrue = Box(VisitChild(expression.MiddleExpression, cancellationToken));
+        var ifFalse = Box(VisitChild(expression.RightExpression, cancellationToken));
 
         // As in the evaluators, a null condition gives null, and the result is the value of the chosen branch with its own type
         var condition = LinqExpression.Variable(typeof(object), "condition");
@@ -92,8 +100,12 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 throw new ArgumentOutOfRangeException(nameof(expression), expression.Type, null);
         }
 
-        var left = Box(expression.LeftExpression.Accept(this, cancellationToken));
-        var right = Box(expression.RightExpression.Accept(this, cancellationToken));
+        // A chain of operators such as 1 + 2 + 3 + ... is a left-deep tree; it is compiled as a sequence of steps instead of nested
+        // blocks, so that a long chain does not make FastExpressionCompiler recurse deeply (NCALC-202)
+        var left = expression.LeftExpression is BinaryExpression leftBinary && IsChainable(leftBinary.Type)
+            ? CompileChain(leftBinary, cancellationToken)
+            : Box(VisitChild(expression.LeftExpression, cancellationToken));
+        var right = Box(VisitChild(expression.RightExpression, cancellationToken));
         var node = LinqExpression.Constant(expression);
         var leftValue = LinqExpression.Variable(typeof(object), "left");
 
@@ -136,41 +148,117 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         }
     }
 
+    // The binary operators that compute a value from their operands (not assignments, loops or indexes)
+    private static bool IsChainable(BinaryExpressionType type)
+        => type is not (BinaryExpressionType.Assignment or BinaryExpressionType.PlusAssignment or BinaryExpressionType.MinusAssignment
+            or BinaryExpressionType.MultiplyAssignment or BinaryExpressionType.DivAssignment or BinaryExpressionType.AndAssignment
+            or BinaryExpressionType.OrAssignment or BinaryExpressionType.XOrAssignment or BinaryExpressionType.WhileLoop
+            or BinaryExpressionType.IndexAccess or BinaryExpressionType.RangeIndex or BinaryExpressionType.Unknown);
+
+    // Compiles a left-deep chain of binary operators as steps on one variable, with the same order of evaluation and the same
+    // treatment of null as nested operators: value = first operand; value = value op1 operand1; value = value op2 operand2; ...
+    private LinqExpression CompileChain(BinaryExpression top, CancellationToken cancellationToken)
+    {
+        if (++_depth > MaxDepth)
+            MaxDepth = _depth;
+        try
+        {
+            EvaluationHelper.EnsureSufficientExecutionStackToVisit();
+
+            var nodes = new List<BinaryExpression>();
+            LogicalExpression current = top;
+            while (current is BinaryExpression binary && IsChainable(binary.Type))
+            {
+                nodes.Add(binary);
+                current = binary.LeftExpression;
+            }
+
+            nodes.Reverse();
+
+            var value = LinqExpression.Variable(typeof(object), "chain");
+            var decided = LinqExpression.Variable(typeof(object), "decided");
+            var statements = new List<LinqExpression> { LinqExpression.Assign(value, Box(VisitChild(current, cancellationToken))) };
+
+            foreach (var node in nodes)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var nodeConstant = LinqExpression.Constant(node);
+                var right = Box(VisitChild(node.RightExpression, cancellationToken));
+
+                switch (node.Type)
+                {
+                    case BinaryExpressionType.Equal:
+                    case BinaryExpressionType.NotEqual:
+                    case BinaryExpressionType.Greater:
+                    case BinaryExpressionType.GreaterOrEqual:
+                    case BinaryExpressionType.Less:
+                    case BinaryExpressionType.LessOrEqual:
+                        statements.Add(LinqExpression.Assign(value, Box(CallRuntime(nameof(LambdaRuntime.Compare), value, right, nodeConstant, _expressionContextConstant))));
+                        break;
+
+                    case BinaryExpressionType.And:
+                    case BinaryExpressionType.Or:
+                    case BinaryExpressionType.XOr:
+                        statements.Add(LinqExpression.Assign(decided, CallRuntime(nameof(LambdaRuntime.LogicalLeft), value, nodeConstant, _expressionContextConstant)));
+                        statements.Add(LinqExpression.Assign(value, LinqExpression.Condition(
+                            LinqExpression.ReferenceEqual(decided, LinqExpression.Constant(LambdaRuntime.Undecided)),
+                            CallRuntime(nameof(LambdaRuntime.LogicalRight), value, right, nodeConstant, _expressionContextConstant),
+                            decided)));
+                        break;
+
+                    default:
+                        statements.Add(LinqExpression.Assign(value, LinqExpression.Condition(
+                            CallRuntime(nameof(LambdaRuntime.IsNull), value, _expressionContextConstant),
+                            NullConstant,
+                            CallRuntime(nameof(LambdaRuntime.Binary), value, right, nodeConstant, _expressionContextConstant))));
+                        break;
+                }
+            }
+
+            statements.Add(value);
+            return LinqExpression.Block(typeof(object), [value, decided], statements);
+        }
+        finally
+        {
+            _depth--;
+        }
+    }
+
     public LinqExpression Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
         if (expression.Type == UnaryExpressionType.Return)
             throw new NotSupportedException("The return statement is not supported in lambda expressions.");
 
-        var operand = Box(expression.Expression.Accept(this, cancellationToken));
+        var operand = Box(VisitChild(expression.Expression, cancellationToken));
         return CallRuntime(nameof(LambdaRuntime.Unary), operand, LinqExpression.Constant(expression), _expressionContextConstant);
     }
 
     public LinqExpression Visit(PercentExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        var value = Box(expression.Expression.Accept(this, cancellationToken));
+        var value = Box(VisitChild(expression.Expression, cancellationToken));
         return CallRuntime(nameof(LambdaRuntime.Percent), value, _expressionContextConstant);
     }
 
     public LinqExpression Visit(ImaginaryNumberExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        var value = Box(expression.Expression.Accept(this, cancellationToken));
+        var value = Box(VisitChild(expression.Expression, cancellationToken));
         return CallRuntime(nameof(LambdaRuntime.Imaginary), value, LinqExpression.Constant(expression), _expressionContextConstant);
     }
 
     public LinqExpression Visit(VectorExpression expression, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        var components = LinqExpression.NewArrayInit(typeof(object), expression.Expressions.Select(e => Box(e.Accept(this, cancellationToken))));
+        var components = LinqExpression.NewArrayInit(typeof(object), expression.Expressions.Select(e => Box(VisitChild(e, cancellationToken))));
         return CallRuntime(nameof(LambdaRuntime.Vector), components, LinqExpression.Constant(expression));
     }
 
     public LinqExpression Visit(ExpressionGroup group, CancellationToken cancellationToken = default)
     {
         EvaluationHelper.EnsureSufficientExecutionStackToVisit();
-        return group.Expression.Accept(this, cancellationToken);
+        return VisitChild(group.Expression, cancellationToken);
     }
 
     public LinqExpression Visit(ValueExpression expression, CancellationToken cancellationToken = default)
@@ -179,7 +267,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         if (expression.ValueFactory is { } valueFactory)
             return LinqExpression.Convert(LinqExpression.Invoke(LinqExpression.Constant(valueFactory)), expression.Value!.GetType());
 
-        return LinqExpression.Constant(expression.Value);
+        return expression.Value is null ? LinqExpression.Constant(null) : ValueConstant(expression.Value);
     }
 
     public LinqExpression Visit(FunctionCall function, CancellationToken cancellationToken = default)
@@ -207,15 +295,13 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         var args = new LinqExpression[parameters.Count];
         for (var i = 0; i < parameters.Count; i++)
         {
-            args[i] = parameters[i].Accept(this, cancellationToken);
+            args[i] = VisitChild(parameters[i], cancellationToken);
         }
 
         //Context methods take precedence over built-in functions because they're user-customizable.
-        var mi = FindMethod(functionName, args, ignoreIdentifierCase ? StringComparison.InvariantCultureIgnoreCase : StringComparison.InvariantCulture);
-        if (mi != null)
-        {
-            return LinqExpression.Call(_context, mi.MethodInfo, mi.PreparedArguments);
-        }
+        var contextCall = CallContextMethod(functionName, args, ignoreIdentifierCase ? StringComparison.InvariantCultureIgnoreCase : StringComparison.InvariantCulture, function);
+        if (contextCall != null)
+            return contextCall;
 
         var functionNode = LinqExpression.Constant(function);
 
@@ -327,7 +413,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                 Expression parameterExpression => CallRuntime(nameof(LambdaRuntime.EvaluateParameterExpression), LinqExpression.Constant(parameterExpression), _expressionContextConstant),
                 AsyncExpression => throw new NCalcEvaluationException($"The value of the parameter '{identifierName}' is an AsyncExpression, which cannot be evaluated synchronously. Use an AsyncExpression for the outer expression or an Expression for the parameter.", identifier.Location),
                 null => NullConstant,
-                _ => LinqExpression.Constant(param)
+                _ => ValueConstant(param)
             };
         }
 
@@ -353,7 +439,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         var newList = LinqExpression.New(typeof(List<object?>));
         if (list.Count == 0)
             return newList;
-        return LinqExpression.ListInit(newList, list.Select(e => Box(e.Accept(this, cancellationToken))));
+        return LinqExpression.ListInit(newList, list.Select(e => Box(VisitChild(e, cancellationToken))));
     }
 
     public LinqExpression Visit(FunctionExpression expression, CancellationToken cancellationToken = default)
@@ -368,7 +454,14 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         List<LinqExpression> expressions = [];
         foreach (LogicalExpression expr in expression)
         {
-            expressions.Add(Box(expr.Accept(this, cancellationToken)));
+            expressions.Add(Box(VisitChild(expr, cancellationToken)));
+        }
+
+        // The values of the other statements are discarded by a call: as statements of the block, a list or in() made
+        // FastExpressionCompiler emit invalid IL (NCALC-210)
+        for (var i = 0; i < expressions.Count - 1; i++)
+        {
+            expressions[i] = CallRuntime(nameof(LambdaRuntime.Discard), expressions[i]);
         }
 
         // As in the evaluators, the value is that of the last statement
@@ -415,13 +508,13 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
         if (expression.Type == BinaryExpressionType.Assignment)
         {
-            newValue = CallRuntime(nameof(LambdaRuntime.ValueOrNull), Box(expression.RightExpression.Accept(this, cancellationToken)), _expressionContextConstant);
+            newValue = CallRuntime(nameof(LambdaRuntime.ValueOrNull), Box(VisitChild(expression.RightExpression, cancellationToken)), _expressionContextConstant);
         }
         else
         {
             // As in the evaluators, a null value of the member gives null and leaves it unchanged
             var leftValue = LinqExpression.Variable(typeof(object), "left");
-            var right = Box(expression.RightExpression.Accept(this, cancellationToken));
+            var right = Box(VisitChild(expression.RightExpression, cancellationToken));
             newValue = LinqExpression.Block(
                 [leftValue],
                 LinqExpression.Assign(leftValue, Box(member)),
@@ -431,17 +524,24 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                     CallRuntime(nameof(LambdaRuntime.CompoundAssignment), leftValue, right, node, _expressionContextConstant)));
         }
 
+        // The value is converted to the type of the member without loss (2.5 is not stored in an int member), and the value
+        // of the assignment is the value stored (NCALC-203)
         var value = LinqExpression.Variable(typeof(object), "value");
+        var stored = LinqExpression.Variable(member.Type, "stored");
+        var convert = typeof(LambdaRuntime).GetMethod(nameof(LambdaRuntime.ConvertAssignedValue), BindingFlags.NonPublic | BindingFlags.Static)!.MakeGenericMethod(member.Type);
         return LinqExpression.Block(
             [value],
             LinqExpression.Assign(value, newValue),
             LinqExpression.Condition(
                 LinqExpression.ReferenceEqual(value, LinqExpression.Constant(LambdaRuntime.NoUpdate)),
                 NullConstant,
-                LinqExpression.Block(
-                    LinqExpression.IfThen(
-                        CallRuntime(nameof(LambdaRuntime.ShouldUpdate), value, LinqExpression.Constant(identifier), _expressionContextConstant),
-                        LinqExpression.Assign(member, ConvertAtRuntime(value, member.Type))),
+                LinqExpression.Condition(
+                    CallRuntime(nameof(LambdaRuntime.ShouldUpdate), value, LinqExpression.Constant(identifier), _expressionContextConstant),
+                    LinqExpression.Block(
+                        [stored],
+                        LinqExpression.Assign(stored, LinqExpression.Call(convert, value, LinqExpression.Constant(identifier))),
+                        LinqExpression.Assign(member, stored),
+                        Box(stored)),
                     value)));
     }
 
@@ -452,10 +552,10 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             return ThrowEvaluationException("iff() takes 2 or 3 arguments", function.Location);
 
         // As in the evaluators, the third argument is optional, and the result is null when the condition is false
-        var condition = CallRuntime(nameof(LambdaRuntime.ToBooleanRaw), Box(parameters[0].Accept(this, cancellationToken)), LinqExpression.Constant("iff"),
+        var condition = CallRuntime(nameof(LambdaRuntime.ToBooleanRaw), Box(VisitChild(parameters[0], cancellationToken)), LinqExpression.Constant("iff"),
             NodeConstant(parameters[0]), _expressionContextConstant);
-        var ifTrue = Box(parameters[1].Accept(this, cancellationToken));
-        var ifFalse = parameters.Count == 3 ? Box(parameters[2].Accept(this, cancellationToken)) : NullConstant;
+        var ifTrue = Box(VisitChild(parameters[1], cancellationToken));
+        var ifFalse = parameters.Count == 3 ? Box(VisitChild(parameters[2], cancellationToken)) : NullConstant;
         return LinqExpression.Condition(condition, ifTrue, ifFalse);
     }
 
@@ -465,7 +565,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         if (parameters.Count < 2)
             return ThrowEvaluationException("ifs() takes at least 2 arguments", function.Location);
 
-        var args = parameters.Select(p => Box(p.Accept(this, cancellationToken))).ToArray();
+        var args = parameters.Select(p => Box(VisitChild(p, cancellationToken))).ToArray();
 
         // Pairs of a condition and a value, optionally followed by the default value; null when no condition is true
         LinqExpression result = args.Length % 2 == 1 ? args[^1] : NullConstant;
@@ -488,13 +588,13 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         LinqExpression? found = null;
         for (var i = 1; i < parameters.Count; i++)
         {
-            var item = CallRuntime(nameof(LambdaRuntime.InFunctionItem), value, Box(parameters[i].Accept(this, cancellationToken)), NodeConstant(parameters[i]), _expressionContextConstant);
+            var item = CallRuntime(nameof(LambdaRuntime.InFunctionItem), value, Box(VisitChild(parameters[i], cancellationToken)), NodeConstant(parameters[i]), _expressionContextConstant);
             found = found is null ? item : LinqExpression.OrElse(found, item);
         }
 
         return LinqExpression.Block(
             [value],
-            LinqExpression.Assign(value, Box(parameters[0].Accept(this, cancellationToken))),
+            LinqExpression.Assign(value, Box(VisitChild(parameters[0], cancellationToken))),
             found!);
     }
 
@@ -524,6 +624,27 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
         return LinqExpression.Throw(LinqExpression.New(constructor, LinqExpression.Constant(message), LinqExpression.Constant(location)), typeof(object));
     }
 
+    private LinqExpression VisitChild(LogicalExpression expression, CancellationToken cancellationToken)
+    {
+        if (++_depth > MaxDepth)
+            MaxDepth = _depth;
+        try
+        {
+            return expression.Accept(this, cancellationToken);
+        }
+        finally
+        {
+            _depth--;
+        }
+    }
+
+    // A constant value. A decimal is read from a field when the lambda runs, because FastExpressionCompiler emits decimal constants
+    // (also boxed ones) without their scale, so 2.0 became 2 (NCALC-241).
+    private static LinqExpression ValueConstant(object value)
+        => value is decimal m
+            ? LinqExpression.Field(LinqExpression.Constant(new StrongBox<decimal>(m)), nameof(StrongBox<decimal>.Value))
+            : LinqExpression.Constant(value);
+
     private static LinqExpression Box(LinqExpression expression)
         => expression.Type == typeof(object) ? expression : LinqExpression.Convert(expression, typeof(object));
 
@@ -533,12 +654,103 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
     private static Linq.MethodCallExpression CallRuntime(string name, params LinqExpression[] arguments)
         => LinqExpression.Call(typeof(LambdaRuntime).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!, arguments);
 
-    private ExtendedMethodInfo? FindMethod(string methodName, LinqExpression[] methodArgs, StringComparison stringComparison)
+    // A call of a method of the context object, or null when the context has no method of that name that can take the arguments
+    private LinqExpression? CallContextMethod(string methodName, LinqExpression[] args, StringComparison stringComparison, FunctionCall function)
     {
         if (_context is null)
             return null;
 
+        // Arguments whose types match the parameters exactly or by an implicit conversion are bound when the lambda is compiled
+        var hasObjectArguments = args.Any(a => a.Type == typeof(object));
+        if (!hasObjectArguments && FindMethod(methodName, args, stringComparison) is { } method)
+            return LinqExpression.Call(_context, method.MethodInfo, method.PreparedArguments);
+
+        // The value of an operator or of a function is known only when the lambda runs: the overload is chosen then, by the types of
+        // the values, and they are converted without loss (NCALC-203)
         var contextType = _context.Type;
+        do
+        {
+            var candidates = contextType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .Where(m => m.Name.Equals(methodName, stringComparison) && !m.ContainsGenericParameters && CanBindWhenRunning(m.GetParameters(), args))
+                .ToArray();
+
+            if (candidates.Length == 1 && hasObjectArguments
+                && LinqUtils.PrepareMethodArgumentsIfValid(candidates[0].GetParameters(), args) is { Item1: 0 } exactMatch)
+                return LinqExpression.Call(_context, candidates[0], exactMatch.Item2);
+
+            if (candidates.Length > 0)
+                return CallBoundWhenRunning(candidates, args, function);
+
+            contextType = contextType.BaseType;
+        }
+        while (contextType != null && contextType != typeof(object));
+
+        return null;
+    }
+
+    // Whether the method can take arguments of these types: an argument of type object can have a value of any type
+    private static bool CanBindWhenRunning(ParameterInfo[] parameters, LinqExpression[] args)
+    {
+        var hasParams = parameters.Length > 0 && parameters[^1].IsDefined(typeof(ParamArrayAttribute));
+        var fixedCount = hasParams ? parameters.Length - 1 : parameters.Length;
+        if (hasParams ? args.Length < fixedCount : args.Length != fixedCount)
+            return false;
+
+        for (var i = 0; i < args.Length; i++)
+        {
+            var parameterType = i < fixedCount ? parameters[i].ParameterType : parameters[^1].ParameterType.GetElementType()!;
+            if (parameterType.IsByRef || parameterType.IsPointer || !CanConvertWhenRunning(args[i].Type, parameterType))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool CanConvertWhenRunning(Type from, Type to)
+    {
+        if (from == typeof(object) || from == to || to.IsAssignableFrom(from))
+            return true;
+        if (Nullable.GetUnderlyingType(from) is { } underlyingType)
+            return CanConvertWhenRunning(underlyingType, to);
+        if (TypeHelper.ImplicitPrimitiveConversionTable.TryGetValue(from, out var conversions) && conversions.Contains(to))
+            return true;
+
+        // A number may be converted to another numeric type without loss
+        return LambdaRuntime.IsNumericType(from) && LambdaRuntime.IsNumericType(Nullable.GetUnderlyingType(to) ?? to);
+    }
+
+    // Chooses the overload by the values of the arguments and calls it:
+    // arguments = [args..., null]; overload = BindContextMethod(arguments, call); overload == 0 ? ctx.M0((T)arguments[0], ...) : ...
+    private LinqExpression CallBoundWhenRunning(MethodInfo[] methods, LinqExpression[] args, FunctionCall function)
+    {
+        var candidates = methods.Select(m => new ContextMethodCandidate(m)).ToArray();
+        var call = new ContextMethodCall(function.Identifier.Name, candidates, function);
+        var arguments = LinqExpression.Variable(typeof(object[]), "arguments");
+        var overload = LinqExpression.Variable(typeof(int), "overload");
+
+        LinqExpression? result = null;
+        for (var k = candidates.Length - 1; k >= 0; k--)
+        {
+            var candidate = candidates[k];
+            var callArguments = candidate.ParameterTypes.Select((type, i) =>
+                (LinqExpression)LinqExpression.Convert(LinqExpression.ArrayIndex(arguments, LinqExpression.Constant(i)), type));
+            LinqExpression invoke = LinqExpression.Call(_context, candidate.Method, callArguments);
+            invoke = invoke.Type == typeof(void) ? LinqExpression.Block(invoke, NullConstant) : Box(invoke);
+            result = result is null ? invoke : LinqExpression.Condition(LinqExpression.Equal(overload, LinqExpression.Constant(k)), invoke, result);
+        }
+
+        return LinqExpression.Block(
+            typeof(object),
+            [arguments, overload],
+            LinqExpression.Assign(arguments, LinqExpression.NewArrayInit(typeof(object), args.Select(Box).Append(NullConstant))),
+            LinqExpression.Assign(overload, CallRuntime(nameof(LambdaRuntime.BindContextMethod), arguments, LinqExpression.Constant(call))),
+            result!);
+    }
+
+    // The overload whose parameters match the types of the arguments exactly or by implicit conversions
+    private ExtendedMethodInfo? FindMethod(string methodName, LinqExpression[] methodArgs, StringComparison stringComparison)
+    {
+        var contextType = _context!.Type;
         var objectType = typeof(object);
 
         do
@@ -550,33 +762,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
 
             foreach (var potentialMethod in methods)
             {
-                var methodParams = potentialMethod.GetParameters();
-
-                // The value of an operator is known only when the lambda runs: it is converted to the type of the parameter then
-                var conversions = 0;
-                var arguments = methodArgs;
-                if (methodParams.Length > 0)
-                {
-                    var hasParamsKeyword = methodParams[^1].IsDefined(typeof(ParamArrayAttribute));
-                    arguments = new LinqExpression[methodArgs.Length];
-                    for (var i = 0; i < methodArgs.Length; i++)
-                    {
-                        var parameterType = hasParamsKeyword && i >= methodParams.Length - 1
-                            ? methodParams[^1].ParameterType.GetElementType()
-                            : i < methodParams.Length ? methodParams[i].ParameterType : null;
-                        if (methodArgs[i].Type == objectType && parameterType is not null && parameterType != objectType)
-                        {
-                            arguments[i] = ConvertAtRuntime(methodArgs[i], parameterType);
-                            conversions++;
-                        }
-                        else
-                        {
-                            arguments[i] = methodArgs[i];
-                        }
-                    }
-                }
-
-                var preparedArguments = LinqUtils.PrepareMethodArgumentsIfValid(methodParams, arguments);
+                var preparedArguments = LinqUtils.PrepareMethodArgumentsIfValid(potentialMethod.GetParameters(), methodArgs);
 
                 if (preparedArguments != null)
                 {
@@ -584,7 +770,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
                     {
                         MethodInfo = potentialMethod,
                         PreparedArguments = preparedArguments.Item2,
-                        Score = preparedArguments.Item1 + conversions * methodArgs.Length
+                        Score = preparedArguments.Item1
                     };
 
                     if (candidate.Score == 0)

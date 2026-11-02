@@ -389,6 +389,57 @@ public class ComparerTests
         Assert.NotEqual(comparer.GetHashCode(huge), comparer.GetHashCode(new BigDecimal(BigInteger.One, 401)));
     }
 
+    // NCALC-233: equal values of different types got different hash codes
+    [Fact]
+    public void BoxedNumberComparerEqualValuesShouldAlwaysHaveEqualHashCodes()
+    {
+        var options = new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.None);
+        var comparer = new BoxedNumberComparer(options, options);
+
+        foreach (var (x, y) in new (object, object)[] { (8297108.5f, 8297108.5), (123456749, 123456752f), (123456749999999999L, 1.2345675E+17), (16777217, 16777216f), (16777216, 16777216f) })
+        {
+            Assert.True(comparer.Equals(x, y), $"{x} and {y} should be equal");
+            Assert.Equal(comparer.GetHashCode(x), comparer.GetHashCode(y));
+            Assert.Single(new HashSet<object?>([x, y], comparer));
+        }
+
+        // Equals implies equal hash codes for random pairs of numbers of different types
+        var random = new Random(233);
+        for (var i = 0; i < 20000; i++)
+        {
+            int n = random.Next() >> random.Next(0, 31);
+            long l = ((long)random.Next() << random.Next(0, 33)) + random.Next();
+            object[] values = [n, (float)n, (double)n, (decimal)n, l, (double)l, (float)l, (decimal)l, (float)(random.NextDouble() * n), random.NextDouble() * l, (decimal)(random.NextDouble() * n)];
+            foreach (var x in values)
+            {
+                foreach (var y in values)
+                {
+                    if (comparer.Equals(x, y))
+                        Assert.True(comparer.GetHashCode(x) == comparer.GetHashCode(y), $"{x} ({x.GetType().Name}) and {y} ({y.GetType().Name}) are equal but have different hash codes");
+                }
+            }
+
+            // A value converted to a less precise type stays equal to the original, and so it has the same hash code
+            Assert.True(comparer.Equals(n, (float)n));
+            Assert.True(comparer.Equals(l, (double)l));
+        }
+    }
+
+    // NCALC-234: (double)decimal.MaxValue is 2^96, which is beyond the range of decimal, so the comparison threw "incomparable types"
+    [Fact]
+    public async Task DecimalShouldBeComparableWithTheDoubleNearestToItsMaximum()
+    {
+        double boundary = (double)decimal.MaxValue;
+        var parameters = new Dictionary<string, object?> { ["a"] = 1m, ["b"] = boundary, ["c"] = (float)decimal.MaxValue, ["d"] = -boundary };
+        Assert.All(await EvaluateInAllEvaluators("a < b", ExpressionOptions.None, parameters), r => Assert.Equal(true, r));
+        Assert.All(await EvaluateInAllEvaluators("a < c", ExpressionOptions.None, parameters), r => Assert.Equal(true, r));
+        Assert.All(await EvaluateInAllEvaluators("a > d", ExpressionOptions.None, parameters), r => Assert.Equal(true, r));
+        Assert.All(await EvaluateInAllEvaluators("a in (b, 2)", ExpressionOptions.None, parameters), r => Assert.Equal(false, r));
+
+        var options = new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.None);
+        Assert.Equal(-1, new BoxedNumberComparer(options, options).Compare(1m, boundary));
+    }
+
     // NCALC-123
     [Fact]
     public void ToleranceComparersShouldHashEqualValuesAlike()

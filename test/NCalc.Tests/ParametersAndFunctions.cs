@@ -462,6 +462,97 @@ public class ParametersAndFunctions
         Assert.ThrowsAny<NCalcException>(() => plainChild.Evaluate(token));
     }
 
+    // NCALC-235: the shared handler was called twice when the parent had another handler too
+    [Fact]
+    public async Task ExpressionParameterShouldCallASharedHandlerOnceWhenTheParentHasOtherHandlers()
+    {
+        var token = TestContext.Current.CancellationToken;
+        int calls = 0;
+        int otherCalls = 0;
+        void Handler(string name, FunctionArgs args)
+        {
+            calls++;
+            args.Result = 1;
+        }
+
+        var child = new Expression("g()");
+        child.EvaluateFunction += Handler;
+        var parent = new Expression("a + 1");
+        parent.EvaluateFunction += Handler;
+        parent.EvaluateFunction += (_, _) => otherCalls++;
+        parent.Parameters["a"] = child;
+        Assert.Equal(2, parent.Evaluate(token));
+        Assert.Equal(1, calls);
+
+        calls = 0;
+        ValueTask AsyncHandler(string name, AsyncFunctionArgs args, CancellationToken cancellationToken)
+        {
+            calls++;
+            args.Result = 1;
+            return ValueTask.CompletedTask;
+        }
+
+        var asyncChild = new AsyncExpression("g()");
+        asyncChild.EvaluateFunctionAsync += AsyncHandler;
+        var asyncParent = new AsyncExpression("a + 1");
+        asyncParent.EvaluateFunctionAsync += AsyncHandler;
+        asyncParent.EvaluateFunctionAsync += (_, _, _) => { otherCalls++; return ValueTask.CompletedTask; };
+        asyncParent.Parameters["a"] = asyncChild;
+        Assert.Equal(2, await asyncParent.EvaluateAsync(token));
+        Assert.Equal(1, calls);
+    }
+
+    // NCALC-236: the child did not see the Functions of the parent
+    [Fact]
+    public async Task ExpressionParameterShouldSeeTheFunctionsOfTheParent()
+    {
+        var token = TestContext.Current.CancellationToken;
+
+        var parent = new Expression("a + 1");
+        parent.Functions["ff"] = _ => 40;
+        parent.Parameters["a"] = new Expression("ff(2)");
+        Assert.Equal(41, parent.Evaluate(token));
+
+        var asyncParent = new AsyncExpression("a + 1");
+        asyncParent.Functions["ff"] = (_, _) => new ValueTask<object?>(40);
+        asyncParent.Parameters["a"] = new AsyncExpression("ff(2)");
+        Assert.Equal(41, await asyncParent.EvaluateAsync(token));
+    }
+
+    // NCALC-237: IterateParameters wrote into Parameters and iterated dictionaries
+    [Fact]
+    public async Task IterateParametersShouldNotChangeParametersNorIterateDictionaries()
+    {
+        var token = TestContext.Current.CancellationToken;
+        static int[] ToInts(object? result) => ((IEnumerable<object?>)result!).Select(v => Convert.ToInt32(v, CultureInfo.InvariantCulture)).ToArray();
+        static IDictionary<string, object?> ReadOnlyParameters() => new System.Collections.ObjectModel.ReadOnlyDictionary<string, object?>(
+            new Dictionary<string, object?> { ["x"] = new List<object?> { 1, 2, 3 } });
+
+        foreach (var nonRecursive in new[] { false, true })
+        {
+            var options = ExpressionOptions.IterateParameters | ExpressionOptions.NoCache | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+
+            var expression = new Expression("x * 2", options) { Parameters = ReadOnlyParameters() };
+            Assert.Equal([2, 4, 6], ToInts(expression.Evaluate(token)));
+            Assert.Equal([2, 4, 6], ToInts(expression.Evaluate(token)));
+
+            var asyncExpression = new AsyncExpression("x * 2", options) { Parameters = ReadOnlyParameters() };
+            Assert.Equal(new[] { 2, 4, 6 }, ToInts(await asyncExpression.EvaluateAsync(token)));
+
+            // A dictionary is one value, not a list of key/value pairs of another length
+            expression = new Expression("x * 2", options);
+            expression.Parameters["x"] = new List<object?> { 1, 2 };
+            expression.Parameters["d"] = new Dictionary<string, object?> { ["a"] = 1 };
+            Assert.Equal([2, 4], ToInts(expression.Evaluate(token)));
+            Assert.IsType<Dictionary<string, object?>>(expression.Parameters["d"]);
+
+            asyncExpression = new AsyncExpression("x * 2", options);
+            asyncExpression.Parameters["x"] = new List<object?> { 1, 2 };
+            asyncExpression.Parameters["d"] = new Dictionary<string, object?> { ["a"] = 1 };
+            Assert.Equal(new[] { 2, 4 }, ToInts(await asyncExpression.EvaluateAsync(token)));
+        }
+    }
+
     // NCALC-118
     [Fact]
     public async Task ExpressionParameterOfTheOtherKindShouldBeHandled()

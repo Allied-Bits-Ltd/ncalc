@@ -21,11 +21,7 @@ public static class BuiltInFunctionHelper
             object? arg2 = arguments[1].Evaluate();
             if (arg2 is null)
                 return null;
-            object? result = MathHelper.Divide(MathHelper.Multiply(100, arg1, false, context), arg2, true, context);
-            if (result != null)
-                return new Percent(result);
-            else
-                return null;
+            return PercentOf(arg1, arg2, context, location);
         }
         if (functionName.Equals("PercentDiff", comparison))
         {
@@ -37,11 +33,7 @@ public static class BuiltInFunctionHelper
             object? arg2 = arguments[1].Evaluate();
             if (arg2 is null)
                 return null;
-            object? result = MathHelper.Divide(MathHelper.Multiply(MathHelper.Subtract(arg2, arg1, false, context), 100, false, context), arg1, true, context);
-            if (result != null)
-                return new Percent(result);
-            else
-                return null;
+            return PercentDiff(arg1, arg2, context, location);
         }
         if (functionName.Equals("Abs", comparison))
         {
@@ -363,6 +355,46 @@ public static class BuiltInFunctionHelper
         }
 
         throw new NCalcFunctionNotFoundException(functionName, location);
+    }
+
+    /// <summary>
+    /// Computes PercentOf(a, b), which is a * 100 / b as a percent. Division by zero follows the "/" operator: two integers give
+    /// infinity or NaN instead of an exception.
+    /// </summary>
+    internal static object? PercentOf(object arg1, object arg2, ExpressionContextBase context, ExpressionLocation location)
+    {
+        CheckPercentFunctionArguments(arg1, arg2, "PercentOf", location);
+        return DivideToPercent(MathHelper.Multiply(100, arg1, false, context), arg2, context, location);
+    }
+
+    /// <summary>
+    /// Computes PercentDiff(a, b), which is (b - a) * 100 / a as a percent. The division follows the "/" operator, as in <see cref="PercentOf"/>.
+    /// </summary>
+    internal static object? PercentDiff(object arg1, object arg2, ExpressionContextBase context, ExpressionLocation location)
+    {
+        CheckPercentFunctionArguments(arg1, arg2, "PercentDiff", location);
+        return DivideToPercent(MathHelper.Multiply(MathHelper.Subtract(arg2, arg1, false, context), 100, false, context), arg1, context, location);
+    }
+
+    private static void CheckPercentFunctionArguments(object arg1, object arg2, string function, ExpressionLocation location)
+    {
+        // A percent has no meaningful "percent of" another value; MathHelper would throw InvalidOperationException
+        if (arg1 is Percent || arg2 is Percent)
+            throw new NCalcEvaluationException($"{function}() does not accept percent arguments", location);
+    }
+
+    private static object? DivideToPercent(object? dividend, object divisor, ExpressionContextBase context, ExpressionLocation location)
+    {
+        if (dividend is null)
+            return null;
+        // A zero divisor follows the "/" operator, which divides two integers in double: PercentOf(10, 0) is infinity, as 10 / 0 is,
+        // instead of DivideByZeroException. Other integers are still divided exactly, as decimals.
+        if (MathHelper.IsBoxedIntegerNumber(divisor) && MathHelper.ConvertToBigInteger(divisor).IsZero
+            && EvaluationHelper.ShouldConvertDividendToDouble(dividend, divisor))
+            dividend = MathHelper.ConvertToDouble(dividend, "Div", context.CultureInfo, location);
+
+        object? result = MathHelper.Divide(dividend, divisor, true, context);
+        return result is null ? null : new Percent(result);
     }
 
     /// <summary>

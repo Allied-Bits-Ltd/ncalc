@@ -389,4 +389,80 @@ public class EvaluationTests : TestBase
         Assert.Equal(3, await asyncExpression.EvaluateAsync(token));
         Assert.Null(asyncExpression.Error);
     }
+
+    // NCALC-232: a negative index from the end and a value of another type in a typed list gave BCL exceptions
+    [Theory]
+    [InlineData("s[^-1]")]
+    [InlineData("lst[^-1]")]
+    [InlineData("lst[^-1..]")]
+    [InlineData("ints[0] := 'x'")]
+    public async Task IndexingErrorsShouldBeNCalcExceptions(string text)
+    {
+        var token = TestContext.Current.CancellationToken;
+        foreach (var nonRecursive in new[] { false, true })
+        {
+            var options = ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+
+            var expression = new Expression(text, options);
+            expression.Parameters["s"] = "abc";
+            expression.Parameters["lst"] = new List<object?> { 1, 2, 3 };
+            expression.Parameters["ints"] = new[] { 1, 2 };
+            Assert.Throws<NCalcParameterIndexException>(() => expression.Evaluate(token));
+
+            var asyncExpression = new AsyncExpression(text, options);
+            asyncExpression.Parameters["s"] = "abc";
+            asyncExpression.Parameters["lst"] = new List<object?> { 1, 2, 3 };
+            asyncExpression.Parameters["ints"] = new[] { 1, 2 };
+            await Assert.ThrowsAsync<NCalcParameterIndexException>(async () => await asyncExpression.EvaluateAsync(token));
+        }
+    }
+
+    // NCALC-232: the value assigned by index to a typed list is converted to the element type
+    [Fact]
+    public async Task IndexedAssignmentShouldConvertTheValueToTheElementType()
+    {
+        var token = TestContext.Current.CancellationToken;
+        foreach (var nonRecursive in new[] { false, true })
+        {
+            var options = ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+
+            var doubles = new List<double> { 1.5, 2.5 };
+            var longs = new long[] { 1, 2 };
+            var expression = new Expression("d[0] := 1; l[1] := 7", options);
+            expression.Parameters["d"] = doubles;
+            expression.Parameters["l"] = longs;
+            expression.Options |= ExpressionOptions.UseStatementSequences;
+            expression.Evaluate(token);
+            Assert.Equal([1.0, 2.5], doubles);
+            Assert.Equal([1L, 7L], longs);
+
+            var asyncDoubles = new List<double> { 1.5, 2.5 };
+            var asyncExpression = new AsyncExpression("d[0] := 3", options);
+            asyncExpression.Parameters["d"] = asyncDoubles;
+            await asyncExpression.EvaluateAsync(token);
+            Assert.Equal([3.0, 2.5], asyncDoubles);
+        }
+    }
+
+    // NCALC-222: nested function calls were limited to a few hundred levels also with UseNonRecursiveEvaluator
+    [Theory]
+    [InlineData("Abs(", ")")]
+    [InlineData("if(true, ", ", 0)")]
+    public async Task DeeplyNestedFunctionCallsShouldBeEvaluatedByTheNonRecursiveEvaluator(string open, string close)
+    {
+        // Well above the former limits (about 260 levels in the synchronous and 100 in the asynchronous evaluator), within those of the parser
+        const int depth = 1000;
+        var text = string.Concat(Enumerable.Repeat(open, depth)) + "1" + string.Concat(Enumerable.Repeat(close, depth));
+        const ExpressionOptions options = ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator;
+        var token = TestContext.Current.CancellationToken;
+
+        // Parsed first, on a thread with a large stack if needed, so that only the evaluation runs on the thread pool thread
+        var expression = new Expression(text, options);
+        Assert.False(expression.HasErrors(token), expression.Error?.Message);
+        Assert.Equal(1, Convert.ToInt32(await Task.Run(() => expression.Evaluate(token), token), CultureInfo.InvariantCulture));
+
+        var asyncExpression = new AsyncExpression(text, options);
+        Assert.False(asyncExpression.HasErrors(token));
+        Assert.Equal(1, Convert.ToInt32(await Task.Run(async () => await asyncExpression.EvaluateAsync(token), token), CultureInfo.InvariantCulture));
+    }
 }

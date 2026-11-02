@@ -661,4 +661,159 @@ public class ParserTests
         var value = new ValueExpression(TimeSpan.FromTicks(ticks));
         Assert.Equal(TimeSpan.FromTicks(ticks), new Expression(value.ToString(), ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
     }
+
+    // NCALC-204: whitespace and a word starting with "e", or a separator after a space, made an integer literal a double
+    [Fact]
+    public void IntegerLiteralShouldStayAnIntegerBeforeWhitespace()
+    {
+        Assert.IsType<int>(new Expression("if (true) 5 else 6", ExpressionOptions.NoCache | ExpressionOptions.UseIfStatement).Evaluate(TestContext.Current.CancellationToken));
+        Assert.IsType<decimal>(new Expression("if (true) 5.5 else 6", ExpressionOptions.NoCache | ExpressionOptions.UseIfStatement | ExpressionOptions.DecimalAsDefault).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(int.MinValue, new Expression("x := if (true) 2147483647 else 0; x + 1",
+            ExpressionOptions.NoCache | ExpressionOptions.UseIfStatement | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences).Evaluate(TestContext.Current.CancellationToken));
+
+        // The comma is the decimal separator of sk-SK and the list separator; ToString() writes "1 , 2" in this mode
+        var sk = CultureInfo.GetCultureInfo("sk-SK");
+        var commaOptions = new AdvancedExpressionOptions(sk)
+        {
+            ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.Comma,
+            DecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.FromCulture
+        };
+        var items = (IEnumerable<object?>)new Expression("(1 , 2)", ExpressionOptions.NoCache, sk) { AdvancedOptions = commaOptions }.Evaluate(TestContext.Current.CancellationToken)!;
+        Assert.All(items, item => Assert.IsType<int>(item));
+        Assert.Equal(int.MinValue, new Expression("Max(2147483647 , 1) + 1", ExpressionOptions.NoCache, sk) { AdvancedOptions = commaOptions }.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(1.5, new Expression("Max(1,5 , 1)", ExpressionOptions.NoCache, sk) { AdvancedOptions = commaOptions }.Evaluate(TestContext.Current.CancellationToken));
+
+        var spaceOptions = new AdvancedExpressionOptions(CultureInfo.InvariantCulture) { ListItemSeparator = AdvancedExpressionOptions.ListItemSeparatorKind.Space };
+        var spaced = new Expression("(5 e)", ExpressionOptions.NoCache, CultureInfo.InvariantCulture) { AdvancedOptions = spaceOptions };
+        spaced.Parameters["e"] = 1;
+        Assert.IsType<int>(((IEnumerable<object?>)spaced.Evaluate(TestContext.Current.CancellationToken)!).First());
+
+        // An exponent directly after the digits still makes a double
+        Assert.Equal(1200.5, new Expression("1e3 + 2E+2 + 5e-1", ExpressionOptions.NoCache).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    // NCALC-207: the year of a date literal was read in the calendar of the thread culture (Thai Buddhist, Um Al-Qura)
+    [Theory]
+    [InlineData("th-TH")]
+    [InlineData("ar-SA")]
+    [InlineData("en-US")]
+    public void DateLiteralsShouldNotDependOnTheCalendarOfTheThreadCulture(string threadCulture)
+    {
+        var oldCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(threadCulture);
+            foreach (var options in new[] { ExpressionOptions.NoCache, ExpressionOptions.None })
+            {
+                Assert.Equal(new DateTime(2024, 1, 2), new Expression("#1/2/2024#", options, CultureInfo.InvariantCulture).Evaluate(TestContext.Current.CancellationToken));
+                Assert.Equal(new DateTime(2024, 1, 2, 10, 30, 0), new Expression("#1/2/2024 10:30#", options, CultureInfo.InvariantCulture).Evaluate(TestContext.Current.CancellationToken));
+                Assert.Equal(new DateTime(2024, 1, 2, 22, 30, 15), new Expression("#1/2/2024 10:30:15 PM#", options, CultureInfo.GetCultureInfo("en-US")).Evaluate(TestContext.Current.CancellationToken));
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = oldCulture;
+        }
+    }
+
+    // NCALC-208: any operand was accepted as the target of an assignment, and the assignment returned the right-hand side
+    [Theory]
+    [InlineData("5 = x", ExpressionOptions.UseCStyleAssignments)]
+    [InlineData("(x + 1) = 4", ExpressionOptions.UseCStyleAssignments)]
+    [InlineData("(x + 1) := 4", ExpressionOptions.None)]
+    [InlineData("5 := 7", ExpressionOptions.None)]
+    [InlineData("'abc' := 7", ExpressionOptions.None)]
+    [InlineData("Abs(x) := 7", ExpressionOptions.None)]
+    [InlineData("5 += 1", ExpressionOptions.None)]
+    [InlineData("Abs(x) -= 1", ExpressionOptions.None)]
+    [InlineData("(x + 1)[0] *= 2", ExpressionOptions.None)]
+    public async Task AssignmentToAnOperandThatIsNotAVariableShouldBeAnError(string expression, ExpressionOptions options)
+    {
+        options |= ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences;
+        Assert.Throws<NCalcParserException>(() => LogicalExpressionFactory.Create(expression, null, CultureInfo.InvariantCulture, options));
+
+        foreach (var evaluatorOptions in new[] { options, options | ExpressionOptions.UseNonRecursiveEvaluator })
+        {
+            var sync = new Expression(expression, evaluatorOptions);
+            sync.Parameters["x"] = 3;
+            Assert.ThrowsAny<NCalcException>(() => sync.Evaluate(TestContext.Current.CancellationToken));
+
+            var async = new AsyncExpression(expression, evaluatorOptions);
+            async.Parameters["x"] = 3;
+            await Assert.ThrowsAnyAsync<NCalcException>(async () => await async.EvaluateAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
+    // NCALC-208: names and indexed names are still assigned to, and a comparison is not mistaken for an assignment
+    [Theory]
+    [InlineData("x = 5", ExpressionOptions.UseCStyleAssignments, 5)]
+    [InlineData("5 == x", ExpressionOptions.UseCStyleAssignments, false)]
+    [InlineData("x := 5", ExpressionOptions.None, 5)]
+    [InlineData("x += 1", ExpressionOptions.None, 4)]
+    [InlineData("5 = x", ExpressionOptions.None, false)]
+    [InlineData("[x] := 7", ExpressionOptions.None, 7)]
+    [InlineData("l[1] := 9; l[1]", ExpressionOptions.None, 9)]
+    public void AssignmentToAVariableShouldStillWork(string expression, ExpressionOptions options, object expected)
+    {
+        var e = new Expression(expression, options | ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences);
+        e.Parameters["x"] = 3;
+        e.Parameters["l"] = new List<object?> { 1, 2 };
+        Assert.Equal(expected, e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    // NCALC-229: under a culture whose time separator is '.', no time span literal could be written, not even the #hh:mm:ss# of ToString()
+    [Theory]
+    [InlineData("#10.30#", 0, 10, 30, 0)]
+    [InlineData("#10.30.00#", 0, 10, 30, 0)]
+    [InlineData("#1.10.30.00#", 1, 10, 30, 0)]
+    [InlineData("#25.00.00#", 0, 25, 0, 0)]
+    [InlineData("#10:30#", 0, 10, 30, 0)]
+    [InlineData("#10:30:00#", 0, 10, 30, 0)]
+    [InlineData("#1.02:03:04#", 1, 2, 3, 4)]
+    public void TimeSpanLiteralsShouldBeReadWhereTheTimeSeparatorIsADot(string expression, int days, int hours, int minutes, int seconds)
+    {
+        var fi = CultureInfo.GetCultureInfo("fi-FI");
+        Assert.Equal(".", fi.DateTimeFormat.TimeSeparator);
+        Assert.Equal(new TimeSpan(days, hours, minutes, seconds), new Expression(expression, ExpressionOptions.NoCache, fi).Evaluate(TestContext.Current.CancellationToken));
+
+        var written = new ValueExpression(new TimeSpan(days, hours, minutes, seconds)).ToString();
+        Assert.Equal(new TimeSpan(days, hours, minutes, seconds), new Expression(written, ExpressionOptions.NoCache, fi).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    // NCALC-229: dates of fi-FI, whose date separator is also '.', are read as before
+    [Fact]
+    public void DatesShouldStillBeReadWhereTheTimeSeparatorIsADot()
+    {
+        var fi = CultureInfo.GetCultureInfo("fi-FI");
+        Assert.Equal(new DateTime(2024, 1, 2), new Expression("#02.01.2024#", ExpressionOptions.NoCache, fi).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(new DateTime(2030, 10, 1), new Expression("#1.10.30#", ExpressionOptions.NoCache, fi).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(new DateTime(2024, 1, 2, 10, 30, 0), new Expression("#02.01.2024 10.30.00#", ExpressionOptions.NoCache, fi).Evaluate(TestContext.Current.CancellationToken));
+        Assert.True(new Expression("#13.13.2222#", ExpressionOptions.NoCache, fi).HasErrors(TestContext.Current.CancellationToken));
+    }
+
+    // NCALC-231: "///" that is not a description of a function is an ordinary comment
+    [Theory]
+    [InlineData("1 + 2 /// c")]
+    [InlineData("1 /// c\n + 2")]
+    [InlineData("/// c\n1 + 2")]
+    [InlineData("/// doc\nfn f(a) => a + 2; f(1)")]
+    [InlineData("/// doc\n\n///  more\nfn f(a) => a + 2; f(1)")]
+    public void TripleSlashShouldBeACommentUnlessItDescribesAFunction(string expression)
+    {
+        var e = new Expression(expression, ExpressionOptions.NoCache | ExpressionOptions.SupportCStyleComments | ExpressionOptions.UseStatementSequences);
+        Assert.Equal(3, e.Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    // NCALC-243: the errors of an unknown operator sequence and of an invalid date literal tell where they are
+    [Fact]
+    public void ParseErrorsShouldHaveAPosition()
+    {
+        var unknown = Assert.Throws<NCalcParserException>(() => LogicalExpressionFactory.Create("1 + * 2", null, CultureInfo.InvariantCulture));
+        Assert.Contains("Unknown operator sequence at position (1:6)", unknown.Message, StringComparison.Ordinal);
+        unknown = Assert.Throws<NCalcParserException>(() => LogicalExpressionFactory.Create("1 = = 2", null, CultureInfo.InvariantCulture));
+        Assert.Contains("Unknown operator sequence at position", unknown.Message, StringComparison.Ordinal);
+
+        var invalidDate = Assert.Throws<FormatException>(() => LogicalExpressionFactory.Create("#2024-13-01#", null, CultureInfo.InvariantCulture));
+        Assert.Contains("at position (1:12)", invalidDate.Message, StringComparison.Ordinal);
+    }
 }

@@ -1121,5 +1121,207 @@ public class LambdaTests
         Assert.Equal(4294967294L, new Expression("2147483647 * 2").ToLambda<long>(TestContext.Current.CancellationToken)());
         Assert.Throws<OverflowException>(() => new Expression("2147483647 * 2", ExpressionOptions.OverflowProtection).ToLambda<int>(TestContext.Current.CancellationToken)());
     }
+
+    private class OverloadContext
+    {
+        public double D { get; set; } = 2.5;
+        public int x { get; set; } = 1;
+        public int? n { get; set; } = 1;
+        public decimal m { get; set; } = 1m;
+
+        // The same overloads declared in opposite orders
+        public string F1(int a) => "int:" + a;
+        public string F1(double a) => "double:" + a.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        public string F2(double a) => "double:" + a.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        public string F2(int a) => "int:" + a;
+
+        public int Twice(int a) => a * 2;
+        public string Long(long a) => "long:" + a;
+        public string O(object a) => "object:" + a.GetType().Name;
+        public string O(int a) => "int:" + a;
+        public string P(string head, params double[] values) => head + ":" + string.Join("|", values.Select(v => v.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+    }
+
+    // NCALC-203: an argument whose value is known only when the lambda runs selects the overload by the type of the value,
+    // whatever the order of the declarations
+    [Theory]
+    [InlineData("F1(5 / 2)", "double:2.5")]
+    [InlineData("F2(5 / 2)", "double:2.5")]
+    [InlineData("F1(1 + 1.5)", "double:2.5")]
+    [InlineData("F2(1 + 1.5)", "double:2.5")]
+    [InlineData("F1(D * 1)", "double:2.5")]
+    [InlineData("F1(1 + 1)", "int:2")]
+    [InlineData("F2(1 + 1)", "int:2")]
+    [InlineData("F1(D)", "double:2.5")]
+    [InlineData("Twice(4 / 2)", 4)]
+    [InlineData("Twice(1 + 2)", 6)]
+    [InlineData("Long(3000000000 * 1)", "long:3000000000")]
+    [InlineData("Long(4 / 2)", "long:2")]
+    [InlineData("O(1 + 1)", "int:2")]
+    [InlineData("O('a' + 'b')", "object:String")]
+    [InlineData("P('s', 1 + 1, 2.5, Abs(-3))", "s:2|2.5|3")]
+    public void LambdaShouldChooseContextOverloadsByTheValuesOfTheArguments(string input, object expected)
+    {
+        var lambda = new Expression(input, ExpressionOptions.NoCache).ToLambda<OverloadContext, object?>(TestContext.Current.CancellationToken);
+        Assert.Equal(expected, lambda(new OverloadContext()));
+    }
+
+    // NCALC-203: an argument is converted to the type of the parameter only without loss
+    [Theory]
+    [InlineData("Twice(2.9 * 1)")]
+    [InlineData("Twice(3000000000 * 1)")]
+    [InlineData("Twice(1 / 0)")]
+    [InlineData("Twice(true && true)")]
+    [InlineData("Twice(2.9)")]
+    [InlineData("Twice(D)")]
+    [InlineData("Long(0.5 + 0)")]
+    public void LambdaShouldNotConvertContextArgumentsWithLoss(string input)
+    {
+        var lambda = new Expression(input, ExpressionOptions.NoCache).ToLambda<OverloadContext, object?>(TestContext.Current.CancellationToken);
+        Assert.Throws<NCalc.Exceptions.NCalcEvaluationException>(() => lambda(new OverloadContext()));
+    }
+
+    // NCALC-203: an assigned value is converted to the type of the member without loss, and the assignment gives the stored value
+    [Fact]
+    public void LambdaShouldAssignToTypedMembersWithoutLoss()
+    {
+        const ExpressionOptions options = ExpressionOptions.NoCache | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences;
+        var token = TestContext.Current.CancellationToken;
+
+        var context = new OverloadContext();
+        Assert.Equal(2, new Expression("x := 4 / 2", options).ToLambda<OverloadContext, object?>(token)(context));
+        Assert.Equal(2, context.x);
+
+        context = new OverloadContext();
+        Assert.Equal(2.5m, new Expression("m := 2.5", options).ToLambda<OverloadContext, object?>(token)(context));
+        Assert.Equal(2.5m, context.m);
+
+        foreach (var input in new[] { "x := 2.7", "x := 3000000000", "x += 0.5", "x := 'abc'" })
+        {
+            context = new OverloadContext();
+            var lambda = new Expression(input, options).ToLambda<OverloadContext, object?>(token);
+            Assert.Throws<NCalc.Exceptions.NCalcEvaluationException>(() => lambda(context));
+            Assert.Equal(1, context.x);
+        }
+
+        // null is stored only in a member that can hold it
+        context = new OverloadContext();
+        Assert.Null(new Expression("n := null", options | ExpressionOptions.AllowNullParameter).ToLambda<OverloadContext, object?>(token)(context));
+        Assert.Null(context.n);
+        var nullToInt = new Expression("x := null", options | ExpressionOptions.AllowNullParameter).ToLambda<OverloadContext, object?>(token);
+        Assert.Throws<NCalc.Exceptions.NCalcEvaluationException>(() => nullToInt(context));
+        Assert.Equal(1, context.x);
+    }
+
+    // NCALC-210: a list or in() as a statement other than the last one made FastExpressionCompiler emit invalid IL
+    [Theory]
+    [InlineData("(1, 2); 3", 3)]
+    [InlineData("in(1, 2, 3); 4", 4)]
+    [InlineData("(1, (2, 3)); in(1, 1); 5", 5)]
+    public void LambdaShouldDiscardListsAndInFunctionsInStatementSequences(string input, int expected)
+    {
+        const ExpressionOptions options = ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences;
+        Assert.Equal(expected, new Expression(input, options).ToLambda<object?>(TestContext.Current.CancellationToken)());
+        AssertLambdaMatchesEvaluate(input, options);
+    }
+
+    // NCALC-241: decimal constants keep their scale
+    [Fact]
+    public void LambdaShouldKeepTheScaleOfDecimals()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+
+        var literal = new Expression("2.0", ExpressionOptions.DecimalAsDefault | ExpressionOptions.NoCache);
+        Assert.Equal("2.0", Convert.ToString(literal.Evaluate(token), invariant));
+        Assert.Equal("2.0", Convert.ToString(literal.ToLambda<object?>(token)(), invariant));
+        Assert.Equal("2.50", Convert.ToString(new Expression("2.50", ExpressionOptions.DecimalAsDefault).ToLambda<decimal>(token)(), invariant));
+
+        var expression = new Expression("a", ExpressionOptions.NoCache);
+        expression.Parameters["a"] = 1.500m;
+        Assert.Equal("1.500", Convert.ToString(expression.ToLambda<object?>(token)(), invariant));
+    }
+
+    // NCALC-242: a lambda uses the parameters and options of the expression at the time it is created, also for the parameters
+    // that are expressions
+    [Fact]
+    public void LambdaShouldUseTheParametersAndOptionsAtTheTimeItIsCreated()
+    {
+        var token = TestContext.Current.CancellationToken;
+
+        var expression = new Expression("x + e1", ExpressionOptions.NoCache);
+        expression.Parameters["x"] = 3;
+        expression.Parameters["e1"] = new Expression("x * 10");
+        var lambda = expression.ToLambda<object?>(token);
+        Assert.Equal(33, lambda());
+
+        expression.Parameters["x"] = 5;
+        Assert.Equal(33, lambda());
+        Assert.Equal(55, expression.Evaluate(token));
+
+        var comparison = new Expression("'a' = 'A'", ExpressionOptions.NoCache);
+        var compare = comparison.ToLambda<bool>(token);
+        comparison.Options |= ExpressionOptions.CaseInsensitiveStringComparer;
+        Assert.False(compare());
+        Assert.True(comparison.ToLambda<bool>(token)());
+    }
+
+    // NCALC-202: ToLambda of a long chain of operators or of a deeply nested expression made FastExpressionCompiler terminate
+    // the process with a StackOverflowException. On a thread with a 1 MB stack, it gives the value or throws NCalcException.
+    [Theory]
+    [InlineData("sum", 250)]
+    [InlineData("sum", 2000)]
+    [InlineData("sum", 20000)]
+    [InlineData("and", 2000)]
+    [InlineData("parens", 250)]
+    [InlineData("parens", 2000)]
+    [InlineData("in", 200)]
+    [InlineData("in", 1000)]
+    [InlineData("abs", 1000)]
+    public void LambdaOfADeepExpressionShouldNotCrashTheProcess(string shape, int count)
+    {
+        static string Nest(string open, string inner, string close, int n)
+            => string.Concat(Enumerable.Repeat(open, n)) + inner + string.Concat(Enumerable.Repeat(close, n));
+
+        var text = shape switch
+        {
+            "sum" => string.Join(" + ", Enumerable.Repeat("1", count)),
+            "and" => string.Join(" and ", Enumerable.Repeat("true", count)),
+            "parens" => Nest("1 + (", "1", ")", count - 1),
+            "in" => Nest("in(", "1", ", 1)", count),
+            _ => Nest("Abs(", "1", ")", count)
+        };
+        object? expected = shape switch
+        {
+            "sum" or "parens" => count,
+            "abs" => 1,
+            _ => true
+        };
+
+        object? result = null;
+        Exception? error = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                result = new Expression(text, ExpressionOptions.NoCache).ToLambda<object?>(TestContext.Current.CancellationToken)();
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+        }, 1024 * 1024);
+        thread.Start();
+        thread.Join();
+
+        if (error is not null)
+            Assert.IsAssignableFrom<NCalc.Exceptions.NCalcException>(error);
+        else
+            Assert.Equal(expected, result);
+
+        // A chain of operators is compiled without nesting, so any length works
+        if (shape is "sum" or "and")
+            Assert.Null(error);
+    }
 }
 #endif

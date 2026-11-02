@@ -35,6 +35,7 @@
       <Compile Include="..\NCalc\Domain\FunctionExpression.cs" Link="Domain\FunctionExpression.cs" />
       <Compile Include="..\NCalc\Domain\Identifier.cs" Link="Domain\Identifier.cs" />
       <Compile Include="..\NCalc\Domain\LogicalExpression.cs" Link="Domain\LogicalExpression.cs" />
+      <Compile Include="..\NCalc\Domain\LogicalExpressionJsonConverter.cs" Link="Domain\LogicalExpressionJsonConverter.cs" />
       <Compile Include="..\NCalc\Domain\LogicalExpressionList.cs" Link="Domain\LogicalExpressionList.cs" />
       <Compile Include="..\NCalc\Domain\ObjectValueJsonConverter.cs" Link="Domain\ObjectValueJsonConverter.cs" />
       <Compile Include="..\NCalc\Domain\Percent.cs" Link="Domain\Percent.cs" />

@@ -13,21 +13,11 @@ namespace NCalc.Domain;
 /// Represents an abstract syntax tree (AST) node for logical expressions.
 /// </summary>
 #if NET
-[JsonPolymorphic]
-[JsonDerivedType(typeof(BinaryExpression), typeDiscriminator: "binary")]
-[JsonDerivedType(typeof(FunctionCall), typeDiscriminator: "function")]
-[JsonDerivedType(typeof(Identifier), typeDiscriminator: "identifier")]
-[JsonDerivedType(typeof(LogicalExpressionList), typeDiscriminator: "list")]
-[JsonDerivedType(typeof(TernaryExpression), typeDiscriminator: "ternary")]
-[JsonDerivedType(typeof(UnaryExpression), typeDiscriminator: "unary")]
-[JsonDerivedType(typeof(PercentExpression), typeDiscriminator: "percent")]
-[JsonDerivedType(typeof(ExpressionGroup), typeDiscriminator: "expressionGroup")]
-[JsonDerivedType(typeof(ValueExpression), typeDiscriminator: "value")]
-[JsonDerivedType(typeof(ImaginaryNumberExpression), typeDiscriminator: "imaginary")]
-[JsonDerivedType(typeof(VectorExpression), typeDiscriminator: "vector")]
-[JsonDerivedType(typeof(StatementSequence), typeDiscriminator: "statements")]
-[JsonDerivedType(typeof(FunctionExpression), typeDiscriminator: "functionDeclaration")]
-[JsonDerivedType(typeof(IfStatementExpression), typeDiscriminator: "if")]
+// The kind of each node is written in a "$type" property ("binary", "function", "identifier", "list", "ternary", "unary", "percent",
+// "expressionGroup", "value", "imaginary", "vector", "statements", "functionDeclaration", "if"), as with the System.Text.Json
+// polymorphism used before. A converter is used instead of that polymorphism, which writes a list or a statement sequence
+// (collections) as a plain array and would lose their options
+[JsonConverter(typeof(LogicalExpressionJsonConverter))]
 #endif
 public abstract class LogicalExpression
 {
@@ -74,7 +64,7 @@ public abstract class LogicalExpression
             ListItemSeparator = _advancedOptions.ListItemSeparator,
             DecimalSeparator = _advancedOptions.GetDecimalSeparator()
         };
-        private set => _advancedOptions = value is null ? null : new AdvancedExpressionOptions(value.Flags)
+        set => _advancedOptions = value is null ? null : new AdvancedExpressionOptions(value.Flags)
         {
             ListItemSeparator = value.ListItemSeparator,
             DecimalSeparatorType = AdvancedExpressionOptions.SeparatorType.Custom,

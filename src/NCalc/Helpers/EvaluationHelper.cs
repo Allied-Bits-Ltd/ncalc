@@ -38,6 +38,88 @@ public static class EvaluationHelper
 #endif
     }
 
+    private const string ExpressionTooDeepNonRecursiveMessage = "The expression is nested too deeply to be evaluated: function calls or expressions used as parameter values are nested too deeply, which ExpressionOptions.UseNonRecursiveEvaluator does not avoid.";
+
+    /// <summary>
+    /// Like <see cref="EnsureSufficientExecutionStack(LogicalExpression)"/>, but with a message that does not advise the non-recursive
+    /// evaluator when it is the one in use.
+    /// </summary>
+    internal static void EnsureSufficientExecutionStack(LogicalExpression expression, bool nonRecursive)
+    {
+        if (!nonRecursive)
+            EnsureSufficientExecutionStack(expression);
+        else
+        if (!HasSufficientExecutionStack())
+            throw new NCalcEvaluationException(ExpressionTooDeepNonRecursiveMessage, expression.Location);
+    }
+
+    internal static bool HasSufficientExecutionStack()
+    {
+#if NET
+        return RuntimeHelpers.TryEnsureSufficientExecutionStack();
+#else
+        try
+        {
+            RuntimeHelpers.EnsureSufficientExecutionStack();
+            return true;
+        }
+        catch (InsufficientExecutionStackException)
+        {
+            return false;
+        }
+#endif
+    }
+
+    /// <summary>
+    /// Runs a part of a non-recursive evaluation that needs the stack (a function call, whose arguments are evaluated as separate
+    /// expressions) on a new thread with a stack of <see cref="Parser.LogicalExpressionParser.DeepExpressionStackSize"/> bytes,
+    /// once the stack of the current thread is nearly used up. Each such thread provides room for thousands of further levels of
+    /// nested function calls. When the size is 0 or the platform cannot start a thread, the evaluation continues on the current thread.
+    /// </summary>
+    internal static T EvaluateOnLargeStack<T>(Func<T> evaluate)
+    {
+        var stackSize = Parser.LogicalExpressionParser.DeepExpressionStackSize;
+#if NET
+        if (OperatingSystem.IsBrowser())
+            stackSize = 0;
+#endif
+        if (stackSize <= 0)
+            return evaluate();
+
+        // The values may be formatted or parsed with the current culture, which a new thread would not have
+        var culture = CultureInfo.CurrentCulture;
+        var uiCulture = CultureInfo.CurrentUICulture;
+        T result = default!;
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? error = null;
+
+        var thread = new Thread(() =>
+        {
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.CurrentUICulture = uiCulture;
+            try
+            {
+                result = evaluate();
+            }
+            catch (Exception ex)
+            {
+                error = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+            }
+        }, stackSize);
+
+        try
+        {
+            thread.Start();
+        }
+        catch (Exception ex) when (ex is PlatformNotSupportedException or OutOfMemoryException)
+        {
+            return evaluate();
+        }
+        thread.Join();
+
+        error?.Throw();
+        return result;
+    }
+
     private const string ExpressionTooDeepToVisitMessage = "The expression is nested too deeply to be processed";
 
     /// <summary>
@@ -72,14 +154,12 @@ public static class EvaluationHelper
     public static object? Plus(object? leftValue, object? rightValue, ExpressionContextBase context)
     {
         if (context.Options.HasFlag(ExpressionOptions.StringConcat))
-            return string.Concat(
-                Convert.ToString(leftValue, context.CultureInfo),
-                Convert.ToString(rightValue, context.CultureInfo));
+            return ConcatStrings(leftValue, rightValue, context);
 
         if (context.Options.HasFlag(ExpressionOptions.NoStringTypeCoercion) &&
             (leftValue is string || rightValue is string))
         {
-            return string.Concat(Convert.ToString(leftValue, context.CultureInfo), Convert.ToString(rightValue, context.CultureInfo));
+            return ConcatStrings(leftValue, rightValue, context);
         }
         else
         if (context.Options.HasFlag(ExpressionOptions.SupportTimeOperations))
@@ -116,10 +196,22 @@ public static class EvaluationHelper
         }
         catch (NCalcConversionException) when (leftValue is string && rightValue is string)
         {
-            return string.Concat(
-                Convert.ToString(leftValue, context.CultureInfo),
-                Convert.ToString(rightValue, context.CultureInfo));
+            return ConcatStrings(leftValue, rightValue, context);
         }
+    }
+
+    /// <summary>
+    /// Concatenates the text of two values. The result may have at most <see cref="BuiltInFunctionHelper.MaxMakeResultLength"/>
+    /// characters, as the results of MakeStr(), so that doubling a string in a loop (s = s + s) cannot exhaust the memory.
+    /// </summary>
+    private static string ConcatStrings(object? leftValue, object? rightValue, ExpressionContextBase context)
+    {
+        string left = Convert.ToString(leftValue, context.CultureInfo) ?? string.Empty;
+        string right = Convert.ToString(rightValue, context.CultureInfo) ?? string.Empty;
+        long length = (long)left.Length + right.Length;
+        if (length > BuiltInFunctionHelper.MaxMakeResultLength)
+            throw new NCalcEvaluationException($"The concatenated string would have {length} characters, which exceeds the limit of {BuiltInFunctionHelper.MaxMakeResultLength} (BuiltInFunctionHelper.MaxMakeResultLength)");
+        return string.Concat(left, right);
     }
 
     /// <summary>
@@ -501,6 +593,14 @@ public static class EvaluationHelper
         };
     }
 
+    private static NCalc.Domain.Index FromEndIndex(int value, UnaryExpression expression)
+    {
+        if (value < 0)
+            throw new NCalcParameterIndexException($"An index from the end (^{value}) must be zero or positive", expression.Location);
+
+        return new NCalc.Domain.Index(value, true);
+    }
+
     /// <summary>
     /// Evaluates a unary expression.
     /// </summary>
@@ -521,10 +621,10 @@ public static class EvaluationHelper
                         ? MathHelper.TryReduceToUInt64(MathHelper.Subtract((object)(long)0, (BigInteger)result))
                         : MathHelper.Subtract(0, result, true, context)),*/
                 MathHelper.Negate(result, context.Options.HasFlag(ExpressionOptions.ReduceArithmeticResultType), context),
-            UnaryExpressionType.FromEnd => new NCalc.Domain.Index(MathHelper.ConvertToInt(result, "From End", context.CultureInfo, expression.Location), true),
+            UnaryExpressionType.FromEnd => FromEndIndex(MathHelper.ConvertToInt(result, "From End", context.CultureInfo, expression.Location), expression),
             UnaryExpressionType.BitwiseNot =>
                 (result is NCalcVector vResult) ? ~vResult :
-                (result is BigInteger biResult) ? MathHelper.TryReduceToUInt64(~biResult) : ~MathHelper.ConvertToULong(result, "Bitwise Not", context.CultureInfo, expression.Location),
+                MathHelper.BitwiseNot(result, "Bitwise Not", context.CultureInfo, expression.Location),
             UnaryExpressionType.SqRoot => MathHelper.Sqrt(result, context.CultureInfo),
 #if NET8_0_OR_GREATER
             UnaryExpressionType.CbRoot => MathHelper.Cbrt(result, context.CultureInfo),
@@ -819,7 +919,108 @@ public static class EvaluationHelper
             return outer;
         if (outer is null || own.Equals(outer))
             return own;
-        return (THandler)Delegate.Combine(own, outer);
+
+        // Each handler of this expression is removed from the outer ones, also when the outer expression has other handlers
+        Delegate? remaining = outer;
+        foreach (var handler in own.GetInvocationList())
+        {
+            while (remaining is not null)
+            {
+                var reduced = Delegate.Remove(remaining, handler);
+                if (ReferenceEquals(reduced, remaining) || Equals(reduced, remaining))
+                    break;
+                remaining = reduced;
+            }
+        }
+
+        return remaining is null ? own : (THandler)Delegate.Combine(own, remaining);
+    }
+
+    /// <summary>
+    /// Assigns a value to an element of a list or to a character of a string by index. A list is changed in place, unless
+    /// <paramref name="copyList"/> is set, in which case a copy of the list is changed. Returns the new value of the parameter:
+    /// the list (or its copy), or a new string.
+    /// </summary>
+    internal static object UpdateElement(object container, string identifierName, int index, object? value, bool copyList, CultureInfo cultureInfo,
+        Parser.ExpressionLocation containerLocation, Parser.ExpressionLocation indexLocation)
+    {
+        if (container is string strParam)
+        {
+            if (!(value is char || (value is string && ((string)value).Length == 1)))
+                throw new NCalcParameterIndexException(identifierName, $"When updating a string in '{identifierName}' via the index, the value must be a character or a one-character string", indexLocation);
+
+            if (strParam.Length <= index)
+                throw new NCalcParameterIndexException(identifierName, $"A character in the '{identifierName}' string cannot be updated by index: the string has the length of {strParam.Length}, while the index is {index}", indexLocation);
+
+            char charValue = value is string strValue ? strValue[0] : (char)value;
+
+            return strParam[0..index] + charValue + strParam[(index + 1)..];
+        }
+
+        if (container is not IList list)
+            throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' is not a list or a string and cannot be assigned to by index", containerLocation);
+
+        if (copyList)
+            list = list is Array array ? (IList)array.Clone() : new List<object?>(list.Cast<object?>());
+        else
+        if (list.IsReadOnly)
+            throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' is read-only and cannot be assigned to by index", containerLocation);
+
+        if (list.Count <= index)
+            throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' cannot be assigned to by index: it has {list.Count} elements, while the index to update is {index}", indexLocation);
+
+        SetListElement(list, identifierName, index, value, cultureInfo, containerLocation);
+        return list;
+    }
+
+    // A typed list or array gets the value converted to its element type; a value that cannot be converted is reported as an NCalc exception
+    private static void SetListElement(IList list, string identifierName, int index, object? value, CultureInfo cultureInfo, Parser.ExpressionLocation location)
+    {
+        var listType = list.GetType();
+        var elementType = list is Array ? listType.GetElementType() : (listType.IsGenericType && listType.GetGenericArguments() is { Length: 1 } arguments ? arguments[0] : null);
+        if (elementType is not null)
+            elementType = Nullable.GetUnderlyingType(elementType) ?? elementType;
+
+        try
+        {
+            if (value is not null && elementType is not null && !elementType.IsInstanceOfType(value))
+                value = ConvertElement(value, elementType, cultureInfo, location);
+
+            list[index] = value;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new NCalcParameterIndexException($"The value cannot be assigned to an element of '{identifierName}'" + (elementType is null ? string.Empty : $", whose elements are of type {elementType.Name}"), location, ex);
+        }
+    }
+
+    private static object? ConvertElement(object value, Type elementType, CultureInfo cultureInfo, Parser.ExpressionLocation location)
+    {
+        const string operation = "Indexed assignment";
+
+        if (elementType == typeof(double))
+            return MathHelper.ConvertToDouble(value, operation, cultureInfo, location);
+        if (elementType == typeof(float))
+            return (float)MathHelper.ConvertToDouble(value, operation, cultureInfo, location);
+        if (elementType == typeof(decimal))
+            return MathHelper.ConvertToDecimal(value, operation, cultureInfo, location);
+        if (elementType == typeof(int))
+            return MathHelper.ConvertToInt(value, operation, cultureInfo, location);
+        if (elementType == typeof(long))
+            return MathHelper.ConvertToLong(value, operation, cultureInfo, location);
+        if (elementType == typeof(ulong))
+            return MathHelper.ConvertToULong(value, operation, cultureInfo, location);
+        if (elementType == typeof(bool))
+            return MathHelper.ConvertToBoolean(value, operation, cultureInfo, location);
+        if (elementType == typeof(BigDecimal))
+            return MathHelper.ConvertToBigDecimal(value);
+        if (elementType == typeof(BigInteger))
+            return MathHelper.ConvertToBigInteger(value);
+        if (value is IConvertible && typeof(IConvertible).IsAssignableFrom(elementType))
+            return Convert.ChangeType(value, elementType, cultureInfo);
+
+        // The list reports the mismatch
+        return value;
     }
 
     internal static void EnsureProperParamNumInFunctionCall(Function userFunction, FunctionCall functionCall)
@@ -929,6 +1130,98 @@ internal class ArgumentStateBase
 {
     protected object? _value = null;
     protected bool _valueSet = false;
+
+    // Set when _value is a copy of a list made by this state, which may be changed in place
+    private bool _ownsValue;
+
+    // Identifies the function call that the arguments belong to
+    internal object? Owner { get; set; }
+
+    protected void ReplaceValue(object? value)
+    {
+        _value = value;
+        _valueSet = true;
+        _ownsValue = false;
+    }
+
+    /// <summary>
+    /// An indexed assignment to an argument (<c>a[1] := 5</c>) changes that element of the argument. Assignments to arguments are local
+    /// to the function, so the list of the caller is copied first (once) and the copy is changed.
+    /// </summary>
+    protected void UpdateElement(object? current, string name, int index, object? value, CultureInfo cultureInfo)
+    {
+        if (current is null)
+            throw new NCalcParameterIndexException(name, $"{name} is not set and cannot be assigned to by index");
+
+        _value = EvaluationHelper.UpdateElement(current, name, index, value, !_ownsValue, cultureInfo, Parser.ExpressionLocation.Empty, Parser.ExpressionLocation.Empty);
+        _valueSet = true;
+        _ownsValue = _value is not string;
+    }
+}
+
+/// <summary>
+/// The loop iterations that an evaluation may still run. The MaxLoopIterations limit applies to all the loops of one evaluation together,
+/// including nested loops and the loops in function arguments, in the bodies of user functions and in expressions used as parameters.
+/// </summary>
+internal sealed class LoopIterationBudget
+{
+    // The budget of the evaluation in progress (per thread and async flow)
+    private static readonly AsyncLocal<LoopIterationBudget?> Current = new();
+
+    private int _remaining;
+
+    private LoopIterationBudget(int limit)
+    {
+        _remaining = limit;
+    }
+
+    /// <summary>
+    /// Starts the budget of an evaluation, unless the evaluation is a part of another one, which has its budget already.
+    /// Returns the budget to end, or null.
+    /// </summary>
+    internal static LoopIterationBudget? Begin(int limit)
+    {
+        if (Current.Value is not null)
+            return null;
+
+        var budget = new LoopIterationBudget(limit);
+        Current.Value = budget;
+        return budget;
+    }
+
+    internal void End()
+    {
+        if (ReferenceEquals(Current.Value, this))
+            Current.Value = null;
+    }
+
+    /// <summary>
+    /// The budget for a loop: that of the evaluation, or, for a visitor used without an expression, one for this loop alone.
+    /// </summary>
+    internal static LoopIterationBudget ForLoop(int limit) => Current.Value ?? new LoopIterationBudget(limit);
+
+    /// <summary>
+    /// Takes one iteration; returns false when the evaluation has run all the iterations it may run.
+    /// </summary>
+    internal bool TryTake()
+    {
+        if (_remaining <= 0)
+            return false;
+
+        _remaining--;
+        return true;
+    }
+}
+
+/// <summary>
+/// Carries flow control (<c>return</c>, <c>break</c>, <c>continue</c>) that happened in an argument of a user function through the body of
+/// that function, which would otherwise handle it as its own; the function call rethrows the original flow control in the calling expression.
+/// </summary>
+internal sealed class ArgumentFlowControl(NCalcFlowControl flowControl, object? owner) : Exception(flowControl.Message, flowControl)
+{
+    internal NCalcFlowControl FlowControl { get; } = flowControl;
+
+    internal object? Owner { get; } = owner;
 }
 
 /// <summary>

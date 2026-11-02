@@ -87,7 +87,7 @@ When adding a new operator or type dispatch to evaluation, all 4 variants must b
 
 ### JSON Serialization
 
-- `LogicalExpression` uses `[JsonPolymorphic]` / `[JsonDerivedType]` for polymorphic System.Text.Json serialization (guarded by `#if NET`)
+- `LogicalExpression` is serialized polymorphically by `LogicalExpressionJsonConverter` (in `Domain/LogicalExpressionJsonConverter.cs`, guarded by `#if NET`), which writes a `"$type"` discriminator and keeps the options of list and statement-sequence nodes
 - `ObjectValueJsonConverter` (in `Domain/ObjectValueJsonConverter.cs`) handles `ValueExpression.Value` (an `object?`), supporting scalars, BigDecimal, ComplexNumber, Vector, and collections
 - BigDecimal serializes as `{"Mantissa": ..., "Exponent": ...}`
 - ComplexNumber and Vector use a `{"$type": "TypeName", ...}` discriminator pattern

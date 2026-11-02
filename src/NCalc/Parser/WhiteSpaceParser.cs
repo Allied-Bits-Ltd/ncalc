@@ -52,11 +52,11 @@ public class WhiteSpaceParser : Parser<TextSpan>
             if (charsLeft <= 0)
                 break;
 
-            // Exclude doc comments
+            // Exclude doc comments: "///" lines directly before "fn" describe the function. Elsewhere "///" is an ordinary comment
             if (_supportCStyleComments && charsLeft >= 3)
             {
                 nextChars = context.Scanner.Buffer.Substring(context.Scanner.Cursor.Offset, 3);
-                if (nextChars.Equals("///", StringComparison.Ordinal))
+                if (nextChars.Equals("///", StringComparison.Ordinal) && IsDocCommentOfFunction(context.Scanner.Buffer, context.Scanner.Cursor.Offset))
                     break;
             }
             if (_supportPythonComments && _parseDates && IsDateTimeLiteralStart(context.Scanner.Buffer, context.Scanner.Cursor.Offset)
@@ -78,6 +78,27 @@ public class WhiteSpaceParser : Parser<TextSpan>
 
         context.ExitParser(this);
         return true;
+    }
+
+    /// <summary>
+    /// Tells whether the "///" at the offset starts a block of doc comment lines that is followed by a function declaration ("fn").
+    /// </summary>
+    private static bool IsDocCommentOfFunction(string buffer, int offset)
+    {
+        int position = offset;
+        while (position + 3 <= buffer.Length && string.CompareOrdinal(buffer, position, "///", 0, 3) == 0)
+        {
+            int lineEnd = buffer.IndexOf('\n', position);
+            if (lineEnd < 0)
+                return false;
+            position = lineEnd + 1;
+            while (position < buffer.Length && char.IsWhiteSpace(buffer[position]))
+                position++;
+        }
+
+        return position + 2 < buffer.Length
+            && string.CompareOrdinal(buffer, position, "fn", 0, 2) == 0
+            && !char.IsLetterOrDigit(buffer[position + 2]) && buffer[position + 2] != '_';
     }
 
     /// <summary>

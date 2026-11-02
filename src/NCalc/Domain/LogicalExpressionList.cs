@@ -1,8 +1,16 @@
+#if NET
+using System.Text.Json.Serialization;
+#endif
+
 using NCalc.Helpers;
 using NCalc.Visitors;
 
 namespace NCalc.Domain;
 
+#if NET
+// Written as an object with the items and the options, not as a plain array (see ExpressionListJsonConverter)
+[JsonConverter(typeof(ExpressionListJsonConverter))]
+#endif
 public sealed class LogicalExpressionList : LogicalExpression, IList<LogicalExpression>
 {
     private readonly List<LogicalExpression> _list;

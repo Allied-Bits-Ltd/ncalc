@@ -21,11 +21,7 @@ public static class AsyncBuiltInFunctionHelper
             object? arg2 = await arguments[1].EvaluateAsync(cancellationToken).ConfigureAwait(false);
             if (arg2 is null)
                 return null;
-            object? result = MathHelper.Divide(MathHelper.Multiply(100, arg1, false, context), arg2, true, context);
-            if (result != null)
-                return new Percent(result);
-            else
-                return null;
+            return BuiltInFunctionHelper.PercentOf(arg1, arg2, context, location);
         }
         if (functionName.Equals("PercentDiff", comparison))
         {
@@ -37,11 +33,7 @@ public static class AsyncBuiltInFunctionHelper
             object? arg2 = await arguments[1].EvaluateAsync(cancellationToken).ConfigureAwait(false);
             if (arg2 is null)
                 return null;
-            object? result = MathHelper.Divide(MathHelper.Multiply(MathHelper.Subtract(arg2, arg1, false, context), 100, false, context), arg1, true, context);
-            if (result != null)
-                return new Percent(result);
-            else
-                return null;
+            return BuiltInFunctionHelper.PercentDiff(arg1, arg2, context, location);
         }
         if (functionName.Equals("Abs", comparison))
         {
@@ -317,7 +309,7 @@ public static class AsyncBuiltInFunctionHelper
                 if (i == arguments.Length - 1)
                     return await argument.EvaluateAsync(cancellationToken).ConfigureAwait(false);
 
-                var tf = MathHelper.ConvertToBoolean(await argument.EvaluateAsync(cancellationToken).ConfigureAwait(false), "ifs", context.CultureInfo, location);
+                var tf = MathHelper.ConvertToBoolean(await argument.EvaluateAsync(cancellationToken).ConfigureAwait(false), "ifs", context.CultureInfo, argument.LogicalExpression?.Location);
                 if (tf)
                     return await arguments[i + 1].EvaluateAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -331,7 +323,7 @@ public static class AsyncBuiltInFunctionHelper
             if (arguments.Length < 2 || arguments.Length > 3)
                 throw new NCalcEvaluationException("iff() takes 2 or 3 arguments", location);
 
-            var cond = MathHelper.ConvertToBoolean(await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false), "iff", context.CultureInfo, location);
+            var cond = MathHelper.ConvertToBoolean(await arguments[0].EvaluateAsync(cancellationToken).ConfigureAwait(false), "iff", context.CultureInfo, arguments[0].LogicalExpression?.Location);
             return cond ? await arguments[1].EvaluateAsync(cancellationToken).ConfigureAwait(false) : ((arguments.Length == 3) ? await arguments[2].EvaluateAsync(cancellationToken).ConfigureAwait(false) : null);
         }
         if (functionName.Equals("in", comparison))

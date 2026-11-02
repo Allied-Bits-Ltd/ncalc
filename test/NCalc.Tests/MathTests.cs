@@ -2428,4 +2428,520 @@ public class MathsTests : TestBase
             Assert.Equal(sync, async);
         }
     }
+
+    // Evaluates an expression with the synchronous and asynchronous evaluators, each recursive and non-recursive
+    private static async Task<object?[]> EvaluateInAllEvaluators(string text, ExpressionOptions options, AdvExpressionOptions advancedOptions, params (string Name, object Value)[] parameters)
+    {
+        var results = new List<object?>();
+        foreach (var evaluator in new[] { ExpressionOptions.None, ExpressionOptions.UseNonRecursiveEvaluator })
+        {
+            var o = options | evaluator | ExpressionOptions.NoCache;
+            var sync = new Expression(text, o, CultureInfo.InvariantCulture);
+            var async = new AsyncExpression(text, o, CultureInfo.InvariantCulture);
+            if (advancedOptions != AdvExpressionOptions.None)
+            {
+                sync.AdvancedOptions = new AdvancedExpressionOptions(CultureInfo.InvariantCulture, advancedOptions);
+                async.AdvancedOptions = new AdvancedExpressionOptions(CultureInfo.InvariantCulture, advancedOptions);
+            }
+            foreach (var (name, value) in parameters)
+            {
+                sync.Parameters[name] = value;
+                async.Parameters[name] = value;
+            }
+            results.Add(sync.Evaluate(TestContext.Current.CancellationToken));
+            results.Add(await async.EvaluateAsync(TestContext.Current.CancellationToken));
+        }
+        return results.ToArray();
+    }
+
+    // Evaluates in the recursive and the non-recursive evaluator, sync and async
+    private static async Task<object?[]> EvaluateInAllEvaluators(string text, ExpressionOptions options, params (string Name, object Value)[] parameters)
+    {
+        var results = new List<object?>();
+        foreach (var nonRecursive in new[] { false, true })
+        {
+            var o = options | ExpressionOptions.NoCache | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+            var expression = new Expression(text, o);
+            var asyncExpression = new AsyncExpression(text, o);
+            foreach (var (name, value) in parameters)
+            {
+                expression.Parameters[name] = value;
+                asyncExpression.Parameters[name] = value;
+            }
+            results.Add(expression.Evaluate(TestContext.Current.CancellationToken));
+            results.Add(await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken));
+        }
+        return results.ToArray();
+    }
+
+    private static async Task AssertThrowsInAllEvaluators<T>(string text, ExpressionOptions options, params (string Name, object Value)[] parameters) where T : Exception
+    {
+        foreach (var evaluator in new[] { ExpressionOptions.None, ExpressionOptions.UseNonRecursiveEvaluator })
+        {
+            var o = options | evaluator | ExpressionOptions.NoCache;
+            var sync = new Expression(text, o, CultureInfo.InvariantCulture);
+            var async = new AsyncExpression(text, o, CultureInfo.InvariantCulture);
+            foreach (var (name, value) in parameters)
+            {
+                sync.Parameters[name] = value;
+                async.Parameters[name] = value;
+            }
+            Assert.ThrowsAny<T>(() => sync.Evaluate(TestContext.Current.CancellationToken));
+            await Assert.ThrowsAnyAsync<T>(async () => await async.EvaluateAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
+    private static object? EvaluatePercent(string text, ExpressionOptions options, params (string Name, object Value)[] parameters)
+    {
+        var expression = new Expression(text, options | ExpressionOptions.NoCache, CultureInfo.InvariantCulture)
+        {
+            AdvancedOptions = new AdvancedExpressionOptions(CultureInfo.InvariantCulture, AdvExpressionOptions.CalculatePercent)
+        };
+        foreach (var (name, value) in parameters)
+            expression.Parameters[name] = value;
+        return expression.Evaluate(TestContext.Current.CancellationToken);
+    }
+
+    // NCALC-201: the percent formula was applied in the integer type of the operands, so 300000000 * 10 wrapped around
+    [Theory]
+    [InlineData(ExpressionOptions.None)]
+    [InlineData(ExpressionOptions.AvoidDynamicFunctions)]
+    [InlineData(ExpressionOptions.OverflowProtection)]
+    [InlineData(ExpressionOptions.DecimalAsDefault)]
+    [InlineData(ExpressionOptions.UseBigNumbers)]
+    public async Task PercentOfALargeIntegerShouldNotOverflow(ExpressionOptions options)
+    {
+        foreach (var (text, expected) in new[] { ("300000000 * 10%", 30000000.0), ("50000000 * 50%", 25000000.0), ("300000000 + 10%", 330000000.0), ("300000000 - 10%", 270000000.0), ("300000000 / 1000%", 30000000.0) })
+        {
+            var results = await EvaluateInAllEvaluators(text, options, AdvExpressionOptions.CalculatePercent);
+            Assert.All(results, r => Assert.Equal(expected, MathHelper.ConvertToDouble(r, MathHelperOptions.Empty), 6));
+        }
+    }
+
+    // NCALC-201: NCalc.AOT computes percentages as NCalc does with AvoidDynamicFunctions; every operand gives the same outcome either way
+    [Fact]
+    public void PercentArithmeticShouldGiveTheSameOutcomeWithAndWithoutDynamicFunctions()
+    {
+        object[] values = [0, 7, 300000000, -5L, long.MaxValue, ulong.MaxValue, 2.5f, 1e308, double.NaN, 1.25m, decimal.MaxValue, new BigInteger(7), new BigDecimal(7), TimeSpan.FromHours(1), true];
+        object[] percents = [0, 3, 10, 2.5, 50m, 1e308];
+        foreach (var baseOptions in new[] { ExpressionOptions.None, ExpressionOptions.OverflowProtection, ExpressionOptions.DecimalAsDefault, ExpressionOptions.UseBigNumbers })
+        {
+            foreach (var op in new[] { "+", "-", "*", "/" })
+            {
+                foreach (var a in values)
+                {
+                    foreach (var p in percents)
+                    {
+                        string Outcome(ExpressionOptions options)
+                        {
+                            try
+                            {
+                                var result = EvaluatePercent($"a {op} p", options, ("a", a), ("p", new Percent(p)));
+                                return $"{result?.GetType().Name}: {Convert.ToString(result, CultureInfo.InvariantCulture)}";
+                            }
+                            catch (Exception ex)
+                            {
+                                return ex.GetType().Name;
+                            }
+                        }
+
+                        string withDynamicCode = Outcome(baseOptions);
+                        string withoutDynamicCode = Outcome(baseOptions | ExpressionOptions.AvoidDynamicFunctions);
+                        Assert.True(withDynamicCode == withoutDynamicCode, $"{a} ({a.GetType().Name}) {op} {p}% with {baseOptions}: {withDynamicCode} and {withoutDynamicCode}");
+                    }
+                }
+            }
+        }
+    }
+
+    // NCALC-201: division by 0%, an overflowing intermediate product, time spans and booleans
+    [Theory]
+    [InlineData(ExpressionOptions.None)]
+    [InlineData(ExpressionOptions.AvoidDynamicFunctions)]
+    public void PercentEdgeCasesShouldGiveTheSameResultsInBothImplementations(ExpressionOptions options)
+    {
+        Assert.True(double.IsNaN((double)EvaluatePercent("0 / 0%", options)!));
+        Assert.Equal(double.PositiveInfinity, EvaluatePercent("200 / 0%", options));
+        Assert.Equal(1e307, (double)EvaluatePercent("1e308 * 10%", options)!, 1e293);
+        Assert.Equal(233.33333333333334, (double)EvaluatePercent("7 / 3%", options)!, 12);
+        Assert.Equal(TimeSpan.FromMinutes(66), EvaluatePercent("t + 10%", options, ("t", TimeSpan.FromHours(1))));
+        Assert.Equal(TimeSpan.FromMinutes(6), EvaluatePercent("t * 10%", options, ("t", TimeSpan.FromHours(1))));
+        var ex = Assert.ThrowsAny<Exception>(() => EvaluatePercent("true + 10%", options));
+        Assert.DoesNotContain("UseDecimalAsDefault", ex.Message);
+    }
+
+    // NCALC-211: & | ^ ~ use two's complement for negative integers, as the shifts and BigInteger operands do
+    [Theory]
+    [InlineData("-1 & 3", 3UL)]
+    [InlineData("-1 & 255", 255UL)]
+    [InlineData("-8 | 1", -7L)]
+    [InlineData("-1 ^ 1", -2L)]
+    [InlineData("-8 & -4", -8L)]
+    [InlineData("~(-1)", 0UL)]
+    [InlineData("~(-6)", 5UL)]
+    [InlineData("6 & 3", 2UL)]
+    [InlineData("~5", 18446744073709551610UL)]
+    [InlineData("4.0 | 1", 5UL)]
+    public async Task BitwiseOperatorsShouldAcceptNegativeIntegers(string text, object expected)
+    {
+        var results = await EvaluateInAllEvaluators(text, ExpressionOptions.None, AdvExpressionOptions.None);
+        Assert.All(results, r => Assert.Equal(expected, r));
+        Assert.Equal(expected, new Expression(text, ExpressionOptions.NoCache).ToLambda<object>(TestContext.Current.CancellationToken)());
+    }
+
+    // NCALC-211
+    [Theory]
+    [InlineData("a := -1; a &= 3; a", 3UL)]
+    [InlineData("a := -8; a |= 1; a", -7L)]
+    [InlineData("a := -1; a ^= 1; a", -2L)]
+    public async Task BitwiseCompoundAssignmentsShouldAcceptNegativeIntegers(string text, object expected)
+    {
+        var results = await EvaluateInAllEvaluators(text, ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences, AdvExpressionOptions.None);
+        Assert.All(results, r => Assert.Equal(expected, r));
+    }
+
+    // NCALC-211: a fraction has no bits; it was silently truncated (1.5 & 3 gave 1) or saturated
+    [Theory]
+    [InlineData("1.5 & 3")]
+    [InlineData("3 | 0.5")]
+    [InlineData("a ^ 1")]
+    [InlineData("~a")]
+    public async Task BitwiseOperatorsShouldRejectFractions(string text)
+    {
+        await AssertThrowsInAllEvaluators<NCalcEvaluationException>(text, ExpressionOptions.None, ("a", double.NaN));
+        var lambda = new Expression(text, ExpressionOptions.NoCache) { Parameters = { ["a"] = double.NaN } };
+        Assert.ThrowsAny<NCalcEvaluationException>(() => lambda.ToLambda<object>(TestContext.Current.CancellationToken)());
+    }
+
+    // NCALC-212: a ulong and a signed integer of any width follow the rule of a ulong and a long
+    [Theory]
+    [InlineData(ExpressionOptions.None)]
+    [InlineData(ExpressionOptions.OverflowProtection)]
+    public void ULongWithASmallerSignedIntegerShouldNotWrapAround(ExpressionOptions options)
+    {
+        Assert.Equal(-2L, EvaluateWith("a - b", options, ("a", 5UL), ("b", 7)));
+        Assert.Equal(-2L, EvaluateWith("a - b", options, ("a", 5UL), ("b", (short)7)));
+        Assert.Equal(-2L, EvaluateWith("a - b", options, ("a", 5UL), ("b", (sbyte)7)));
+        Assert.Equal(-2L, EvaluateWith("a - b", options, ("a", 5UL), ("b", 7L)));
+        Assert.Equal(-2L, EvaluateWith("a + b", options, ("a", 5UL), ("b", -7)));
+        Assert.Equal(-2L, EvaluateWith("b - a", options, ("a", 7UL), ("b", 5)));
+        Assert.Equal(-10L, EvaluateWith("a * b", options, ("a", 5UL), ("b", -2)));
+        Assert.Equal(-9223372036854775803L, EvaluateWith("5 - a", options, ("a", 1UL << 63)));
+        Assert.Equal(9223372036854775812UL, EvaluateWith("a + 5", options, ("a", (ulong)long.MaxValue + 0)));
+        Assert.Equal(12UL, EvaluateWith("a + b", options, ("a", 5UL), ("b", 7)));
+    }
+
+    // NCALC-213: % and // of big decimals were computed with a quotient rounded to BigDecimal.Precision (100) digits
+    [Fact]
+    public void BigDecimalRemainderAndFloorDivisionShouldBeExact()
+    {
+        var options = ExpressionOptions.UseBigNumbers;
+        string tenTo206 = "1" + new string('0', 206);
+        Assert.Equal(new BigDecimal(2), MathHelper.ConvertToBigDecimal(EvaluateWith(tenTo206 + " % 7", options)!));
+        Assert.Equal(new BigDecimal(new BigInteger(25), -1), MathHelper.ConvertToBigDecimal(EvaluateWith(tenTo206 + ".5 % 7", options)!));
+        Assert.Equal(BigDecimal.One, MathHelper.ConvertToBigDecimal(EvaluateWith("a % b", options, ("a", new BigDecimal(BigInteger.One, 300)), ("b", new BigDecimal(new BigInteger(15), -1)))!));
+        Assert.Equal(-new BigDecimal(BigInteger.One, -1), MathHelper.ConvertToBigDecimal(EvaluateWith("a % b", options, ("a", new BigDecimal(new BigInteger(-21), -1)), ("b", new BigDecimal(BigInteger.One, 0)))!));
+        Assert.Equal(BigInteger.Pow(10, 206) / 7, AsBigInteger(EvaluateWith(tenTo206 + " // 7", options)));
+        Assert.Equal(-(BigInteger.Pow(10, 206) / 7) - 1, AsBigInteger(EvaluateWith("-" + tenTo206 + " // 7", options)));
+        Assert.Equal(BigInteger.Pow(10, 300) * 2 / 3, AsBigInteger(EvaluateWith("a // b", options, ("a", new BigDecimal(BigInteger.One, 300)), ("b", new BigDecimal(new BigInteger(15), -1)))));
+
+        var vector = (NCalc.Domain.Vector)EvaluateWith("v % 7", options, ("v", new NCalc.Domain.Vector([new BigDecimal(BigInteger.One, 206), new BigDecimal(BigInteger.One, 300)])))!;
+        Assert.Equal(new BigDecimal(2), vector[0]);
+        Assert.Equal(BigDecimal.One, vector[1]);
+    }
+
+    // NCALC-214: the digit limit was bypassed by factorials of numbers beyond the range of double and by powers of 0.1
+    [Fact(Timeout = 30000)]
+    public async Task FactorialsAndPowersOfFractionsShouldRespectTheDigitLimit()
+    {
+        await Task.Run(() =>
+        {
+            Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("(2 ** 1100)!", ExpressionOptions.UseBigNumbers));
+            Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("a!", ExpressionOptions.UseBigNumbers, ("a", BigInteger.Pow(10, 400))));
+            Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("0.1 ** 3000000", ExpressionOptions.UseBigNumbers));
+            Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("0.1 ** 3000000", ExpressionOptions.DecimalAsDefault));
+            Assert.Equal(0.001, MathHelper.ConvertToDouble(EvaluateWith("0.1 ** 3", ExpressionOptions.UseBigNumbers), MathHelperOptions.Empty), 15);
+        }, TestContext.Current.CancellationToken);
+    }
+
+    // NCALC-215: products of big numbers and concatenated strings had no size limit, so repeated squaring built unbounded values
+    [Fact]
+    public async Task ProductsAndConcatenationsShouldRespectTheSizeLimits()
+    {
+        var bigOptions = ExpressionOptions.UseBigNumbers | ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences;
+        await AssertThrowsInAllEvaluators<NCalcEvaluationException>("fn sq(x) => x * x; sq(sq(2 ** 300000))", bigOptions);
+        await AssertThrowsInAllEvaluators<NCalcEvaluationException>("a * a", ExpressionOptions.None, ("a", BigInteger.Pow(2, 200000)));
+        await AssertThrowsInAllEvaluators<NCalcEvaluationException>("a + b", ExpressionOptions.None, ("a", new BigDecimal(BigInteger.One, 200000)), ("b", new BigDecimal(BigInteger.One, -200000)));
+        await AssertThrowsInAllEvaluators<NCalcEvaluationException>("s + s", ExpressionOptions.StringConcat, ("s", new string('a', 6_000_000)));
+
+        // Values within the limits are still computed
+        Assert.Equal(BigInteger.Pow(2, 200000), AsBigInteger(EvaluateWith("a * a", ExpressionOptions.None, ("a", BigInteger.Pow(2, 100000)))));
+        Assert.Equal(new string('a', 2_000_000), EvaluateWith("s + s", ExpressionOptions.StringConcat, ("s", new string('a', 1_000_000))));
+    }
+
+    // NCALC-219: a decimal with a double beyond the range of decimal (or NaN, or infinity) threw OverflowException
+    [Theory]
+    [InlineData(ExpressionOptions.None)]
+    [InlineData(ExpressionOptions.OverflowProtection)]
+    public async Task DecimalWithADoubleBeyondItsRangeShouldBeComputedInDouble(ExpressionOptions options)
+    {
+        (string, object)[] parameters = [("m", 1m), ("z", 0m), ("d", 1e300), ("n", double.NaN), ("i", double.PositiveInfinity)];
+        Assert.All(await EvaluateInAllEvaluators("m + d", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(1e300, r));
+        Assert.All(await EvaluateInAllEvaluators("z * d", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(0.0, r));
+        Assert.All(await EvaluateInAllEvaluators("d / m", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(1e300, r));
+        Assert.All(await EvaluateInAllEvaluators("m + n", options, AdvExpressionOptions.None, parameters), r => Assert.True(double.IsNaN((double)r!)));
+        Assert.All(await EvaluateInAllEvaluators("Max(m, d)", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(1e300, r));
+        Assert.All(await EvaluateInAllEvaluators("Min(m, d)", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(1.0, MathHelper.ConvertToDouble(r, MathHelperOptions.Empty)));
+        Assert.All(await EvaluateInAllEvaluators("m < d", options, AdvExpressionOptions.None, parameters), r => Assert.Equal(true, r));
+        Assert.Equal(1e300, MathHelper.ConvertToDouble(EvaluateWith("m + d", options | ExpressionOptions.UseBigNumbers, ("m", 1m), ("d", 1e300)), MathHelperOptions.Empty), 1e286);
+        Assert.Equal(double.PositiveInfinity, EvaluateWith("m + i", ExpressionOptions.None, ("m", 1m), ("i", double.PositiveInfinity)));
+    }
+
+    // NCALC-220: with DecimalAsDefault, big-number results were narrowed to decimal even when digits were lost
+    [Fact]
+    public void DecimalAsDefaultShouldNotNarrowBigNumbersWithALossOfDigits()
+    {
+        var options = ExpressionOptions.DecimalAsDefault;
+        Assert.Equal(new BigDecimal(new BigInteger(5), -40), EvaluateWith("a / b", options, ("a", new BigInteger(5)), ("b", new BigDecimal(BigInteger.One, 40))));
+        Assert.IsType<BigDecimal>(EvaluateWith("a / b", options, ("a", BigDecimal.One), ("b", new BigDecimal(3))));
+
+        // A result that decimal holds exactly is still a decimal
+        Assert.Equal(0.25m, EvaluateWith("a / b", options, ("a", BigDecimal.One), ("b", new BigDecimal(4))));
+    }
+
+    // NCALC-221: negating a ulong above 2^63 threw a raw OverflowException
+    [Fact]
+    public async Task NegatingALargeULongShouldGiveABigInteger()
+    {
+        foreach (var value in new[] { (1UL << 63) + 1, ulong.MaxValue })
+        {
+            foreach (var options in new[] { ExpressionOptions.None, ExpressionOptions.OverflowProtection })
+            {
+                var results = await EvaluateInAllEvaluators("-a", options, AdvExpressionOptions.None, ("a", value));
+                Assert.All(results, r => Assert.Equal(-new BigInteger(value), r));
+            }
+        }
+        Assert.Equal(long.MinValue, EvaluateWith("-a", ExpressionOptions.None, ("a", 1UL << 63)));
+    }
+
+    // NCALC-243: the message of an unsupported negation had a stray '$'
+    [Fact]
+    public void NegatingAnUnsupportedTypeShouldNameTheType()
+    {
+        var ex = Assert.ThrowsAny<NCalcException>(() => MathHelper.Negate('a', false, MathHelperOptions.Empty));
+        Assert.Contains("Unsupported type Char", ex.Message);
+    }
+
+    private static void AssertCloseTo(double expected, object? actual)
+    {
+        Assert.NotNull(actual);
+        double value = MathHelper.ConvertToDouble(actual, MathHelperOptions.Empty);
+        if (double.IsNaN(expected) || double.IsInfinity(expected))
+            Assert.Equal(expected, value);
+        else
+            Assert.True(Math.Abs(value - expected) <= 1e-12 * Math.Max(1, Math.Abs(expected)), $"Expected {expected:R}, got {value:R} ({actual})");
+    }
+
+    // A big-number argument: an integer, or a decimal number such as "-2.5"
+    private static object ParseBigNumber(string text)
+    {
+        int point = text.IndexOf('.');
+        if (point < 0)
+            return BigInteger.Parse(text, CultureInfo.InvariantCulture);
+        return new BigDecimal(BigInteger.Parse(text.Remove(point, 1), CultureInfo.InvariantCulture), -(text.Length - point - 1));
+    }
+
+    // NCALC-216
+    [Fact]
+    public async Task PowWithANonFiniteBaseShouldNotThrow()
+    {
+        foreach (var options in new[] { ExpressionOptions.None, ExpressionOptions.DecimalAsDefault, ExpressionOptions.UseBigNumbers })
+        {
+            Assert.All(await EvaluateInAllEvaluators("Sqrt(-1) ** 2", options), r => Assert.Equal(double.NaN, r));
+            Assert.Equal(double.NaN, EvaluateWith("Pow(Sqrt(-1), 2)", options));
+            Assert.Equal(double.PositiveInfinity, EvaluateWith("Pow(Exp(1000), 2)", options));
+            Assert.Equal(double.NegativeInfinity, EvaluateWith("Pow(-Exp(1000), 3)", options));
+            Assert.Equal(0.0, EvaluateWith("Pow(Exp(1000), -1)", options));
+            Assert.Equal(double.PositiveInfinity, EvaluateWith("x ** 2", options, ("x", float.NegativeInfinity)));
+            Assert.Equal(double.NaN, EvaluateWith("Pow(x, 3)", options, ("x", double.NaN)));
+        }
+    }
+
+    // NCALC-232: zero to a negative power is infinite, as 1 / 0 and Math.Pow(0, -1) are, also when the power is computed exactly
+    [Fact]
+    public async Task ZeroToANegativePowerShouldBeInfinite()
+    {
+        foreach (var options in new[] { ExpressionOptions.None, ExpressionOptions.DecimalAsDefault, ExpressionOptions.UseBigNumbers })
+        {
+            Assert.All(await EvaluateInAllEvaluators("Pow(0, -1)", options), r => Assert.Equal(double.PositiveInfinity, r));
+            Assert.Equal(double.PositiveInfinity, EvaluateWith("0 ** -1", options));
+            Assert.Equal(double.PositiveInfinity, EvaluateWith("Pow(x, -2)", options, ("x", 0m)));
+            Assert.Equal(double.PositiveInfinity, EvaluateWith("Pow(x, -3)", options, ("x", BigInteger.Zero)));
+            Assert.Equal(double.PositiveInfinity, EvaluateWith("Pow(x, y)", options, ("x", BigDecimal.Zero), ("y", new BigInteger(-1))));
+        }
+    }
+
+    // NCALC-217
+    [Fact]
+    public async Task RoundingFunctionsShouldAcceptDoublesOutsideTheDecimalRangeWithDecimalAsDefault()
+    {
+        const ExpressionOptions options = ExpressionOptions.DecimalAsDefault;
+        Assert.All(await EvaluateInAllEvaluators("Abs(Sqrt(-1))", options), r => Assert.Equal(double.NaN, r));
+        Assert.Equal(double.NaN, EvaluateWith("Floor(Sqrt(-1))", options));
+        Assert.Equal(double.PositiveInfinity, EvaluateWith("Round(Exp(1000), 2)", options));
+        Assert.Equal(double.PositiveInfinity, EvaluateWith("Round(Exp(1000), -2)", options));
+        Assert.Equal(1, EvaluateWith("Sign(Exp(1000))", options));
+        Assert.Equal(double.PositiveInfinity, EvaluateWith("Truncate(Exp(1000))", options));
+        Assert.Equal(1e30, EvaluateWith("Ceiling(d)", options, ("d", 1e30)));
+        Assert.Equal(1e30, EvaluateWith("Floor(d)", options, ("d", 1e30)));
+        Assert.Equal(1e30, EvaluateWith("Abs(d)", options, ("d", -1e30)));
+        Assert.Equal(1e30, EvaluateWith("Round(d, 2)", options, ("d", 1e30)));
+        Assert.Equal(-1, EvaluateWith("Sign(d)", options, ("d", -1e30)));
+        Assert.Equal(-1, EvaluateWith("Sign(d)", options, ("d", float.NegativeInfinity)));
+        Assert.Equal(double.NaN, EvaluateWith("Truncate(d)", options, ("d", float.NaN)));
+
+        // A double within the range of decimal is still computed as a decimal
+        Assert.Equal(2.5m, EvaluateWith("Abs(d)", options, ("d", -2.5)));
+        Assert.Equal(3m, EvaluateWith("Ceiling(d)", options, ("d", 2.5)));
+    }
+
+    // NCALC-218
+    [Theory]
+    [InlineData("Exp(x)", "-100", 3.7200759760208360e-44)]
+    [InlineData("Atan(x)", "1", Math.PI / 4)]
+    [InlineData("Atan(x)", "-1", -Math.PI / 4)]
+    [InlineData("Asin(x)", "1", Math.PI / 2)]
+    [InlineData("Asin(x)", "-1", -Math.PI / 2)]
+    [InlineData("Asin(x)", "2", double.NaN)]
+    [InlineData("Acos(x)", "0", Math.PI / 2)]
+    [InlineData("Acos(x)", "-2", double.NaN)]
+    [InlineData("Ln(x)", "-1", double.NaN)]
+    [InlineData("Ln(x)", "0", double.NegativeInfinity)]
+    [InlineData("Log10(x)", "-1", double.NaN)]
+    [InlineData("Log10(x)", "0", double.NegativeInfinity)]
+    [InlineData("Log2(x)", "-4", double.NaN)]
+    [InlineData("Log(x, 10)", "-4", double.NaN)]
+    [InlineData("Log(x, 10)", "0", double.NegativeInfinity)]
+    [InlineData("Log(x, -2)", "8", double.NaN)]
+    [InlineData("Log(x, 0)", "8", double.NaN)]
+    [InlineData("Log(x, 1)", "8", double.NaN)]
+    [InlineData("Sqrt(x)", "-4", double.NaN)]
+    [InlineData("Sin(x)", "2", 0.9092974268256817)]
+    [InlineData("Sin(x)", "100", -0.5063656411097588)]
+    [InlineData("Sin(x)", "-2.5", -0.5984721441039564)]
+    [InlineData("Sin(x)", "1000000000000000000000000000000", -0.0901169019121380580)]
+    [InlineData("Cos(x)", "0.3", 0.955336489125606)]
+    [InlineData("Cos(x)", "1000000000000000000000000000000", -0.9959311944053957)]
+    [InlineData("Tan(x)", "0", 0.0)]
+    [InlineData("Tan(x)", "1", 1.5574077246549023)]
+    [InlineData("Tan(x)", "-2.5", 0.7470222972386602)]
+    public void BigNumberTranscendentalFunctionsShouldMatchSystemMath(string expression, string x, double expected)
+    {
+        AssertCloseTo(expected, EvaluateWith(expression, ExpressionOptions.UseBigNumbers, ("x", ParseBigNumber(x))));
+    }
+
+    // NCALC-218
+    [Fact]
+    public async Task BigNumberTranscendentalFunctionsShouldHandleExtremeArguments()
+    {
+        var huge = BigInteger.Pow(10, 400);
+
+        // e^-1000 is 5.0759588975494567652918E-435, below the range of double
+        var tiny = Assert.IsType<BigDecimal>(EvaluateWith("Exp(x)", ExpressionOptions.UseBigNumbers, ("x", new BigInteger(-1000))));
+        string digits = tiny.Mantissa.ToString(CultureInfo.InvariantCulture);
+        Assert.StartsWith("50759588975494567652918", digits);
+        Assert.Equal(-435, digits.Length - 1 + tiny.Exponent);
+
+        // The result of Exp is limited like that of a power, and a huge negative argument gives zero, as Math.Exp does; both used to hang
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("Exp(x)", ExpressionOptions.UseBigNumbers, ("x", huge)));
+        Assert.Equal(BigDecimal.Zero, EvaluateWith("Exp(-x)", ExpressionOptions.UseBigNumbers, ("x", huge)));
+
+        // Trigonometric arguments beyond the range of int were an OverflowException; sin(10^400) = -0.99853823198309772291...
+        AssertCloseTo(-0.9985382319830977, EvaluateWith("Sin(x)", ExpressionOptions.UseBigNumbers, ("x", huge)));
+        Assert.Throws<NCalcEvaluationException>(() => EvaluateWith("Sin(x)", ExpressionOptions.UseBigNumbers, ("x", BigInteger.Pow(10, 20000))));
+        AssertCloseTo(Math.PI / 2, EvaluateWith("Atan(x)", ExpressionOptions.UseBigNumbers, ("x", huge)));
+
+        // A base beyond the range of int was an OverflowException, or NaN (an infinite double) with an integer argument
+        AssertCloseTo(2.0, EvaluateWith("Log(x, b)", ExpressionOptions.UseBigNumbers, ("x", huge * huge), ("b", huge)));
+        AssertCloseTo(Math.Log10(8) / 400, EvaluateWith("Log(8, b)", ExpressionOptions.UseBigNumbers, ("b", huge)));
+
+        // The same in all evaluators
+        Assert.All(await EvaluateInAllEvaluators("Ln(x)", ExpressionOptions.UseBigNumbers, ("x", new BigInteger(-1))), r => Assert.Equal(double.NaN, r));
+        Assert.All(await EvaluateInAllEvaluators("Asin(x)", ExpressionOptions.UseBigNumbers, ("x", BigInteger.One)), r => AssertCloseTo(Math.PI / 2, r));
+    }
+
+    // NCALC-225
+    [Fact]
+    public void RoundShouldRoundSmallDoublesToMoreThanFifteenPlaces()
+    {
+        Assert.Equal(0.0, EvaluateWith("Round(t, 16)", ExpressionOptions.None, ("t", 1.23e-17)));
+        Assert.Equal(1e-17, EvaluateWith("Round(t, 17)", ExpressionOptions.None, ("t", 1.23e-17)));
+        Assert.Equal(2e-16, EvaluateWith("Round(t, 16)", ExpressionOptions.None, ("t", 1.5e-16)));
+        Assert.Equal(3e-16, EvaluateWith("Round(t, 16)", ExpressionOptions.RoundAwayFromZero, ("t", 2.5e-16)));
+        Assert.Equal(-1.2e-20, EvaluateWith("Round(t, 21)", ExpressionOptions.None, ("t", -1.23e-20)));
+
+        // A place beyond the last digit leaves the value unchanged
+        Assert.Equal(1.23e-17, EvaluateWith("Round(t, 30)", ExpressionOptions.None, ("t", 1.23e-17)));
+        Assert.Equal(1.5, EvaluateWith("Round(1.5, 16)", ExpressionOptions.None));
+        Assert.Equal(double.NaN, EvaluateWith("Round(Sqrt(-1), 20)", ExpressionOptions.None));
+    }
+
+    // NCALC-238
+    [Fact]
+    public void TruncateShouldAcceptVectorsAndKeepBigDecimals()
+    {
+        var result = EvalVec("Truncate([1.5; -2.5])");
+        Assert.Equal(2, result.Dimensions);
+        Assert.Equal((BigDecimal)1, result[0]);
+        Assert.Equal((BigDecimal)(-2), result[1]);
+
+        var truncated = EvaluateWith("Truncate(x)", ExpressionOptions.None, ("x", new BigDecimal(-25, -1)));
+        Assert.Equal(new BigDecimal(-2), Assert.IsType<BigDecimal>(truncated));
+        Assert.IsType<BigDecimal>(EvaluateWith("Floor(x)", ExpressionOptions.None, ("x", new BigDecimal(-25, -1))));
+    }
+
+    // NCALC-232
+    [Fact]
+    public async Task PercentFunctionsShouldDivideByZeroLikeTheDivisionOperator()
+    {
+        Assert.All(await EvaluateInAllEvaluators("PercentOf(10, 0)", ExpressionOptions.None),
+            r => Assert.Equal(double.PositiveInfinity, Assert.IsType<Percent>(r).Value));
+        Assert.All(await EvaluateInAllEvaluators("PercentDiff(0, 5)", ExpressionOptions.None),
+            r => Assert.Equal(double.PositiveInfinity, Assert.IsType<Percent>(r).Value));
+        Assert.Equal(double.NaN, Assert.IsType<Percent>(EvaluateWith("PercentOf(0, 0)", ExpressionOptions.None)).Value);
+        Assert.Equal(double.NegativeInfinity, Assert.IsType<Percent>(EvaluateWith("PercentDiff(0, -5)", ExpressionOptions.DecimalAsDefault)).Value);
+
+        // Other divisors are still divided exactly
+        Assert.Equal("50%", EvaluateWith("PercentOf(25, 50)", ExpressionOptions.None)?.ToString());
+        Assert.Equal("33.333333333333333333333333333%", EvaluateWith("PercentOf(1, 3)", ExpressionOptions.None)?.ToString());
+        Assert.Equal("-25%", EvaluateWith("PercentDiff(80, 60)", ExpressionOptions.None)?.ToString());
+    }
+
+    // NCALC-232
+    [Fact]
+    public async Task BuiltInFunctionsShouldThrowNCalcExceptionsForUnsupportedArguments()
+    {
+        var complex = new ComplexNumber(BigDecimal.Zero, new BigDecimal(2), MathHelperOptions.Empty);
+        var percent = new Percent(10);
+        foreach (var (text, name, value) in new (string, string, object)[]
+        {
+            ("PercentOf(p, 200)", "p", percent),
+            ("PercentOf(200, p)", "p", percent),
+            ("PercentDiff(p, 200)", "p", percent),
+            ("Sign(c)", "c", complex),
+            ("IEEERemainder(c, 1)", "c", complex),
+        })
+        {
+            foreach (var nonRecursive in new[] { false, true })
+            {
+                var options = ExpressionOptions.NoCache | (nonRecursive ? ExpressionOptions.UseNonRecursiveEvaluator : ExpressionOptions.None);
+                var expression = new Expression(text, options);
+                expression.Parameters[name] = value;
+                Assert.Throws<NCalcEvaluationException>(() => expression.Evaluate(TestContext.Current.CancellationToken));
+                var asyncExpression = new AsyncExpression(text, options);
+                asyncExpression.Parameters[name] = value;
+                await Assert.ThrowsAsync<NCalcEvaluationException>(async () => await asyncExpression.EvaluateAsync(TestContext.Current.CancellationToken));
+            }
+        }
+    }
 }

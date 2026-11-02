@@ -18,7 +18,7 @@ namespace NCalc.Visitors;
 /// (<see cref="EvaluationVisitor"/>), with the same helper methods and the options of the expression, so that a lambda
 /// computes the same value as Evaluate().
 /// </summary>
-internal static class LambdaRuntime
+internal static partial class LambdaRuntime
 {
     /// <summary>Returned by <see cref="LogicalLeft"/> when the result depends on the right operand.</summary>
     internal static readonly object Undecided = new();
@@ -169,20 +169,17 @@ internal static class LambdaRuntime
                 case BinaryExpressionType.AndAssignment:
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseAnd(leftValue, rightValue);
-                    return MathHelper.ConvertToULong(leftValue, "And with assignment", context.CultureInfo, expression.LeftExpression.Location) &
-                        MathHelper.ConvertToULong(rightValue, "And with assignment", context.CultureInfo, expression.RightExpression.Location);
+                    return MathHelper.BitwiseAnd(leftValue, rightValue, "And with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location);
 
                 case BinaryExpressionType.OrAssignment:
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseOr(leftValue, rightValue);
-                    return MathHelper.ConvertToULong(leftValue, "Or with assignment", context.CultureInfo, expression.LeftExpression.Location) |
-                        MathHelper.ConvertToULong(rightValue, "Or with assignment", context.CultureInfo, expression.RightExpression.Location);
+                    return MathHelper.BitwiseOr(leftValue, rightValue, "Or with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location);
 
                 case BinaryExpressionType.XOrAssignment:
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseXOr(leftValue, rightValue);
-                    return MathHelper.ConvertToULong(leftValue, "Xor with assignment", context.CultureInfo, expression.LeftExpression.Location) ^
-                        MathHelper.ConvertToULong(rightValue, "XOr with assignment", context.CultureInfo, expression.RightExpression.Location);
+                    return MathHelper.BitwiseXOr(leftValue, rightValue, "Xor with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location);
             }
 
             var operation = expression.Type switch
@@ -282,6 +279,12 @@ internal static class LambdaRuntime
     internal static object? EvaluateDynamicParameter(ExpressionParameter parameter, Identifier identifier, ExpressionContext context)
         => parameter(new ExpressionParameterData(identifier.Id, context));
 
+    // A statement of a sequence other than the last one, whose value is not used. Compiling it as the argument of a void call
+    // instead of as a statement of the block avoids invalid IL from FastExpressionCompiler for lists and in() (NCALC-210).
+    internal static void Discard(object? value)
+    {
+        _ = value;
+    }
     internal static long MakeSize(object? size, string what, string functionName, FunctionCall function)
         => BuiltInFunctionHelper.GetMakeSize(size, what, functionName, function.Location);
 
@@ -292,16 +295,10 @@ internal static class LambdaRuntime
         => BuiltInFunctionHelper.MakeString(size, value, function.Location);
 
     internal static object? PercentOf(object? arg1, object? arg2, ExpressionContext context)
-    {
-        object? result = MathHelper.Divide(MathHelper.Multiply(100, arg1, false, context), arg2, true, context);
-        return result is null ? null : new Percent(result);
-    }
+        => arg1 is null || arg2 is null ? null : BuiltInFunctionHelper.PercentOf(arg1, arg2, context, ExpressionLocation.Empty);
 
     internal static object? PercentDiff(object? arg1, object? arg2, ExpressionContext context)
-    {
-        object? result = MathHelper.Divide(MathHelper.Multiply(MathHelper.Subtract(arg2, arg1, false, context), 100, false, context), arg1, true, context);
-        return result is null ? null : new Percent(result);
-    }
+        => arg1 is null || arg2 is null ? null : BuiltInFunctionHelper.PercentDiff(arg1, arg2, context, ExpressionLocation.Empty);
 
     internal static object? Round(object arg0, object arg1, ExpressionContext context)
     {
@@ -531,13 +528,11 @@ internal static class LambdaRuntime
                     BinaryExpressionType.BitwiseOr => "Bitwise Or",
                     _ => "Bitwise XOr"
                 };
-                var l = MathHelper.ConvertToULong(leftValue, operation, context.CultureInfo, expression.LeftExpression.Location);
-                var r = MathHelper.ConvertToULong(rightValue, operation, context.CultureInfo, expression.RightExpression.Location);
                 return type switch
                 {
-                    BinaryExpressionType.BitwiseAnd => l & r,
-                    BinaryExpressionType.BitwiseOr => l | r,
-                    _ => l ^ r
+                    BinaryExpressionType.BitwiseAnd => MathHelper.BitwiseAnd(leftValue, rightValue, operation, context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location),
+                    BinaryExpressionType.BitwiseOr => MathHelper.BitwiseOr(leftValue, rightValue, operation, context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location),
+                    _ => MathHelper.BitwiseXOr(leftValue, rightValue, operation, context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location)
                 };
             }
 

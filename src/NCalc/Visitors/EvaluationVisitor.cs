@@ -39,7 +39,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     /// <summary>
     /// A single-threaded lazily computed operand value. Unlike <see cref="Lazy{T}"/>, it does not catch and rethrow
     /// exceptions of the factory; a catch-and-rethrow at every nesting level would exhaust the stack
-    /// while the exception thrown by <see cref="EvaluationHelper.EnsureSufficientExecutionStack"/> propagates.
+    /// while the exception thrown by <see cref="EvaluationHelper.EnsureSufficientExecutionStack(LogicalExpression)"/> propagates.
     /// </summary>
     private sealed class DeferredValue(Func<object?> factory)
     {
@@ -85,7 +85,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     public virtual object? Visit(TernaryExpression expression, CancellationToken cancellationToken = default)
     {
         EnsureSufficientExecutionStack(expression);
-        if (!TryGetValueOrNull(expression.LeftExpression.Accept(this, cancellationToken), out object? value))
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!TryGetValueOrNull(EvaluateOperand(expression.LeftExpression, cancellationToken), out object? value))
             return null;
 
         return (MathHelper.ConvertToBoolean(value, "Ternary", context.CultureInfo, expression.LeftExpression.Location) ? expression.MiddleExpression : expression.RightExpression).Accept(this, cancellationToken);
@@ -130,44 +131,13 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         || staticParam is null)
                         throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not set and cannot be assigned to by index", binExpr.LeftExpression.Location);
 
-                    if (staticParam is string strParam)
+                    // A list is changed in place; a string is replaced
+                    if (EvaluationHelper.UpdateElement(staticParam, identifierName, index, value, false, context.CultureInfo, binExpr.LeftExpression.Location, binExpr.RightExpression.Location) is string strParam)
                     {
-                        if (value is char || (value is string && ((string)value).Length == 1))
-                        {
-                            if (strParam.Length <= index)
-                                throw new NCalcParameterIndexException(identifierName, $"A character in the '{identifierName}' string cannot be updated by index: the string has the length of {strParam.Length}, while the index is {index}", binExpr.RightExpression.Location);
-
-                            char charValue;
-
-                            if (value is string strValue)
-                                charValue = strValue[0];
-                            else
-                                charValue = (char)value;
-
-                            strParam = strParam[0..index] + charValue + strParam[(index + 1)..];
-
-                            if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
-                                EvaluationHelper.SetParameterValueFromListNoCase(context.StaticParameters, identifierName, strParam);
-                            else
-                                context.StaticParameters[identifierName] = strParam;
-                        }
+                        if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
+                            EvaluationHelper.SetParameterValueFromListNoCase(context.StaticParameters, identifierName, strParam);
                         else
-                        {
-                            throw new NCalcParameterIndexException(identifierName, $"When updating a string in '{identifierName}' via the index, the value must be a character or a one-character string", binExpr.RightExpression.Location);
-                        }
-                    }
-                    else
-                    {
-                        if (staticParam is not IList list)
-                            throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' is not a list or a string and cannot be assigned to by index", binExpr.LeftExpression.Location);
-
-                        if (list.IsReadOnly)
-                            throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' is read-only and cannot be assigned to by index", binExpr.LeftExpression.Location);
-
-                        if (list.Count <= index)
-                            throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' cannot be assigned to by index: it has {list.Count} elements, while the index to update is {index}", binExpr.RightExpression.Location);
-
-                        list[index] = value;
+                            context.StaticParameters[identifierName] = strParam;
                     }
                 }
                 else
@@ -204,8 +174,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     {
         EnsureSufficientExecutionStack(expression);
         cancellationToken.ThrowIfCancellationRequested();
-        var left = new DeferredValue(() => Evaluate(expression.LeftExpression, cancellationToken));
-        var right = new DeferredValue(() => Evaluate(expression.RightExpression, cancellationToken));
+        var left = new DeferredValue(() => EvaluateOperand(expression.LeftExpression, cancellationToken));
+        var right = new DeferredValue(() => EvaluateOperand(expression.RightExpression, cancellationToken));
 
         var handlePercent = context.AdvancedOptions?.Flags.HasFlag(AdvExpressionOptions.CalculatePercent) == true;
 
@@ -410,8 +380,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     return UpdateParameter(
                         expression.LeftExpression,
-                        MathHelper.ConvertToULong(leftValue, "And with assignment", context.CultureInfo, expression.LeftExpression.Location) &
-                            MathHelper.ConvertToULong(rightValue, "And with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        MathHelper.BitwiseAnd(leftValue, rightValue, "And with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location),
                         cancellationToken);
 
                 case BinaryExpressionType.OrAssignment:
@@ -426,8 +395,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     return UpdateParameter(
                         expression.LeftExpression,
-                        MathHelper.ConvertToULong(leftValue, "Or with assignment", context.CultureInfo, expression.LeftExpression.Location) |
-                            MathHelper.ConvertToULong(rightValue, "Or with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        MathHelper.BitwiseOr(leftValue, rightValue, "Or with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location),
                         cancellationToken);
 
                 case BinaryExpressionType.XOrAssignment:
@@ -441,8 +409,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
                     return UpdateParameter(
                         expression.LeftExpression,
-                        MathHelper.ConvertToULong(leftValue, "Xor with assignment", context.CultureInfo, expression.LeftExpression.Location) ^
-                            MathHelper.ConvertToULong(rightValue, "XOr with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        MathHelper.BitwiseXOr(leftValue, rightValue, "Xor with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location),
                         cancellationToken);
 
                 case BinaryExpressionType.And:
@@ -727,8 +694,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseAnd(leftValue, rightValue);
 
-                    return MathHelper.ConvertToULong(leftValue, "Bitwise And", context.CultureInfo, expression.LeftExpression.Location) &
-                            MathHelper.ConvertToULong(rightValue, "Bitwise And", context.CultureInfo, expression.RightExpression.Location);
+                    return MathHelper.BitwiseAnd(leftValue, rightValue, "Bitwise And", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location);
 
                 case BinaryExpressionType.BitwiseOr:
                     if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -744,8 +710,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseOr(leftValue, rightValue);
 
-                    return MathHelper.ConvertToULong(leftValue, "Bitwise Or", context.CultureInfo, expression.LeftExpression.Location) |
-                            MathHelper.ConvertToULong(rightValue, "Bitwise Or", context.CultureInfo, expression.RightExpression.Location);
+                    return MathHelper.BitwiseOr(leftValue, rightValue, "Bitwise Or", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location);
 
                 case BinaryExpressionType.BitwiseXOr:
                     if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -761,8 +726,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return MathHelper.BitwiseXOr(leftValue, rightValue);
 
-                    return MathHelper.ConvertToULong(leftValue, "Bitwise XOr", context.CultureInfo, expression.LeftExpression.Location) ^
-                            MathHelper.ConvertToULong(rightValue, "Bitwise XOr", context.CultureInfo, expression.RightExpression.Location);
+                    return MathHelper.BitwiseXOr(leftValue, rightValue, "Bitwise XOr", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location);
 
                 case BinaryExpressionType.LeftShift:
                     if (!TryGetValueOrNull(left.Value, out leftValue))
@@ -980,12 +944,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 {
                     object? result = null;
 
-                    int ctr = 0;
+                    // The iterations are counted for the whole evaluation, so nested loops do not multiply the limit
+                    var loopBudget = LoopIterationBudget.ForLoop(Expression.MaxLoopIterations);
 
-                    while (ctr < Expression.MaxLoopIterations)
+                    while (loopBudget.TryTake())
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        ctr++;
 
                         if (!TryGetValueOrNull(Evaluate(expression.LeftExpression, cancellationToken), out leftValue))
                             break;
@@ -1025,19 +989,20 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     public virtual object? Visit(UnaryExpression expression, CancellationToken cancellationToken = default)
     {
         EnsureSufficientExecutionStack(expression);
+        cancellationToken.ThrowIfCancellationRequested();
         if (expression.Type == UnaryExpressionType.Not && context.Options.HasFlag(ExpressionOptions.UseTernaryLogic))
         {
-            object? value = expression.Expression.Accept(this, cancellationToken);
+            object? value = EvaluateOperand(expression.Expression, cancellationToken);
 
             return K3LogicHelper.Not(value);
         }
 
         // "return" returns any value, null included
         if (expression.Type == UnaryExpressionType.Return)
-            throw new NCalcFlowControl(expression.Expression.Accept(this, cancellationToken), expression.Location);
+            throw new NCalcFlowControl(EvaluateOperand(expression.Expression, cancellationToken), expression.Location);
 
         // Recursively evaluates the underlying expression
-        if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out object? result))
+        if (!TryGetValueOrNull(EvaluateOperand(expression.Expression, cancellationToken), out object? result))
             return null;
 
         return EvaluationHelper.Unary(expression, result, context);
@@ -1047,7 +1012,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     {
         EnsureSufficientExecutionStack(expression);
         // Recursively evaluates the underlying expression
-        if (!TryGetValueOrNull(expression.Expression.Accept(this, cancellationToken), out object? result))
+        if (!TryGetValueOrNull(EvaluateOperand(expression.Expression, cancellationToken), out object? result))
             return null;
 
         return new Percent(result!);
@@ -1086,7 +1051,9 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
     public virtual object? Visit(FunctionCall functionCall, CancellationToken cancellationToken = default)
     {
-        EnsureSufficientExecutionStack(functionCall);
+        // The non-recursive evaluator calls this method too; the message does not advise it when it is in use
+        if (Expression.CheckExecutionStack)
+            EvaluationHelper.EnsureSufficientExecutionStack(functionCall, Expression.UseNonRecursiveEvaluator || context.Options.HasFlag(ExpressionOptions.UseNonRecursiveEvaluator));
         cancellationToken.ThrowIfCancellationRequested();
         var argsCount = functionCall.Parameters.Count;
 
@@ -1137,6 +1104,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     public virtual object? Visit(Identifier identifier, CancellationToken cancellationToken = default)
     {
         EnsureSufficientExecutionStack(identifier);
+        cancellationToken.ThrowIfCancellationRequested();
         object? result = null;
         var identifierName = identifier.Name;
 
@@ -1305,6 +1273,16 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         return expression.Accept(this, cancellationToken);
     }
 
+    // An operand of a binary operator; a cancellation during its evaluation stops the evaluation before the other operand,
+    // as in the non-recursive evaluator
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private object? EvaluateOperand(LogicalExpression expression, CancellationToken cancellationToken)
+    {
+        var value = expression.Accept(this, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return value;
+    }
+
     internal object? EvaluateNoRecurse(LogicalExpression expression, CancellationToken cancellationToken = default)
     {
         List<ExpressionTask<object?>> stack = [];
@@ -1319,7 +1297,15 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             // a) return the value
             // b) add an expression to the task that must be evaluated first.
             currentTask = stack[^1];
-            _ = currentTask.State.Expression.AcceptNoRecurse(this, currentTask, cancellationToken);
+            try
+            {
+                _ = currentTask.State.Expression.AcceptNoRecurse(this, currentTask, cancellationToken);
+            }
+            // An error thrown in a function gets the location that the recursive evaluator gives it (the filter never catches)
+            catch (NCalcEvaluationException ex) when (currentTask.SetMissingErrorLocation(ex))
+            {
+                throw;
+            }
             if (currentTask.State.ValueSet)
             {
                 // Remove the current task from the stack; it is the last one, so no search is needed
@@ -1348,7 +1334,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     {
         Dictionary<string, ArgumentStateBase> argumentStates = [];
 
-        EvaluationHelper.PopulateArgumentStates(userFunction, functionCall, argumentStates, context, (expression, context) => new ArgumentState(expression, context, cancellationToken));
+        EvaluationHelper.PopulateArgumentStates(userFunction, functionCall, argumentStates, context, (expression, context) => new ArgumentState(expression, context, cancellationToken) { Owner = argumentStates });
 
         var expression = new Expression(userFunction.Body, context.Options, context.CultureInfo);
         expression.AdvancedOptions = context.AdvancedOptions;
@@ -1376,7 +1362,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                 string paramName = ignoreCase ? name.ToLowerInvariant() : name;
                 if (argumentStates.TryGetValue(paramName, out var state))
                 {
-                    ((ArgumentState)state).Value = args.Value;
+                    // An indexed assignment changes an element of the argument, not the whole argument
+                    if (args.Index is { } index)
+                        ((ArgumentState)state).UpdateElement(name, index, args.Value, context.CultureInfo);
+                    else
+                        ((ArgumentState)state).Value = args.Value;
                     args.UpdateParameterLists = false;
                     return;
                 }
@@ -1405,6 +1395,11 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
         catch (NCalcFlowControl ex) when (ex.Type == NCalcFlowControl.FlowControlType.Return)
         {
             return ex.ReturnValue;
+        }
+        // Flow control in an argument of this call continues in the calling expression
+        catch (ArgumentFlowControl ex) when (ReferenceEquals(ex.Owner, argumentStates))
+        {
+            throw ex.FlowControl;
         }
     }
 
@@ -1457,16 +1452,25 @@ internal class ArgumentState(LogicalExpression expression, ExpressionContextBase
             {
                 // The argument is a part of the calling expression, evaluated in its context
                 var expr = Expression.CreateSubExpression(expression, context as ExpressionContext ?? new ExpressionContext(), cancellationToken);
-                _value = expr.Evaluate(cancellationToken);
+                try
+                {
+                    _value = expr.Evaluate(cancellationToken);
+                }
+                // Flow control in an argument belongs to the calling expression, not to the body of the function that uses the argument
+                catch (NCalcFlowControl flowControl)
+                {
+                    throw new ArgumentFlowControl(flowControl, Owner);
+                }
                 _valueSet = true;
             }
             return _value;
         }
 
-        set
-        {
-            _value = value;
-            _valueSet = true;
-        }
+        set => ReplaceValue(value);
+    }
+
+    internal void UpdateElement(string name, int index, object? value, CultureInfo cultureInfo)
+    {
+        UpdateElement(Value, name, index, value, cultureInfo);
     }
 }

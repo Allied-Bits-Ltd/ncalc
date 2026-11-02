@@ -254,7 +254,7 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         const string separator = "\u001F";
         return string.Concat(((long)(Context.Options & ~ExpressionOptions.NoCache)).ToString(CultureInfo.InvariantCulture),
             separator, LogicalExpressionParser.GetCultureCacheKey(CultureInfo),
-            separator, LogicalExpressionParser.GetCultureCacheKey(CultureInfo.CurrentCulture),
+            separator, LogicalExpressionParser.GetCurrentCultureCacheKey(Context.AdvancedOptions),
             separator, Context.AdvancedOptions?.GetCacheKey() ?? string.Empty,
             separator, expression);
     }

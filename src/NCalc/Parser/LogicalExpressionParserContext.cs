@@ -32,6 +32,9 @@ public sealed class LogicalExpressionParserContext : ParseContext
     // Set while a '#' is being checked for a date/time literal, so that the whitespace skipped inside the literal does not check again
     internal bool IsCheckingDateTimeLiteral { get; set; }
 
+    // The position right after the last sequence of operators that was read (e.g. "+ *" in "1 + * 2"), reported when it is unknown
+    internal TextPosition OperatorSequencePosition { get; set; }
+
     public LogicalExpressionParserContext(string text, ExpressionOptions options, CultureInfo? cultureInfo, CancellationToken cancellationToken)
         : base(new Scanner(text), cancellationToken)
     {

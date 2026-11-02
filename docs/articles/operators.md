@@ -9,10 +9,11 @@ Expressions can be combined using operators, each with a specific precedence pri
 5. **Unary**
 6. **Multiplicative**
 7. **Additive**
-8. **Relational**
-9. **Bitwise**
-10. **Logical**
-11. **Ternary**
+8. **Shift**
+9. **Relational**
+10. **Bitwise**
+11. **Logical**
+12. **Ternary**
 
 ## Handling of null values
 
@@ -206,6 +207,18 @@ When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignme
 
 The non-AOT version of NCalc can perform addition and subtraction operations on any types which have these operations defined (overloaded). This includes non-numeric types. The AOT version can handle numbers (including BigInteger and BigDecimal), dates and times (where the operations make sense), char variables, as well as add (concatenate)  strings.
 
+## Shift
+
+Shift operators shift the bits of an integer. They bind more tightly than the relational operators and more loosely than the additive ones, so `1 << 2 + 1` is `1 << 3`, and `1 << 2 > 3` compares `4` with `3`.
+
+* `<<` : Left shift
+* `>>` : Right shift
+
+**Example:**
+```csharp
+2 >> 3
+```
+
 ## Relational
 
 Relational operators compare two values and return a boolean result.
@@ -298,10 +311,7 @@ With default matching, patterns can include:
 
 ## Bitwise
 
-Bitwise operators perform bitwise operations on integers. The `and` operator has the highest priority, followed by `xor` and then by `or`.
-
-* `<<` : Left shift
-* `>>` : Right shift
+Bitwise operators perform bitwise operations on integers. The bitwise AND has the highest priority, followed by the bitwise XOR and then by the bitwise OR. The shift operators are described in [Shift](#shift).
 
 By default, when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is not set in <xref:NCalc.ExpressionOptions>, the following operator symbols are used:
 
@@ -311,7 +321,7 @@ By default, when the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars>
 
 **Example:**
 ```csharp
-2 >> 3
+6 & 3 | 8
 ```
 
 When the <xref:NCalc.ExpressionOptions.SkipLogicalAndBitwiseOpChars> flag is set in <xref:NCalc.ExpressionOptions>, the following operators are used:
@@ -344,7 +354,7 @@ true or false and true    // Evaluates to true
 *Note:* The `and` operator has the highest priority, followed by `xor` and then by `or`. Hence, in the example above, `false and true` is evaluated first.
 
 When Unicode Characters are enabled for operations using the <xref:NCalc.ExpressionOptions.UseUnicodeCharsForOperations> flag in <xref:NCalc.ExpressionOptions>, the following operators are also supported:
-* `∧` (U+2229) : Logical AND
+* `∧` (U+2227) : Logical AND
 * `⊕` (U+2295) : Logical XOR
 * `⊻` (U+22BB) : Logical XOR
 * `∨` (U+2228) : Logical OR

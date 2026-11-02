@@ -352,8 +352,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                     return SetTaskValue(task, await UpdateParameterAsync(
                         expression.LeftExpression,
-                        MathHelper.ConvertToULong(leftValue, "And with assignment", context.CultureInfo, expression.LeftExpression.Location) &
-                            MathHelper.ConvertToULong(rightValue, "And with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        MathHelper.BitwiseAnd(leftValue, rightValue, "And with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location),
                         cancellationToken).ConfigureAwait(false));
 
                 case BinaryExpressionType.OrAssignment:
@@ -367,8 +366,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, MathHelper.BitwiseOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false));
                     return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression,
-                        MathHelper.ConvertToULong(leftValue, "Or with assignment", context.CultureInfo, expression.LeftExpression.Location) |
-                            MathHelper.ConvertToULong(rightValue, "Or with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        MathHelper.BitwiseOr(leftValue, rightValue, "Or with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location),
                         cancellationToken).ConfigureAwait(false));
 
                 case BinaryExpressionType.XOrAssignment:
@@ -383,8 +381,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression, MathHelper.BitwiseXOr(leftValue, rightValue), cancellationToken).ConfigureAwait(false));
 
                     return SetTaskValue(task, await UpdateParameterAsync(expression.LeftExpression,
-                        MathHelper.ConvertToULong(leftValue, "Xor with assignment", context.CultureInfo, expression.LeftExpression.Location) ^
-                            MathHelper.ConvertToULong(rightValue, "XOr with assignment", context.CultureInfo, expression.RightExpression.Location),
+                        MathHelper.BitwiseXOr(leftValue, rightValue, "Xor with assignment", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location),
                         cancellationToken).ConfigureAwait(false));
 
                 case BinaryExpressionType.And:
@@ -748,8 +745,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, MathHelper.BitwiseAnd(leftValue, rightValue));
-                    return SetTaskValue(task, MathHelper.ConvertToULong(leftValue, "Bitwise And", context.CultureInfo, expression.LeftExpression.Location) &
-                            MathHelper.ConvertToULong(rightValue, "Bitwise And", context.CultureInfo, expression.RightExpression.Location));
+                    return SetTaskValue(task, MathHelper.BitwiseAnd(leftValue, rightValue, "Bitwise And", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location));
 
                 case BinaryExpressionType.BitwiseOr:
                     if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
@@ -766,8 +762,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, MathHelper.BitwiseOr(leftValue, rightValue));
-                    return SetTaskValue(task, MathHelper.ConvertToULong(leftValue, "Bitwise Or", context.CultureInfo, expression.LeftExpression.Location) |
-                        MathHelper.ConvertToULong(rightValue, "Bitwise Or", context.CultureInfo, expression.RightExpression.Location));
+                    return SetTaskValue(task, MathHelper.BitwiseOr(leftValue, rightValue, "Bitwise Or", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location));
 
                 case BinaryExpressionType.BitwiseXOr:
                     if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
@@ -784,8 +779,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
                     if (leftValue is BigInteger || rightValue is BigInteger)
                         return SetTaskValue(task, MathHelper.BitwiseXOr(leftValue, rightValue));
-                    return SetTaskValue(task, MathHelper.ConvertToULong(leftValue, "Bitwise XOr", context.CultureInfo, expression.LeftExpression.Location) ^
-                            MathHelper.ConvertToULong(rightValue, "Bitwise XOr", context.CultureInfo, expression.RightExpression.Location));
+                    return SetTaskValue(task, MathHelper.BitwiseXOr(leftValue, rightValue, "Bitwise XOr", context.CultureInfo, expression.LeftExpression.Location, expression.RightExpression.Location));
 
                 case BinaryExpressionType.LeftShift:
                     if (!ExpressionsEvaluatedUnlessLeftNull(task, expression.LeftExpression, expression.RightExpression))
@@ -1033,12 +1027,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 {
                     object? result = null;
 
-                    int ctr = 0;
+                    // The iterations are counted for the whole evaluation, so nested loops do not multiply the limit
+                    var loopBudget = LoopIterationBudget.ForLoop(AsyncExpression.MaxLoopIterations);
 
-                    while (ctr < Expression.MaxLoopIterations)
+                    while (loopBudget.TryTake())
                     {
-                        ctr++;
-
                         if (!TryGetValueOrNull(await EvaluateNoRecurseAsync(expression.LeftExpression, cancellationToken).ConfigureAwait(false), out leftValue))
                             break;
 
@@ -1231,7 +1224,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
     public virtual async ValueTask<object?> Visit(FunctionCall function, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
     {
-        return SetTaskValue(task, await Visit(function, cancellationToken).ConfigureAwait(false));
+        // The arguments are evaluated as separate expressions, which uses the stack; deeply nested calls continue on a thread pool thread,
+        // whose stack is empty, while this one waits without using a thread
+        return SetTaskValue(task, EvaluationHelper.HasSufficientExecutionStack()
+            ? await Visit(function, cancellationToken).ConfigureAwait(false)
+            : await Task.Run(() => Visit(function, cancellationToken).AsTask()).ConfigureAwait(false));
     }
 
     public virtual async ValueTask<object?> Visit(Identifier identifier, ExpressionTask<ValueTask<object?>> task, CancellationToken cancellationToken = default)
