@@ -16,51 +16,64 @@ namespace NCalc.Helpers;
 /// </summary>
 public static class MathHelper
 {
-    private static readonly object TruncationLock = new();
-    private static int _truncationScopes;
-    private static bool _truncationOriginalValue;
+    // The big-number transcendental functions below are computed here in fixed point, where a BigInteger v stands for
+    // v / 10^scale. The functions of ExtendedNumerics return wrong values for some arguments (Exp(-100) was negative, Atan(1) was
+    // 0.7866, Sin(100) had the wrong sign, Ln(-1) was 0), throw .NET exceptions for others (Asin(1), Sqrt(-4), Ln(0), Sin(1E+30)),
+    // do not finish (Exp(1E+400)), and their series grow to tens of thousands of digits unless the process-wide
+    // BigDecimal.AlwaysTruncate is set, which truncated the BigDecimal results of every other thread meanwhile (NCALC-017, NCALC-101).
+    // Where System.Math returns NaN or an infinity, so do they (as a double).
 
-    /// <summary>
-    /// Runs a transcendental function of ExtendedNumerics with <see cref="BigDecimal.AlwaysTruncate"/> set, as suggested by the
-    /// author of the library: the intermediate results are then truncated to <see cref="BigDecimal.Precision"/> digits, so the
-    /// series used by Ln, Log, Asin, Acos, Atan, Sin, Cos and the others do not grow to tens of thousands of digits.
-    /// The setting is process-wide and makes operations on large values much slower, so it is set only for these calls
-    /// (nested and concurrent calls are counted) and the original value is restored afterwards.
-    /// </summary>
-    private static T Truncated<T>(Func<T> calculation)
+    // The decimal places of the fixed-point computations: BigDecimal.Precision and guard digits
+    private static int WorkingScale => BigDecimal.Precision + 10;
+
+    // value / 10^scale rounded to BigDecimal.Precision decimal places
+    private static BigDecimal FromFixedPoint(BigInteger value, int scale)
     {
-        lock (TruncationLock)
+        int excess = scale - BigDecimal.Precision;
+        if (excess > 0)
         {
-            if (_truncationScopes++ == 0)
-            {
-                _truncationOriginalValue = BigDecimal.AlwaysTruncate;
-                BigDecimal.AlwaysTruncate = true;
-            }
+            BigInteger divisor = BigInteger.Pow(10, excess);
+            BigInteger quotient = BigInteger.DivRem(value, divisor, out BigInteger remainder);
+            if (BigInteger.Abs(remainder) * 2 >= divisor)
+                quotient += value.Sign;
+            value = quotient;
+            scale = BigDecimal.Precision;
         }
-
-        try
-        {
-            return calculation();
-        }
-        catch (Exception ex) when (ex is ArithmeticException or ArgumentException)
-        {
-            // ExtendedNumerics reports arguments it cannot handle with .NET exceptions (DivideByZeroException, ArgumentException ...)
-            throw new NCalcEvaluationException("The big-number function cannot be computed for this argument: " + ex.Message, ex);
-        }
-        finally
-        {
-            lock (TruncationLock)
-            {
-                if (--_truncationScopes == 0)
-                    BigDecimal.AlwaysTruncate = _truncationOriginalValue;
-            }
-        }
+        return BigDecimal.Normalize(new BigDecimal(value, -scale));
     }
 
-    // The big-number transcendental functions below guard the domain and reduce the arguments before calling ExtendedNumerics,
-    // whose functions return wrong values for some arguments (Exp(-100) was negative, Atan(1) was 0.7866, Sin(100) had the wrong
-    // sign, Ln(-1) was 0), throw .NET exceptions for others (Asin(1), Sqrt(-4), Ln(0), Sin(1E+30)), or do not finish (Exp(1E+400)).
-    // Where System.Math returns NaN or an infinity, so do they (as a double). The trigonometric functions are computed here.
+    // The exact number of digits of |value| (1 for zero)
+    private static int GetDigitCount(BigInteger value)
+    {
+        value = BigInteger.Abs(value);
+        int digits = value.IsZero ? 1 : (int)Math.Floor(BigInteger.Log10(value)) + 1;
+        if (digits > 1 && value < BigInteger.Pow(10, digits - 1))
+            digits--;
+        else if (value >= BigInteger.Pow(10, digits))
+            digits++;
+        return digits;
+    }
+
+    // floor(value^(1/n)) for value >= 0, with Newton's method
+    private static BigInteger IntegerRoot(BigInteger value, int n)
+    {
+        if (value.Sign <= 0)
+            return BigInteger.Zero;
+
+        // A start near the root; from any positive start, one step lands at or above the integer root, and from there the steps
+        // decrease to it
+        double log10 = BigInteger.Log10(value) / n;
+        int shift = Math.Max((int)log10 - 15, 0);
+        BigInteger root = new BigInteger(Math.Pow(10, log10 - shift)) * BigInteger.Pow(10, shift) + 1;
+        root = ((n - 1) * root + value / BigInteger.Pow(root, n - 1)) / n;
+        while (true)
+        {
+            BigInteger next = ((n - 1) * root + value / BigInteger.Pow(root, n - 1)) / n;
+            if (next >= root)
+                return root;
+            root = next;
+        }
+    }
 
     /// <summary>
     /// The maximum number of integer digits of a big-number argument of Sin, Cos, Tan, Sec, Csc and Cot. The argument is reduced
@@ -68,8 +81,6 @@ public static class MathHelper
     /// <see cref="NCalcEvaluationException"/>.
     /// </summary>
     private const int MaxBigTrigArgumentDigits = 10_000;
-
-    private static readonly BigDecimal BigQuarter = new(new BigInteger(25), -2);
 
     private sealed class PiDigits(int digits, BigInteger value)
     {
@@ -158,11 +169,14 @@ public static class MathHelper
         return excess <= 0 ? value : new BigDecimal(value.Mantissa / BigInteger.Pow(10, excess), value.Exponent + excess);
     }
 
-    // value * 10^scale, truncated
+    // value * 10^scale, truncated (zero without computing a huge power of 10 when value is far below 10^-scale)
     private static BigInteger ToFixedPoint(BigDecimal value, int scale)
-        => value.Exponent + scale >= 0
-            ? value.Mantissa * BigInteger.Pow(10, value.Exponent + scale)
-            : value.Mantissa / BigInteger.Pow(10, -(value.Exponent + scale));
+    {
+        long shift = (long)value.Exponent + scale;
+        if (shift >= 0)
+            return value.Mantissa * BigInteger.Pow(10, (int)shift);
+        return -shift > GetIntegerDigits(new BigDecimal(value.Mantissa, 0)) ? BigInteger.Zero : value.Mantissa / BigInteger.Pow(10, (int)-shift);
+    }
 
     private static BigInteger FloorDivide(BigInteger dividend, BigInteger divisor)
     {
@@ -259,49 +273,77 @@ public static class MathHelper
             throw new NCalcEvaluationException($"The result of Exp would have more than {MaxPowResultDigits} digits (MathHelper.MaxPowResultDigits).");
         }
 
-        BigDecimal magnitude = Truncated(() =>
+        // e^|x| = (e^(|x| / 2^k))^(2^k) with |x| / 2^k <= 1, where the series 1 + t + t²/2! + ... converges quickly
+        BigDecimal reduced = x.Sign < 0 ? -x : x;
+        int halvings = 0;
+        while (reduced > BigDecimal.One)
         {
-            // e^|x| = (e^(|x| / 2^k))^(2^k) with |x| / 2^k <= 1, where the series of ExtendedNumerics is fast and exact
-            BigDecimal reduced = x.Sign < 0 ? -x : x;
-            int halvings = 0;
-            while (reduced > BigDecimal.One)
-            {
-                reduced *= BigDecimal.OneHalf;
-                halvings++;
-            }
+            reduced *= BigDecimal.OneHalf;
+            halvings++;
+        }
 
-            BigDecimal result = BigDecimal.Exp(reduced);
+        int scale = WorkingScale;
+        BigInteger unity = BigInteger.Pow(10, scale);
+        BigInteger t = ToFixedPoint(reduced, scale);
+        BigInteger sum = unity;
+        BigInteger term = unity;
+        for (int n = 1; !term.IsZero; n++)
+        {
+            term = term * t / unity / n;
+            sum += term;
+        }
+
+        BigDecimal magnitude;
+        if (halvings == 0)
+        {
+            magnitude = FromFixedPoint(sum, scale);
+        }
+        else
+        {
+            magnitude = new BigDecimal(sum, -scale);
             for (int i = 0; i < halvings; i++)
-                result = TruncateMantissa(result * result, BigDecimal.Precision + 10);
-
-            return result;
-        });
+                magnitude = TruncateMantissa(magnitude * magnitude, BigDecimal.Precision + 10);
+        }
 
         // e^-|x| = 1 / e^|x|
         return x.Sign < 0 ? Reciprocal(magnitude) : magnitude;
     }
 
     // 1 / value with about BigDecimal.Precision significant digits: 1 / (m * 10^e) = (10^k / m) * 10^(-k - e). The division of
-    // ExtendedNumerics keeps a fixed number of decimal places, so 1 / e^1000 would be zero. (With AlwaysTruncate set, a BigDecimal
-    // below 10^-Precision is zero, so a tiny result must be created outside Truncated.)
+    // ExtendedNumerics keeps a fixed number of decimal places, so 1 / e^1000 would be zero.
     private static BigDecimal Reciprocal(BigDecimal value)
     {
         int k = BigDecimal.Precision + GetIntegerDigits(new BigDecimal(value.Mantissa, 0));
         return new BigDecimal(BigInteger.Pow(10, k) / value.Mantissa, -k - value.Exponent);
     }
 
+    // a / b with about BigDecimal.Precision + 10 significant digits
+    private static BigDecimal Quotient(BigDecimal a, BigDecimal b)
+    {
+        int k = Math.Max(BigDecimal.Precision + 10 + GetDigitCount(b.Mantissa) - GetDigitCount(a.Mantissa), 0);
+        return BigDecimal.Normalize(new BigDecimal(a.Mantissa * BigInteger.Pow(10, k) / b.Mantissa, a.Exponent - b.Exponent - k));
+    }
+
     /// <summary>
     /// Whether |x| is below 10^-(Precision / 2), where sin x = tan x = asin x = atan x = x and cos x = 1 to the precision of BigDecimal
-    /// (the next terms of the series are below x * 10^-Precision). Such an argument would be zero in the fixed point of the
-    /// trigonometric functions, and truncated to zero with <see cref="BigDecimal.AlwaysTruncate"/> set.
+    /// (the next terms of the series are below x * 10^-Precision). Such an argument would lose its digits in the fixed point of
+    /// these functions.
     /// </summary>
     private static bool IsTinyBigArgument(BigDecimal x)
         => !x.IsZero() && GetIntegerDigits(x) <= -(BigDecimal.Precision / 2);
 
-    // asin(x) = atan(x / sqrt(1 - x²)) for |x| < 1, with the reduced arctangent: the series of ExtendedNumerics for Arcsin is
-    // inaccurate for some arguments (Asin(0.7) was wrong in the 7th digit) and slow (NCALC-310)
+    // asin(x) = atan(x / sqrt(1 - x²)) for |x| < 1: the series of ExtendedNumerics for Arcsin is inaccurate for some arguments
+    // (Asin(0.7) was wrong in the 7th digit) and slow (NCALC-310). x and sqrt(1 - x²) have twice the working digits, as 1 - x²
+    // loses digits for x near ±1.
     private static BigDecimal ArcsinOfFraction(BigDecimal x)
-        => IsTinyBigArgument(x) ? x : Truncated(() => ReducedArctan(x / BigDecimal.SquareRoot(BigDecimal.One - x * x, BigDecimal.Precision)));
+    {
+        if (IsTinyBigArgument(x))
+            return x;
+        int scale = WorkingScale;
+        BigInteger fixedX = ToFixedPoint(x, 2 * scale);
+        BigInteger unitySquared = BigInteger.Pow(10, 4 * scale);
+        return FromFixedPoint(FixedArctan(fixedX, IntegerRoot(unitySquared - fixedX * fixedX, 2), scale), scale);
+    }
 
     // Asin and Acos of ±1 are exact (ExtendedNumerics divided by zero), and of |x| > 1 NaN
     private static object BigArcsin(BigDecimal x)
@@ -325,54 +367,88 @@ public static class MathHelper
         if (magnitude < BigDecimal.One)
         {
             BigDecimal arcsin = ArcsinOfFraction(x);
-            return Truncated(() => halfPi - arcsin);
+            return halfPi - arcsin;
         }
         return x.Sign > 0 ? BigDecimal.Zero : GetBigPi();
     }
 
     private static object BigArctan(BigDecimal x)
-        => IsTinyBigArgument(x) ? x : Truncated(() => ReducedArctan(x));
-
-    // Called with BigDecimal.AlwaysTruncate set (in Truncated)
-    private static BigDecimal ReducedArctan(BigDecimal x)
     {
-        // The series of ExtendedNumerics is inaccurate near ±1, so the argument is reduced first: atan(x) = ±π/2 - atan(1/x)
-        // for |x| > 1, then atan(x) = 2 atan(x / (1 + sqrt(1 + x²))) until |x| <= 1/4
-        BigDecimal offset = BigDecimal.Zero;
-        BigDecimal reduced = x;
-        if (BigDecimal.Abs(x) > BigDecimal.One)
+        if (IsTinyBigArgument(x))
+            return x;
+
+        // Beyond 10^scale, atan(x) is ±π/2 to the working precision
+        int scale = WorkingScale;
+        if (GetIntegerDigits(x) > scale)
+            return FromFixedPoint(GetScaledPi(scale) / 2 * x.Sign, scale);
+
+        // x = m * 10^e as the fraction m * 10^e / 1 or m / 10^-e
+        return x.Exponent >= 0
+            ? FromFixedPoint(FixedArctan(x.Mantissa * BigInteger.Pow(10, x.Exponent), BigInteger.One, scale), scale)
+            : FromFixedPoint(FixedArctan(x.Mantissa, BigInteger.Pow(10, -x.Exponent), scale), scale);
+    }
+
+    // atan(numerator / denominator) * 10^scale for denominator > 0. The argument is reduced first: atan(q) = ±π/2 - atan(1/q) for
+    // |q| > 1, then atan(t) = 2 atan(t / (1 + sqrt(1 + t²))) until |t| <= 1/4, where the series t - t³/3 + t⁵/5 - ... converges
+    // quickly (the series of ExtendedNumerics was inaccurate near ±1)
+    private static BigInteger FixedArctan(BigInteger numerator, BigInteger denominator, int scale)
+    {
+        BigInteger unity = BigInteger.Pow(10, scale);
+        BigInteger offset = BigInteger.Zero;
+        BigInteger t;
+        if (BigInteger.Abs(numerator) > denominator)
         {
-            offset = GetBigPi() * BigDecimal.OneHalf;
-            if (x.Sign < 0)
-                offset = -offset;
-            reduced = -Reciprocal(x);
+            offset = GetScaledPi(scale) / 2 * numerator.Sign;
+            t = -denominator * unity / numerator;
+        }
+        else
+        {
+            t = numerator * unity / denominator;
         }
 
         int factor = 1;
-        while (BigDecimal.Abs(reduced) > BigQuarter)
+        while (BigInteger.Abs(t) * 4 > unity)
         {
-            reduced /= BigDecimal.One + BigDecimal.SquareRoot(BigDecimal.One + reduced * reduced, BigDecimal.Precision);
+            t = t * unity / (unity + IntegerRoot(unity * unity + t * t, 2));
             factor *= 2;
         }
-        return offset + BigDecimal.Arctan(reduced) * factor;
+
+        BigInteger tSquared = t * t / unity;
+        BigInteger sum = t;
+        BigInteger power = t;
+        for (int n = 1; !power.IsZero; n++)
+        {
+            power = -power * tSquared / unity;
+            sum += power / (2 * n + 1);
+        }
+        return offset + sum * factor;
     }
 
     /// <summary>
-    /// The n-th root of a positive big number with about <see cref="BigDecimal.Precision"/> significant digits. The roots of
-    /// ExtendedNumerics keep Precision decimal places, so the root of a number below 10^-200 was zero (NCALC-410): a number below 1 is
-    /// scaled by a power of 10^n into [1, 10^n), and the exponent of its root is shifted back outside <see cref="Truncated"/>.
+    /// The n-th root of a positive big number with at least <see cref="BigDecimal.Precision"/> significant digits (rounded down;
+    /// exact roots are exact). A number below 1 is scaled by a power of 10^n into [1, 10^n) first, and the exponent of its root is
+    /// shifted back, so that the root of a number below 10^-200 has its digits (NCALC-410); m * 10^e with e >= n is rooted as
+    /// m * 10^(e mod n), so that the power of 10 of 1E+1000000 is not multiplied out.
     /// </summary>
-    private static BigDecimal BigRoot(BigDecimal x, int n, Func<BigDecimal, BigDecimal> root)
+    private static BigDecimal BigRoot(BigDecimal x, int n)
     {
         int integerDigits = GetIntegerDigits(x);
-        if (x.IsZero() || integerDigits >= 1)
-            return Truncated(() => root(x));
+        int shift;
+        if (x.IsZero())
+            return BigDecimal.Zero;
+        if (integerDigits >= 1)
+            shift = n * (Math.Max(x.Exponent, 0) / n);
+        else
+            shift = n * (int)Math.Floor((integerDigits - 1) / (double)n);
 
-        int shift = n * (int)Math.Floor((integerDigits - 1) / (double)n);
         var scaled = new BigDecimal(x.Mantissa, x.Exponent - shift);
-        BigDecimal result = Truncated(() => root(scaled));
-        return new BigDecimal(result.Mantissa, result.Exponent + shift / n);
+        BigDecimal result = FixedRoot(scaled, n);
+        return BigDecimal.Normalize(new BigDecimal(result.Mantissa, result.Exponent + shift / n));
     }
+
+    // (x * 10^(n * Precision))^(1/n) / 10^Precision
+    private static BigDecimal FixedRoot(BigDecimal x, int n)
+        => BigDecimal.Normalize(new BigDecimal(IntegerRoot(ToFixedPoint(x, n * BigDecimal.Precision), n), -BigDecimal.Precision));
 
     private enum BigHyperbolicFunction
     {
@@ -387,8 +463,8 @@ public static class MathHelper
     /// <summary>
     /// Computes a hyperbolic function of a big number with about <see cref="BigDecimal.Precision"/> significant digits also when the
     /// result is small (NCALC-410). For |x| &lt; 1, sinh x = x * S and cosh x = C, where the series S = 1 + x²/3! + x⁴/5! + ... and
-    /// C = 1 + x²/2! + x⁴/4! + ... are close to 1, so x is multiplied (or divided) outside <see cref="Truncated"/>; the functions of
-    /// ExtendedNumerics keep Precision decimal places, which made Sinh(1E-120) zero and Coth(1E-120) a division by zero.
+    /// C = 1 + x²/2! + x⁴/4! + ... are close to 1 and computed in fixed point, and x is multiplied (or divided) afterwards; the functions
+    /// of ExtendedNumerics keep Precision decimal places, which made Sinh(1E-120) zero and Coth(1E-120) a division by zero.
     /// For |x| &gt;= 1, sinh and cosh are computed from e^|x| (BigExp) and e^-|x| (its reciprocal): Sinh and Cosh of ExtendedNumerics
     /// were wrong from about the 8th digit for large arguments (Sinh(300); NCALC-436). Sech and Csch are their reciprocals.
     /// </summary>
@@ -400,22 +476,30 @@ public static class MathHelper
         if (GetIntegerDigits(x) >= 1)
             return LargeBigHyperbolic(x, function);
 
-        (BigDecimal sinhFactor, BigDecimal cosh) = IsTinyBigArgument(x) ? (BigDecimal.One, BigDecimal.One) : Truncated(() =>
+        BigDecimal sinhFactor = BigDecimal.One;
+        BigDecimal cosh = BigDecimal.One;
+        if (!IsTinyBigArgument(x))
         {
-            BigDecimal xSquared = x * x;
-            BigDecimal s = BigDecimal.One;
-            BigDecimal c = BigDecimal.One;
-            BigDecimal sTerm = BigDecimal.One;
-            BigDecimal cTerm = BigDecimal.One;
-            for (int n = 1; !cTerm.IsZero() && GetIntegerDigits(cTerm) > -(BigDecimal.Precision + 10); n++)
+            int scale = WorkingScale;
+            BigInteger unity = BigInteger.Pow(10, scale);
+            BigInteger fixedX = ToFixedPoint(x, scale);
+            BigInteger xSquared = fixedX * fixedX / unity;
+            BigInteger s = unity;
+            BigInteger c = unity;
+            BigInteger sTerm = unity;
+            BigInteger cTerm = unity;
+            for (int n = 1; !cTerm.IsZero; n++)
             {
-                cTerm = cTerm * xSquared / new BigDecimal(new BigInteger((2 * n - 1) * 2 * n), 0);
-                sTerm = sTerm * xSquared / new BigDecimal(new BigInteger(2 * n * (2 * n + 1)), 0);
+                cTerm = cTerm * xSquared / unity / ((2 * n - 1) * 2 * n);
+                sTerm = sTerm * xSquared / unity / (2 * n * (2 * n + 1));
                 s += sTerm;
                 c += cTerm;
             }
-            return (s, c);
-        });
+            if (function == BigHyperbolicFunction.Cosh)
+                return FromFixedPoint(c, scale);
+            sinhFactor = new BigDecimal(s, -scale);
+            cosh = new BigDecimal(c, -scale);
+        }
 
         if (function == BigHyperbolicFunction.Cosh)
             return cosh;
@@ -424,7 +508,7 @@ public static class MathHelper
 
         BigDecimal factor = function is BigHyperbolicFunction.Sinh or BigHyperbolicFunction.Csch
             ? sinhFactor
-            : Truncated(() => sinhFactor / cosh);
+            : Quotient(sinhFactor, cosh);
         BigDecimal value = TruncateMantissa(x * factor, BigDecimal.Precision + 10);
         return function is BigHyperbolicFunction.Sinh or BigHyperbolicFunction.Tanh ? value : Reciprocal(value);
     }
@@ -452,21 +536,69 @@ public static class MathHelper
         {
             BigHyperbolicFunction.Sinh => sinh,
             BigHyperbolicFunction.Cosh => cosh,
-            BigHyperbolicFunction.Tanh => Truncated(() => sinh / cosh),
-            BigHyperbolicFunction.Coth => Truncated(() => cosh / sinh),
+            BigHyperbolicFunction.Tanh => Quotient(sinh, cosh),
+            BigHyperbolicFunction.Coth => Quotient(cosh, sinh),
             BigHyperbolicFunction.Sech => Reciprocal(cosh),
             _ => Reciprocal(sinh)
         };
     }
 
-    // The logarithm of zero or a negative number is -∞ or NaN, as with Math.Log
-    private static object BigLogarithm(BigDecimal x, Func<BigDecimal, BigDecimal> logarithm)
+    // The logarithm of zero or a negative number is -∞ or NaN, as with Math.Log; without a base, the natural logarithm
+    private static object BigLogarithm(BigDecimal x, int? newBase)
     {
         if (x.Sign < 0)
             return double.NaN;
         if (x.IsZero())
             return double.NegativeInfinity;
-        return Truncated(() => logarithm(x));
+        if (newBase is { } b)
+            return LogarithmOf(x, new BigDecimal(b));
+        int scale = LogarithmScale(x);
+        return FromFixedPoint(FixedLn(x, scale), scale);
+    }
+
+    // ln(x) / ln(newBase) for x > 0 and newBase > 0, newBase != 1; the powers of 2 and 10 in those bases are exact
+    private static BigDecimal LogarithmOf(BigDecimal x, BigDecimal newBase)
+    {
+        int scale = Math.Max(LogarithmScale(x), LogarithmScale(newBase));
+        return FromFixedPoint(FixedLn(x, scale) * BigInteger.Pow(10, scale) / FixedLn(newBase, scale), scale);
+    }
+
+    // The working scale and the digits of the power of 10 of x, which multiplies the error of ln 10
+    private static int LogarithmScale(BigDecimal x)
+        => WorkingScale + GetDigitCount((long)x.Exponent + GetDigitCount(x.Mantissa));
+
+    // ln(x) * 10^scale for x > 0: x = y * 2^j * 10^k with y in [1, 2), and ln(y) = 2 atanh((y - 1) / (y + 1)) with the series
+    // 2 (z + z³/3 + z⁵/5 + ...) for z < 1/3; ln 2 = 2 atanh(1/3) and ln 10 = 3 ln 2 + 2 atanh(1/9)
+    private static BigInteger FixedLn(BigDecimal x, int scale)
+    {
+        BigInteger unity = BigInteger.Pow(10, scale);
+        int digits = GetDigitCount(x.Mantissa);
+        long k = (long)x.Exponent + digits - 1;
+        BigInteger y = ToFixedPoint(new BigDecimal(x.Mantissa, 1 - digits), scale);
+        int j = 0;
+        while (y >= 2 * unity)
+        {
+            y /= 2;
+            j++;
+        }
+
+        BigInteger ln2 = 2 * FixedArctanh(unity / 3, unity);
+        BigInteger ln10 = 3 * ln2 + 2 * FixedArctanh(unity / 9, unity);
+        return 2 * FixedArctanh((y - unity) * unity / (y + unity), unity) + j * ln2 + k * ln10;
+    }
+
+    // atanh(z / unity) * unity for |z| <= unity / 3
+    private static BigInteger FixedArctanh(BigInteger z, BigInteger unity)
+    {
+        BigInteger zSquared = z * z / unity;
+        BigInteger sum = z;
+        BigInteger power = z;
+        for (int n = 1; !power.IsZero; n++)
+        {
+            power = power * zSquared / unity;
+            sum += power / (2 * n + 1);
+        }
+        return sum;
     }
 
     // ln(x) as a double, also for x beyond the range of double: ln(m * 10^e) = ln(m) + e * ln(10) with the first 17 digits of m
@@ -488,11 +620,7 @@ public static class MathHelper
         if (x.Sign <= 0 || newBase.Sign <= 0 || (newBase - BigDecimal.One).IsZero())
             return Math.Log(SaturatingToDouble(x), SaturatingToDouble(newBase));
 
-        if (newBase > int.MaxValue)
-            return Truncated(() => BigDecimal.Ln(x) / BigDecimal.Ln(newBase));
-
-        int intBase = (int)GetWholeValue(newBase);
-        return Truncated(() => BigDecimal.Log(x, intBase));
+        return LogarithmOf(x, newBase);
     }
 
     enum ArithmeticOperation
@@ -3980,7 +4108,7 @@ public static class MathHelper
         if (x.Sign > 0)
             return arctan;
         BigDecimal pi = GetBigPi();
-        return Truncated(() => pi + (BigDecimal)arctan);
+        return pi + (BigDecimal)arctan;
     }
 
     public static double Arccot(double x)
@@ -4260,7 +4388,7 @@ public static class MathHelper
         if (options.UseBigNumbers)
         {
             if (a is BigInteger or BigDecimal)
-                return BigLogarithm(ToBigDecimalArgument(a), BigDecimal.Ln);
+                return BigLogarithm(ToBigDecimalArgument(a), null);
         }
 
         if (a is ComplexNumber cnA)
@@ -4271,7 +4399,7 @@ public static class MathHelper
 
     public static object Log(object? a, object? b, MathHelperOptions options)
     {
-        // BigDecimal.Log takes an integer base; a fractional base (Log(x, 2.5)) is computed in double instead of being truncated to 2
+        // The big-number logarithm takes an integer base; a fractional base (Log(x, 2.5)) is computed in double (it was truncated to 2)
         bool integralBase = b is not null && (IsBoxedIntegerNumber(b) || b is BigInteger || (b is BigDecimal bdB && IsWholeNumber(bdB)) || IsBoxedFloatingNumberInteger(b) == true)
             && b is not (double.PositiveInfinity or double.NegativeInfinity or float.PositiveInfinity or float.NegativeInfinity);
         // A big base is also used exactly with an integer or decimal argument (Log(8, 10 ** 400)), as double would make it infinite
@@ -4296,7 +4424,7 @@ public static class MathHelper
         if (options.UseBigNumbers)
         {
             if (a is BigInteger or BigDecimal)
-                return BigLogarithm(ToBigDecimalArgument(a), BigDecimal.Log2);
+                return BigLogarithm(ToBigDecimalArgument(a), 2);
         }
 
         if (a is ComplexNumber cnA)
@@ -4311,7 +4439,7 @@ public static class MathHelper
         if (options.UseBigNumbers)
         {
             if (a is BigInteger or BigDecimal)
-                return BigLogarithm(ToBigDecimalArgument(a), BigDecimal.Log10);
+                return BigLogarithm(ToBigDecimalArgument(a), 10);
         }
 
         if (a is ComplexNumber cnA)
@@ -5148,7 +5276,7 @@ public static class MathHelper
                 BigDecimal bdA = ToBigDecimalArgument(a);
                 if (bdA.Sign < 0)
                     return double.NaN;
-                return BigRoot(bdA, 2, x => BigDecimal.SquareRoot(x, BigDecimal.Precision));
+                return BigRoot(bdA, 2);
             }
         }
 
@@ -5172,7 +5300,7 @@ public static class MathHelper
                 BigDecimal bdA = ToBigDecimalArgument(a);
                 if (bdA.Sign < 0)
                     return double.NaN;
-                return BigRoot(bdA, 4, x => BigDecimal.SquareRoot(BigDecimal.SquareRoot(x, BigDecimal.Precision), BigDecimal.Precision));
+                return BigRoot(bdA, 4);
             }
         }
 
@@ -5185,8 +5313,6 @@ public static class MathHelper
     }
 
 #if NET8_0_OR_GREATER
-    private static BigDecimal CubeRoot(BigDecimal x) => BigDecimal.NthRoot(x, 3, BigDecimal.Precision);
-
     public static object? Cbrt(object? a, MathHelperOptions options)
     {
         if (a is null)
@@ -5194,13 +5320,13 @@ public static class MathHelper
 
         if (options.UseBigNumbers)
         {
-            // The cube root of a negative number is negative, as with Math.Cbrt (ExtendedNumerics accepts only positive numbers)
+            // The cube root of a negative number is negative, as with Math.Cbrt
             if (a is BigInteger or BigDecimal)
             {
                 BigDecimal bdA = ToBigDecimalArgument(a);
                 if (bdA.IsZero())
                     return BigDecimal.Zero;
-                return bdA.Sign < 0 ? -BigRoot(-bdA, 3, CubeRoot) : BigRoot(bdA, 3, CubeRoot);
+                return bdA.Sign < 0 ? -BigRoot(-bdA, 3) : BigRoot(bdA, 3);
             }
         }
 

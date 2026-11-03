@@ -477,7 +477,6 @@ public class ParserAudit5Tests
         Assert.Equal(true, await EvaluateAllAsync("1e9999999 * 2 > 0", options));
         Assert.Equal(double.PositiveInfinity, await EvaluateAllAsync("1e9999999", options));
         Assert.Equal(double.PositiveInfinity, await EvaluateAllAsync("1.0e999999999", options));
-        // (tiny values are compared, not typed: other tests set BigDecimal.AlwaysTruncate meanwhile, which truncates them)
         Assert.Equal(0, MathHelperCompare(0, Assert.IsType<ValueExpression>(Parse("1e-400000", options)).Value));
 
         var withinLimit = Parse("1e20000", options);

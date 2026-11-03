@@ -2076,7 +2076,7 @@ public class MathsTests : TestBase
     public void BigDecimalTranscendentalFunctionsShouldBeBounded(string text, int mantissa, int exponent)
     {
         // NCALC-017: the series of ExtendedNumerics grew to tens of thousands of digits and took from seconds to minutes;
-        // with BigDecimal.AlwaysTruncate set for the call, the result has about BigDecimal.Precision digits
+        // the result has about BigDecimal.Precision digits
         var x = new BigDecimal(new BigInteger(mantissa), exponent);
         var expression = new Expression(text, ExpressionOptions.UseBigNumbers | ExpressionOptions.NoCache);
         expression.Parameters["x"] = x;
@@ -2092,6 +2092,76 @@ public class MathsTests : TestBase
             _ => Math.Log10(value),
         };
         Assert.Equal(expected, MathHelper.ConvertToDouble(result, MathHelperOptions.Empty), 12);
+    }
+
+    [Theory]
+    [InlineData("Ln(x)", -690.0823807176538)]
+    [InlineData("Log10(x)", -299.69897000433605)]
+    [InlineData("Log(x, 7)", -354.6321915493735)]
+    public void BigNumberLogarithmsOfTinyArgumentsShouldBeComputed(string text, double expected)
+    {
+        // NCALC-101: x = 2E-300 was truncated to zero while the logarithm ran, which threw NCalcEvaluationException
+        var expression = new Expression(text, ExpressionOptions.UseBigNumbers | ExpressionOptions.NoCache);
+        expression.Parameters["x"] = new BigDecimal(2, -300);
+        var result = Assert.IsType<BigDecimal>(expression.Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(expected, MathHelper.ConvertToDouble(result, MathHelperOptions.Empty), 12);
+    }
+
+    [Fact]
+    public void BigNumberRootsAndLogarithmsShouldNotMultiplyOutHugeExponents()
+    {
+        // NCALC-101: the functions computed by NCalc split off the power of 10 of the argument
+        var options = new MathHelperOptions(CultureInfo.InvariantCulture, ExpressionOptions.UseBigNumbers);
+        Assert.Equal(new BigDecimal(1, 1000000000), MathHelper.Sqrt(new BigDecimal(1, 2000000000), options));
+        Assert.Equal(new BigDecimal(-2, 333333333), MathHelper.Cbrt(new BigDecimal(-8, 999999999), options));
+        Assert.Equal(new BigDecimal(2000000000), MathHelper.Log10(new BigDecimal(1, 2000000000), options));
+        Assert.Equal(-4605170185.2949441874760375999514962937, MathHelper.ConvertToDouble(MathHelper.Ln(new BigDecimal(2, -2000000000), options), MathHelperOptions.Empty), 4);
+    }
+
+    [Fact]
+    public void BigNumberFunctionsShouldNotTruncateBigDecimalsOfOtherThreads()
+    {
+        // NCALC-101: the big-number functions set the process-wide BigDecimal.AlwaysTruncate while they ran, which truncated the
+        // BigDecimal results of every other thread to BigDecimal.Precision digits
+        const ExpressionOptions options = ExpressionOptions.UseBigNumbers | ExpressionOptions.NoCache;
+        var expected = new Expression("1.5 ** 400", options, CultureInfo.InvariantCulture).Evaluate(TestContext.Current.CancellationToken);
+        string[] functions = ["Ln(x)", "Log10(x)", "Log(x, 3)", "Exp(x)", "Sqrt(x)", "∛x", "∜x","Atan(x)", "Asin(1 / x)", "Acos(1 / x)"];
+        var x = new BigDecimal(123456789, -5);
+        var helperOptions = new MathHelperOptions(CultureInfo.InvariantCulture, options);
+        int rounds = 0;
+        using var stop = new CancellationTokenSource();
+        var background = Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                foreach (var function in functions)
+                {
+                    var expression = new Expression(function, options);
+                    expression.Parameters["x"] = x;
+                    expression.Evaluate();
+                }
+                MathHelper.Tanh(x / 100000, helperOptions);
+                MathHelper.Sinh(BigDecimal.One / x, helperOptions);
+                MathHelper.Arccot(-x, helperOptions);
+                Interlocked.Increment(ref rounds);
+            }
+        }, TestContext.Current.CancellationToken);
+
+        try
+        {
+            // until the functions have run a few times
+            for (int i = 0; i < 200 || Volatile.Read(ref rounds) < 3; i++)
+            {
+                Assert.False(background.IsFaulted);
+                Assert.False(BigDecimal.AlwaysTruncate);
+                Assert.Equal(expected, new Expression("1.5 ** 400", options, CultureInfo.InvariantCulture).Evaluate(TestContext.Current.CancellationToken));
+            }
+        }
+        finally
+        {
+            stop.Cancel();
+            background.Wait(TestContext.Current.CancellationToken);
+        }
     }
 
     private static object? EvaluateWith(string text, ExpressionOptions options, params (string Name, object Value)[] parameters)

@@ -549,9 +549,8 @@ public class ArithmeticAudit5Tests
     public async Task ProductOfDecimalAndTinyDoubleShouldBeBigDecimalWithBigNumbers()
     {
         // NCALC-403 (differential): the product is not narrowed to decimal 0; it is 1E-300 (a BigDecimal, or the double that holds it
-        // exactly, as UseBigNumbers narrows a BigDecimal result that a double holds without losing digits). 1e-300 itself is not used:
-        // other tests set the process-wide BigDecimal.AlwaysTruncate for a while, which cuts a product of 1E-300 to 0 meanwhile
-        foreach (var b in new[] { 1e-40, 1e-60 })
+        // exactly, as UseBigNumbers narrows a BigDecimal result that a double holds without losing digits)
+        foreach (var b in new[] { 1e-40, 1e-60, 1e-300 })
         {
             foreach (var result in await EvaluateAllAsync("a * b", ExpressionOptions.UseBigNumbers, new Dictionary<string, object?> { ["a"] = 1m, ["b"] = b }))
                 Assert.True((result is BigDecimal bd && bd == NCalc.Helpers.MathHelper.ConvertToBigDecimal(b)) || (result is double d && d == b), $"{result} ({result?.GetType().Name})");
@@ -576,7 +575,7 @@ public class ArithmeticAudit5Tests
     [Fact]
     public async Task DecimalWithTinyDoubleShouldBeBigDecimalWithBigNumbers()
     {
-        // NCALC-403 (1e-29 rather than 1e-300: other tests set BigDecimal.AlwaysTruncate for a while, which cuts 1e-300 to 0)
+        // NCALC-403
         foreach (var result in await EvaluateAllAsync("a / b", ExpressionOptions.UseBigNumbers, new Dictionary<string, object?> { ["a"] = 1m, ["b"] = 1e-29 }))
             Assert.True(result is BigDecimal bd && bd == new BigDecimal(1, 29), $"{result} ({result?.GetType().Name})");
     }

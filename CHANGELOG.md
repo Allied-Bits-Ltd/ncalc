@@ -84,7 +84,7 @@
 * `ToString()` handles a factorial with a long step, GUID values, and quotes in strings that were not read from text.
 * An ISO date-time without the `Z` designator has `DateTimeKind.Unspecified` instead of `DateTimeKind.Utc`.
 * NCalc.MemoryCache sets the size of the entries (`LogicalExpressionMemoryCacheOptions.EntrySize`), so it works with an `IMemoryCache` that has a `SizeLimit`, and its keys cannot collide with other keys in a shared cache.
-* The BigDecimal versions of `Asin`, `Acos`, `Atan`, `Ln`, `Log`, `Log10`, `Sin`, `Cos`, `Tan`, `Exp` and the other transcendental functions run with `BigDecimal.AlwaysTruncate` set (and restored afterwards), so their results have about `BigDecimal.Precision` digits and take about 0.5-2 seconds instead of growing to tens of thousands of digits for seconds or minutes.
+* The BigDecimal versions of `Asin`, `Acos`, `Atan`, `Ln`, `Log`, `Log10`, `Sin`, `Cos`, `Tan`, `Exp` and the other transcendental functions have about `BigDecimal.Precision` digits and take milliseconds instead of growing to tens of thousands of digits for seconds or minutes.
 * Division with `UseBigNumbers` no longer depends on the current culture: after the thread culture changed (e.g. from sk-SK to en-US), `1.0 / 4.0` gave `25` instead of `0.25` because the quotient was converted with ExtendedNumerics' culture-dependent conversions. Decimal literals are also parsed to the same type in every culture.
 * Integer division of or by a `ulong` above `long.MaxValue` now works: `a // 2` and `a \ 2` with `a = ulong.MaxValue` give `9223372036854775807` (previously `null` or `OverflowException`), and `1 // a` gives `0`.
 * `ulong` arithmetic no longer throws `OverflowException` when the result fits: `ulong.MaxValue * 1` is `ulong.MaxValue`, `2^63 (ulong) + (-1L)` is `9223372036854775807`, and `Max(ulong.MaxValue, -1)` / `Min(...)` work. Without `OverflowProtection`, a `ulong` product wraps around as in C#.
@@ -270,6 +270,7 @@
 * `break` and `continue` in the body of an `fn` function outside a loop of that body no longer act on a loop of the caller; they raise the same "may be used only inside the loop body" error as outside any loop.
 * Indexed assignment accepts from-end indices (`l[^1] := 7`, `l[^1] += 1`, `s[^1] := 'z'`) as reading `l[^1]` does; an index outside the list or string raises NCalcParameterIndexException.
 * After an asynchronous evaluation whose deeply nested calls continued on thread pool threads (`UseNonRecursiveEvaluator`), the caller continues on a fresh stack: it resumed with the stack of the thread nearly used up, so its next evaluation could fail as nested too deeply.
+* The big-number transcendental functions (`Ln`, `Log`, `Log2`, `Log10`, `Exp`, `Sqrt`, `∛`, `∜`, `Asin`, `Acos`, `Atan`, the reciprocal and hyperbolic functions; UseBigNumbers with a BigInteger or BigDecimal argument) no longer set the process-wide `BigDecimal.AlwaysTruncate` while they run, which truncated the BigDecimal results of every other thread to `BigDecimal.Precision` digits meanwhile (`1.5 ** 400` lost 300 digits while another thread computed `Ln(x)`) and overwrote a value the application had set. They are computed by NCalc in fixed point and take milliseconds instead of up to seconds; the logarithms of numbers below 10^-100 are computed (they threw NCalcEvaluationException).
 
 # 9.0.6.5  (Allied Bits)
 

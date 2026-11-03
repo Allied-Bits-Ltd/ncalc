@@ -10,13 +10,7 @@ using Assert = Xunit.Assert;
 
 namespace NCalc.Tests;
 
-// The big-number functions set the process-wide BigDecimal.AlwaysTruncate while they run (for seconds with Cosh(300)), which would
-// truncate the exact BigDecimal arithmetic of tests running in parallel, so these tests run alone
-[CollectionDefinition(nameof(BigNumberFunctionCollection), DisableParallelization = true)]
-public sealed class BigNumberFunctionCollection;
-
 [Trait("Category", "Math")]
-[Collection(nameof(BigNumberFunctionCollection))]
 public class MathFunctionAudit5Tests : TestBase
 {
     private static readonly MathHelperOptions BigOptions = new(CultureInfo.InvariantCulture, ExpressionOptions.UseBigNumbers);
