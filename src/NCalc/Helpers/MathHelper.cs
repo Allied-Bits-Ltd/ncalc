@@ -1034,7 +1034,7 @@ public static class MathHelper
     private static object PercentOfBigNumberAndDouble(object a, object b, ArithmeticOperation operation, MathHelperOptions options)
     {
         static BigDecimal ToExact(object value)
-            => value is double or float ? ToShortestBigDecimal(Convert.ToDouble(value, CultureInfo.InvariantCulture)) : ConvertToBigDecimal(value);
+            => value is double d ? ToShortestBigDecimal(d) : ConvertToBigDecimal(value); // a float with its own shortest text (SingleToBigDecimal)
 
         BigDecimal exactA = ToExact(a);
         BigDecimal exactB = ToExact(b);
@@ -2854,6 +2854,13 @@ public static class MathHelper
             a = TruncateForIntegerDivision(a, options);
             b = TruncateForIntegerDivision(b, options);
 
+            // With UseBigNumbers, a float widened to double (with a double operand) is taken with its own value
+            if (options.UseBigNumbers)
+            {
+                a = FloatingSource(a, originalA);
+                b = FloatingSource(b, originalB);
+            }
+
             // A divisor truncated to zero is a division by zero also for a dividend beyond the range of long, which would otherwise be
             // divided in floating point (1e30 \ 0.5 gave ∞); NaN and infinite dividends keep their IEEE result
             if (!IsNaNOrInfinity(a) && TryGetWholeValue(b, options, out BigInteger truncatedDivisor) && truncatedDivisor.IsZero)
@@ -2883,10 +2890,11 @@ public static class MathHelper
             if (a is decimal decimalA && b is decimal decimalB)
                 return WholeQuotient(FloorDivide(new BigDecimal(decimalA), new BigDecimal(decimalB)), a, b, reduceTypes ? null : t, options);
 
-            // With UseBigNumbers, doubles are divided as the BigDecimals they are converted to
+            // With UseBigNumbers, doubles are divided as the BigDecimals they are converted to (a float with its own value, not that of
+            // the double it was widened to: 1e-30f is 1E-30, not 1.0000000031710769E-30)
             if (options.UseBigNumbers && a is double or float && b is double or float && !IsNaNOrInfinity(a) && !IsNaNOrInfinity(b)
                 && Convert.ToDouble(b, options.CultureInfo) != 0)
-                return WholeQuotient(FloorDivide(ConvertToBigDecimal(a), ConvertToBigDecimal(b)), a, b, reduceTypes ? null : t, options);
+                return WholeQuotient(FloorDivide(ConvertToBigDecimal(FloatingSource(a, originalA)), ConvertToBigDecimal(FloatingSource(b, originalB))), a, b, reduceTypes ? null : t, options);
         }
 
         //var func = options.OverflowProtection ? DivideFuncChecked : DivideFunc;
@@ -3151,6 +3159,19 @@ public static class MathHelper
         }
     }
 
+    // A long or ulong that a double cannot hold exactly (beyond ±2^53); smaller integer types always fit
+    internal static bool IsIntegerBeyondDouble(object? value) => value switch
+    {
+        long l => l < -9007199254740992L || l > 9007199254740992L,
+        ulong ul => ul > 9007199254740992UL,
+        _ => false
+    };
+
+    // The operand to convert to BigDecimal: a finite float that ConvertToHighestPrecision widened to double (paired with a double) keeps
+    // its own value, the shortest text of the float (SingleToBigDecimal), not that of the double it became
+    private static object FloatingSource(object converted, object original)
+        => converted is double && original is float f && !float.IsNaN(f) && !float.IsInfinity(f) && (double)f == (double)converted ? original : converted;
+
     // With UseBigNumbers, an integer divided by a finite double or float is divided as BigDecimals; converting a 64-bit integer to double first,
     // as other operations with such a pair do, would lose its last digits (long.MaxValue / 7.5)
     private static bool TryConvertIntegerAndFloatingToBigDecimal(ref object a, ref object b, MathHelperOptions options, bool floatingDividend)
@@ -3258,7 +3279,11 @@ public static class MathHelper
         a = ConvertIfNeeded(a, "%", options);
         b = ConvertIfNeeded(b, "%", options);
 
-        TypeCode typeCode = ConvertToHighestPrecision(ref a, ref b, false, options, out var typesWereExpanded);
+        // With UseBigNumbers, an integer that a double cannot hold (beyond ±2^53) with a finite double or float is computed exactly as
+        // BigDecimals, as "/", "//" and "\" do; converting the integer to double would change it (9007199254740993 % 7.5 is 3, not 2)
+        TypeCode typeCode = (IsIntegerBeyondDouble(a) || IsIntegerBeyondDouble(b)) && TryConvertIntegerAndFloatingToBigDecimal(ref a, ref b, options, true)
+            ? TypeCode.Object
+            : ConvertToHighestPrecision(ref a, ref b, false, options, out _);
 
         if (typeCode == TypeCode.Empty)
             throw new InvalidOperationException(
@@ -4864,8 +4889,8 @@ public static class MathHelper
     internal static readonly BigDecimal SingleMaxValueAsBigDecimal = SingleToBigDecimal(float.MaxValue);
     internal static readonly BigDecimal SingleMinValueAsBigDecimal = SingleToBigDecimal(float.MinValue);
 
-    // Reads the invariant text of a finite double or float ("-1.5E+40", "0.001") as a BigDecimal
-    private static BigDecimal ParseInvariantBigDecimal(string text)
+    // Reads an invariant number text ("-1.5E+40", "0.001"), such as that of a finite double or float, as a BigDecimal, without the culture-dependent BigDecimal.Parse
+    internal static BigDecimal ParseInvariantBigDecimal(string text)
     {
         int exponent = 0;
         int exponentIndex = text.IndexOfAny(['E', 'e']);
@@ -5049,18 +5074,18 @@ public static class MathHelper
         if (absX > absY)
         {
             BigDecimal ratio = absY / absX;
-            BigDecimal result = absX * ConvertToBigDecimal(Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!);
+            BigDecimal result = absX * ConvertToBigDecimal(Sqrt(BigDecimal.One + ratio * ratio, options)!);
             return result;
         }
 
-        if (absY > 0.0)
+        if (absY.IsPositive())
         {
             BigDecimal ratio = absX / absY;
-            BigDecimal result = absY * ConvertToBigDecimal(Sqrt(new BigDecimal(1.0) + ratio * ratio, options)!);
+            BigDecimal result = absY * ConvertToBigDecimal(Sqrt(BigDecimal.One + ratio * ratio, options)!);
             return result;
         }
 
-        return 0.0;
+        return BigDecimal.Zero;
     }
 
     /// <summary>
@@ -6147,8 +6172,8 @@ public static class MathHelper
             case uint value: return a * value;
             case long value: return a * value;
             case ulong value: return a * value;
-            case float value: return a * value;
-            case double value: return a * value;
+            case float value: return a * SingleToBigDecimal(value);
+            case double value: return a * DoubleToBigDecimal(value);
             case decimal value: return a * value;
             case BigInteger value: return a * new BigDecimal(value);
             case BigDecimal value: return a * value;
@@ -6197,8 +6222,8 @@ public static class MathHelper
             case uint value: return a + value;
             case long value: return a + value;
             case ulong value: return a + value;
-            case float value: return a + value;
-            case double value: return a + value;
+            case float value: return a + SingleToBigDecimal(value);
+            case double value: return a + DoubleToBigDecimal(value);
             case decimal value: return a + value;
             case BigInteger value: return a + new BigDecimal(value);
             case BigDecimal value: return a + value;
@@ -6237,8 +6262,8 @@ public static class MathHelper
             case uint value: return a - value;
             case long value: return a - value;
             case ulong value: return a - value;
-            case float value: return a - value;
-            case double value: return a - value;
+            case float value: return a - SingleToBigDecimal(value);
+            case double value: return a - DoubleToBigDecimal(value);
             case decimal value: return a - value;
             case BigInteger value: return a - new BigDecimal(value);
             case BigDecimal value: return a - value;
@@ -6377,8 +6402,8 @@ public static class MathHelper
             case uint value: return a / value;
             case long value: return a / value;
             case ulong value: return a / value;
-            case float value: return a / value;
-            case double value: return a / value;
+            case float value: return a / SingleToBigDecimal(value);
+            case double value: return a / DoubleToBigDecimal(value);
             case decimal value: return a / value;
             case BigInteger value: return a / new BigDecimal(value);
             case BigDecimal value: return a / value;

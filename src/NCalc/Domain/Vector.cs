@@ -535,7 +535,7 @@ namespace NCalc.Domain
 
         /// <summary>Creates an NCalc <see cref="Vector"/> from a <see cref="Vector2"/>.</summary>
         public static Vector FromVector2(Vector2 v, MathHelperOptions options = default) =>
-            new Vector(new BigDecimal[] { new BigDecimal((double)v.X), new BigDecimal((double)v.Y) }, options);
+            new Vector(new BigDecimal[] { MathHelper.SingleToBigDecimal(v.X), MathHelper.SingleToBigDecimal(v.Y) }, options);
 
         /// <summary>Explicitly converts an NCalc <see cref="Vector"/> to a <see cref="Vector2"/>.</summary>
         public static explicit operator Vector2(Vector v) => v.ToVector2();
@@ -565,9 +565,9 @@ namespace NCalc.Domain
         public static Vector FromVector3(Vector3 v, MathHelperOptions options = default) =>
             new Vector(new BigDecimal[]
             {
-                new BigDecimal((double)v.X),
-                new BigDecimal((double)v.Y),
-                new BigDecimal((double)v.Z)
+                MathHelper.SingleToBigDecimal(v.X),
+                MathHelper.SingleToBigDecimal(v.Y),
+                MathHelper.SingleToBigDecimal(v.Z)
             }, options);
 
         /// <summary>Explicitly converts an NCalc <see cref="Vector"/> to a <see cref="Vector3"/>.</summary>
@@ -599,10 +599,10 @@ namespace NCalc.Domain
         public static Vector FromVector4(Vector4 v, MathHelperOptions options = default) =>
             new Vector(new BigDecimal[]
             {
-                new BigDecimal((double)v.X),
-                new BigDecimal((double)v.Y),
-                new BigDecimal((double)v.Z),
-                new BigDecimal((double)v.W)
+                MathHelper.SingleToBigDecimal(v.X),
+                MathHelper.SingleToBigDecimal(v.Y),
+                MathHelper.SingleToBigDecimal(v.Z),
+                MathHelper.SingleToBigDecimal(v.W)
             }, options);
 
         /// <summary>Explicitly converts an NCalc <see cref="Vector"/> to a <see cref="Vector4"/>.</summary>
@@ -660,7 +660,13 @@ namespace NCalc.Domain
 
             var components = new BigDecimal[count];
             for (int i = 0; i < count; i++)
-                components[i] = new BigDecimal(Convert.ToDouble(buffer[i]));
+            {
+                // The exact value of an integer, the shortest value of a float or double (not through the culture-dependent conversion)
+                object value = buffer[i];
+                components[i] = value is nint or nuint
+                    ? new BigDecimal(value is nint signedValue ? new BigInteger((long)signedValue) : new BigInteger((ulong)(nuint)value))
+                    : MathHelper.ConvertToBigDecimal(value);
+            }
 
             return new Vector(components, options);
         }
@@ -724,7 +730,7 @@ namespace NCalc.Domain
 
         public bool Equals(Vector a, Vector b)
         {
-            double tol = _tolerance ?? Vector.Tolerance;
+            BigDecimal tol = MathHelper.DoubleToBigDecimal(_tolerance ?? Vector.Tolerance);
             if (a.Dimensions != b.Dimensions) return false;
             for (int i = 0; i < a.Dimensions; i++)
             {

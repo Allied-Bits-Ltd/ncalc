@@ -55,7 +55,7 @@ namespace NCalc.Domain
 
         public static implicit operator ComplexNumber(double value)
         {
-            return new ComplexNumber(value, 0.0);
+            return new ComplexNumber(MathHelper.DoubleToBigDecimal(value), BigDecimal.Zero);
         }
 
         public ComplexNumber(BigDecimal real, MathHelperOptions options)
@@ -168,15 +168,16 @@ namespace NCalc.Domain
             if (divisor == 0.0)
                 throw new NCalcEvaluationException("Cannot divide a complex number by zero.");
 
-            BigDecimal real = value.Real / divisor;
-            BigDecimal imaginary = value.Imaginary / divisor;
+            BigDecimal bigDivisor = MathHelper.DoubleToBigDecimal(divisor);
+            BigDecimal real = value.Real / bigDivisor;
+            BigDecimal imaginary = value.Imaginary / bigDivisor;
 
             return new ComplexNumber(real, imaginary);
         }
 
         public static ComplexNumber operator /(ComplexNumber value, BigDecimal divisor)
         {
-            if (divisor == 0.0)
+            if (divisor.IsZero())
                 throw new NCalcEvaluationException("Cannot divide a complex number by zero.");
 
             BigDecimal real = value.Real / divisor;
@@ -187,42 +188,45 @@ namespace NCalc.Domain
 
         public static ComplexNumber operator /(double scalar, ComplexNumber value)
         {
-            return new ComplexNumber(scalar, 0.0) / value;
+            return new ComplexNumber(MathHelper.DoubleToBigDecimal(scalar), BigDecimal.Zero) / value;
         }
 
         public static ComplexNumber operator /(BigDecimal scalar, ComplexNumber value)
         {
-            return new ComplexNumber(scalar, 0.0) / value;
+            return new ComplexNumber(scalar, BigDecimal.Zero) / value;
         }
 
+        // The double operands are converted with MathHelper.DoubleToBigDecimal: the implicit conversion of ExtendedNumerics depends on the culture
         public static ComplexNumber operator +(ComplexNumber z, double r)
         {
-            return new ComplexNumber(z.Real + r, z.Imaginary);
+            return new ComplexNumber(z.Real + MathHelper.DoubleToBigDecimal(r), z.Imaginary);
         }
 
         public static ComplexNumber operator +(double r, ComplexNumber z)
         {
-            return new ComplexNumber(r + z.Real, z.Imaginary);
+            return new ComplexNumber(MathHelper.DoubleToBigDecimal(r) + z.Real, z.Imaginary);
         }
 
         public static ComplexNumber operator -(ComplexNumber z, double r)
         {
-            return new ComplexNumber(z.Real - r, z.Imaginary);
+            return new ComplexNumber(z.Real - MathHelper.DoubleToBigDecimal(r), z.Imaginary);
         }
 
         public static ComplexNumber operator -(double r, ComplexNumber z)
         {
-            return new ComplexNumber(r - z.Real, -z.Imaginary);
+            return new ComplexNumber(MathHelper.DoubleToBigDecimal(r) - z.Real, -z.Imaginary);
         }
 
         public static ComplexNumber operator *(ComplexNumber z, double r)
         {
-            return new ComplexNumber(z.Real * r, z.Imaginary * r);
+            BigDecimal factor = MathHelper.DoubleToBigDecimal(r);
+            return new ComplexNumber(z.Real * factor, z.Imaginary * factor);
         }
 
         public static ComplexNumber operator *(double r, ComplexNumber z)
         {
-            return new ComplexNumber(r * z.Real, r * z.Imaginary);
+            BigDecimal factor = MathHelper.DoubleToBigDecimal(r);
+            return new ComplexNumber(factor * z.Real, factor * z.Imaginary);
         }
 
         public static ComplexNumber operator +(ComplexNumber z, BigDecimal r)
@@ -266,7 +270,8 @@ namespace NCalc.Domain
             if (Imaginary.IsZero())
                 return true;
 
-            if ((Imaginary.IsPositive() && Imaginary > Tolerance) || (Imaginary < -Tolerance))
+            BigDecimal tolerance = MathHelper.DoubleToBigDecimal(Tolerance);
+            if ((Imaginary.IsPositive() && Imaginary > tolerance) || (Imaginary < -tolerance))
                 return false;
 
             return true;
@@ -375,10 +380,11 @@ namespace NCalc.Domain
                 return Zero;
 
             BigDecimal magnitude = value.Magnitude;
-            BigDecimal realPart = MathHelper.ConvertToBigDecimal(MathHelper.Sqrt((magnitude + value.Real) / 2.0, options)!);
-            BigDecimal imaginaryPart = MathHelper.ConvertToBigDecimal(MathHelper.Sqrt((magnitude - value.Real) / 2.0, options)!);
+            BigDecimal two = new(2);
+            BigDecimal realPart = MathHelper.ConvertToBigDecimal(MathHelper.Sqrt((magnitude + value.Real) / two, options)!);
+            BigDecimal imaginaryPart = MathHelper.ConvertToBigDecimal(MathHelper.Sqrt((magnitude - value.Real) / two, options)!);
 
-            if (value.Imaginary < 0.0)
+            if (value.Imaginary.IsNegative())
                 imaginaryPart = -imaginaryPart;
 
             return new ComplexNumber(realPart, imaginaryPart);
@@ -402,7 +408,7 @@ namespace NCalc.Domain
 
         public static ComplexNumber Log(ComplexNumber value, MathHelperOptions options)
         {
-            if (value.Real == 0.0 && value.Imaginary == 0.0)
+            if (value.Real.IsZero() && value.Imaginary.IsZero())
                 throw new NCalcEvaluationException("The logarithm of zero is undefined.");
 
             BigDecimal magnitude = value.Magnitude;
@@ -416,7 +422,7 @@ namespace NCalc.Domain
 
         public static ComplexNumber Log(ComplexNumber value, BigDecimal baseValue, MathHelperOptions options)
         {
-            if (baseValue.IsNegative() || baseValue.IsZero() || baseValue == 1.0)
+            if (baseValue.IsNegative() || baseValue.IsZero() || baseValue == BigDecimal.One)
                 throw new NCalcEvaluationException("The logarithm base must be positive and not equal to 1.");
 
             ComplexNumber naturalLog = Log(value, options);
@@ -465,7 +471,7 @@ namespace NCalc.Domain
 
         public static ComplexNumber Pow(ComplexNumber value, BigDecimal power, MathHelperOptions options)
         {
-            ComplexNumber complexPower = new ComplexNumber(power, 0.0);
+            ComplexNumber complexPower = new ComplexNumber(power, BigDecimal.Zero);
             ComplexNumber result = Pow(value, complexPower, options);
             return result;
         }
@@ -749,7 +755,7 @@ namespace NCalc.Domain
 
         public bool Equals(ComplexNumber a, ComplexNumber b)
         {
-            double tol = _tolerance ?? ComplexNumber.Tolerance;
+            BigDecimal tol = MathHelper.DoubleToBigDecimal(_tolerance ?? ComplexNumber.Tolerance);
 
             BigDecimal diff = a.Real - b.Real;
             if ((diff.IsPositive() && diff > tol) || (diff < -tol))

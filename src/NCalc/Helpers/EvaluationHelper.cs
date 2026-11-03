@@ -453,6 +453,26 @@ public static class EvaluationHelper
         return result;
     }
 
+    /// <summary>
+    /// Divides the value of a percent by a number (a% / b) as the "/" operator does, for the evaluators: when
+    /// <paramref name="convertDividendToDouble"/> is set, the value of the percent is converted to double, which decides the result type.
+    /// When an integer percent is divided by an integer and a double cannot hold one of them (beyond 2^53), the value is computed from
+    /// the exact integers, as for <see cref="DivideAsOperator"/> (the nearest double, or a whole quotient with ReduceDivResultToInteger).
+    /// </summary>
+    internal static object? DividePercentByNumber(object? percentValue, object? rightValue, bool convertDividendToDouble, ExpressionContextBase context,
+        string operation, Parser.ExpressionLocation location)
+    {
+        if (!convertDividendToDouble)
+            return MathHelper.Divide(percentValue, rightValue, true, context);
+
+        object? integerDividend = percentValue;
+        object? result = MathHelper.Divide(MathHelper.ConvertToDouble(percentValue, operation, context.CultureInfo, location), rightValue, true, context);
+        if (MathHelper.IsBoxedIntegerNumber(integerDividend) && MathHelper.IsBoxedIntegerNumber(rightValue)
+            && (!IsExactAsDouble(integerDividend!) || !IsExactAsDouble(rightValue!)))
+            return MathHelper.ExactIntegerQuotient(result, integerDividend!, rightValue!, context);
+        return result;
+    }
+
     // Integers up to 2^53 are exact as doubles
     private static bool IsExactAsDouble(object integer) => integer switch
     {

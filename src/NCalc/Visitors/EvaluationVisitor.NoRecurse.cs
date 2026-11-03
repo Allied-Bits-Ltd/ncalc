@@ -295,11 +295,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         }
                         if (leftValue is Percent lValPercent)
                         {
-                            leftValue = lValPercent.Value;
-                            if (!noConvertToDouble)
-                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
-
-                            object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                            object? result = EvaluationHelper.DividePercentByNumber(lValPercent.Value, rightValue, !noConvertToDouble, context, "Div with assignment", expression.LeftExpression.Location);
                             if (result is null)
                                 return SetTaskValue(task, null);
 
@@ -480,11 +476,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         else
                         if (leftValue is Percent lValPercent)
                         {
-                            leftValue = lValPercent.Value;
-                            if (!noConvertToDouble)
-                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.LeftExpression.Location);
-
-                            object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                            object? result = EvaluationHelper.DividePercentByNumber(lValPercent.Value, rightValue, !noConvertToDouble, context, "Div", expression.LeftExpression.Location);
                             if (result is null)
                                 return SetTaskValue(task, null);
 

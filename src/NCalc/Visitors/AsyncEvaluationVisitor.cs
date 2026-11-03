@@ -345,11 +345,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         }
                         if (lval is Percent lValPercent)
                         {
-                            leftValue = lValPercent.Value;
-                            if (!noConvertToDouble)
-                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
-
-                            object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                            object? result = EvaluationHelper.DividePercentByNumber(lValPercent.Value, rightValue, !noConvertToDouble, context, "Div with assignment", expression.LeftExpression.Location);
                             if (result is null)
                                 return null;
 
@@ -513,11 +509,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         }
                         if (lval is Percent lValPercent)
                         {
-                            leftValue = lValPercent.Value;
-                            if (!noConvertToDouble)
-                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
-
-                            object? result = MathHelper.Divide(leftValue, rightValue, true, context);
+                            object? result = EvaluationHelper.DividePercentByNumber(lValPercent.Value, rightValue, !noConvertToDouble, context, "Div", expression.Location);
                             if (result is null)
                                 return null;
 

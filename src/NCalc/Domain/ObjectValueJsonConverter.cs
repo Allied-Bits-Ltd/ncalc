@@ -374,7 +374,8 @@ public sealed class ObjectValueJsonConverter : JsonConverter<object?>
                     CultureInfo.InvariantCulture);
 
             case nameof(BigDecimal):
-                return BigDecimal.Parse(RequireString(typeName, text), CultureInfo.InvariantCulture);
+                // BigDecimal.Parse depends on the current culture even with the invariant culture ("-1.5E-30" fails under fa-IR)
+                return NCalc.Helpers.MathHelper.ParseInvariantBigDecimal(RequireString(typeName, text));
 
             case nameof(Guid):
                 return Guid.Parse(RequireString(typeName, text));
