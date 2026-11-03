@@ -91,8 +91,9 @@ namespace NCalc.Domain
         {
             get
             {
+                // The square root is a double unless the options have UseBigNumbers
                 BigDecimal sumOfSquares = _components.Aggregate(BigDecimal.Zero, (sum, c) => sum + c * c);
-                return (BigDecimal)MathHelper.Sqrt(sumOfSquares, _mathHelperOptions)!;
+                return MathHelper.ConvertToBigDecimal(MathHelper.Sqrt(sumOfSquares, _mathHelperOptions)!);
             }
         }
 
@@ -148,7 +149,7 @@ namespace NCalc.Domain
 
         public static Vector operator *(Vector v, double scalar)
         {
-            BigDecimal s = new BigDecimal(scalar);
+            BigDecimal s = ToComponentValue(scalar);
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
                 result[i] = v[i] * s;
@@ -160,7 +161,7 @@ namespace NCalc.Domain
         public static Vector operator /(Vector v, BigDecimal scalar)
         {
             if (scalar.IsZero())
-                throw new DivideByZeroException("Cannot divide a vector by zero.");
+                throw new NCalcEvaluationException("Cannot divide a vector by zero.");
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
                 result[i] = v[i] / scalar;
@@ -170,8 +171,8 @@ namespace NCalc.Domain
         public static Vector operator /(Vector v, double scalar)
         {
             if (scalar == 0.0)
-                throw new DivideByZeroException("Cannot divide a vector by zero.");
-            BigDecimal s = new BigDecimal(scalar);
+                throw new NCalcEvaluationException("Cannot divide a vector by zero.");
+            BigDecimal s = ToComponentValue(scalar);
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
                 result[i] = v[i] / s;
@@ -183,6 +184,8 @@ namespace NCalc.Domain
         /// <summary>Element-wise modulo: each component mod a scalar (remainder of a truncated division, as with the scalar % operator).</summary>
         public static Vector operator %(Vector v, BigDecimal scalar)
         {
+            if (scalar.IsZero())
+                throw new NCalcEvaluationException("Cannot compute the remainder of a vector divided by zero.");
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
                 result[i] = MathHelper.Remainder(v[i], scalar);
@@ -195,70 +198,102 @@ namespace NCalc.Domain
             CheckDimensions(a, b, "modulo");
             var result = new BigDecimal[a.Dimensions];
             for (int i = 0; i < a.Dimensions; i++)
+            {
+                if (b[i].IsZero())
+                    throw new NCalcEvaluationException("Cannot compute the remainder of a vector divided by zero.");
                 result[i] = MathHelper.Remainder(a[i], b[i]);
+            }
             return new Vector(result, a._mathHelperOptions);
         }
 
         // ── Bitwise operators ────────────────────────────────────────────────────
-        // All bitwise operations use the integer (whole-value) part of each component.
+        // The components are integers in two's complement, as the operands of the scalar operators; a component with a
+        // fractional part throws NCalcEvaluationException.
 
         /// <summary>Element-wise bitwise AND of two same-dimension vectors.</summary>
+        /// <exception cref="NCalcEvaluationException">A component is not a whole number.</exception>
         public static Vector operator &(Vector a, Vector b)
         {
             CheckDimensions(a, b, "bitwise AND");
             var result = new BigDecimal[a.Dimensions];
             for (int i = 0; i < a.Dimensions; i++)
-                result[i] = new BigDecimal(a[i].WholeValue & b[i].WholeValue);
+                result[i] = new BigDecimal(WholeComponent(a[i], "Bitwise And") & WholeComponent(b[i], "Bitwise And"));
             return new Vector(result, a._mathHelperOptions);
         }
 
         /// <summary>Element-wise bitwise OR of two same-dimension vectors.</summary>
+        /// <exception cref="NCalcEvaluationException">A component is not a whole number.</exception>
         public static Vector operator |(Vector a, Vector b)
         {
             CheckDimensions(a, b, "bitwise OR");
             var result = new BigDecimal[a.Dimensions];
             for (int i = 0; i < a.Dimensions; i++)
-                result[i] = new BigDecimal(a[i].WholeValue | b[i].WholeValue);
+                result[i] = new BigDecimal(WholeComponent(a[i], "Bitwise Or") | WholeComponent(b[i], "Bitwise Or"));
             return new Vector(result, a._mathHelperOptions);
         }
 
         /// <summary>Element-wise bitwise XOR of two same-dimension vectors.</summary>
+        /// <exception cref="NCalcEvaluationException">A component is not a whole number.</exception>
         public static Vector operator ^(Vector a, Vector b)
         {
             CheckDimensions(a, b, "bitwise XOR");
             var result = new BigDecimal[a.Dimensions];
             for (int i = 0; i < a.Dimensions; i++)
-                result[i] = new BigDecimal(a[i].WholeValue ^ b[i].WholeValue);
+                result[i] = new BigDecimal(WholeComponent(a[i], "Bitwise XOr") ^ WholeComponent(b[i], "Bitwise XOr"));
             return new Vector(result, a._mathHelperOptions);
         }
 
         /// <summary>Element-wise bitwise NOT (ones complement) of each component.</summary>
+        /// <exception cref="NCalcEvaluationException">A component is not a whole number.</exception>
         public static Vector operator ~(Vector v)
         {
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
-                result[i] = new BigDecimal(~v[i].WholeValue);
+                result[i] = new BigDecimal(~WholeComponent(v[i], "Bitwise Not"));
             return new Vector(result, v._mathHelperOptions);
         }
 
         // ── Shift operators ──────────────────────────────────────────────────────
 
         /// <summary>Element-wise left shift of each component by <paramref name="shift"/> bits.</summary>
-        public static Vector operator <<(Vector v, int shift)
+        /// <exception cref="NCalcEvaluationException">A component is not a whole number, the count is negative or a result exceeds MathHelper.MaxPowResultDigits digits.</exception>
+        public static Vector operator <<(Vector v, int shift) => Shift(v, shift, true, v._mathHelperOptions);
+
+        /// <summary>Element-wise right shift of each component by <paramref name="shift"/> bits.</summary>
+        /// <exception cref="NCalcEvaluationException">A component is not a whole number or the count is negative.</exception>
+        public static Vector operator >>(Vector v, int shift) => Shift(v, shift, false, v._mathHelperOptions);
+
+        // Shifts each component as a big integer is shifted by the scalar operators: the count is a whole number from 0 to
+        // int.MaxValue, and a left shift may not give more than MathHelper.MaxPowResultDigits digits
+        internal static Vector Shift(Vector v, object count, bool left, MathHelperOptions options)
         {
+            string operation = left ? "Left Shift" : "Right Shift";
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
-                result[i] = new BigDecimal(v[i].WholeValue << shift);
+            {
+                BigInteger component = WholeComponent(v[i], operation);
+                BigInteger? shifted = left ? MathHelper.LeftShift(component, count, options) : MathHelper.RightShift(component, count, options);
+                result[i] = new BigDecimal(shifted!.Value);
+            }
             return new Vector(result, v._mathHelperOptions);
         }
 
-        /// <summary>Element-wise right shift of each component by <paramref name="shift"/> bits.</summary>
-        public static Vector operator >>(Vector v, int shift)
+        private static BigInteger WholeComponent(BigDecimal component, string operation)
         {
-            var result = new BigDecimal[v.Dimensions];
-            for (int i = 0; i < v.Dimensions; i++)
-                result[i] = new BigDecimal(v[i].WholeValue >> shift);
-            return new Vector(result, v._mathHelperOptions);
+            if (!MathHelper.IsWholeNumber(component))
+                throw new NCalcEvaluationException($"The '{operation}' operation requires integer operands, but the vector component '{component.ToString()}' is not a whole number.");
+            return MathHelper.GetWholeValue(component);
+        }
+
+        /// <summary>
+        /// Converts a number to a vector component (or a scalar operand of a vector operation). NaN and the infinities have no
+        /// BigDecimal value and throw NCalcEvaluationException.
+        /// </summary>
+        internal static BigDecimal ToComponentValue(object value)
+        {
+            if ((value is double d && (double.IsNaN(d) || double.IsInfinity(d))) || (value is float f && (float.IsNaN(f) || float.IsInfinity(f))))
+                throw new NCalcEvaluationException($"A vector component cannot be {Convert.ToString(value, CultureInfo.InvariantCulture)}");
+            return MathHelper.ConvertToBigDecimal(value);
         }
 
         // ── Common vector operations ─────────────────────────────────────────────
@@ -312,7 +347,7 @@ namespace NCalc.Domain
             if (cosTheta > BigDecimal.One) cosTheta = BigDecimal.One;
             if (cosTheta < -BigDecimal.One) cosTheta = -BigDecimal.One;
 
-            return (BigDecimal)MathHelper.Acos(cosTheta, options)!;
+            return MathHelper.ConvertToBigDecimal(MathHelper.Acos(cosTheta, options)!);
         }
 
         /// <summary>Vector projection of <paramref name="a"/> onto <paramref name="b"/>.</summary>
@@ -362,39 +397,47 @@ namespace NCalc.Domain
         }
 
         /// <summary>Element-wise absolute value.</summary>
-        public static Vector Abs(Vector v)
+        public static Vector Abs(Vector v) => Abs(v, v._mathHelperOptions);
+
+        internal static Vector Abs(Vector v, MathHelperOptions options)
         {
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
-                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Abs(v[i], v._mathHelperOptions));
-            return new Vector(result, v._mathHelperOptions);
+                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Abs(v[i], options));
+            return new Vector(result, options);
         }
 
         /// <summary>Element-wise floor.</summary>
-        public static Vector Floor(Vector v)
+        public static Vector Floor(Vector v) => Floor(v, v._mathHelperOptions);
+
+        internal static Vector Floor(Vector v, MathHelperOptions options)
         {
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
-                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Floor(v[i], v._mathHelperOptions));
-            return new Vector(result, v._mathHelperOptions);
+                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Floor(v[i], options));
+            return new Vector(result, options);
         }
 
         /// <summary>Element-wise ceiling.</summary>
-        public static Vector Ceiling(Vector v)
+        public static Vector Ceiling(Vector v) => Ceiling(v, v._mathHelperOptions);
+
+        internal static Vector Ceiling(Vector v, MathHelperOptions options)
         {
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
-                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Ceiling(v[i], v._mathHelperOptions));
-            return new Vector(result, v._mathHelperOptions);
+                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Ceiling(v[i], options));
+            return new Vector(result, options);
         }
 
         /// <summary>Element-wise truncation toward zero.</summary>
-        public static Vector Truncate(Vector v)
+        public static Vector Truncate(Vector v) => Truncate(v, v._mathHelperOptions);
+
+        internal static Vector Truncate(Vector v, MathHelperOptions options)
         {
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
-                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Truncate(v[i], v._mathHelperOptions));
-            return new Vector(result, v._mathHelperOptions);
+                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Truncate(v[i], options));
+            return new Vector(result, options);
         }
 
         /// <summary>Element-wise sign (-1, 0 or 1).</summary>
@@ -408,22 +451,26 @@ namespace NCalc.Domain
 
         /// <summary>Element-wise square root.</summary>
         /// <exception cref="NCalcEvaluationException">A component is negative.</exception>
-        public static Vector Sqrt(Vector v)
+        public static Vector Sqrt(Vector v) => Sqrt(v, v._mathHelperOptions);
+
+        internal static Vector Sqrt(Vector v, MathHelperOptions options)
         {
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
-                result[i] = ToComponent(MathHelper.Sqrt(v[i], v._mathHelperOptions), "Sqrt");
-            return new Vector(result, v._mathHelperOptions);
+                result[i] = ToComponent(MathHelper.Sqrt(v[i], options), "Sqrt");
+            return new Vector(result, options);
         }
 
         /// <summary>Element-wise power with a scalar exponent.</summary>
         /// <exception cref="NCalcEvaluationException">A power is not a finite real number.</exception>
-        public static Vector Pow(Vector v, object exponent)
+        public static Vector Pow(Vector v, object exponent) => Pow(v, exponent, v._mathHelperOptions);
+
+        internal static Vector Pow(Vector v, object exponent, MathHelperOptions options)
         {
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
-                result[i] = ToComponent(MathHelper.Pow(v[i], exponent, true, v._mathHelperOptions), "Pow");
-            return new Vector(result, v._mathHelperOptions);
+                result[i] = ToComponent(MathHelper.Pow(v[i], exponent, true, options), "Pow");
+            return new Vector(result, options);
         }
 
         // A component is a finite real number; NaN (Sqrt of a negative component) and infinities cannot be stored
@@ -438,12 +485,14 @@ namespace NCalc.Domain
         public static Vector Round(Vector v) => Round(v, 0, MidpointRounding.AwayFromZero);
 
         /// <summary>Element-wise rounding to the given number of decimal places.</summary>
-        public static Vector Round(Vector v, int digits, MidpointRounding rounding)
+        public static Vector Round(Vector v, int digits, MidpointRounding rounding) => Round(v, digits, rounding, v._mathHelperOptions);
+
+        internal static Vector Round(Vector v, int digits, MidpointRounding rounding, MathHelperOptions options)
         {
             var result = new BigDecimal[v.Dimensions];
             for (int i = 0; i < v.Dimensions; i++)
-                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Round(v[i], digits, rounding, v._mathHelperOptions));
-            return new Vector(result, v._mathHelperOptions);
+                result[i] = MathHelper.ConvertToBigDecimal(MathHelper.Round(v[i], digits, rounding, options));
+            return new Vector(result, options);
         }
 
         /// <summary>Returns the vector with the largest magnitude.</summary>

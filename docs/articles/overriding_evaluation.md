@@ -23,6 +23,14 @@ private class CustomVisitor(ExpressionContext context) : EvaluationVisitor(conte
 }
 ```
 
+The visitor created by the factory also evaluates the arguments of functions (including `if()` and `ifs()`) and the
+bodies and arguments of `fn` functions.
+
+The non-recursive evaluator (`ExpressionOptions.UseNonRecursiveEvaluator`) calls the
+`Visit(..., ExpressionTask<object?> task, ...)` overloads (`ExpressionTask<ValueTask<object?>>` in
+`AsyncEvaluationVisitor`) instead. Override them as well, and set the result with `SetTaskValue(task, value)`, for the
+custom behavior to apply with that option.
+
 ## Custom Evaluation Visitor Factory
 
 To integrate the custom visitor with NCalc, implement the `IEvaluationVisitorFactory` interface:

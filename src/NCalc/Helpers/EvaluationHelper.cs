@@ -120,8 +120,17 @@ public static class EvaluationHelper
         if (Parser.LogicalExpressionParser.DeepExpressionStackSize <= 0)
             throw new NCalcEvaluationException(ExpressionTooDeepNonRecursiveMessage, expression.Location);
 
+        if (ThreadPoolContinuation.Value is { } continuedOnThreadPool)
+            continuedOnThreadPool.Value = true;
         return await Task.Run(() => evaluate().AsTask()).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Set by the outermost asynchronous evaluation: whether a part of it continued on a thread pool thread
+    /// (<see cref="EvaluateOnThreadPoolAsync"/>). The awaiting methods of the nested parts then resume one inside another on the stack of
+    /// the thread that finished last, so the outermost evaluation continues on a fresh stack before it returns to its caller.
+    /// </summary>
+    internal static readonly AsyncLocal<StrongBox<bool>?> ThreadPoolContinuation = new();
 
     // The number of asynchronous evaluations that an exception has come out of
     private static readonly ConditionalWeakTable<Exception, StrongBox<int>> AsyncEvaluationExits = new();
@@ -140,6 +149,38 @@ public static class EvaluationHelper
     {
         var exits = Interlocked.Increment(ref AsyncEvaluationExits.GetOrCreateValue(exception).Value);
         return exits > EvaluationsWithFullStackTrace && exits % 4 == 0;
+    }
+
+    /// <summary>
+    /// A "break" or "continue" that leaves the body of a user function outside a loop of that body. The function call is a boundary,
+    /// so it does not act on a loop of the caller: it is the same error as a "break" or "continue" outside any loop at the top level.
+    /// </summary>
+    internal static NCalcEvaluationException FlowControlOutsideLoop(NCalcFlowControl flowControl)
+    {
+        return new NCalcEvaluationException(flowControl.Message, flowControl.Location);
+    }
+
+    /// <summary>
+    /// The position of the element that an indexed assignment with an <see cref="NCalc.Domain.Index"/> (<c>l[^1] := 7</c>) changes in
+    /// <paramref name="container"/>, the current value of the parameter: a from-end index counts from the end of the list or string,
+    /// as in reading <c>l[^1]</c>.
+    /// </summary>
+    internal static int GetIndexToUpdate(object? container, string identifierName, NCalc.Domain.Index index,
+        Parser.ExpressionLocation containerLocation, Parser.ExpressionLocation indexLocation)
+    {
+        int length = container switch
+        {
+            null => throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not set and cannot be assigned to by index", containerLocation),
+            string str => str.Length,
+            IList list => list.Count,
+            _ => throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' is not a list or a string and cannot be assigned to by index", containerLocation)
+        };
+
+        int position = index.IsFromEnd ? length - index.Value : index.Value;
+        if (position < 0 || position >= length)
+            throw new NCalcParameterIndexException(identifierName, $"'{identifierName}' cannot be assigned to by index: its length is {length}, while the index to update is {(index.IsFromEnd ? "^" : string.Empty)}{index.Value}", indexLocation);
+
+        return position;
     }
 
     private const string ExpressionTooDeepToVisitMessage = "The expression is nested too deeply to be processed";
@@ -316,6 +357,59 @@ public static class EvaluationHelper
             || leftValue is TimeSpan);
 
     /// <summary>
+    /// The check of <see cref="ShouldConvertDividendToDouble(object?, object?)"/> for operands that may be percents: the values of the
+    /// percents decide, so that an integer divided by a decimal or big-number percent is not rounded to double.
+    /// </summary>
+    internal static bool ShouldConvertPercentDividendToDouble(object? leftValue, object? rightValue, ExpressionContextBase context)
+    {
+        // An integer divided by a decimal or big-number percent is divided exactly (the percent's value is converted as it is), and so is,
+        // with UseBigNumbers, an integer that a double cannot hold (beyond 2^53); other percents convert the dividend to double as before
+        if (leftValue is not Percent && MathHelper.IsBoxedIntegerNumber(leftValue) && rightValue is Percent percent
+            && (percent.Value is decimal or BigInteger or BigDecimal
+                || (context.Options.HasFlag(ExpressionOptions.UseBigNumbers) && !IsExactAsDouble(leftValue!))))
+            return false;
+        return ShouldConvertDividendToDouble(leftValue, rightValue);
+    }
+
+    /// <summary>
+    /// Divides the left value by the right value as the "/" operator does: when <see cref="ShouldConvertDividendToDouble(object?, object?)"/>
+    /// says so, the dividend is converted to double. The result of two integers then has the type that this gives, but when a double cannot
+    /// hold an operand (beyond 2^53), its value is computed from the exact integers.
+    /// With UseBigNumbers, a numeric string is read first, so that a big number in a string keeps its digits.
+    /// </summary>
+    internal static object? DivideAsOperator(object? leftValue, object? rightValue, ExpressionContextBase context, string operation, Parser.ExpressionLocation location)
+    {
+        if (context.Options.HasFlag(ExpressionOptions.UseBigNumbers))
+        {
+            if (leftValue is string leftText && MathHelper.TryConvertNumericString(leftText, context, out var leftNumber))
+                leftValue = leftNumber;
+            if (rightValue is string rightText && MathHelper.TryConvertNumericString(rightText, context, out var rightNumber))
+                rightValue = rightNumber;
+        }
+
+        if (ShouldConvertDividendToDouble(leftValue, rightValue))
+        {
+            object? integerDividend = leftValue;
+            leftValue = MathHelper.ConvertToDouble(leftValue, operation, context.CultureInfo, location);
+
+            // Integers that a double holds give the same result as before; a larger one would lose its last digits
+            if (MathHelper.IsBoxedIntegerNumber(integerDividend) && MathHelper.IsBoxedIntegerNumber(rightValue)
+                && (!IsExactAsDouble(integerDividend!) || !IsExactAsDouble(rightValue!)))
+                return MathHelper.ExactIntegerQuotient(Divide(leftValue, rightValue, context), integerDividend!, rightValue!, context);
+        }
+
+        return Divide(leftValue, rightValue, context);
+    }
+
+    // Integers up to 2^53 are exact as doubles
+    private static bool IsExactAsDouble(object integer) => integer switch
+    {
+        long l => l >= -9007199254740992L && l <= 9007199254740992L,
+        ulong ul => ul <= 9007199254740992UL,
+        _ => true
+    };
+
+    /// <summary>
     /// Divides the first value by the second one, with support for timespans as left values.
     /// </summary>
     /// <param name="leftValue">The left operand.</param>
@@ -367,13 +461,16 @@ public static class EvaluationHelper
             case float f:
                 return ticks / (double)f;
             case decimal or BigDecimal:
+                // A zero divisor gives no time span, as the infinity of a floating-point zero divisor
                 BigDecimal bdDivisor = MathHelper.ConvertToBigDecimal(divisor);
                 if (bdDivisor.IsZero())
-                    throw new DivideByZeroException();
+                    throw new NCalcEvaluationException($"The result of the time operation is outside the range of {nameof(TimeSpan)}");
                 return MathHelper.Divide(MathHelper.ConvertToBigDecimal(ticks), (object)bdDivisor);
             default:
                 // Integers are divided exactly, and the remainder decides the rounding
                 BigInteger integerDivisor = MathHelper.ConvertToBigInteger(divisor);
+                if (integerDivisor.IsZero)
+                    throw new NCalcEvaluationException($"The result of the time operation is outside the range of {nameof(TimeSpan)}");
                 BigInteger quotient = BigInteger.DivRem(ticks, integerDivisor, out BigInteger remainder);
                 BigInteger twiceRemainder = BigInteger.Abs(remainder) * 2;
                 BigInteger absDivisor = BigInteger.Abs(integerDivisor);
@@ -426,6 +523,17 @@ public static class EvaluationHelper
     /// <exception cref="NCalcEvaluationException">Thrown when the right value is not an enumerable or a string.</exception>
     public static bool In(object? rightValue, object? leftValue, ExpressionContextBase context)
     {
+        // With StrictTypeMatching, a value is found only among values of its own type, as "=" compares only such values
+        if (context.Options.HasFlag(ExpressionOptions.StrictTypeMatching))
+        {
+            if (rightValue is string)
+                return leftValue is string && Contains(leftValue, (string)rightValue, context);
+            if (rightValue is IEnumerable strictEnumerable)
+                return Contains(leftValue, strictEnumerable.Cast<object?>().Where(item => item?.GetType() == leftValue?.GetType()).ToArray(), context);
+            if (rightValue is not null)
+                return rightValue.GetType() == leftValue?.GetType() && Contains(leftValue, [rightValue], context);
+        }
+
         return rightValue switch
         {
             string rightValueString => Contains(leftValue, rightValueString, context),
@@ -647,11 +755,12 @@ public static class EvaluationHelper
             UnaryExpressionType.BitwiseNot =>
                 (result is NCalcVector vResult) ? ~vResult :
                 MathHelper.BitwiseNot(result, "Bitwise Not", context.CultureInfo, expression.Location),
-            UnaryExpressionType.SqRoot => MathHelper.Sqrt(result, context.CultureInfo),
+            // The roots use the options of the expression (UseBigNumbers ...), as the Sqrt function does (NCALC-409)
+            UnaryExpressionType.SqRoot => MathHelper.Sqrt(result, context),
 #if NET8_0_OR_GREATER
-            UnaryExpressionType.CbRoot => MathHelper.Cbrt(result, context.CultureInfo),
+            UnaryExpressionType.CbRoot => MathHelper.Cbrt(result, context),
 #endif
-            UnaryExpressionType.FourthRoot => MathHelper.Fthrt(result, context.CultureInfo),
+            UnaryExpressionType.FourthRoot => MathHelper.Fthrt(result, context),
             UnaryExpressionType.Positive => result,
             UnaryExpressionType.Return => throw new NCalcFlowControl(result, expression.Location),
             _ => throw new InvalidOperationException("Unknown UnaryExpressionType")

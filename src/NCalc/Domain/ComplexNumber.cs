@@ -20,6 +20,9 @@ namespace NCalc.Domain
     {
         public static double Tolerance { get; set; } = 1e-10;
 
+        // The largest whole exponent (in magnitude) that Pow computes exactly by repeated squaring
+        private const int MaxExactPowerExponent = 64;
+
         public BigDecimal Real { get; }
 
         public BigDecimal Imaginary { get; }
@@ -151,7 +154,7 @@ namespace NCalc.Domain
             BigDecimal denom = b.Real * b.Real + b.Imaginary * b.Imaginary;
 
             if (denom.IsZero())
-                throw new DivideByZeroException();
+                throw new NCalcEvaluationException("Cannot divide a complex number by zero.");
 
             return new ComplexNumber(
                 (a.Real * b.Real + a.Imaginary * b.Imaginary) / denom,
@@ -162,7 +165,7 @@ namespace NCalc.Domain
         public static ComplexNumber operator /(ComplexNumber value, double divisor)
         {
             if (divisor == 0.0)
-                throw new DivideByZeroException();
+                throw new NCalcEvaluationException("Cannot divide a complex number by zero.");
 
             BigDecimal real = value.Real / divisor;
             BigDecimal imaginary = value.Imaginary / divisor;
@@ -173,7 +176,7 @@ namespace NCalc.Domain
         public static ComplexNumber operator /(ComplexNumber value, BigDecimal divisor)
         {
             if (divisor == 0.0)
-                throw new DivideByZeroException();
+                throw new NCalcEvaluationException("Cannot divide a complex number by zero.");
 
             BigDecimal real = value.Real / divisor;
             BigDecimal imaginary = value.Imaginary / divisor;
@@ -382,7 +385,11 @@ namespace NCalc.Domain
 
         public static ComplexNumber Exp(ComplexNumber value, MathHelperOptions options)
         {
-            BigDecimal expReal = MathHelper.ConvertToBigDecimal(MathHelper.Exp(value.Real, options)!);
+            // Exp of a real part beyond about 709 is an infinity in double, which no complex number can hold
+            object? exponential = MathHelper.Exp(value.Real, options);
+            if (exponential is double doubleExponential && (double.IsInfinity(doubleExponential) || double.IsNaN(doubleExponential)))
+                throw new NCalcEvaluationException($"The exponential of the complex number {value} is outside the range of double.");
+            BigDecimal expReal = MathHelper.ConvertToBigDecimal(exponential!);
             BigDecimal cosImaginary = MathHelper.ConvertToBigDecimal(MathHelper.Cos(value.Imaginary, options)!);
             BigDecimal sinImaginary = MathHelper.ConvertToBigDecimal(MathHelper.Sin(value.Imaginary, options)!);
 
@@ -395,7 +402,7 @@ namespace NCalc.Domain
         public static ComplexNumber Log(ComplexNumber value, MathHelperOptions options)
         {
             if (value.Real == 0.0 && value.Imaginary == 0.0)
-                throw new ArgumentOutOfRangeException(nameof(value), "Logarithm of zero is undefined.");
+                throw new NCalcEvaluationException("The logarithm of zero is undefined.");
 
             BigDecimal magnitude = value.Magnitude;
             BigDecimal phase = value.Phase;
@@ -409,7 +416,7 @@ namespace NCalc.Domain
         public static ComplexNumber Log(ComplexNumber value, BigDecimal baseValue, MathHelperOptions options)
         {
             if (baseValue.IsNegative() || baseValue.IsZero() || baseValue == 1.0)
-                throw new ArgumentOutOfRangeException(nameof(baseValue), "Logarithm base must be positive and not equal to 1.");
+                throw new NCalcEvaluationException("The logarithm base must be positive and not equal to 1.");
 
             ComplexNumber naturalLog = Log(value, options);
             BigDecimal naturalLogOfBase = MathHelper.ConvertToBigDecimal(MathHelper.Ln(baseValue, options)!);
@@ -430,6 +437,23 @@ namespace NCalc.Domain
                     return One;
 
                 return Zero;
+            }
+
+            // A whole exponent is computed exactly by repeated squaring, so that (1+2i) ** 2 is the same as (1+2i) * (1+2i);
+            // a negative one is the reciprocal of that power. Large exponents use exp(power * log(value)), as fractional ones do.
+            if (power.Imaginary.IsZero() && MathHelper.IsWholeNumber(power.Real) && BigDecimal.Abs(power.Real) <= MaxExactPowerExponent)
+            {
+                int exponent = (int)MathHelper.GetWholeValue(power.Real);
+                ComplexNumber exactPower = One;
+                ComplexNumber factor = value;
+                for (int remaining = Math.Abs(exponent); remaining > 0; remaining >>= 1)
+                {
+                    if ((remaining & 1) != 0)
+                        exactPower *= factor;
+                    if (remaining > 1)
+                        factor *= factor;
+                }
+                return exponent < 0 ? One / exactPower : exactPower;
             }
 
             ComplexNumber logarithm = Log(value, options);

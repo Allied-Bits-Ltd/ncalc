@@ -2247,8 +2247,9 @@ public class MathsTests : TestBase
         Assert.Equal(1.0, MathHelper.ConvertToDouble(MathHelper.Min(one, two, options), options));
         Assert.Equal(3L, Convert.ToInt64(MathHelper.IntegerDivide(seven, two, true, true, options), CultureInfo.InvariantCulture));
         Assert.Equal(1.0, Convert.ToDouble(MathHelper.Modulo(seven, two, true, options), CultureInfo.InvariantCulture));
-        Assert.Throws<InvalidOperationException>(() => MathHelper.IntegerDivide(3, nonReal, true, true, options));
-        Assert.Throws<InvalidOperationException>(() => MathHelper.Modulo(3, nonReal, true, options));
+        // NCALC-434: an NCalc exception, not InvalidOperationException
+        Assert.Throws<NCalcEvaluationException>(() => MathHelper.IntegerDivide(3, nonReal, true, true, options));
+        Assert.Throws<NCalcEvaluationException>(() => MathHelper.Modulo(3, nonReal, true, options));
     }
 
     // NCALC-130

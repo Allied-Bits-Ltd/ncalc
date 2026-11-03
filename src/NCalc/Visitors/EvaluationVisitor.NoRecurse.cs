@@ -282,7 +282,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
                         return SetTaskValue(task, UpdateParameter(expression.LeftExpression, null, cancellationToken));
 
-                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertDividendToDouble(leftValue, rightValue);
+                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertPercentDividendToDouble(leftValue, rightValue, context);
 
                     if (handlePercent)
                     {
@@ -324,11 +324,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         }
                     }
 
-                    if (!noConvertToDouble)
-                        leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
-
                     {
-                        object? result = EvaluationHelper.Divide(leftValue, rightValue, context);
+                        object? result = EvaluationHelper.DivideAsOperator(leftValue, rightValue, context, "Div with assignment", expression.LeftExpression.Location);
                         if (result is null)
                             return SetTaskValue(task, null);
 
@@ -477,7 +474,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                     if (!TryGetValueOrNull(task.ChildStates[1].Value, out rightValue))
                         return SetTaskValue(task, null);
 
-                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertDividendToDouble(leftValue, rightValue);
+                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertPercentDividendToDouble(leftValue, rightValue, context);
 
                     if (handlePercent)
                     {
@@ -520,11 +517,8 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
                         }
                     }
 
-                    if (!noConvertToDouble)
-                        leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.LeftExpression.Location);
-
                     {
-                        object? result = EvaluationHelper.Divide(leftValue, rightValue, context);
+                        object? result = EvaluationHelper.DivideAsOperator(leftValue, rightValue, context, "Div", expression.LeftExpression.Location);
                         if (result is null)
                             return SetTaskValue(task, null);
                         return SetTaskValue(task, result);
@@ -1125,7 +1119,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             object? value = task.ChildStates[i].Value;
             if (value is null)
                 throw new NCalcEvaluationException($"Vector component at index {i} evaluated to null.", expression.Expressions[i].Location);
-            components.Add(MathHelper.ConvertToBigDecimal(value));
+            components.Add(NCalcVector.ToComponentValue(value));
         }
 
         return SetTaskValue(task, new NCalcVector(components, options));

@@ -1,4 +1,5 @@
-﻿using NCalc.Cache;
+﻿using System.Runtime.CompilerServices;
+using NCalc.Cache;
 using NCalc.Domain;
 using NCalc.Exceptions;
 using NCalc.Factories;
@@ -79,11 +80,32 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     /// <summary>
     /// Creates the expression for an argument of a function, which is a part of the tree that is being evaluated.
     /// </summary>
-    internal static AsyncExpression CreateSubExpression(LogicalExpression logicalExpression, AsyncExpressionContext context, CancellationToken cancellationToken)
+    internal static AsyncExpression CreateSubExpression(LogicalExpression logicalExpression, AsyncExpressionContext context,
+        IAsyncEvaluationVisitorFactory? evaluationVisitorFactory, CancellationToken cancellationToken)
     {
-        var expression = new AsyncExpression(context);
+        // The argument is evaluated with a visitor of the factory that evaluates the calling expression
+        var expression = new AsyncExpression(context, evaluationVisitorFactory ?? new AsyncEvaluationVisitorFactory());
         expression.InitSubExpression(logicalExpression, cancellationToken);
         return expression;
+    }
+
+    /// <summary>
+    /// Creates the expression for the body of a user function, evaluated with a visitor of the factory that evaluates the calling expression.
+    /// </summary>
+    internal static AsyncExpression CreateFunctionBody(LogicalExpression body, AsyncExpressionContext callerContext, IAsyncEvaluationVisitorFactory? evaluationVisitorFactory)
+    {
+        return new AsyncExpression(new AsyncExpressionContext(callerContext.Options, callerContext.CultureInfo), evaluationVisitorFactory ?? new AsyncEvaluationVisitorFactory())
+        {
+            LogicalExpression = body
+        };
+    }
+
+    // The visitor knows its factory, so that the arguments of functions and the bodies of user functions are evaluated with visitors of the same factory
+    private Visitors.AsyncEvaluationVisitor CreateEvaluationVisitor()
+    {
+        var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
+        evaluationVisitor.VisitorFactory = EvaluationVisitorFactory;
+        return evaluationVisitor;
     }
 
     /// <summary>
@@ -189,11 +211,39 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     }
 
     // Parsing errors and cancellation fault the returned task instead of being thrown from the call
-    private async Task<object?> ParseAndEvaluateAsync(CancellationToken cancellationToken, LoopIterationBudget? outerLoopBudget)
+    private Task<object?> ParseAndEvaluateAsync(CancellationToken cancellationToken, LoopIterationBudget? outerLoopBudget)
     {
-        LogicalExpression ??= GetLogicalExpression(cancellationToken);
+        return ReturnOnFreshStackAsync(() =>
+        {
+            LogicalExpression ??= GetLogicalExpression(cancellationToken);
 
-        return await InternalEvaluateAsync(cancellationToken, outerLoopBudget).ConfigureAwait(false);
+            return InternalEvaluateAsync(cancellationToken, outerLoopBudget);
+        });
+    }
+
+    // Deeply nested parts of an evaluation continue on thread pool threads (EvaluationHelper.EvaluateOnThreadPoolAsync). When they finish,
+    // the awaiting methods of the parts resume one inside another, so the evaluation would return to its caller with the stack of the
+    // thread nearly used up, and the caller's next evaluation could fail as nested too deeply. The outermost evaluation therefore
+    // continues on a fresh stack before it returns or throws.
+    private static async Task<object?> ReturnOnFreshStackAsync(Func<Task<object?>> evaluate)
+    {
+        if (EvaluationHelper.ThreadPoolContinuation.Value is not null)
+            return await evaluate().ConfigureAwait(false);
+
+        var continuedOnThreadPool = new StrongBox<bool>();
+        EvaluationHelper.ThreadPoolContinuation.Value = continuedOnThreadPool;
+        try
+        {
+            var result = await evaluate().ConfigureAwait(false);
+            if (continuedOnThreadPool.Value)
+                await Task.Yield();
+            return result;
+        }
+        catch when (continuedOnThreadPool.Value)
+        {
+            await Task.Yield();
+            throw;
+        }
     }
 
     /// <summary>
@@ -206,11 +256,14 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         return new ValueTask<object?>(ParseAndEvaluateAsync(parser, parserContext, cancellationToken));
     }
 
-    private async Task<object?> ParseAndEvaluateAsync(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext, CancellationToken cancellationToken)
+    private Task<object?> ParseAndEvaluateAsync(Parser<LogicalExpression> parser, LogicalExpressionParserContext parserContext, CancellationToken cancellationToken)
     {
-        LogicalExpression = GetLogicalExpression(parser, parserContext);
+        return ReturnOnFreshStackAsync(() =>
+        {
+            LogicalExpression = GetLogicalExpression(parser, parserContext);
 
-        return await InternalEvaluateAsync(cancellationToken, OuterLoopBudget).ConfigureAwait(false);
+            return InternalEvaluateAsync(cancellationToken, OuterLoopBudget);
+        });
     }
 
     // outerLoopBudget: the loop budget of the evaluation that this one is a part of, if any
@@ -227,7 +280,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
         if (LogicalExpression is null)
             return null;
 
-        return await EvaluateOnceAsync(EvaluationVisitorFactory.Create(Context), cancellationToken, outerLoopBudget).ConfigureAwait(false);
+        return await EvaluateOnceAsync(CreateEvaluationVisitor(), cancellationToken, outerLoopBudget).ConfigureAwait(false);
     }
 
     // The static UseNonRecursiveEvaluator setting selects the evaluator for this evaluation without changing Options
@@ -266,7 +319,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
     {
         var parameterEnumerators = ParametersHelper.GetEnumerators(Parameters, out var size);
 
-        var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
+        var evaluationVisitor = CreateEvaluationVisitor();
 
         if (LogicalExpression is null)
             return null;

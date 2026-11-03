@@ -79,11 +79,32 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     /// <summary>
     /// Creates the expression for an argument of a function, which is a part of the tree that is being evaluated.
     /// </summary>
-    internal static Expression CreateSubExpression(LogicalExpression logicalExpression, ExpressionContext context, CancellationToken cancellationToken)
+    internal static Expression CreateSubExpression(LogicalExpression logicalExpression, ExpressionContext context,
+        IEvaluationVisitorFactory? evaluationVisitorFactory, CancellationToken cancellationToken)
     {
-        var expression = new Expression(context);
+        // The argument is evaluated with a visitor of the factory that evaluates the calling expression
+        var expression = new Expression(context, evaluationVisitorFactory ?? new EvaluationVisitorFactory());
         expression.InitSubExpression(logicalExpression, cancellationToken);
         return expression;
+    }
+
+    /// <summary>
+    /// Creates the expression for the body of a user function, evaluated with a visitor of the factory that evaluates the calling expression.
+    /// </summary>
+    internal static Expression CreateFunctionBody(LogicalExpression body, ExpressionContext callerContext, IEvaluationVisitorFactory? evaluationVisitorFactory)
+    {
+        return new Expression(new ExpressionContext(callerContext.Options, callerContext.CultureInfo), evaluationVisitorFactory ?? new EvaluationVisitorFactory())
+        {
+            LogicalExpression = body
+        };
+    }
+
+    // The visitor knows its factory, so that the arguments of functions and the bodies of user functions are evaluated with visitors of the same factory
+    private Visitors.EvaluationVisitor CreateEvaluationVisitor()
+    {
+        var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
+        evaluationVisitor.VisitorFactory = EvaluationVisitorFactory;
+        return evaluationVisitor;
     }
 
     /// <summary>
@@ -243,7 +264,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
         if (Options.HasFlag(ExpressionOptions.IterateParameters) && !IsSubExpression)
             return IterateParameters(cancellationToken, outerLoopBudget);
 
-        return EvaluateOnce(EvaluationVisitorFactory.Create(Context), cancellationToken, outerLoopBudget);
+        return EvaluateOnce(CreateEvaluationVisitor(), cancellationToken, outerLoopBudget);
     }
 
     // The static UseNonRecursiveEvaluator setting selects the evaluator for this evaluation without changing Options
@@ -274,7 +295,7 @@ public partial class Expression : ExpressionBase<ExpressionContext>
     {
         var parameterEnumerators = ParametersHelper.GetEnumerators(Parameters, out var size);
 
-        var evaluationVisitor = EvaluationVisitorFactory.Create(Context);
+        var evaluationVisitor = CreateEvaluationVisitor();
 
         if (LogicalExpression is null)
             return null;

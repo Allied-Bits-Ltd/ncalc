@@ -48,6 +48,25 @@ namespace NCalc.Tests.AOT
             mathTests.QuotientBelowTheResolutionOfTheDividendTypeShouldNotBecomeZero(ExpressionOptions.None).GetAwaiter().GetResult();
             mathTests.NegationOfALargeULongShouldEqualItsSubtractionFromZero().GetAwaiter().GetResult();
             mathTests.UnsignedProductsShouldBeWidenedWithOverflowProtection().GetAwaiter().GetResult();
+
+            // NCALC-414: DateTimeOffset and TimeOnly arithmetic in NCalc.AOT, and an out-of-range result as NCalcEvaluationException
+            var dto = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.FromHours(2));
+            object? EvaluateTime(string text)
+            {
+                var expression = new Expression(text, ExpressionOptions.NoCache);
+                expression.Parameters["dto"] = dto;
+                expression.Parameters["dto2"] = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+                expression.Parameters["t"] = TimeSpan.FromHours(1);
+                expression.Parameters["ton"] = new TimeOnly(23, 30);
+                expression.Parameters["ton2"] = new TimeOnly(1, 0);
+                expression.Parameters["dtomax"] = DateTimeOffset.MaxValue;
+                return expression.Evaluate();
+            }
+            Assert.Equal(dto.AddHours(1), EvaluateTime("dto + t"));
+            Assert.Equal(dto.AddHours(-1), EvaluateTime("dto - t"));
+            Assert.Equal(TimeSpan.FromHours(-2), EvaluateTime("dto - dto2"));
+            Assert.Equal(new TimeSpan(22, 30, 0), EvaluateTime("ton - ton2"));
+            Assert.Throws<NCalc.Exceptions.NCalcEvaluationException>(() => EvaluateTime("dtomax + t"));
             Console.WriteLine("NCalc.Tests.AOT: all checks passed");
         }
     }

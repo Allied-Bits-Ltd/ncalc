@@ -29,6 +29,12 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         this.context = parentExpression.Context;
     }
 
+    /// <summary>
+    /// The factory that created this visitor, set by the expression that evaluates with it. The arguments of functions
+    /// and the bodies of user functions are evaluated with visitors of this factory (the default one when it is not set).
+    /// </summary>
+    internal Factories.IAsyncEvaluationVisitorFactory? VisitorFactory { get; set; }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void EnsureSufficientExecutionStack(LogicalExpression expression)
     {
@@ -68,6 +74,23 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         return await (MathHelper.ConvertToBoolean(value, "Ternary", context.CultureInfo, expression.LeftExpression.Location) ? expression.MiddleExpression : expression.RightExpression).Accept(this, cancellationToken).ConfigureAwait(false);
     }
 
+    // The current value of the target of an indexed assignment, needed to count a from-end index: an argument of the user function whose
+    // body this is, else a static parameter, where the assignment itself looks for it. The parameter is not evaluated (no handlers and dynamic
+    // parameters are called), so the assignment calls them as often as one with an index counted from the start
+    private async ValueTask<object?> GetIndexedAssignmentTargetAsync(string identifierName, CancellationToken cancellationToken)
+    {
+        if (context.FunctionArgumentLookup?.Invoke(identifierName) is AsyncArgumentState argumentState)
+            return await argumentState.GetValueAsync(cancellationToken).ConfigureAwait(false);
+
+        object? staticParam = null;
+        if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup)
+                ? EvaluationHelper.GetParameterValueFromListNoCase(context.StaticParameters, identifierName, out staticParam)
+                : context.StaticParameters.TryGetValue(identifierName, out staticParam))
+            return staticParam;
+
+        return null;
+    }
+
     private async Task<object?> UpdateParameterAsync(LogicalExpression leftExpression, object? value, CancellationToken cancellationToken = default)
     {
         if (value is null && !(context.Options.HasFlag(ExpressionOptions.AllowNullParameter) || context.Options.HasFlag(ExpressionOptions.UseTernaryLogic)))
@@ -82,12 +105,19 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     var identifierName = ident.Name;
 
                     var indexObj = await binExpr.RightExpression.Accept(this, cancellationToken).ConfigureAwait(false);
-                    if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(indexObj))
-                        throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number", binExpr.RightExpression.Location);
+                    int index;
+                    // A from-end index (l[^1]) counts from the end of the current value, as in reading l[^1]
+                    if (indexObj is NCalc.Domain.Index indexValue)
+                        index = EvaluationHelper.GetIndexToUpdate(await GetIndexedAssignmentTargetAsync(identifierName, cancellationToken).ConfigureAwait(false), identifierName, indexValue, binExpr.LeftExpression.Location, binExpr.RightExpression.Location);
+                    else
+                    {
+                        if (!MathHelper.IsBoxedIntegerNumberOrBigNumber(indexObj))
+                            throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} does not evaluate to a number", binExpr.RightExpression.Location);
 
-                    var index = MathHelper.ConvertToInt(indexObj, "Indexed access", context.CultureInfo, binExpr.RightExpression.Location);
-                    if (index < 0)
-                        throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} is less than zero ({index}), which is not a valid value (an index must be zero or positive)", binExpr.RightExpression.Location);
+                        index = MathHelper.ConvertToInt(indexObj, "Indexed access", context.CultureInfo, binExpr.RightExpression.Location);
+                        if (index < 0)
+                            throw new NCalcParameterIndexException(identifierName, $"The index of {identifierName} is less than zero ({index}), which is not a valid value (an index must be zero or positive)", binExpr.RightExpression.Location);
+                    }
 
                     var parameterArgs = new UpdateParameterArgs(identifierName, ident.Id, index, value);
 
@@ -296,7 +326,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (!TryGetValueOrNull(rval, out rightValue))
                         return await UpdateParameterAsync(expression.LeftExpression, null, cancellationToken).ConfigureAwait(false);
 
-                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertDividendToDouble(leftValue, rightValue);
+                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertPercentDividendToDouble(leftValue, rightValue, context);
 
                     if (handlePercent)
                     {
@@ -339,11 +369,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         }
                     }
 
-                    if (!noConvertToDouble)
-                        leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
-
                     {
-                        object? result = EvaluationHelper.Divide(leftValue, rightValue, context);
+                        object? result = EvaluationHelper.DivideAsOperator(leftValue, rightValue, context, "Div with assignment", expression.LeftExpression.Location);
                         if (result is null)
                             return null;
                         return await UpdateParameterAsync(expression.LeftExpression, result, cancellationToken).ConfigureAwait(false);
@@ -476,7 +503,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     if (!TryGetValueOrNull(rval, out rightValue))
                         return null;
 
-                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertDividendToDouble(leftValue, rightValue);
+                    bool noConvertToDouble = !EvaluationHelper.ShouldConvertPercentDividendToDouble(leftValue, rightValue, context);
 
                     if (handlePercent)
                     {
@@ -514,10 +541,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         }
                     }
 
-                    if (!noConvertToDouble)
-                        leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
-
-                    return EvaluationHelper.Divide(leftValue, rightValue, context);
+                    return EvaluationHelper.DivideAsOperator(leftValue, rightValue, context, "Div", expression.Location);
                 }
                 case BinaryExpressionType.IntDivB:
                 case BinaryExpressionType.IntDivP:
@@ -1038,7 +1062,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             object? component = await expression.Expressions[i].Accept(this, cancellationToken).ConfigureAwait(false);
             if (component is null)
                 throw new NCalcEvaluationException($"Vector component at index {i} evaluated to null.", expression.Expressions[i].Location);
-            components.Add(MathHelper.ConvertToBigDecimal(component));
+            components.Add(NCalcVector.ToComponentValue(component));
         }
 
         return new NCalcVector(components, options);
@@ -1068,7 +1092,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                 : context.UserFunctions.TryGetValue(functionName, out userFunction)) && userFunction is not null)
             {
                 EvaluationHelper.EnsureProperParamNumInFunctionCall(userFunction, functionCall);
-                return await ExecuteUserFunctionCallAsync(userFunction, functionCall, context, cancellationToken).ConfigureAwait(false);
+                return await ExecuteUserFunctionCallAsync(userFunction, functionCall, context, VisitorFactory, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -1080,7 +1104,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         // The arguments are evaluated with the token of this evaluation, also when a function evaluates them without one
         for (var i = 0; i < argsCount; i++)
         {
-            args[i] = AsyncExpression.CreateSubExpression(functionCall.Parameters[i], context, cancellationToken);
+            args[i] = AsyncExpression.CreateSubExpression(functionCall.Parameters[i], context, VisitorFactory, cancellationToken);
         }
 
         var functionArgs = new AsyncFunctionArgs(functionCall.Identifier.Id, args);
@@ -1337,20 +1361,21 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         return root.State.ValueSet ? root.State.Value : null;
     }
 
-    internal static async ValueTask<object?> ExecuteUserFunctionCallAsync(Function userFunction, FunctionCall functionCall, AsyncExpressionContext context, CancellationToken cancellationToken = default)
+    internal static async ValueTask<object?> ExecuteUserFunctionCallAsync(Function userFunction, FunctionCall functionCall, AsyncExpressionContext context,
+        Factories.IAsyncEvaluationVisitorFactory? visitorFactory, CancellationToken cancellationToken = default)
     {
         Dictionary<string, ArgumentStateBase> argumentStates = [];
 
-        EvaluationHelper.PopulateArgumentStates(userFunction, functionCall, argumentStates, context, (expression, context) => new AsyncArgumentState(expression, context) { Owner = argumentStates });
+        EvaluationHelper.PopulateArgumentStates(userFunction, functionCall, argumentStates, context, (expression, context) => new AsyncArgumentState(expression, context, visitorFactory) { Owner = argumentStates });
 
-        var expression = new AsyncExpression(userFunction.Body, context.Options, context.CultureInfo)
-        {
-            AdvancedOptions = context.AdvancedOptions,
-            // The loops of the body draw from the budget of the calling evaluation
-            OuterLoopBudget = LoopIterationBudget.Current
-        };
+        var expression = AsyncExpression.CreateFunctionBody(userFunction.Body, context, visitorFactory);
+        expression.AdvancedOptions = context.AdvancedOptions;
+        // The loops of the body draw from the budget of the calling evaluation
+        expression.OuterLoopBudget = LoopIterationBudget.Current;
 
         bool ignoreCase = context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);
+
+        expression.Context.FunctionArgumentLookup = name => argumentStates.TryGetValue(ignoreCase ? name.ToLowerInvariant() : name, out var state) ? state : null;
 
         expression.EvaluateParameterAsync += async (name, args, cancellationToken) =>
             {
@@ -1423,6 +1448,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             return ex.ReturnValue;
         }
         // Flow control in an argument of this call continues in the calling expression
+        // A function call is a boundary for "break" and "continue": outside a loop of the body they are errors, as outside any loop at the top level
+        catch (NCalcFlowControl ex)
+        {
+            throw EvaluationHelper.FlowControlOutsideLoop(ex);
+        }
         catch (ArgumentFlowControl ex) when (ReferenceEquals(ex.Owner, argumentStates))
         {
             throw ex.FlowControl;
@@ -1468,14 +1498,14 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     }
 }
 
-internal class AsyncArgumentState(LogicalExpression expression, ExpressionContextBase context) : ArgumentStateBase
+internal class AsyncArgumentState(LogicalExpression expression, ExpressionContextBase context, Factories.IAsyncEvaluationVisitorFactory? visitorFactory) : ArgumentStateBase
 {
     internal async ValueTask<object?> GetValueAsync(CancellationToken cancellationToken = default)
     {
         if (!_valueSet)
         {
-            // The argument is a part of the calling expression, evaluated in its context
-            var expr = AsyncExpression.CreateSubExpression(expression, context as AsyncExpressionContext ?? new AsyncExpressionContext(), cancellationToken);
+            // The argument is a part of the calling expression, evaluated in its context and with the visitors of its factory
+            var expr = AsyncExpression.CreateSubExpression(expression, context as AsyncExpressionContext ?? new AsyncExpressionContext(), visitorFactory, cancellationToken);
             try
             {
                 _value = await expr.EvaluateAsync(cancellationToken).ConfigureAwait(false);

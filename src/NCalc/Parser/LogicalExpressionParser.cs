@@ -142,6 +142,147 @@ public static class LogicalExpressionParser
     private static Parser<T> StackGuarded<T>(Parser<T> parser) => new StackGuardParser<T>(parser);
 
     /// <summary>
+    /// Tells whether the text of a number literal (without the leading whitespace) and its value are accepted.
+    /// </summary>
+    private delegate bool NumberTextCheck<in T>(ReadOnlySpan<char> text, T value);
+
+    /// <summary>
+    /// Wraps a number parser and accepts its result only when the text that it read passes a check; otherwise the parser fails
+    /// without consuming input, so that the next alternative (another number type, or an identifier) is tried.
+    /// </summary>
+    private sealed class CheckedNumberParser<T>(Parser<T> parser, NumberTextCheck<T> check) : Parser<T>
+    {
+        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        {
+            var startPosition = context.Scanner.Cursor.Position;
+            context.SkipWhiteSpace();
+            int start = context.Scanner.Cursor.Offset;
+
+            if (parser.Parse(context, ref result)
+                && check(context.Scanner.Buffer.AsSpan(start, context.Scanner.Cursor.Offset - start), result.Value))
+            {
+                return true;
+            }
+
+            context.Scanner.Cursor.ResetPosition(startPosition);
+            return false;
+        }
+
+        public override string ToString() => parser.ToString() ?? nameof(CheckedNumberParser<T>);
+    }
+
+    private static Parser<T> CheckedNumber<T>(Parser<T> parser, NumberTextCheck<T>? check)
+        => check is null ? parser : new CheckedNumberParser<T>(parser, check);
+
+    /// <summary>
+    /// With <see cref="AdvExpressionOptions.AcceptUnderscoresInNumbers"/>, an underscore separates digits, as in C#: it may only stand
+    /// between two digits ("1_000", "1__000"), so "_1" is an identifier and "1_", "1_.5" or "1e_5" are not numbers.
+    /// </summary>
+    private static bool HasUnderscoresOnlyBetweenDigits(ReadOnlySpan<char> text)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] != '_')
+                continue;
+
+            int end = i;
+            while (end < text.Length && text[end] == '_')
+                end++;
+
+            if (i == 0 || !IsAsciiDigit(text[i - 1]) || end == text.Length || !IsAsciiDigit(text[end]))
+                return false;
+
+            i = end;
+        }
+
+        return true;
+    }
+
+    private static bool IsAsciiDigit(char c) => c >= '0' && c <= '9';
+
+    /// <summary>
+    /// The number of significant digits that a double keeps; a decimal literal that decimal can keep only with fewer digits is read as a double.
+    /// </summary>
+    private const int DoubleSignificantDigits = 16;
+
+    /// <summary>
+    /// With DecimalAsDefault, tells whether a decimal keeps the digits of a literal: false when the literal has significant digits
+    /// below the resolution of decimal (1E-28) and decimal would keep fewer of them than a double does. Such a literal (1e-30,
+    /// 1.234e-27) is read as a double, as a literal beyond the range of decimal is, instead of becoming 0 or losing its digits.
+    /// A literal with more digits than decimal holds, but not below its resolution, stays a decimal (decimal keeps more of them).
+    /// </summary>
+    private static bool DecimalKeepsDigits(ReadOnlySpan<char> text, char decimalSeparator, char decimalSeparator2)
+    {
+        int digitCount = 0;
+        int integerDigits = -1;
+        int firstNonZero = -1;
+        int lastNonZero = -1;
+        int leadingDigits = 0; // the first two significant digits
+        int i = 0;
+        for (; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (IsAsciiDigit(c))
+            {
+                if (c != '0')
+                {
+                    if (firstNonZero < 0)
+                        firstNonZero = digitCount;
+                    lastNonZero = digitCount;
+                }
+                if (firstNonZero >= 0 && digitCount - firstNonZero < 2)
+                    leadingDigits = leadingDigits * 10 + (c - '0');
+                digitCount++;
+            }
+            else if (c == decimalSeparator || (decimalSeparator2 != '\0' && c == decimalSeparator2))
+            {
+                integerDigits = digitCount;
+            }
+            else if (c == 'e' || c == 'E')
+            {
+                break;
+            }
+            // group separators and underscores are skipped
+        }
+
+        if (firstNonZero < 0)
+            return true; // zero
+
+        if (integerDigits < 0)
+            integerDigits = digitCount;
+        if (digitCount - firstNonZero < 2)
+            leadingDigits *= 10; // "3" is 30 of "30"
+
+        // The exponent; it is saturated, a literal with a huge exponent is far out of the range of decimal anyway
+        long exponent = 0;
+        bool negativeExponent = false;
+        for (i++; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '-')
+                negativeExponent = true;
+            else if (IsAsciiDigit(c) && exponent < 1_000_000)
+                exponent = exponent * 10 + (c - '0');
+        }
+        if (negativeExponent)
+            exponent = -exponent;
+
+        // The power of ten of the first and the last significant digit
+        long mostSignificant = integerDigits - 1 - firstNonZero + exponent;
+        long leastSignificant = integerDigits - 1 - lastNonZero + exponent;
+        if (leastSignificant >= -28)
+            return true;
+
+        // Below the range of double too (it reads 2E-324 as 0), the literal stays a decimal 0, as before: double keeps none of its
+        // digits either. The double closest to a value of 2.5E-324 or more is its smallest value 4.9E-324.
+        if (mostSignificant < -324 || (mostSignificant == -324 && leadingDigits < 25))
+            return true;
+
+        // Decimal keeps the digits from the first significant one down to 1E-28
+        return mostSignificant + 29 >= DoubleSignificantDigits;
+    }
+
+    /// <summary>
     /// Parses a chain of left-associative binary operators of several precedence levels in one loop with explicit stacks,
     /// instead of a nested parser per level, so that each nesting level of an expression (a group, a function argument)
     /// takes far fewer stack frames.
@@ -725,20 +866,38 @@ public static class LogicalExpressionParser
         NumberOptions useNumberGroupSeparatorFlag = ((extOptions is not null) && (numGroupSeparator != '\0')) ? NumberOptions.AllowGroupSeparators : NumberOptions.None;
         NumberOptions useUnderscoreFlag = acceptUnderscores ? NumberOptions.AllowUnderscore : NumberOptions.None;
 
+        // A group separator equal to the decimal separator would make "0.5" the number 5, and numbers could not be written back
+        if (useNumberGroupSeparatorFlag != NumberOptions.None && numGroupSeparator == decimalSeparator)
+            throw new NCalcParserException($"The number group separator '{numGroupSeparator}' is the same as the decimal separator. Use different separators in the advanced options.");
+
+        // decimalSeparator2 takes precedence over an equal group separator when it is specified, in all number parsers (the integer
+        // parsers included: otherwise "1,5" followed by a list separator would be the integer 15)
+        if (decimalSeparator2 != '\0' && decimalSeparator2 == numGroupSeparator)
+            useNumberGroupSeparatorFlag = 0;
+
+        // With AcceptUnderscoresInNumbers, an underscore may only stand between digits ("_1" is an identifier, "1_" is not a number)
+        NumberTextCheck<int>? intUnderscoreCheck = acceptUnderscores ? static (text, _) => HasUnderscoresOnlyBetweenDigits(text) : null;
+        NumberTextCheck<long>? longUnderscoreCheck = acceptUnderscores ? static (text, _) => HasUnderscoresOnlyBetweenDigits(text) : null;
+        NumberTextCheck<BigInteger>? bigIntegerUnderscoreCheck = acceptUnderscores ? static (text, _) => HasUnderscoresOnlyBetweenDigits(text) : null;
+        NumberTextCheck<decimal>? decimalUnderscoreCheck = acceptUnderscores ? static (text, _) => HasUnderscoresOnlyBetweenDigits(text) : null;
+        NumberTextCheck<double>? doubleUnderscoreCheck = acceptUnderscores ? static (text, _) => HasUnderscoresOnlyBetweenDigits(text) : null;
+
         // The exclusions must match right after the digits (Literals, not Terms): a separator or a word such as "else" after whitespace does not make the literal fractional.
-        // An exponent is "E" followed by a digit or a sign.
+        // A decimal separator makes the literal fractional only when a digit follows it: with a comma as both the decimal and the list
+        // separator, "1, 2" are two integers. An exponent is "E" followed by a digit or a sign.
         Parser<string> exponentStart = Literals.Text("E", true).AndSkip(Literals.Pattern(static c => (c >= '0' && c <= '9') || c == '+' || c == '-', 1, 1));
+        Parser<char> digitChar = Literals.Pattern(static c => c >= '0' && c <= '9', 1, 1).Then(static s => s.Span[0]);
         Parser<string>[] floatNumExclusions =
             (decimalSeparator2 != '\0')
-            ? [Literals.Text(decimalSeparator.ToString()), Literals.Text(decimalSeparator2.ToString()), exponentStart]
-            : [Literals.Text(decimalSeparator.ToString()), exponentStart];
+            ? [Literals.Text(decimalSeparator.ToString()).AndSkip(digitChar), Literals.Text(decimalSeparator2.ToString()).AndSkip(digitChar), exponentStart]
+            : [Literals.Text(decimalSeparator.ToString()).AndSkip(digitChar), exponentStart];
 
         //var intNumberParser
-        var intNumber = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
+        var intNumber = CheckedNumber(Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator), intUnderscoreCheck)
             .AndSkip(Not(OneOf(floatNumExclusions)))
             .Then<LogicalExpression>(static (ctx, d) => new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx)));
 
-        var longNumber = Terms.Number<long>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
+        var longNumber = CheckedNumber(Terms.Number<long>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator), longUnderscoreCheck)
             .AndSkip(Not(OneOf(floatNumExclusions)))
             .Then<LogicalExpression>(static (ctx, d) => new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx)));
 
@@ -746,7 +905,7 @@ public static class LogicalExpressionParser
 
         if (useBigNumbers)
         {
-            bigIntNumber = Terms.Number<BigInteger>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
+            bigIntNumber = CheckedNumber(Terms.Number<BigInteger>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator), bigIntegerUnderscoreCheck)
                 .AndSkip(Not(OneOf(floatNumExclusions)))
                 .Then<LogicalExpression>(static (ctx, d) =>
                     {
@@ -757,15 +916,17 @@ public static class LogicalExpressionParser
                     });
         }
 
-        if (decimalSeparator2 != '\0' && decimalSeparator2 == numGroupSeparator)
-            useNumberGroupSeparatorFlag = 0; // decimalSeparator2 takes precedence when it is specified.
-        var decimalNumber = Terms.Number<decimal>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals, decimalSeparator, numGroupSeparator, decimalSeparator2)
+        // With DecimalAsDefault, a literal that decimal could keep only with fewer digits than double (1e-30) is read as a double
+        NumberTextCheck<decimal>? decimalCheck = options.HasFlag(ExpressionOptions.DecimalAsDefault)
+            ? (text, _) => (!acceptUnderscores || HasUnderscoresOnlyBetweenDigits(text)) && DecimalKeepsDigits(text, decimalSeparator, decimalSeparator2)
+            : decimalUnderscoreCheck;
+        var decimalNumber = CheckedNumber(Terms.Number<decimal>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals, decimalSeparator, numGroupSeparator, decimalSeparator2), decimalCheck)
             .Then<LogicalExpression>(static (ctx, val) =>
             {
                 return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
             });
 
-        var doubleNumber = Terms.Number<double>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals, decimalSeparator, numGroupSeparator, decimalSeparator2)
+        var doubleNumber = CheckedNumber(Terms.Number<double>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals, decimalSeparator, numGroupSeparator, decimalSeparator2), doubleUnderscoreCheck)
             .Then<LogicalExpression>(static (ctx, val) =>
             {
                 return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
@@ -782,8 +943,8 @@ public static class LogicalExpressionParser
             else
                 decimalSeparators = decimalSeparator.ToString();
 
-            Parser<LogicalExpression> bigIntNumberD = Terms.Number<BigInteger>((NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag), decimalSeparator, numGroupSeparator)
-                //.AndSkip(Not(OneOf(floatNumExclusions)))
+            // A number has no whitespace inside (as with Terms.Number): the parts are Literals, and the whitespace before the literal is skipped once
+            Parser<LogicalExpression> bigIntNumberD = Literals.Number<BigInteger>((NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag), decimalSeparator, numGroupSeparator)
                 .Then<LogicalExpression>(static (d) =>
                 {
                     if (d >= ulong.MinValue && d <= ulong.MaxValue)
@@ -791,14 +952,25 @@ public static class LogicalExpressionParser
                     else
                         return new ValueExpression(d);
                 });
-            Parser<LogicalExpression> bigUIntNumberD = Terms.Pattern(c => acceptableDecChars.Contains(c))
-                .Then<LogicalExpression>(static s => new ValueExpression(s));
+            Parser<string> fractionD = Literals.AnyOf(decimalSeparators.AsSpan(), 1, 1)
+                .SkipAnd(Literals.Pattern(c => acceptableDecChars.Contains(c)))
+                .Then(static s => s.ToString());
+            Parser<string> exponentD = Literals.AnyOf("Ee".AsSpan(), 1, 1)
+                .SkipAnd(Literals.Number<BigInteger>(NumberOptions.Integer | useUnderscoreFlag, decimalSeparator, numGroupSeparator))
+                .Then(static d => d.ToString(CultureInfo.InvariantCulture));
+
+            // Digits with a fraction and an optional exponent ("1.5", "1.5e3"), digits with an exponent ("1e400", read as "1.0e400"),
+            // or a fraction alone (".5")
+            Parser<(LogicalExpression? IntegerPart, string Fraction, string? Exponent)> bigDecimalParts = OneOf(
+                bigIntNumberD.And(OneOf(fractionD.And(ZeroOrOne(exponentD)), exponentD.Then(static e => (string.Empty, e))))
+                    .Then<(LogicalExpression? IntegerPart, string Fraction, string? Exponent)>(static x => (x.Item1, x.Item2.Item1, x.Item2.Item2)),
+                fractionD.And(ZeroOrOne(exponentD))
+                    .Then<(LogicalExpression? IntegerPart, string Fraction, string? Exponent)>(static x => (null, x.Item1, x.Item2)));
 
             bigDecimalNumber =
-                ZeroOrOne(bigIntNumberD)
-                .And(Terms.AnyOf(decimalSeparators.AsSpan(), 1, 1))
-                .And(bigUIntNumberD)
-                .And(ZeroOrOne(Terms.AnyOf("Ee".AsSpan(), 1, 1).And(bigIntNumberD)))
+                (acceptUnderscores
+                    ? new CheckedNumberParser<(LogicalExpression? IntegerPart, string Fraction, string? Exponent)>(bigDecimalParts, static (text, _) => HasUnderscoresOnlyBetweenDigits(text))
+                    : SkipWhiteSpace(bigDecimalParts))
                 .When((_, val) => TryParseDecimal(val, acceptUnderscores) is not null)
                 .Then<LogicalExpression>(static (ctx, val) =>
                 {
@@ -808,6 +980,23 @@ public static class LogicalExpressionParser
 
                     if (value is null)
                         return new ValueExpression();  // never happens - the When condition ensures that val can be parsed
+
+                    // A value far beyond the range of double (or below its smallest value) stays a BigDecimal; it is not compared with
+                    // the limits of decimal and double, which would expand its exponent into digits (1e9999999)
+                    long magnitude = (long)value.Value.Exponent + BigInteger.Abs(value.Value.Mantissa).ToString(CultureInfo.InvariantCulture).Length;
+                    if (!value.Value.Mantissa.IsZero && (magnitude > 400 || magnitude < -400))
+                    {
+                        // A literal with more integer digits (or leading zeros) than MathHelper.MaxPowResultDigits is a double, infinity
+                        // or 0, as it was before such literals were big numbers: as a BigDecimal it would be written with all its digits
+                        // by ToString() and could not be used in arithmetic
+                        if (Math.Abs(magnitude) > NCalc.Helpers.MathHelper.MaxPowResultDigits)
+                        {
+                            double outOfRange = magnitude > 0 ? double.PositiveInfinity : 0.0;
+                            return new ValueExpression(value.Value.Mantissa.Sign < 0 ? -outOfRange : outOfRange).SetLocation(new ParlotExpressionLocation(ctx));
+                        }
+
+                        return new ValueExpression(value).SetLocation(new ParlotExpressionLocation(ctx));
+                    }
 
                     if (decimalDefault && (value >= decimal.MinValue && value <= decimal.MaxValue))
                     {
@@ -880,7 +1069,7 @@ public static class LogicalExpressionParser
                 Parser<LogicalExpression>? currency1 = null;
                 Parser<LogicalExpression>? currency2 = null;
 
-                var decimalCurrencyNumber = Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | useNumberGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator, currencyDecimalSeparator2)
+                var decimalCurrencyNumber = CheckedNumber(Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | useNumberGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator, currencyDecimalSeparator2), decimalUnderscoreCheck)
                     .Then<LogicalExpression>(static (ctx, val) => new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx)));
 
                 currency1 = OneOf(currencyCharsArray).SkipAnd(SkipWhiteSpace(OneOf(decimalCurrencyNumber, intNumber, longNumber)))
@@ -1130,17 +1319,18 @@ public static class LogicalExpressionParser
         var singleQuotesStringValue = Terms.String(quotes: StringLiteralQuotes.Single, returnDecoded: false)
                 .Then<LogicalExpression>(static (ctx, value) =>
                 {
-                    if (value.Length == 1 &&
-                        ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.AllowCharValues))
-                    {
-                        return new ValueExpression(value.Span[0]).SetLocation(new ParlotExpressionLocation(ctx));
-                    }
-
                     string? originalValue = value.ToString();
                     if (originalValue is null)
                         return new ValueExpression(null);
 
                     TextSpan decodedValue = Character.DecodeString(originalValue);
+
+                    // One character, also when it is written with an escape sequence ('\n', '\t', '\''), is a char
+                    if (decodedValue.Length == 1 &&
+                        ((LogicalExpressionParserContext)ctx).Options.HasFlag(ExpressionOptions.AllowCharValues))
+                    {
+                        return new ValueExpression(decodedValue.Span[0]).SetLocation(new ParlotExpressionLocation(ctx));
+                    }
 
                     return new ValueExpression(decodedValue.ToString(), originalValue, StringKind.SingleQuote).SetLocation(new ParlotExpressionLocation(ctx));
                 });
@@ -1190,6 +1380,15 @@ public static class LogicalExpressionParser
                         : advancedFormat);
             }
             DateTimeFormatInfo literalDateTimeFormat = CreateLiteralDateTimeFormat(dateTimeFormat);
+
+            // The parts of a time are joined with ':' for DateTime.TryParse, which reads it with this format: joined with a custom time
+            // separator such as '-' or '+', the last part would be read as a UTC offset (#2024/01/02 10-30-05# was 05:30 local time)
+            var timeDateTimeFormat = (DateTimeFormatInfo)dateTimeFormat.Clone();
+            timeDateTimeFormat.TimeSeparator = ":";
+
+            // A date written with the custom date separator '-' is read with this format, as the same date written with '/' would be
+            var slashDateTimeFormat = (DateTimeFormatInfo)dateTimeFormat.Clone();
+            slashDateTimeFormat.DateSeparator = "/";
 
             Sequence<TextSpan, TextSpan, TextSpan> dateDefinition;
             Sequence<TextSpan, TextSpan, TextSpan> dateDefinitionIso;
@@ -1301,17 +1500,28 @@ public static class LogicalExpressionParser
             DateTime? ParseDate((TextSpan, TextSpan, TextSpan) date)
             {
                 string customDateSepForDT = dateTimeFormat.DateSeparator;
+
+                // A date written with the custom separator '-' is read as the same date written with the custom separator '/':
+                // DateTime.TryParse reads "12-31-2024" whatever the date order (as a form of ISO date), and the built-in masks would
+                // read it in the order of the culture
+                bool hyphenDate = customDateSep == "-" && date.Item1.Buffer is { } buffer
+                    && date.Item1.Offset + date.Item1.Length < buffer.Length && buffer[date.Item1.Offset + date.Item1.Length] == '-';
+                if (hyphenDate)
+                {
+                    customDateSepForDT = "/";
+                }
+
                 if (useSecondDate || onlyCustomDateTranslation)
                 {
                     // The parts in the order of the date pattern of the advanced options; then other forms that the format accepts,
                     // but not a time of day, which DateTime.TryParse also reads where '.' separates both (fi-FI: "10.30.00")
                     if (DateTime.TryParseExact($"{date.Item1}/{date.Item2}/{date.Item3}", customDateMasks, literalDateTimeFormat, DateTimeStyles.None, out var exact))
                         return exact;
-                    if (DateTime.TryParse($"{date.Item1}{customDateSepForDT}{date.Item2}{customDateSepForDT}{date.Item3}", dateTimeFormat, DateTimeStyles.NoCurrentDateDefault, out var result)
+                    if (DateTime.TryParse($"{date.Item1}{customDateSepForDT}{date.Item2}{customDateSepForDT}{date.Item3}", hyphenDate ? slashDateTimeFormat : dateTimeFormat, DateTimeStyles.NoCurrentDateDefault, out var result)
                         && result.TimeOfDay == TimeSpan.Zero && result != DateTime.MinValue)
                         return result;
                 }
-                if (useSecondDate || !onlyCustomDateTranslation)
+                if ((useSecondDate || !onlyCustomDateTranslation) && !hyphenDate)
                 {
                     // The masks follow the order of the parts in the culture of the expression
                     if (DateTime.TryParseExact($"{date.Item1}{builtInDateSep}{date.Item2}{builtInDateSep}{date.Item3}", ncalcDateMasks, literalDateTimeFormat, DateTimeStyles.None, out var result))
@@ -1323,7 +1533,9 @@ public static class LogicalExpressionParser
             // Where the date separator is also the time separator (fi-FI: "."), "10.30.00" may be a time span, and "1.10.30" may be
             // the days and the hours of "1.10.30.00": three numbers are a date only when they make a valid date and the literal ends
             // after them; otherwise they are read as a time span
-            Parser<(TextSpan, TextSpan, TextSpan)> dateParts = (builtInDateSep == builtInTimeSep || customDateSep == builtInTimeSep)
+            // The same holds where '-' is both the custom date and the custom time separator (#10-30-05#)
+            bool hyphenDateAndTime = customDateSep == "-" && extOptions?.GetTimeSeparator() == "-";
+            Parser<(TextSpan, TextSpan, TextSpan)> dateParts = (builtInDateSep == builtInTimeSep || customDateSep == builtInTimeSep || hyphenDateAndTime)
                 ? dateDefinition.When((_, date) => ParseDate(date) is not null).AndSkip(Not(Not(Literals.Char('#'))))
                 : dateDefinition;
 
@@ -1340,7 +1552,10 @@ public static class LogicalExpressionParser
                     .And(charIsNumber);
 
             // dateIso => number-number-number['Z']
-            dateIso = dateDefinitionIso.And(ZeroOrOne(Literals.Char('Z'))).Then<LogicalExpression>((ctx, date) =>
+            // An ISO date starts with a year of four digits; where '-' is also the date or the time separator of the options, anything
+            // else (#01-02-2024# in the DMY or MDY order, the time #10-30-00#) is left to the parsers of those separators
+            bool hyphenIsSeparator = customDateSep == "-" || extOptions?.GetTimeSeparator() == "-";
+            dateIso = dateDefinitionIso.And(ZeroOrOne(Literals.Char('Z'))).When((_, date) => date.Item1.Length == 4 || !hyphenIsSeparator).Then<LogicalExpression>((ctx, date) =>
             {
                 if (DateTime.TryParseExact($"{date.Item1}-{date.Item2}-{date.Item3}", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
                 {
@@ -1540,10 +1755,10 @@ public static class LogicalExpressionParser
             // A time span may have a fraction of a second (#00:00:01.5#), which is how ToString() writes one
             var time = timeSpanDefinition.And(ZeroOrOne(Literals.Char('.').SkipAnd(charIsNumber))).Then<LogicalExpression>((ctx, time) =>
             {
-                string customTimeSepForDT = dateTimeFormat.TimeSeparator;
+                string customTimeSepForDT = timeDateTimeFormat.TimeSeparator;
                 if (useSecondTime || onlyCustomTimeTranslation)
                 {
-                    if (DateTime.TryParse($"{time.Item3}{customTimeSepForDT}{time.Item4}{customTimeSepForDT}{time.Item5}", dateTimeFormat, DateTimeStyles.None, out var result))
+                    if (DateTime.TryParse($"{time.Item3}{customTimeSepForDT}{time.Item4}{customTimeSepForDT}{time.Item5}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                     {
                         TimeSpan tsResult = result.TimeOfDay + GetSecondFraction(time.Item6);
 
@@ -1588,10 +1803,10 @@ public static class LogicalExpressionParser
 
             var shortTime = shortTimeSpanDefinition.Then<LogicalExpression>((ctx, time) =>
             {
-                string customTimeSepForDT = dateTimeFormat.TimeSeparator;
+                string customTimeSepForDT = timeDateTimeFormat.TimeSeparator;
                 if (useSecondTime || onlyCustomTimeTranslation)
                 {
-                    if (DateTime.TryParse($"{time.Item3}{customTimeSepForDT}{time.Item4}", dateTimeFormat, DateTimeStyles.None, out var result))
+                    if (DateTime.TryParse($"{time.Item3}{customTimeSepForDT}{time.Item4}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                     {
                         TimeSpan tsResult = result.TimeOfDay;
 
@@ -1632,7 +1847,7 @@ public static class LogicalExpressionParser
 
             if (use12HourTime)
             {
-                string customTimeSepForDT = dateTimeFormat.TimeSeparator;
+                string customTimeSepForDT = timeDateTimeFormat.TimeSeparator;
                 string amSpacer = "";
                 if (dateTimeFormat.ShortTimePattern.Contains(" t"))
                     amSpacer = " ";
@@ -1648,7 +1863,7 @@ public static class LogicalExpressionParser
 
                     if (useSecondTime || onlyCustomTimeTranslation)
                     {
-                        if (DateTime.TryParse($"{time.Item1}{customTimeSepForDT}{time.Item2}{customTimeSepForDT}{time.Item3}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
+                        if (DateTime.TryParse($"{time.Item1}{customTimeSepForDT}{time.Item2}{customTimeSepForDT}{time.Item3}{amSpacer}{amPMValue}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                         {
                             return new ValueExpression(result.TimeOfDay).SetLocation(new ParlotExpressionLocation(ctx));
                         }
@@ -1667,7 +1882,7 @@ public static class LogicalExpressionParser
 
                 shortTime12 = shortTime12Definition!.Then<LogicalExpression>((ctx, time) =>
                 {
-                    string customTimeSepForDT = dateTimeFormat.TimeSeparator;
+                    string customTimeSepForDT = timeDateTimeFormat.TimeSeparator;
                     string amPMValue = time.Item3;
                     if (amPMValue.ToLower().Equals(amTimeFirstCharLower))
                         amPMValue = dateTimeFormat.AMDesignator;
@@ -1677,7 +1892,7 @@ public static class LogicalExpressionParser
 
                     if (useSecondTime || onlyCustomTimeTranslation)
                     {
-                        if (DateTime.TryParse($"{time.Item1}{customTimeSepForDT}{time.Item2}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
+                        if (DateTime.TryParse($"{time.Item1}{customTimeSepForDT}{time.Item2}{amSpacer}{amPMValue}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                         {
                             return new ValueExpression(result.TimeOfDay).SetLocation(new ParlotExpressionLocation(ctx));
                         }
@@ -1698,12 +1913,12 @@ public static class LogicalExpressionParser
             var dateAndTime = dateDefinition.AndSkip(Literals.WhiteSpace()).And(timeDefinition).Then<LogicalExpression>((ctx, dateTime) =>
                 {
                     string customDateSepForDT = dateTimeFormat.DateSeparator;
-                    string customTimeSepForDT = dateTimeFormat.TimeSeparator;
+                    string customTimeSepForDT = timeDateTimeFormat.TimeSeparator;
                     if (useSecondDate || onlyCustomDateTranslation)
                     {
                         if (useSecondTime || onlyCustomTimeTranslation)
                         {
-                            if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}", dateTimeFormat, DateTimeStyles.None, out var result))
+                            if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                             {
                                 return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
@@ -1720,7 +1935,7 @@ public static class LogicalExpressionParser
                     {
                         if (useSecondTime || onlyCustomTimeTranslation)
                         {
-                            if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}", dateTimeFormat, DateTimeStyles.None, out var result))
+                            if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                             {
                                 return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
@@ -1777,12 +1992,12 @@ public static class LogicalExpressionParser
             var dateAndShortTime = dateDefinition.AndSkip(Literals.WhiteSpace()).And(shortTimeDefinition).Then<LogicalExpression>((ctx, dateTime) =>
                 {
                     string customDateSepForDT = dateTimeFormat.DateSeparator;
-                    string customTimeSepForDT = dateTimeFormat.TimeSeparator;
+                    string customTimeSepForDT = timeDateTimeFormat.TimeSeparator;
                     if (useSecondDate || onlyCustomDateTranslation)
                     {
                         if (useSecondTime || onlyCustomTimeTranslation)
                         {
-                            if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}", dateTimeFormat, DateTimeStyles.None, out var result))
+                            if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                             {
                                 return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
@@ -1799,7 +2014,7 @@ public static class LogicalExpressionParser
                     {
                         if (useSecondTime || onlyCustomTimeTranslation)
                         {
-                            if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}", dateTimeFormat, DateTimeStyles.None, out var result))
+                            if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                             {
                                 return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                             }
@@ -1831,7 +2046,7 @@ public static class LogicalExpressionParser
                 dateAndTime12 = dateDefinition.AndSkip(Literals.WhiteSpace()).And(time12Definition!).Then<LogicalExpression>((ctx, dateTime) =>
                     {
                         string customDateSepForDT = dateTimeFormat.DateSeparator;
-                        string customTimeSepForDT = dateTimeFormat.TimeSeparator;
+                        string customTimeSepForDT = timeDateTimeFormat.TimeSeparator;
                         string amPMValue = dateTime.Item4.Item4;
                         if (amPMValue.ToLower().Equals(amTimeFirstCharLower))
                             amPMValue = dateTimeFormat.AMDesignator;
@@ -1843,7 +2058,7 @@ public static class LogicalExpressionParser
                         {
                             if (useSecondTime || onlyCustomTimeTranslation)
                             {
-                                if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
+                                if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}{amSpacer}{amPMValue}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                                 {
                                     return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
@@ -1860,7 +2075,7 @@ public static class LogicalExpressionParser
                         {
                             if (useSecondTime || onlyCustomTimeTranslation)
                             {
-                                if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
+                                if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{customTimeSepForDT}{dateTime.Item4.Item3}{amSpacer}{amPMValue}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                                 {
                                     return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
@@ -1882,7 +2097,7 @@ public static class LogicalExpressionParser
                 dateAndShortTime12 = dateDefinition.AndSkip(Literals.WhiteSpace()).And(shortTime12Definition!).Then<LogicalExpression>((ctx, dateTime) =>
                     {
                         string customDateSepForDT = dateTimeFormat.DateSeparator;
-                        string customTimeSepForDT = dateTimeFormat.TimeSeparator;
+                        string customTimeSepForDT = timeDateTimeFormat.TimeSeparator;
                         string amPMValue = dateTime.Item4.Item3;
                         if (amPMValue.ToLower().Equals(amTimeFirstCharLower))
                             amPMValue = dateTimeFormat.AMDesignator;
@@ -1894,7 +2109,7 @@ public static class LogicalExpressionParser
                         {
                             if (useSecondTime || onlyCustomTimeTranslation)
                             {
-                                if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
+                                if (DateTime.TryParse($"{dateTime.Item1}{customDateSepForDT}{dateTime.Item2}{customDateSepForDT}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{amSpacer}{amPMValue}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                                 {
                                     return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
@@ -1911,7 +2126,7 @@ public static class LogicalExpressionParser
                         {
                             if (useSecondTime || onlyCustomTimeTranslation)
                             {
-                                if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{amSpacer}{amPMValue}", dateTimeFormat, DateTimeStyles.None, out var result))
+                                if (DateTime.TryParse($"{dateTime.Item1}{builtInDateSep}{dateTime.Item2}{builtInDateSep}{dateTime.Item3} {dateTime.Item4.Item1}{customTimeSepForDT}{dateTime.Item4.Item2}{amSpacer}{amPMValue}", timeDateTimeFormat, DateTimeStyles.None, out var result))
                                 {
                                     return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
                                 }
@@ -1937,7 +2152,7 @@ public static class LogicalExpressionParser
             {
                 Parser<string>? alphaText = Terms.Pattern(c => char.IsLetter(c) || c == '\'').Then<string>(x => x.ToString() ?? string.Empty);
 
-                var intNumberForPeriod = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
+                var intNumberForPeriod = CheckedNumber(Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator), intUnderscoreCheck)
                     .AndSkip(Not(OneOf(floatNumExclusions)))
                     .Then<int>(d => d);
 
@@ -2739,37 +2954,42 @@ public static class LogicalExpressionParser
         return /*enableParserCompilation ? expressionParser.Compile() : */expressionParser;
     }
 
-    private static BigDecimal? TryParseDecimal((LogicalExpression, TextSpan, LogicalExpression, (TextSpan, LogicalExpression)) val, bool useUnderscores)
+    private static BigDecimal? TryParseDecimal((LogicalExpression? IntegerPart, string Fraction, string? Exponent) val, bool useUnderscores)
     {
-        StringBuilder sb = new();
-        if (val.Item1 is not null)
-            sb.Append(val.Item1.ToString());
-        else
-            sb.Append('0');
+        // The value is built from its digits and its exponent, which does not depend on the culture and does not expand a huge
+        // exponent into digits (1e9999999 is kept as a mantissa and an exponent)
+        BigInteger integerPart = val.IntegerPart is ValueExpression { Value: { } integerValue }
+            ? integerValue switch
+            {
+                ulong ul => ul,
+                BigInteger bi => bi,
+                _ => BigInteger.Parse(Convert.ToString(integerValue, CultureInfo.InvariantCulture)!, CultureInfo.InvariantCulture),
+            }
+            : BigInteger.Zero;
 
-        sb.Append(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator); // BigDecimal uses the current culture's separator
         // With the fractional part, we have text that we may need to sanitize
-        string fracPart = val.Item3.ToString();
-        if (fracPart.Length > 0 && fracPart[0] == '\'')
-            fracPart = fracPart[1..^1];
+        string fracPart = val.Fraction;
         if (useUnderscores)
             fracPart = fracPart.Replace("_", "");
-        sb.Append(fracPart);
-        /*if (val.Item4.Item1.Length == 0)
+
+        BigInteger mantissa = integerPart;
+        if (fracPart.Length > 0)
         {
-            if (val.Item4.Item2 is not null)
-                return null;
+            BigInteger fraction = BigInteger.Parse(fracPart, NumberStyles.None, CultureInfo.InvariantCulture);
+            mantissa = integerPart.Sign < 0
+                ? integerPart * BigInteger.Pow(10, fracPart.Length) - fraction
+                : integerPart * BigInteger.Pow(10, fracPart.Length) + fraction;
         }
-*/
-        if (val.Item4.Item1.Length != 0 && val.Item4.Item2 is not null)
-        {
-            sb.Append('E');
-            sb.Append(val.Item4.Item2.ToString()); // fractional part
-        }
-        if (BigDecimal.TryParse(sb.ToString(), out BigDecimal result))
-            return result;
-        else
+
+        BigInteger exponent = -fracPart.Length;
+        if (!string.IsNullOrEmpty(val.Exponent))
+            exponent += BigInteger.Parse(val.Exponent, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+
+        // An exponent beyond the range of int cannot be held by BigDecimal; such a literal is left to the double parser (infinity or 0)
+        if (exponent < int.MinValue || exponent > int.MaxValue)
             return null;
+
+        return new BigDecimal(mantissa, (int)exponent);
     }
 
     /// <summary>

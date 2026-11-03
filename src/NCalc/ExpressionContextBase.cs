@@ -15,6 +15,10 @@ public abstract record ExpressionContextBase
 
     public IDictionary<string, Function> UserFunctions { get; private set; }
 
+    // Set in the context of the body of a user function: finds the state of an argument of the call by the name of its parameter
+    // (null when the name is not a parameter of the function)
+    internal Func<string, ArgumentStateBase?>? FunctionArgumentLookup { get; set; }
+
     public static implicit operator MathHelperOptions(ExpressionContextBase context)
     {
         return new MathHelperOptions(context.CultureInfo, context.Options);

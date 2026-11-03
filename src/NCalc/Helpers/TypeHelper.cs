@@ -253,6 +253,19 @@ public static class TypeHelper
         _ => false
     };
 
+    // A double or float compared with a decimal is converted as in arithmetic: a whole value keeps all its digits (16777216f = 16777216m)
+    private static object? ConvertForComparison(object? value, Type type, CultureInfo cultureInfo)
+    {
+        if (value is null)
+            return null;
+        if (type == typeof(decimal) && value is double or float && !double.IsNaN(Convert.ToDouble(value, CultureInfo.InvariantCulture)))
+            return MathHelper.ConvertFloatingToDecimal(value, cultureInfo);
+        // A decimal compared as a double is the nearest double, so that 8.8E-27 equals 0.0000000000000000000000000088m
+        if (type == typeof(double) && value is decimal decimalValue)
+            return MathHelper.DecimalToNearestDouble(decimalValue);
+        return Convert.ChangeType(value, type, cultureInfo);
+    }
+
     public static bool CompareUsingMostPreciseType(object? a, object? b, ExpressionContextBase context, out int outcome)
     {
         ComparisonOptions cmpOptions = context;
@@ -356,12 +369,14 @@ public static class TypeHelper
 
                     mpt = GetMostPreciseType(a?.GetType(), b?.GetType());
 
-                    // A double beyond the range of decimal (or infinity) cannot be converted to decimal, but it can be compared with one as a double
-                    if (mpt == typeof(decimal) && (IsOutsideDecimalRange(a) || IsOutsideDecimalRange(b)))
+                    // A double beyond the range of decimal (or infinity) cannot be converted to decimal, but it can be compared with one as a double;
+                    // so is a non-zero double below the resolution of decimal, which would become 0 (1e-29 = 0m is false)
+                    if (mpt == typeof(decimal) && (IsOutsideDecimalRange(a) || IsOutsideDecimalRange(b)
+                        || MathHelper.IsBelowDecimalResolution(a) || MathHelper.IsBelowDecimalResolution(b)))
                         mpt = typeof(double);
 
-                    aValue = a is not null ? Convert.ChangeType(a, mpt, comparisonOptions.CultureInfo) : null;
-                    bValue = b is not null ? Convert.ChangeType(b, mpt, comparisonOptions.CultureInfo) : null;
+                    aValue = ConvertForComparison(a, mpt, comparisonOptions.CultureInfo);
+                    bValue = ConvertForComparison(b, mpt, comparisonOptions.CultureInfo);
                 }
             }
 
