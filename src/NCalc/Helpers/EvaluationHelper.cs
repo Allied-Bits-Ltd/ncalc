@@ -1280,6 +1280,30 @@ public static class EvaluationHelper
     internal static bool IsCallerParameter(IDictionary<string, object?> parameters, string parameterName, bool ignoreCase)
         => parameters is ParameterOverlay<object?> { IsFunctionBodyScope: true } overlay && !overlay.HasLocalValue(parameterName, ignoreCase);
 
+    /// <summary>
+    /// Whether the body of a user function has assigned a value to the name: it then hides the arguments of the calling functions that
+    /// the function is not declared in.
+    /// </summary>
+    internal static bool HasLocalValue(ExpressionContextBase context, string parameterName)
+        => context.StaticParameters is ParameterOverlay<object?> { IsFunctionBodyScope: true } overlay
+           && overlay.HasLocalValue(parameterName, context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup));
+
+    /// <summary>
+    /// Stores in the body of a user function a copy of a list (or string) of a calling function with an element changed, so that an
+    /// indexed assignment to an argument of a function that the body is not declared in stays local.
+    /// </summary>
+    internal static void SetLocalCopyWithElement(ExpressionContextBase context, string parameterName, object? current, int index, object? value)
+    {
+        if (current is null)
+            throw new NCalcParameterIndexException(parameterName, $"{parameterName} is not set and cannot be assigned to by index");
+
+        var updated = UpdateElement(current, parameterName, index, value, true, context.CultureInfo, Parser.ExpressionLocation.Empty, Parser.ExpressionLocation.Empty);
+        if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
+            SetParameterValueFromListNoCase(context.StaticParameters, parameterName, updated);
+        else
+            context.StaticParameters[parameterName] = updated;
+    }
+
     internal static void SetParameterValueFromListNoCase(IDictionary<string, object?> dictionary, string parameterName, object? value)
     {
         var lParameterName = parameterName.ToUpperInvariant();
@@ -1352,21 +1376,41 @@ internal class ArgumentStateBase
 /// <summary>
 /// The arguments of a call of a user function, for its body. A name that is not a parameter of the function is looked up in the arguments
 /// of the calling function (the body reads the context of its caller), and so on up to the expression that started the calls, whose
-/// handlers are called then. The chain is walked in a loop, so deep recursion does not nest the lookups.
+/// handlers are called then. The chain is walked in a loop, so deep recursion does not nest the lookups. Only a function declared in the
+/// body of the calling function assigns to the arguments of that function; another function reads them after its own local values, and
+/// its assignments stay local.
 /// </summary>
 internal sealed class UserFunctionScope
 {
+    // The functions declared in the body of each function (also in the bodies of the functions declared there), found once per function
+    private static readonly ConditionalWeakTable<Function, HashSet<Function>> DeclaredFunctions = new();
+
     private readonly Dictionary<string, ArgumentStateBase> _arguments;
     private readonly UserFunctionScope? _parent;
     private readonly bool _ignoreCase;
 
-    internal UserFunctionScope(Dictionary<string, ArgumentStateBase> arguments, ExpressionContextBase callerContext)
+    // Set when the function was declared in the body of the calling function
+    private readonly bool _isNestedInParent;
+
+    internal UserFunctionScope(Function function, Dictionary<string, ArgumentStateBase> arguments, ExpressionContextBase callerContext)
     {
+        Function = function;
         _arguments = arguments;
         _parent = callerContext.FunctionScope;
         _ignoreCase = callerContext.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);
+        _isNestedInParent = _parent is not null && GetDeclaredFunctions(_parent.Function).Contains(function);
         RootContext = _parent?.RootContext ?? callerContext;
     }
+
+    internal Function Function { get; }
+
+    private static HashSet<Function> GetDeclaredFunctions(Function function)
+        => DeclaredFunctions.GetValue(function, static f =>
+        {
+            var visitor = new Visitors.FunctionDeclarationExtractionVisitor();
+            f.Body.Accept(visitor);
+            return [.. visitor.Functions];
+        });
 
     /// <summary>
     /// The context of the expression (not a body of a user function) that made the outermost call, whose handlers the bodies use.
@@ -1374,9 +1418,10 @@ internal sealed class UserFunctionScope
     internal ExpressionContextBase RootContext { get; }
 
     /// <summary>
-    /// The state of the argument for the parameter of this function or of a calling one with the given name, or null.
+    /// The state of the argument for the parameter of this function or of a calling one with the given name, or null. With
+    /// <paramref name="lexical"/>, only the functions whose bodies this one is declared in are searched (those the body may assign to).
     /// </summary>
-    internal ArgumentStateBase? FindArgument(string name)
+    internal ArgumentStateBase? FindArgument(string name, bool lexical = false)
     {
         if (_ignoreCase)
             name = name.ToLowerInvariant();
@@ -1384,6 +1429,8 @@ internal sealed class UserFunctionScope
         {
             if (scope._arguments.TryGetValue(name, out var state))
                 return state;
+            if (lexical && !scope._isNestedInParent)
+                break;
         }
         return null;
     }

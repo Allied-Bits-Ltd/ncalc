@@ -103,8 +103,10 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
     // parameters are called), so the assignment calls them as often as one with an index counted from the start
     private object? GetIndexedAssignmentTarget(string identifierName)
     {
-        if (context.FunctionScope?.FindArgument(identifierName) is ArgumentState argumentState)
+        if (context.FunctionScope?.FindArgument(identifierName, lexical: true) is ArgumentState argumentState)
             return argumentState.Value;
+        if (context.FunctionScope?.FindArgument(identifierName) is ArgumentState callerState && !EvaluationHelper.HasLocalValue(context, identifierName))
+            return callerState.Value;
 
         object? staticParam = null;
         if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup)
@@ -1370,7 +1372,7 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
 
         // A name that is not a parameter of this function is an argument of a calling function, else the handlers of the expression
         // that made the outermost call answer for it (the chain of calls is walked in a loop, not by handlers calling each other)
-        var scope = new UserFunctionScope(argumentStates, context);
+        var scope = new UserFunctionScope(userFunction, argumentStates, context);
         var rootContext = (ExpressionContext)scope.RootContext;
         expression.Context.FunctionScope = scope;
 
@@ -1378,7 +1380,12 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (scope.FindArgument(name) is { } state)
+                // The arguments of this function and of those whose bodies it is declared in; a value assigned in the body comes before
+                // the arguments of the other calling functions
+                var state = scope.FindArgument(name, lexical: true);
+                if (state is null && !EvaluationHelper.HasLocalValue(expression.Context, name))
+                    state = scope.FindArgument(name);
+                if (state is not null)
                 {
                     args.Result = ((ArgumentState)state).Value;
                     return;
@@ -1391,13 +1398,21 @@ public partial class EvaluationVisitor : ILogicalExpressionVisitor<object?>, ILo
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (scope.FindArgument(name) is { } state)
+                if (scope.FindArgument(name, lexical: true) is { } state)
                 {
                     // An indexed assignment changes an element of the argument, not the whole argument
                     if (args.Index is { } index)
                         ((ArgumentState)state).UpdateElement(name, index, args.Value, context.CultureInfo);
                     else
                         ((ArgumentState)state).Value = args.Value;
+                    args.UpdateParameterLists = false;
+                    return;
+                }
+
+                // An indexed assignment to an argument of a calling function that this one is not declared in changes a local copy
+                if (args.Index is { } localIndex && !EvaluationHelper.HasLocalValue(expression.Context, name) && scope.FindArgument(name) is { } callerState)
+                {
+                    EvaluationHelper.SetLocalCopyWithElement(expression.Context, name, ((ArgumentState)callerState).Value, localIndex, args.Value);
                     args.UpdateParameterLists = false;
                     return;
                 }

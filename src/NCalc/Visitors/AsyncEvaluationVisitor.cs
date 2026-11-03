@@ -79,8 +79,10 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     // parameters are called), so the assignment calls them as often as one with an index counted from the start
     private async ValueTask<object?> GetIndexedAssignmentTargetAsync(string identifierName, CancellationToken cancellationToken)
     {
-        if (context.FunctionScope?.FindArgument(identifierName) is AsyncArgumentState argumentState)
+        if (context.FunctionScope?.FindArgument(identifierName, lexical: true) is AsyncArgumentState argumentState)
             return await argumentState.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (context.FunctionScope?.FindArgument(identifierName) is AsyncArgumentState callerState && !EvaluationHelper.HasLocalValue(context, identifierName))
+            return await callerState.GetValueAsync(cancellationToken).ConfigureAwait(false);
 
         object? staticParam = null;
         if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup)
@@ -1363,7 +1365,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
 
         // A name that is not a parameter of this function is an argument of a calling function, else the handlers of the expression
         // that made the outermost call answer for it (the chain of calls is walked in a loop, not by handlers calling each other)
-        var scope = new UserFunctionScope(argumentStates, context);
+        var scope = new UserFunctionScope(userFunction, argumentStates, context);
         var rootContext = (AsyncExpressionContext)scope.RootContext;
         expression.Context.FunctionScope = scope;
 
@@ -1371,7 +1373,12 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (scope.FindArgument(name) is { } state)
+                // The arguments of this function and of those whose bodies it is declared in; a value assigned in the body comes before
+                // the arguments of the other calling functions
+                var state = scope.FindArgument(name, lexical: true);
+                if (state is null && !EvaluationHelper.HasLocalValue(expression.Context, name))
+                    state = scope.FindArgument(name);
+                if (state is not null)
                 {
                     args.Result = await ((AsyncArgumentState)state).GetValueAsync(cancellationToken).ConfigureAwait(false);
                     return;
@@ -1384,13 +1391,22 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (scope.FindArgument(name) is { } state)
+                if (scope.FindArgument(name, lexical: true) is { } state)
                 {
                     // An indexed assignment changes an element of the argument, not the whole argument
                     if (args.Index is { } index)
                         await ((AsyncArgumentState)state).UpdateElementAsync(name, index, args.Value, context.CultureInfo, cancellationToken).ConfigureAwait(false);
                     else
                         ((AsyncArgumentState)state).SetValue(args.Value);
+                    args.UpdateParameterLists = false;
+                    return;
+                }
+
+                // An indexed assignment to an argument of a calling function that this one is not declared in changes a local copy
+                if (args.Index is { } localIndex && !EvaluationHelper.HasLocalValue(expression.Context, name) && scope.FindArgument(name) is { } callerState)
+                {
+                    var current = await ((AsyncArgumentState)callerState).GetValueAsync(cancellationToken).ConfigureAwait(false);
+                    EvaluationHelper.SetLocalCopyWithElement(expression.Context, name, current, localIndex, args.Value);
                     args.UpdateParameterLists = false;
                     return;
                 }

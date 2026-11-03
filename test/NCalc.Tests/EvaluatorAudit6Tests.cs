@@ -92,9 +92,17 @@ public class EvaluatorAudit6Tests
         ("fn f() { l[0] := 9; l[0] }; f() * 10 + l[0]", 91),
         ("fn f() { s[0] := 'z'; s }; f() + s", "zbcabc"),
         ("fn f() { l[0] := 9; l[0] }; l[0] := 7; f() * 10 + l[0]", 97),
-        // An assignment to an argument of a calling function changes that argument, as in a function declared in the body of another
+        // A function declared in the body of another assigns to the arguments of that function
         ("fn f(n) { fn g() { n := 7; 0 }; g(); n }; f(5)", 7),
-        ("fn g() { n := 7; 0 }; fn f(n) { g(); n }; f(5)", 7),
+        ("fn f(l2) { fn g() { l2[0] := 9; 0 }; g(); l2[0] }; f(l)", 9),
+        ("fn f(n) { fn g() { fn h() { n := 7; 0 }; h() }; g(); n }; f(5)", 7),
+        // Another function reads the arguments of its caller, but its assignments stay local and hide them
+        ("fn g() { n := 7; 0 }; fn f(n) { g(); n }; f(5)", 5),
+        ("fn g() { n := 7; n }; fn f(n) { g() * 10 + n }; f(5)", 75),
+        ("fn g() { n += 2; n }; fn f(n) { g() * 10 + n }; f(5)", 75),
+        ("fn g() { l2[0] := 9; l2[0] }; fn f(l2) { g() * 10 + l2[0] }; f(l)", 91),
+        ("fn g() { l2[^1] := 9; l2[2] }; fn f(l2) { g() * 10 + l2[2] }; f(l)", 93),
+        ("fn f(n) { fn g() => k(); g() }; fn k() { n := 7; n }; f(5)", 7),
         // The caller of a function may be another function: its local values and arguments come before the parameters of the expression
         ("fn f() { a := 3; g() }; fn g() => a; f()", 3),
         ("fn f(a) => g(); fn g() => a * 2; f(4) + a", 18));
