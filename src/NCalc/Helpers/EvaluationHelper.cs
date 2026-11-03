@@ -38,6 +38,16 @@ public static class EvaluationHelper
 #endif
     }
 
+    /// <summary>
+    /// Throws an <see cref="NCalcEvaluationException"/> when a call of a user function would be nested deeper than <paramref name="maxDepth"/>
+    /// calls of user functions (Expression.MaxUserFunctionCallDepth or AsyncExpression.MaxUserFunctionCallDepth).
+    /// </summary>
+    internal static void EnsureUserFunctionCallDepth(Function userFunction, FunctionCall functionCall, ExpressionContextBase context, int maxDepth)
+    {
+        if (context.UserFunctionCallDepth >= maxDepth)
+            throw new NCalcEvaluationException($"The function '{userFunction.Name}' cannot be called: the calls of the functions declared in the expression are nested too deeply (the limit is {maxDepth} nested calls, set via MaxUserFunctionCallDepth)", functionCall.Location);
+    }
+
     private const string ExpressionTooDeepNonRecursiveMessage = "The expression is nested too deeply to be evaluated: function calls or expressions used as parameter values are nested too deeply for the stack of the thread. The non-recursive evaluator continues them on threads with a larger stack unless LogicalExpressionParser.DeepExpressionStackSize is 0.";
 
     internal static bool HasSufficientExecutionStack()
@@ -386,6 +396,28 @@ public static class EvaluationHelper
             if (rightValue is string rightText && MathHelper.TryConvertNumericString(rightText, context, out var rightNumber))
                 rightValue = rightNumber;
         }
+        else
+        if (context.Options.HasFlag(ExpressionOptions.DecimalAsDefault) && MathHelper.IsBoxedIntegerNumber(leftValue)
+            && rightValue is string divisorText && MathHelper.TryConvertNumericString(divisorText, context, out var divisorNumber) && divisorNumber is decimal)
+        {
+            // With DecimalAsDefault, a numeric string divisor is a decimal. The integer is converted to double first, as for an integer divisor,
+            // which decides the result type as before; but a decimal result is the exact quotient of the integer, which the double would
+            // have rounded (9223372036854775807 / '1.5' is 6148914691236517204.67, not 6148914691236517333.33)
+            object? doubleDividendResult = Divide(MathHelper.ConvertToDouble(leftValue, operation, context.CultureInfo, location), rightValue, context);
+            if (doubleDividendResult is not decimal)
+                return doubleDividendResult;
+            try
+            {
+                object? exactQuotient = Divide(leftValue, divisorNumber, context);
+                return exactQuotient is decimal || MathHelper.IsBoxedIntegerNumber(exactQuotient)
+                    ? Convert.ToDecimal(exactQuotient, CultureInfo.InvariantCulture)
+                    : doubleDividendResult;
+            }
+            catch (OverflowException)
+            {
+                return doubleDividendResult;
+            }
+        }
 
         if (ShouldConvertDividendToDouble(leftValue, rightValue))
         {
@@ -399,6 +431,26 @@ public static class EvaluationHelper
         }
 
         return Divide(leftValue, rightValue, context);
+    }
+
+    /// <summary>
+    /// Divides the left value by the value of a percent (a / b% is 100 * a / b) as the "/" operator does: when
+    /// <paramref name="convertDividendToDouble"/> is set (see <see cref="ShouldConvertPercentDividendToDouble"/>), the dividend is converted
+    /// to double, which decides the result type. When an integer is divided by an integer percent and a double cannot hold one of them
+    /// (beyond 2^53), the double result is computed from the exact integers, so that it is the nearest double to the exact quotient.
+    /// </summary>
+    internal static object? DivideByPercent(object? leftValue, object? percentValue, bool convertDividendToDouble, ExpressionContextBase context,
+        string operation, Parser.ExpressionLocation location)
+    {
+        if (!convertDividendToDouble)
+            return MathHelper.DividePercent(leftValue, percentValue, context);
+
+        object? integerDividend = leftValue;
+        object? result = MathHelper.DividePercent(MathHelper.ConvertToDouble(leftValue, operation, context.CultureInfo, location), percentValue, context);
+        if (MathHelper.IsBoxedIntegerNumber(integerDividend) && MathHelper.IsBoxedIntegerNumber(percentValue)
+            && (!IsExactAsDouble(integerDividend!) || !IsExactAsDouble(percentValue!)))
+            return MathHelper.ExactIntegerPercentQuotient(result, integerDividend!, percentValue!);
+        return result;
     }
 
     // Integers up to 2^53 are exact as doubles
@@ -1221,6 +1273,13 @@ public static class EvaluationHelper
         return false;
     }
 
+    /// <summary>
+    /// Whether the static parameter is one of the caller of the user function whose body is being evaluated (the body reads the parameters of
+    /// its caller): an indexed assignment then changes a copy of the value that is local to the body, not the caller's list.
+    /// </summary>
+    internal static bool IsCallerParameter(IDictionary<string, object?> parameters, string parameterName, bool ignoreCase)
+        => parameters is ParameterOverlay<object?> { IsFunctionBodyScope: true } overlay && !overlay.HasLocalValue(parameterName, ignoreCase);
+
     internal static void SetParameterValueFromListNoCase(IDictionary<string, object?> dictionary, string parameterName, object? value)
     {
         var lParameterName = parameterName.ToUpperInvariant();
@@ -1287,6 +1346,46 @@ internal class ArgumentStateBase
         _value = EvaluationHelper.UpdateElement(current, name, index, value, !_ownsValue, cultureInfo, Parser.ExpressionLocation.Empty, Parser.ExpressionLocation.Empty);
         _valueSet = true;
         _ownsValue = _value is not string;
+    }
+}
+
+/// <summary>
+/// The arguments of a call of a user function, for its body. A name that is not a parameter of the function is looked up in the arguments
+/// of the calling function (the body reads the context of its caller), and so on up to the expression that started the calls, whose
+/// handlers are called then. The chain is walked in a loop, so deep recursion does not nest the lookups.
+/// </summary>
+internal sealed class UserFunctionScope
+{
+    private readonly Dictionary<string, ArgumentStateBase> _arguments;
+    private readonly UserFunctionScope? _parent;
+    private readonly bool _ignoreCase;
+
+    internal UserFunctionScope(Dictionary<string, ArgumentStateBase> arguments, ExpressionContextBase callerContext)
+    {
+        _arguments = arguments;
+        _parent = callerContext.FunctionScope;
+        _ignoreCase = callerContext.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);
+        RootContext = _parent?.RootContext ?? callerContext;
+    }
+
+    /// <summary>
+    /// The context of the expression (not a body of a user function) that made the outermost call, whose handlers the bodies use.
+    /// </summary>
+    internal ExpressionContextBase RootContext { get; }
+
+    /// <summary>
+    /// The state of the argument for the parameter of this function or of a calling one with the given name, or null.
+    /// </summary>
+    internal ArgumentStateBase? FindArgument(string name)
+    {
+        if (_ignoreCase)
+            name = name.ToLowerInvariant();
+        for (var scope = this; scope is not null; scope = scope._parent)
+        {
+            if (scope._arguments.TryGetValue(name, out var state))
+                return state;
+        }
+        return null;
     }
 }
 
@@ -1393,6 +1492,31 @@ internal sealed class ParameterOverlay<TValue>(IDictionary<string, TValue> own, 
     private readonly Dictionary<string, TValue> _local = new(StringComparer.Ordinal);
     private readonly IDictionary<string, TValue> _own = own;
     private readonly IDictionary<string, TValue> _outer = outer;
+
+    /// <summary>
+    /// Set for the parameters of the body of a user function, whose outer layer is the parameters of the caller: an element of a list of the
+    /// caller is changed in a local copy of the list (see <see cref="EvaluationHelper.IsCallerParameter"/>).
+    /// </summary>
+    internal bool IsFunctionBodyScope { get; init; }
+
+    // Whether the name has a value written during the evaluation or one of the own parameters
+    internal bool HasLocalValue(string key, bool ignoreCase)
+    {
+        if (!ignoreCase)
+            return _local.ContainsKey(key) || _own.ContainsKey(key);
+
+        foreach (var name in _local.Keys)
+        {
+            if (string.Equals(name, key, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        foreach (var name in _own.Keys)
+        {
+            if (string.Equals(name, key, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
 
     public TValue this[string key]
     {

@@ -1,5 +1,4 @@
 ﻿using System.Collections;
-using System.Diagnostics;
 using System.Text.Json;
 
 using ExtendedNumerics;
@@ -132,11 +131,10 @@ public class ParserAudit5Tests
         Assert.Equal(options.HasFlag(ExpressionOptions.DecimalAsDefault) ? 1.5m : 1.5, await EvaluateAllAsync("1.5", options));
         Assert.Equal(12, await EvaluateAllAsync("12", options));
 
-        // A huge exponent is kept as an exponent (1.0e9999999 took more than a minute) and an exponent beyond int is infinity
-        var stopwatch = Stopwatch.StartNew();
+        // A huge exponent is kept as an exponent (1.0e9999999 took more than a minute; the time is checked by
+        // ParserTimingTests.HugeExponentLiteralsShouldNotBeExpanded) and an exponent beyond int is infinity
         foreach (var text in new[] { "1e9999999", "1.0e9999999", "1e999999999 > 1" })
             Assert.NotNull(await EvaluateAllAsync(text, options));
-        Assert.True(stopwatch.ElapsedMilliseconds < 10_000, $"{stopwatch.ElapsedMilliseconds} ms");
         Assert.Equal(double.PositiveInfinity, await EvaluateAllAsync("1e99999999999999999999", options));
     }
 

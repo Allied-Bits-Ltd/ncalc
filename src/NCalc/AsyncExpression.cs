@@ -91,11 +91,23 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
 
     /// <summary>
     /// Creates the expression for the body of a user function, evaluated with a visitor of the factory that evaluates the calling expression.
+    /// The body calls the user functions known to the caller (incl. itself) and those declared in it, and reads the parameters, dynamic
+    /// parameters and functions of the caller after its own arguments and local values; the values that it assigns stay in the body.
     /// </summary>
     internal static AsyncExpression CreateFunctionBody(LogicalExpression body, AsyncExpressionContext callerContext, IAsyncEvaluationVisitorFactory? evaluationVisitorFactory)
     {
-        return new AsyncExpression(new AsyncExpressionContext(callerContext.Options, callerContext.CultureInfo), evaluationVisitorFactory ?? new AsyncEvaluationVisitorFactory())
+        var context = new AsyncExpressionContext(callerContext.Options, callerContext.CultureInfo, callerContext.DynamicParameters, callerContext.Functions)
         {
+            StaticParameters = new ParameterOverlay<object?>(new Dictionary<string, object?>(StringComparer.Ordinal), callerContext.StaticParameters) { IsFunctionBodyScope = true },
+            UserFunctionCallDepth = callerContext.UserFunctionCallDepth + 1
+        };
+        // The functions declared in the body (registered when the tree is set) take precedence over those of the caller
+        foreach (var userFunction in callerContext.UserFunctions)
+            context.UserFunctions[userFunction.Key] = userFunction.Value;
+
+        return new AsyncExpression(context, evaluationVisitorFactory ?? new AsyncEvaluationVisitorFactory())
+        {
+            IsFunctionBody = true,
             LogicalExpression = body
         };
     }
@@ -274,7 +286,7 @@ public class AsyncExpression : ExpressionBase<AsyncExpressionContext>
 
         // If array evaluation, execute the same expression multiple times. The arguments of functions are not iterated again:
         // the outer evaluation has put the current elements into the parameters
-        if (Options.HasFlag(ExpressionOptions.IterateParameters) && !IsSubExpression)
+        if (Options.HasFlag(ExpressionOptions.IterateParameters) && !IsSubExpression && !IsFunctionBody)
             return await IterateParametersAsync(cancellationToken, outerLoopBudget).ConfigureAwait(false);
 
         if (LogicalExpression is null)

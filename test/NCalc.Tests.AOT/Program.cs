@@ -67,6 +67,16 @@ namespace NCalc.Tests.AOT
             Assert.Equal(TimeSpan.FromHours(-2), EvaluateTime("dto - dto2"));
             Assert.Equal(new TimeSpan(22, 30, 0), EvaluateTime("ton - ton2"));
             Assert.Throws<NCalc.Exceptions.NCalcEvaluationException>(() => EvaluateTime("dtomax + t"));
+
+            // fn bodies call the declared functions (recursion) and read the caller's parameters; endless recursion throws
+            foreach (var evaluatorOption in new[] { ExpressionOptions.None, ExpressionOptions.UseNonRecursiveEvaluator })
+            {
+                var fnOptions = ExpressionOptions.NoCache | ExpressionOptions.UseStatementSequences | evaluatorOption;
+                var fnExpression = new Expression("fn fact(n) => if(n <= 1, 1, n * fact(n - 1)); fn scale(x) => fact(x) * k; scale(5)", fnOptions);
+                fnExpression.Parameters["k"] = 2;
+                Assert.Equal(240, Convert.ToInt32(fnExpression.Evaluate()));
+                Assert.Throws<NCalc.Exceptions.NCalcEvaluationException>(() => new Expression("fn f(n) => f(n + 1); f(0)", fnOptions).Evaluate());
+            }
             Console.WriteLine("NCalc.Tests.AOT: all checks passed");
         }
     }

@@ -287,11 +287,13 @@ public class OperatorsTests : TestBase
     [InlineData("a % b", ExpressionOptions.None)]
     public void DivisionByZeroShouldBeReportedAsSuch(string expression, ExpressionOptions options)
     {
-        // It was reported as "Operator '%' is not implemented for operands of types Int32 and Int32"
+        // It was reported as "Operator '%' is not implemented for operands of types Int32 and Int32"; then as the .NET
+        // DivideByZeroException, which is now the inner exception of NCalcEvaluationException
         var e = new Expression(expression, options | ExpressionOptions.NoCache);
         e.Parameters["a"] = 5m;
         e.Parameters["b"] = 0m;
-        Assert.Throws<DivideByZeroException>(() => e.Evaluate(TestContext.Current.CancellationToken));
+        var exception = Assert.Throws<NCalcEvaluationException>(() => e.Evaluate(TestContext.Current.CancellationToken));
+        Assert.IsType<DivideByZeroException>(exception.InnerException);
     }
 
     [Fact]

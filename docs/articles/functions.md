@@ -78,6 +78,24 @@ After an expression is parsed (e.g. with a call to the <xref:NCalc.ExpressionBas
 
 To return a value from a function, one can use a common `return` keyword followed by the value to return.
 
+### Scope of names in a function body
+
+The body of a user-defined function is evaluated with the context of its caller:
+
+- The body can call any function declared in the expression, whether it is declared before or after the calling function, including the function itself (recursion), as well as the functions declared in the body itself (they take precedence over the functions with the same names declared outside).
+- A name is looked up first among the parameters of the function and the values assigned in the body. A name that the body does not define is looked up in the caller: the parameters of the calling function (when the function is called from the body of another user-defined function), then the parameters (`Parameters`), dynamic parameters (`DynamicParameters`), custom functions (`Functions`) and event handlers of the expression.
+- Assignments in the body do not change the parameters of the expression: assigning a value to a name that is not a parameter of the function, including an indexed assignment (`l[0] := 9`) to a list of the caller, keeps the new value in the body. The `UpdateParameter` handlers are called as for other assignments. An assignment to a parameter of a calling function (e.g. of the function in whose body the function is declared) changes the argument of that call.
+
+```
+fn fact(n) => if(n <= 1, 1, n * fact(n - 1)); fact(5) // will return 120
+
+fn scale(x) => x * factor; scale(2) // with Parameters["factor"] = 10, will return 20
+
+fn even(n) => if(n = 0, true, odd(n - 1)); fn odd(n) => if(n = 0, false, even(n - 1)); even(10) // will return true
+```
+
+The depth of recursion is limited: a call of a user-defined function nested deeper than `Expression.MaxUserFunctionCallDepth` (`AsyncExpression.MaxUserFunctionCallDepth` for <xref:NCalc.AsyncExpression>; 1000 by default) throws an <xref:NCalc.Exceptions.NCalcEvaluationException>, so endless recursion never crashes the process. The recursive evaluator may run out of stack before reaching that limit, which throws an <xref:NCalc.Exceptions.NCalcEvaluationException> too; use <xref:NCalc.ExpressionOptions.UseNonRecursiveEvaluator> for deep recursion.
+
 ## Using Event Handlers
 You can also use event handlers to handle functions.
 ```csharp

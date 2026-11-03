@@ -35,8 +35,9 @@ namespace NCalc.Domain
         {
             get
             {
-                bool realZero = MathHelper.ConvertToBigDecimal(MathHelper.Abs(Real, _mathHelperOptions)) < Tolerance;
-                bool imaginaryZero = MathHelper.ConvertToBigDecimal(MathHelper.Abs(Imaginary, _mathHelperOptions)) < Tolerance;
+                BigDecimal tolerance = MathHelper.DoubleToBigDecimal(Tolerance);
+                bool realZero = MathHelper.ConvertToBigDecimal(MathHelper.Abs(Real, _mathHelperOptions)) < tolerance;
+                bool imaginaryZero = MathHelper.ConvertToBigDecimal(MathHelper.Abs(Imaginary, _mathHelperOptions)) < tolerance;
                 return realZero && imaginaryZero;
             }
         }
@@ -719,7 +720,7 @@ namespace NCalc.Domain
         /// Both components are widened from <c>double</c> to <see cref="BigDecimal"/>.
         /// </summary>
         public static ComplexNumber FromComplex(Complex c, MathHelperOptions options = default) =>
-            new ComplexNumber(new BigDecimal(c.Real), new BigDecimal(c.Imaginary), options);
+            new ComplexNumber(MathHelper.DoubleToBigDecimal(c.Real), MathHelper.DoubleToBigDecimal(c.Imaginary), options);
 
         /// <summary>
         /// Explicitly converts a <see cref="ComplexNumber"/> to a <see cref="Complex"/>.

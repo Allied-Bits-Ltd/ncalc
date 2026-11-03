@@ -42,12 +42,27 @@ namespace NCalc.Helpers
         /// converted to float, so a pair of an integer and a float or a long and a double that "=" considers equal always has
         /// equal hash codes; so do almost all pairs of a decimal and a double or float. The rare pairs left, such as a decimal and
         /// a double that "=" considers equal only after rounding the double to 15 digits and whose floats differ, are unequal here.
+        /// <para>
+        /// NaN equals NaN here (of any floating-point type, also as the value of a percent), as in <see cref="double.Equals(double)"/>
+        /// and as <see cref="Compare(object?, object?)"/> orders it (0), so that NaN can be found in a dictionary or a set that uses
+        /// this comparer. The "=" operator keeps the IEEE 754 rule: <c>NaN = NaN</c> is false.
+        /// </para>
         /// </remarks>
         public new bool Equals(object? x, object? y)
         {
+            if (IsNaN(x) && IsNaN(y))
+                return true;
             return EvaluationHelper.Compare(x, y, ComparisonType.Equal, _comparisonOptions, _mathHelperOptions)
                 && GetHashCode(x) == GetHashCode(y);
         }
+
+        private static bool IsNaN(object? value) => value switch
+        {
+            double d => double.IsNaN(d),
+            float f => float.IsNaN(f),
+            Percent percent => IsNaN(percent.Value),
+            _ => false
+        };
 
         /// <summary>
         /// Returns the hash code of a value; values that <see cref="Equals(object?, object?)"/> considers equal have the same hash code:
@@ -99,16 +114,20 @@ namespace NCalc.Helpers
             BigDecimal value;
             switch (number)
             {
-                // All NaNs are alike; infinities are equal only to themselves
-                case double d when double.IsNaN(d) || double.IsInfinity(d):
+                // All NaNs are alike (whatever their payload, on every target framework); infinities are equal only to themselves
+                case double d when double.IsNaN(d):
+                    return double.NaN.GetHashCode();
+                case float f when float.IsNaN(f):
+                    return double.NaN.GetHashCode();
+                case double d when double.IsInfinity(d):
                     return d.GetHashCode();
-                case float f when float.IsNaN(f) || float.IsInfinity(f):
+                case float f when float.IsInfinity(f):
                     return ((double)f).GetHashCode();
                 case BigInteger or BigDecimal when !IsInFloatRange(MathHelper.ConvertToBigDecimal(number)):
                     value = MathHelper.ConvertToBigDecimal(number);
                     break;
                 case double d when Math.Abs(d) > float.MaxValue:
-                    value = new BigDecimal(d);
+                    value = MathHelper.DoubleToBigDecimal(d);
                     break;
                 default:
                     double asDouble = number switch
@@ -122,7 +141,7 @@ namespace NCalc.Helpers
                     float asFloat = (float)asDouble;
                     if (asFloat == 0)
                         return 0;
-                    value = Math.Abs(asFloat) < 7.9e28f ? new BigDecimal((decimal)asFloat) : new BigDecimal((double)asFloat);
+                    value = Math.Abs(asFloat) < 7.9e28f ? new BigDecimal((decimal)asFloat) : MathHelper.DoubleToBigDecimal(asFloat);
                     break;
             }
 
@@ -158,7 +177,9 @@ namespace NCalc.Helpers
         private static bool IsInFloatRange(BigDecimal value)
             => value.Mantissa.IsZero
             || (MathHelper.DecimalMagnitude(value) <= 40
-                && MathHelper.CompareBigDecimals(value, new BigDecimal(-float.MaxValue)) >= 0
-                && MathHelper.CompareBigDecimals(value, new BigDecimal(float.MaxValue)) <= 0);
+                && MathHelper.CompareBigDecimals(value, -FloatMaxValue) >= 0
+                && MathHelper.CompareBigDecimals(value, FloatMaxValue) <= 0);
+
+        private static readonly BigDecimal FloatMaxValue = MathHelper.SingleToBigDecimal(float.MaxValue);
     }
 }

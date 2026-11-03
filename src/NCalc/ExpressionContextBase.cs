@@ -15,9 +15,12 @@ public abstract record ExpressionContextBase
 
     public IDictionary<string, Function> UserFunctions { get; private set; }
 
-    // Set in the context of the body of a user function: finds the state of an argument of the call by the name of its parameter
-    // (null when the name is not a parameter of the function)
-    internal Func<string, ArgumentStateBase?>? FunctionArgumentLookup { get; set; }
+    // Set in the context of the body of a user function: the arguments of the call and of the calls of user functions that it is nested in
+    internal UserFunctionScope? FunctionScope { get; set; }
+
+    // The number of calls of user functions that are in progress around an evaluation in this context: 0 for an expression, 1 for the body
+    // of a user function called by it, 2 for the body of a function called by that body, etc.
+    internal int UserFunctionCallDepth { get; set; }
 
     public static implicit operator MathHelperOptions(ExpressionContextBase context)
     {

@@ -75,11 +75,11 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     }
 
     // The current value of the target of an indexed assignment, needed to count a from-end index: an argument of the user function whose
-    // body this is, else a static parameter, where the assignment itself looks for it. The parameter is not evaluated (no handlers and dynamic
+    // body this is (or of a calling one), else a static parameter, where the assignment itself looks for it. The parameter is not evaluated (no handlers and dynamic
     // parameters are called), so the assignment calls them as often as one with an index counted from the start
     private async ValueTask<object?> GetIndexedAssignmentTargetAsync(string identifierName, CancellationToken cancellationToken)
     {
-        if (context.FunctionArgumentLookup?.Invoke(identifierName) is AsyncArgumentState argumentState)
+        if (context.FunctionScope?.FindArgument(identifierName) is AsyncArgumentState argumentState)
             return await argumentState.GetValueAsync(cancellationToken).ConfigureAwait(false);
 
         object? staticParam = null;
@@ -133,13 +133,16 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         || staticParam is null)
                         throw new NCalcParameterIndexException(identifierName, $"{identifierName} is not set and cannot be assigned to by index", binExpr.LeftExpression.Location);
 
-                    // A list is changed in place; a string is replaced
-                    if (EvaluationHelper.UpdateElement(staticParam, identifierName, index, value, false, context.CultureInfo, binExpr.LeftExpression.Location, binExpr.RightExpression.Location) is string strParam)
+                    // A list is changed in place; a string is replaced. In the body of a user function, a list of the caller is copied
+                    // and the copy is kept in the body
+                    bool copy = EvaluationHelper.IsCallerParameter(context.StaticParameters, identifierName, context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup));
+                    var updatedParam = EvaluationHelper.UpdateElement(staticParam, identifierName, index, value, copy, context.CultureInfo, binExpr.LeftExpression.Location, binExpr.RightExpression.Location);
+                    if (copy || updatedParam is string)
                     {
                         if (context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup))
-                            EvaluationHelper.SetParameterValueFromListNoCase(context.StaticParameters, identifierName, strParam);
+                            EvaluationHelper.SetParameterValueFromListNoCase(context.StaticParameters, identifierName, updatedParam);
                         else
-                            context.StaticParameters[identifierName] = strParam;
+                            context.StaticParameters[identifierName] = updatedParam;
                     }
                 }
                 else
@@ -332,11 +335,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     {
                         if (lval is Percent lValPerc && rval is Percent rValPerc)
                         {
-                            leftValue = lValPerc.Value;
-                            if (!noConvertToDouble)
-                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
-
-                            object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
+                            object? result = EvaluationHelper.DivideByPercent(lValPerc.Value, rValPerc.Value, !noConvertToDouble, context, "Div with assignment", expression.LeftExpression.Location);
                             if (result is null)
                                 return null;
 
@@ -357,11 +356,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         else
                         if (rval is Percent rValPercent)
                         {
-                            rightValue = rValPercent.Value;
-                            if (!noConvertToDouble)
-                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div with assignment", context.CultureInfo, expression.LeftExpression.Location);
-
-                            object? result = MathHelper.DividePercent(leftValue, rightValue, context);
+                            object? result = EvaluationHelper.DivideByPercent(leftValue, rValPercent.Value, !noConvertToDouble, context, "Div with assignment", expression.LeftExpression.Location);
                             if (result is null)
                                 return null;
 
@@ -509,11 +504,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     {
                         if (lval is Percent lValPerc && rval is Percent rValPerc)
                         {
-                            leftValue = lValPerc.Value;
-                            if (!noConvertToDouble)
-                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
-
-                            object? result = MathHelper.DividePercent(leftValue, rValPerc.Value, context);
+                            object? result = EvaluationHelper.DivideByPercent(lValPerc.Value, rValPerc.Value, !noConvertToDouble, context, "Div", expression.Location);
                             if (result is null)
                                 return null;
                             return new Percent(result);
@@ -532,13 +523,7 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                         }
                         else
                         if (rval is Percent rValPercent)
-                        {
-                            rightValue = rValPercent.Value;
-                            if (!noConvertToDouble)
-                                leftValue = MathHelper.ConvertToDouble(leftValue, "Div", context.CultureInfo, expression.Location);
-
-                            return MathHelper.DividePercent(leftValue, rightValue, context);
-                        }
+                            return EvaluationHelper.DivideByPercent(leftValue, rValPercent.Value, !noConvertToDouble, context, "Div", expression.Location);
                     }
 
                     return EvaluationHelper.DivideAsOperator(leftValue, rightValue, context, "Div", expression.Location);
@@ -1364,6 +1349,9 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
     internal static async ValueTask<object?> ExecuteUserFunctionCallAsync(Function userFunction, FunctionCall functionCall, AsyncExpressionContext context,
         Factories.IAsyncEvaluationVisitorFactory? visitorFactory, CancellationToken cancellationToken = default)
     {
+        // Endless recursion ends with an error also where the stack does not limit it (the non-recursive evaluator continues on other threads)
+        EvaluationHelper.EnsureUserFunctionCallDepth(userFunction, functionCall, context, AsyncExpression.MaxUserFunctionCallDepth);
+
         Dictionary<string, ArgumentStateBase> argumentStates = [];
 
         EvaluationHelper.PopulateArgumentStates(userFunction, functionCall, argumentStates, context, (expression, context) => new AsyncArgumentState(expression, context, visitorFactory) { Owner = argumentStates });
@@ -1373,30 +1361,30 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
         // The loops of the body draw from the budget of the calling evaluation
         expression.OuterLoopBudget = LoopIterationBudget.Current;
 
-        bool ignoreCase = context.Options.HasFlag(ExpressionOptions.LowerCaseIdentifierLookup);
-
-        expression.Context.FunctionArgumentLookup = name => argumentStates.TryGetValue(ignoreCase ? name.ToLowerInvariant() : name, out var state) ? state : null;
+        // A name that is not a parameter of this function is an argument of a calling function, else the handlers of the expression
+        // that made the outermost call answer for it (the chain of calls is walked in a loop, not by handlers calling each other)
+        var scope = new UserFunctionScope(argumentStates, context);
+        var rootContext = (AsyncExpressionContext)scope.RootContext;
+        expression.Context.FunctionScope = scope;
 
         expression.EvaluateParameterAsync += async (name, args, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                string paramName = ignoreCase ? name.ToLowerInvariant() : name;
-                if (argumentStates.TryGetValue(paramName, out var state))
+                if (scope.FindArgument(name) is { } state)
                 {
                     args.Result = await ((AsyncArgumentState)state).GetValueAsync(cancellationToken).ConfigureAwait(false);
                     return;
                 }
-                if (context.AsyncEvaluateParameterHandler != null)
-                    await EvaluationHelper.InvokeAllAsync(context.AsyncEvaluateParameterHandler, name, args, cancellationToken).ConfigureAwait(false);
+                if (rootContext.AsyncEvaluateParameterHandler != null)
+                    await EvaluationHelper.InvokeAllAsync(rootContext.AsyncEvaluateParameterHandler, name, args, cancellationToken).ConfigureAwait(false);
             };
 
         expression.UpdateParameterAsync += async (name, args, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                string paramName = ignoreCase ? name.ToLowerInvariant() : name;
-                if (argumentStates.TryGetValue(paramName, out var state))
+                if (scope.FindArgument(name) is { } state)
                 {
                     // An indexed assignment changes an element of the argument, not the whole argument
                     if (args.Index is { } index)
@@ -1407,16 +1395,16 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
                     return;
                 }
 
-                if (context.AsyncUpdateParameterHandler != null)
-                    await EvaluationHelper.InvokeAllAsync(context.AsyncUpdateParameterHandler, name, args, cancellationToken).ConfigureAwait(false);
+                if (rootContext.AsyncUpdateParameterHandler != null)
+                    await EvaluationHelper.InvokeAllAsync(rootContext.AsyncUpdateParameterHandler, name, args, cancellationToken).ConfigureAwait(false);
             };
 
         expression.EvaluateFunctionAsync += (name, args, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (context.AsyncEvaluateFunctionHandler != null)
-                    return EvaluationHelper.InvokeAllAsync(context.AsyncEvaluateFunctionHandler, name, args, cancellationToken);
+                if (rootContext.AsyncEvaluateFunctionHandler != null)
+                    return EvaluationHelper.InvokeAllAsync(rootContext.AsyncEvaluateFunctionHandler, name, args, cancellationToken);
                 else
 #if NET8_0_OR_GREATER
                     return ValueTask.CompletedTask;
@@ -1429,8 +1417,8 @@ public partial class AsyncEvaluationVisitor : ILogicalExpressionVisitor<ValueTas
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (context.AsyncMatchStringHandler != null)
-                    return EvaluationHelper.InvokeAllAsync(context.AsyncMatchStringHandler, args, cancellationToken);
+                if (rootContext.AsyncMatchStringHandler != null)
+                    return EvaluationHelper.InvokeAllAsync(rootContext.AsyncMatchStringHandler, args, cancellationToken);
                 else
 #if NET8_0_OR_GREATER
                     return ValueTask.CompletedTask;

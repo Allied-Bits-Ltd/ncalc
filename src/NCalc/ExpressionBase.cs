@@ -120,6 +120,10 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
 
     private protected bool IsSubExpression => _isSubExpression;
 
+    // Set for the expressions that the evaluators create for the bodies of user functions. The body reads the parameters of its caller,
+    // whose list parameters are not iterated again (the outer evaluation does that)
+    private protected bool IsFunctionBody { get; set; }
+
     private protected void InitSubExpression(LogicalExpression logicalExpression, CancellationToken cancellationToken)
     {
         SetLogicalExpressionWithoutRegistration(logicalExpression);
@@ -143,6 +147,15 @@ public abstract class ExpressionBase<TExpressionContext> where TExpressionContex
         => cancellationToken.CanBeCanceled ? cancellationToken : _subExpressionCancellationToken;
 
     public static int MaxLoopIterations = 65536;
+
+    /// <summary>
+    /// The safety fuse for recursion: the maximum number of nested calls of functions declared in an expression with <c>fn</c> (a function
+    /// that calls itself or another declared function). A call beyond it throws an <see cref="Exceptions.NCalcEvaluationException"/>.
+    /// The recursive evaluator may reach the limit of the stack earlier, which throws an <see cref="Exceptions.NCalcEvaluationException"/> too.
+    /// The default value is 1000.
+    /// </summary>
+    public static int MaxUserFunctionCallDepth = 1000;
+
     public static bool UseNonRecursiveEvaluator = false;
 
     /// <summary>

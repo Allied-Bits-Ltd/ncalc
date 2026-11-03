@@ -77,6 +77,8 @@ The <xref:NCalc.AdvancedExpressionOptions.HoursFormat> property lets you choose 
 
 When handling the 12-hour format, the parser will try values with and without a space before the am/pm value and with short (a/p) and normal (am/pm forms). This algorithm applies to all types of date formats including the built-in parsing.
 
+A time-only 12-hour literal is a `TimeSpan`, like a 24-hour one: with en-US, `#10:30 PM#` equals `#22:30#`, `#12:00 AM#` is `00:00:00` and `#12:00 PM#` is `12:00:00`. The hours must be between 0 and 12.
+
 ## Parsing of Humane Date and Period Expressions
 
 <xref:NCalc.AdvancedExpressionOptions> makes it possible to write current and relative dates and time periods in a humane form as a set of numbers and period identifiers. Example: "#5 days ago#" or "#in 3 days#" for dates relative to today, or "#321 yr 3 weeks 35 s#" for a time period. In all cases, spaces are ignored, so "#321yr3weeks35s#" will work equally well. 
@@ -204,7 +206,7 @@ The <xref:NCalc.AdvancedExpressionOptions.NumberGroupSeparatorType> and <xref:NC
 * `CurrentCulture` : the separator defined in the current culture (which is either CultureInfo.CurrentCulture or a custom culture that you specify in the constructor or the `CultureInfo` property) 
 * `Custom` : the separator defined in the <xref:NCalc.AdvancedExpressionOptions.NumberGroupSeparator> and <xref:NCalc.AdvancedExpressionOptions.CurrencyNumberGroupSeparator> property respectively
 
-A number group separator may be empty.
+A number group separator may be empty. A group separator must differ from the decimal separator it is used with: when the number group separator equals the decimal separator, or the currency group separator equals the currency decimal separator, parsing throws <xref:NCalc.Exceptions.NCalcParserException>.
 
 ## C-Style Octal Literals
 

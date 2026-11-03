@@ -581,7 +581,7 @@ public class EvaluationTests : TestBase
             if (inner == "return 5")
                 Assert.Null(exception);
             else
-                Assert.IsType(inner == "throw()" ? typeof(InvalidOperationException) : typeof(DivideByZeroException), exception);
+                Assert.IsType(inner == "throw()" ? typeof(InvalidOperationException) : typeof(NCalcEvaluationException), exception);
         }
     }
 }

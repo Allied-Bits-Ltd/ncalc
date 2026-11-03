@@ -335,6 +335,33 @@ public static class LogicalExpressionParser
     }
 
     /// <summary>
+    /// Creates the time of day of a 12-hour time literal (#10:30 PM#, #10:30:15 AM#) from its parts: the hours are 0 to 12, 12 AM is
+    /// midnight and 12 PM is noon. TimeSpan.TryParse does not read AM/PM designators.
+    /// </summary>
+    private static bool TryCreateTime12(string hours, string minutes, string? seconds, bool isPm, out TimeSpan result)
+    {
+        result = default;
+        if (!TryCreateTimeSpan(hours.Trim(), minutes.Trim(), seconds?.Trim(), false, out var parts) || parts.Days > 0 || parts.Hours > 12)
+            return false;
+
+        int hourValue = parts.Hours % 12 + (isPm ? 12 : 0);
+        result = new TimeSpan(hourValue, parts.Minutes, parts.Seconds);
+        return true;
+    }
+
+    // Whether the AM/PM designator of a 12-hour time literal, the whole designator or its first letter, is the PM designator
+    private static bool IsPmDesignator(string text, DateTimeFormatInfo format)
+    {
+        if (string.Equals(text, format.PMDesignator, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (string.Equals(text, format.AMDesignator, StringComparison.OrdinalIgnoreCase))
+            return false;
+        return !string.IsNullOrEmpty(format.PMDesignator) && text.Length == 1
+            && !(format.AMDesignator.Length > 0 && char.ToLowerInvariant(format.AMDesignator[0]) == char.ToLowerInvariant(text[0]))
+            && char.ToLowerInvariant(format.PMDesignator[0]) == char.ToLowerInvariant(text[0]);
+    }
+
+    /// <summary>
     /// Converts the digits after the seconds of a time span literal (#00:00:01.5#) to a time span; digits beyond the 7th (a tick) are ignored.
     /// </summary>
     private static TimeSpan GetSecondFraction(TextSpan digits)
@@ -1005,10 +1032,11 @@ public static class LogicalExpressionParser
                             return new ValueExpression(decValue).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
-                    if (value >= double.MinValue && value <= double.MaxValue)
+                    // The limits and the double are converted without the culture (BigDecimal's own conversion from double depends on it)
+                    if (value >= NCalc.Helpers.MathHelper.DoubleMinValueAsBigDecimal && value <= NCalc.Helpers.MathHelper.DoubleMaxValueAsBigDecimal)
                     {
                         double dValue = NCalc.Helpers.MathHelper.BigDecimalToDouble(value.Value);
-                        if (value == dValue)
+                        if (value == NCalc.Helpers.MathHelper.DoubleToBigDecimal(dValue))
                             return new ValueExpression(dValue).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
@@ -1058,6 +1086,14 @@ public static class LogicalExpressionParser
                     }
                 }
 
+                // As for plain numbers, a currency group separator equal to the currency decimal separator would make "$0.5" ambiguous
+                // and currency values could not be written back; a secondary decimal separator equal to it takes precedence over it
+                NumberOptions currencyGroupSeparatorFlag = currencyNumGroupSeparator != '\0' ? useNumberGroupSeparatorFlag : NumberOptions.None;
+                if (currencyGroupSeparatorFlag != NumberOptions.None && currencyNumGroupSeparator == currencyDecimalSeparator)
+                    throw new NCalcParserException($"The currency group separator '{currencyNumGroupSeparator}' is the same as the currency decimal separator. Use different separators in the advanced options.");
+                if (currencyDecimalSeparator2 != '\0' && currencyDecimalSeparator2 == currencyNumGroupSeparator)
+                    currencyGroupSeparatorFlag = NumberOptions.None;
+
                 List <Parser<string>> currencyChars = [];
 
                 if (!string.IsNullOrEmpty(currencySymbol)) currencyChars.Add(Terms.Text(currencySymbol, true));
@@ -1069,7 +1105,7 @@ public static class LogicalExpressionParser
                 Parser<LogicalExpression>? currency1 = null;
                 Parser<LogicalExpression>? currency2 = null;
 
-                var decimalCurrencyNumber = CheckedNumber(Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | useNumberGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator, currencyDecimalSeparator2), decimalUnderscoreCheck)
+                var decimalCurrencyNumber = CheckedNumber(Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | currencyGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator, currencyDecimalSeparator2), decimalUnderscoreCheck)
                     .Then<LogicalExpression>(static (ctx, val) => new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx)));
 
                 currency1 = OneOf(currencyCharsArray).SkipAnd(SkipWhiteSpace(OneOf(decimalCurrencyNumber, intNumber, longNumber)))
@@ -1868,13 +1904,11 @@ public static class LogicalExpressionParser
                             return new ValueExpression(result.TimeOfDay).SetLocation(new ParlotExpressionLocation(ctx));
                         }
                     }
-                    if (useSecondTime || !onlyCustomTimeTranslation)
+                    // The parts are already split at the separator, so they are read the same way on every path (TimeSpan.TryParse,
+                    // used before, does not read the AM/PM designator, so #10:30 PM# was an error)
+                    if (TryCreateTime12(time.Item1.ToString(), time.Item2.ToString(), time.Item3.ToString(), IsPmDesignator(amPMValue, dateTimeFormat), out var time12Result))
                     {
-                        // Use the existing ncalc approach with the current culture
-                        if (TimeSpan.TryParse($"{time.Item1}{builtInTimeSep}{time.Item2}{builtInTimeSep}{time.Item3}{amSpacer}{amPMValue}", out var result))
-                        {
-                            return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
-                        }
+                        return new ValueExpression(time12Result).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
                     throw InvalidLiteralFormat("TimeSpan", ctx);
@@ -1897,12 +1931,9 @@ public static class LogicalExpressionParser
                             return new ValueExpression(result.TimeOfDay).SetLocation(new ParlotExpressionLocation(ctx));
                         }
                     }
-                    if (useSecondTime || !onlyCustomTimeTranslation)
+                    if (TryCreateTime12(time.Item1.ToString(), time.Item2.ToString(), null, IsPmDesignator(amPMValue, dateTimeFormat), out var time12Result))
                     {
-                        if (TimeSpan.TryParse($"{time.Item1}{builtInTimeSep}{time.Item2}{amSpacer}{amPMValue}", out var result))
-                        {
-                            return new ValueExpression(result).SetLocation(new ParlotExpressionLocation(ctx));
-                        }
+                        return new ValueExpression(time12Result).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
                     throw InvalidLiteralFormat("TimeSpan", ctx);
@@ -3146,6 +3177,10 @@ public static class LogicalExpressionParser
     {
         if (parserToUse.TryParse(context, out var result, out var error))
             return result;
+
+        // Parlot reports a cancellation during the parse as a parse error; a cancelled parse throws OperationCanceledException,
+        // as a parse cancelled before it starts and an evaluation cancelled do
+        context.CancellationToken.ThrowIfCancellationRequested();
 
         string message;
         TextPosition position;

@@ -362,63 +362,8 @@ public class ParserTests
         Assert.ThrowsAny<NCalcException>(() => e.Evaluate(TestContext.Current.CancellationToken));
     }
 
-    // The prefix, the opening part repeated at each nesting level, the innermost operand, the closing part and the nesting depth
-    public static TheoryData<string, string, string, string, int> NestedExpressionsWithAssignments => new()
-    {
-        { "", "(", "84", ")", 1000 },
-        { "", "Abs(", "84", ")", 200 },
-        { "", "a[", "0", "]", 200 },
-        { "b = ", "Abs(", "84", ")", 200 },
-    };
-
-    // NCALC-135: the test compares the times of depth n and 2n after a warm-up, so neither the first parse with the options (JIT,
-    // building the parser) nor the load of a parallel test run decides the result
-    [Theory]
-    [MemberData(nameof(NestedExpressionsWithAssignments))]
-    public void NestedExpressionsWithAssignmentsShouldParseInLinearTime(string prefix, string open, string operand, string close, int depth)
-    {
-        // The assignment target used to be parsed again as an ordinary operand at every nesting level, which took exponential time.
-        // A large stack keeps the parser's depth guard out of the way, so only the parsing time is measured.
-        var cancellationToken = TestContext.Current.CancellationToken;
-        const ExpressionOptions options = ExpressionOptions.UseAssignments | ExpressionOptions.UseStatementSequences | ExpressionOptions.NoCache;
-
-        string Build(int n) => prefix + string.Concat(Enumerable.Repeat(open, n)) + operand + string.Concat(Enumerable.Repeat(close, n));
-
-        // The shortest of a few runs is the least affected by other work on the machine
-        TimeSpan Measure(string expression)
-        {
-            var best = TimeSpan.MaxValue;
-            for (var run = 0; run < 3; run++)
-            {
-                Expression e = null!;
-                bool hasErrors = true;
-                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-                var thread = new Thread(() =>
-                {
-                    e = new Expression(expression, options);
-                    hasErrors = e.HasErrors(cancellationToken);
-                }, 64 * 1024 * 1024);
-                thread.Start();
-                thread.Join();
-                stopwatch.Stop();
-                Assert.False(hasErrors, e.Error?.InnerException?.Message ?? e.Error?.Message);
-                if (stopwatch.Elapsed < best)
-                    best = stopwatch.Elapsed;
-            }
-            return best;
-        }
-
-        // Warm-up: builds the parser for these options and compiles the code paths
-        Measure(Build(10));
-        Measure(Build(depth));
-
-        var timeN = Measure(Build(depth));
-        var time2N = Measure(Build(2 * depth));
-
-        // Linear parsing doubles the time; exponential parsing multiplied it by far more. The bound is generous on purpose
-        Assert.True(time2N < TimeSpan.FromTicks(timeN.Ticks * 8) + TimeSpan.FromMilliseconds(100),
-            $"Parsing depth {depth} took {timeN}, depth {2 * depth} took {time2N}");
-    }
+    // NCALC-135: the test of the linear parse time of nested expressions with assignments is
+    // ParserTimingTests.NestedExpressionsWithAssignmentsShouldParseInLinearTime (ParserAudit6Tests.cs), which runs alone
 
     public static TheoryData<string, ExpressionOptions, object> RadixLiteralData => new()
     {
