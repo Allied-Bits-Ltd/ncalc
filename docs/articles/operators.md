@@ -218,8 +218,10 @@ The remainder (`%` and `mod`) has the sign of the dividend, as in C#: `-7 % 3` i
 
 **Division by zero** depends on the type of the operands:
 
-* When the division is computed in `double` (a `double` or `float` operand, or `/` of two integers), the result follows IEEE rules: `5 / 0` is +∞, `0 / 0` is NaN, and `7.5 % 0.0` is NaN.
+* When the division is computed in `double` (a `double` or `float` operand, or `/` of two integers), the result follows IEEE rules: `5 / 0` is +∞, `0 / 0` is NaN, and `7.5 % 0.0` is NaN. With <xref:NCalc.ExpressionOptions.OverflowProtection>, an infinite result throws <xref:System.OverflowException> instead.
 * Integer division (`//`, `\`, `div`), the remainder of integers, and any division of `decimal` and big-number values (including `/` with <xref:NCalc.ExpressionOptions.DecimalAsDefault> or <xref:NCalc.ExpressionOptions.UseBigNumbers> when an operand is a `decimal` or a big number) throw <xref:NCalc.Exceptions.NCalcEvaluationException> with the message "Division by zero." and a <xref:System.DivideByZeroException> as its `InnerException`. The divisor of `\` and `div` is truncated first, so a divisor that truncates to zero (`5 \ 0.5`) is a division by zero too.
+
+A `decimal` result of `+`, `-`, `*` or `/` beyond the range of `decimal` throws <xref:NCalc.Exceptions.NCalcEvaluationException> ("The result of the multiplication is outside the range of decimal.", with an <xref:System.OverflowException> as its `InnerException`), with or without <xref:NCalc.ExpressionOptions.OverflowProtection>; with <xref:NCalc.ExpressionOptions.UseBigNumbers>, it is a big number instead.
 
 When time operations are enabled using the <xref:NCalc.ExpressionOptions.SupportTimeOperations> flag in <xref:NCalc.ExpressionOptions>, it is possible to perform the following additional operations: 
 * multiply a time period value (TimeSpan) by a number and obtain a time period as a result;

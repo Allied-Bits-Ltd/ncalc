@@ -82,7 +82,9 @@ public enum ExpressionOptions : long
     AllowNullOrEmptyExpressions = 1 << 14,
 
     /// <summary>
-    /// Enables strict type matching, where comparisons between objects of different types will return false. This also applies to LIKE and NOT LIKE operations - if StrictTypeMatching is enabled, the operands must be strings.
+    /// Enables strict type matching, where values of different types are never equal and are not converted to a common type: = and == return
+    /// false and != returns true, the ordering operators (&lt;, &lt;=, &gt;, &gt;=) return false, and IN and NOT IN find no element of another
+    /// type. The operands of LIKE and NOT LIKE must be strings or chars; otherwise, <see cref="NCalc.Exceptions.NCalcEvaluationException"/> is thrown.
     /// </summary>
     StrictTypeMatching = 1 << 15,
 

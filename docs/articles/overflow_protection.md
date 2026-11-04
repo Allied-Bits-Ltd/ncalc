@@ -23,6 +23,6 @@ The option also applies to:
 * the left shift: a shift that moves set bits out of 64 bits (`1 << 64`) throws instead of giving 0;
 * the conversion of a result to the type of a typed lambda (`ToLambda<int>()`).
 
-A `ulong` combined with a signed integer, and the products of two `uint`, `ushort` or `byte` values, are computed exactly with or without the option. Floating-point and `decimal` arithmetic is not affected: a `double` overflows to infinity, and a `decimal` result beyond the range of `decimal` throws <xref:System.OverflowException> with or without the option.
+A `ulong` combined with a signed integer, and the products of two `uint`, `ushort` or `byte` values, are computed exactly with or without the option. With the option, a `double` or `float` operation whose result is infinite (`1e308 * 10`, also `1.0 / 0`) throws <xref:System.OverflowException> too; without it, the result is infinity. A `decimal` result beyond the range of `decimal` throws <xref:NCalc.Exceptions.NCalcEvaluationException> (with an <xref:System.OverflowException> as its `InnerException`) with or without the option.
 
 With <xref:NCalc.ExpressionOptions.UseBigNumbers>, integer arithmetic never overflows: a result beyond 64 bits is a `BigInteger`, limited in size by `MathHelper.MaxPowResultDigits` (see [Limits](options.md#limits)).

@@ -1000,7 +1000,7 @@ public static class MathHelper
         }
         catch (OverflowException ex)
         {
-            throw new NCalcEvaluationException("The result of the percent operation is outside the range of decimal.", ex);
+            throw DecimalOverflow("percent operation", ex);
         }
     }
 
@@ -1839,10 +1839,14 @@ public static class MathHelper
                 result = promoted;
             return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
-        catch (OverflowException)
+        catch (OverflowException ex)
         {
             if (!TryExpandAfterOverflow(ref a, ref b, options))
+            {
+                if (a is decimal && b is decimal)
+                    throw DecimalOverflow("addition", ex);
                 throw;
+            }
             object? result = Add(a, b, reduceTypes, options);
             if (result is null)
                 return null;
@@ -1990,7 +1994,7 @@ public static class MathHelper
                 result = promoted;
             return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
-        catch (OverflowException)
+        catch (OverflowException ex)
         {
             // A negative difference of two ulong values is a long when it fits (2^64 - 2 - (2^64 - 1) is -1, as 0UL - 1UL is),
             // also when an operand is beyond the range of long; a smaller difference is an overflow
@@ -1998,7 +2002,11 @@ public static class MathHelper
                 return ReduceNumericType(unchecked(-(long)(ulongB - ulongA)), reduceTypes ? null : t, options);
 
             if (!TryExpandAfterOverflow(ref a, ref b, options))
+            {
+                if (a is decimal && b is decimal)
+                    throw DecimalOverflow("subtraction", ex);
                 throw;
+            }
             object? result = Subtract(a, b, reduceTypes, options);
             if (result is null)
                 return result;
@@ -2260,10 +2268,14 @@ public static class MathHelper
             object result = ExecuteOperation(a, b, '*', ArithmeticOperation.Multiply, options, typeCode);
             return ReduceNumericType(result, reduceTypes ? null : t, options);
         }
-        catch (OverflowException)
+        catch (OverflowException ex)
         {
             if (!TryExpandAfterOverflow(ref a, ref b, options))
+            {
+                if (a is decimal && b is decimal)
+                    throw DecimalOverflow("multiplication", ex);
                 throw;
+            }
             object? result = Multiply(a, b, reduceTypes, options);
             if (result is null)
                 return null;
@@ -2306,6 +2318,15 @@ public static class MathHelper
     /// </summary>
     internal static NCalcEvaluationException DivisionByZero(DivideByZeroException? innerException = null)
         => new("Division by zero.", innerException ?? new DivideByZeroException());
+
+    /// <summary>
+    /// The exception for an operation of two decimals whose result is outside the range of decimal and cannot be widened (see
+    /// <see cref="TryExpandAfterOverflow"/>; UseBigNumbers widens it to a big number): the arithmetic operators throw it in all evaluators,
+    /// as the percent operators do, with the .NET exception as the inner one. An integer overflow with OverflowProtection stays an
+    /// <see cref="OverflowException"/>.
+    /// </summary>
+    private static NCalcEvaluationException DecimalOverflow(string operation, OverflowException innerException)
+        => new($"The result of the {operation} is outside the range of decimal.", innerException);
 
     private static object? DivideCore(object? a, object? b, bool reduceTypes, MathHelperOptions options)
     {
@@ -2552,10 +2573,14 @@ public static class MathHelper
         {
             result = ExecuteOperation(a, b, '/', ArithmeticOperation.Divide, options, typeCode);
         }
-        catch (OverflowException)
+        catch (OverflowException ex)
         {
             if (!TryExpandAfterOverflow(ref a, ref b, options))
+            {
+                if (a is decimal && b is decimal)
+                    throw DecimalOverflow("division", ex);
                 throw;
+            }
             result = Divide(a, b, reduceTypes, options);
         }
         if (result is null)
@@ -2911,10 +2936,14 @@ public static class MathHelper
             else
                 result = ExecuteOperation(a, b, '/', ArithmeticOperation.Divide, options);
         }
-        catch (OverflowException)
+        catch (OverflowException ex)
         {
             if (!TryExpandAfterOverflow(ref a, ref b, options))
+            {
+                if (a is decimal && b is decimal)
+                    throw DecimalOverflow("integer division", ex);
                 throw;
+            }
 
             result = Divide(a, b, reduceTypes, options);
         }

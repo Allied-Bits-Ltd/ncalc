@@ -287,4 +287,28 @@ public class ArithmeticAudit6Tests
             }
         }
     }
+
+    // Docs review: a decimal result beyond the range of decimal threw a .NET OverflowException; it is an NCalc exception, as in percents
+    [Theory]
+    [InlineData("m * 10")]
+    [InlineData("m + m")]
+    [InlineData("-m - m")]
+    [InlineData("m / 0.1")]
+    [InlineData("m * 9223372036854775807")]
+    public async Task DecimalOverflowShouldThrowNCalcEvaluationException(string text)
+    {
+        foreach (var options in new[] { ExpressionOptions.DecimalAsDefault, ExpressionOptions.DecimalAsDefault | ExpressionOptions.OverflowProtection,
+                     ExpressionOptions.DecimalAsDefault | ExpressionOptions.AvoidDynamicFunctions })
+        {
+            foreach (var result in await EvaluateAllAsync(text, options, Parameters(("m", decimal.MaxValue))))
+            {
+                var exception = Assert.IsType<NCalcEvaluationException>(result);
+                Assert.IsType<OverflowException>(exception.InnerException);
+            }
+        }
+
+        // UseBigNumbers widens the result to a big number
+        foreach (var result in await EvaluateAllAsync(text, ExpressionOptions.DecimalAsDefault | ExpressionOptions.UseBigNumbers, Parameters(("m", decimal.MaxValue))))
+            Assert.False(result is Exception, $"{text}: {result}");
+    }
 }

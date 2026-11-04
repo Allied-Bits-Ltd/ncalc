@@ -16,7 +16,7 @@ All flags are off by default (`ExpressionOptions.None`). An expression parsed wi
 |------|--------|
 | `DecimalAsDefault` | Floating-point literals are `decimal` instead of `double` (literals that `decimal` cannot hold with their digits stay `double`); math functions use the `decimal` overloads of `System.Math` where they exist. See [Values](values.md#floating-point-numbers). |
 | `UseBigNumbers` | Integer literals beyond `long` are `ulong` or `BigInteger`, floating-point literals beyond `double` are `BigDecimal`; integer arithmetic that overflows gives a `BigInteger`, and exact powers and factorials are computed. Functions of big numbers are computed with big-number precision. |
-| `OverflowProtection` | Integer arithmetic that overflows its type is computed in a wider type, or throws <xref:System.OverflowException> beyond 64 bits. See [Overflow Protection](overflow_protection.md). |
+| `OverflowProtection` | Integer arithmetic that overflows its type is computed in a wider type, or throws <xref:System.OverflowException> beyond 64 bits; a floating-point operator whose result is infinite throws <xref:System.OverflowException>. See [Overflow Protection](overflow_protection.md). |
 | `ReduceDivResultToInteger` | `/` of two integers gives an integer when the quotient is a whole number (`6 / 3` is the `int` 2 instead of the `double` 2). |
 | `ReduceArithmeticResultType` | The integer result of an arithmetic operation is reduced to the smallest type that holds it. |
 | `AllowBooleanCalculation` | Booleans take part in arithmetic as 1 and 0 (`true + 1` is 2); without it, such an operation fails. |
