@@ -4,11 +4,14 @@ on:
   push:
     branches:
       - master
+      - ABCalc
       - release/*
   pull_request:
     branches:
       - master
+      - ABCalc
       - release/*
+  workflow_dispatch:
 
 jobs:
   build_and_test:
