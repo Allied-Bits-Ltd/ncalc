@@ -15,7 +15,7 @@ Lambda compilation is not available in the AOT version as these two features are
 ```c#
 var expression = new Expression("1 + 2");
 Func<int> function = expression.ToLambda<int>();
-Debug.Assert(function()); //3
+Debug.Assert(function() == 3);
 ```
 
 **Expressions with Functions and Parameters**
@@ -53,4 +53,4 @@ See [benchmarks](benchmarks.md) for more info.
 
 ## Limitations
 
-Not all functionality is supported with Lambda compilation. Unsupported functionality includes loops, conditional statements, and indexed access to lists and strings.
+Not all functionality is supported with Lambda compilation. Unsupported functionality includes `while` loops, `if` statements, `return`, indexed access to lists and strings, functions declared with `fn`, and assignments without a context object (with `ToLambda<TContext, TResult>()`, assignments update the members of the context). `ToLambda()` throws `NotSupportedException` for such expressions instead of compiling them into something that gives a different result. An expression nested more than 128 levels deep throws `NCalcException`; use `Evaluate()` for it.

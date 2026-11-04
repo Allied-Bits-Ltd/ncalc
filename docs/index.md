@@ -28,7 +28,7 @@ Over the years, several variants of NCalc have evolved from the original library
 * Parsing of humane period expressions like "3 weeks 2 days 5 hours" (period identifiers are customizable and multiple identifiers per period are supported).
 * Basic calculations with dates and time spans - one can add and subtract dates and times, multiply and divide time periods.
 * Currency support, which takes into account culture settings (current or specific culture or custom symbols) and produces decimal result from the currency value.
-* Optional use of BigInteger and BigDecimal types for basic math operations and most built-in funcitons.
+* Optional use of BigInteger and BigDecimal types for basic math operations and most built-in functions.
 * Underscores in numbers and currency values. Modern programming languages support underscores for readability.
 * Custom decimal and group separators in numbers and currency.
 * An optional secondary decimal number separator. 

@@ -8,9 +8,12 @@ NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expres
 - [Advanced Value Formats](advanced_value_formats.md): Advanced Value Formats and Operations
 - [Functions](functions.md): List of already implemented functions.
 - [Parameters/Variables](parameters.md): How to use parameters (variables) in expressions.
+- [Expression Options](options.md): What each option does, the limits, the culture, the choice of an evaluator and thread safety.
 - [Handling Errors](handling_errors.md): How to handle errors.
 - [Case Sensitivity](case_sensitivity.md): Options in how to handle case sensitivity.
 - [Overflow Handling](overflow_protection.md): How to handle overflow with binary arithmetic operations
+- [String Concatenation](string_concatenation.md): How `+` handles strings.
+- [Strict Type Matching](strict_type_matching.md): Comparisons without type conversion.
 - [Async Support](async.md): How and when to use `async`.
 - [Caching](caching.md): How caching works.
 - [Improve performance](lambda_compilation.md): How to use compilation of expressions to CLR lambdas.
@@ -39,7 +42,7 @@ var expression = new NCalc.Expression("{ 1; 2 }", ExpressionOptions.UseStatement
 
 ```c#
 var expression = new Expression("2 + 3 * 5");
-Debug.Assert(17 == expression.Evaluate());
+Debug.Assert(17.Equals(expression.Evaluate()));
 ```
 
 ### Conditional Statements
@@ -66,26 +69,28 @@ var expression = new NCalc.Expression("a = 1; while (a < 5) { a += 1; }", Expres
 
 You can use `break` and `continue` keywords in loops; they do the same job as in C/C++ and C#. 
 
+A loop evaluates to the value of the last statement of its body that was evaluated. As a safety fuse, the iterations of all loops of one evaluation are limited by `Expression.MaxLoopIterations` (`AsyncExpression.MaxLoopIterations`; 65536 by default); when the limit is reached, the loops stop silently and the evaluation continues. See [Limits](options.md#limits).
+
 ### Returning of Value
 
-An expression always evaluates to some value. In complex expressions which include conditional statements and loops, it may be desired to return a value without evaluating the expression completely. For this, one can use a common `return` keyword followed by the value to return. 
+An expression always evaluates to some value. In complex expressions which include conditional statements and loops, it may be desired to return a value without evaluating the expression completely. For this, one can use a common `return` keyword followed by the value to return. For example, with <xref:NCalc.ExpressionOptions.UseStatementSequences>, `1; return 2; 3` evaluates to 2. In the body of a function declared with `fn`, `return` returns from that function; elsewhere, including inside the argument of a function call, it returns from the whole expression.
 
 ### .NET Data Types
 
 ```c#
-Debug.Assert(123456 == new Expression("123456").Evaluate()); // integers
-Debug.Assert(new DateTime(2001, 01, 01) == new Expression("#01/01/2001#").Evaluate()); // datetime
-Debug.Assert(123.456 == new Expression("123.456").Evaluate()); // floating point numbers
-Debug.Assert(true == new Expression("true").Evaluate()); // booleans
-Debug.Assert("azerty" == new Expression("'azerty'").Evaluate()); // strings
+Debug.Assert(123456.Equals(new Expression("123456").Evaluate())); // integers (int)
+Debug.Assert(new DateTime(2001, 01, 01).Equals(new Expression("#01/01/2001#").Evaluate())); // datetime
+Debug.Assert(123.456.Equals(new Expression("123.456").Evaluate())); // floating point numbers (double)
+Debug.Assert(true.Equals(new Expression("true").Evaluate())); // booleans
+Debug.Assert("azerty".Equals(new Expression("'azerty'").Evaluate())); // strings
 ```
 
 ### Mathematical functional from [System.Math](https://learn.microsoft.com/en-us/dotnet/api/system.math?view=net-8.0)**
 
 ```c#
-Debug.Assert(0 == new Expression("Sin(0)").Evaluate());
-Debug.Assert(2 == new Expression("Sqrt(4)").Evaluate());
-Debug.Assert(0 == new Expression("Tan(0)").Evaluate());
+Debug.Assert(0.0.Equals(new Expression("Sin(0)").Evaluate())); // the functions return doubles
+Debug.Assert(2.0.Equals(new Expression("Sqrt(4)").Evaluate()));
+Debug.Assert(0.0.Equals(new Expression("Tan(0)").Evaluate()));
 ```
 
 ### Custom Functions
@@ -97,16 +102,16 @@ expression.Functions["SecretOperation"] = (args) =>
     return (int)args[0].Evaluate() + (int)args[1].Evaluate();
 };
 
-Debug.Assert(9 == expression.Evaluate());
+Debug.Assert(9.Equals(expression.Evaluate()));
 ```
 
 ### Unicode Characters
 
 ```c#
-Debug.Assert("経済協力開発機構" == new Expression("'経済協力開発機構'").Evaluate());
-Debug.Assert("Hello" == new Expression(@"'\u0048\u0065\u006C\u006C\u006F'").Evaluate());
-Debug.Assert("だ" == new Expression(@"'\u3060'").Evaluate());
-Debug.Assert("\u0100" == new Expression(@"'\u0100'").Evaluate());
+Debug.Assert("経済協力開発機構".Equals(new Expression("'経済協力開発機構'").Evaluate()));
+Debug.Assert("Hello".Equals(new Expression(@"'\u0048\u0065\u006C\u006C\u006F'").Evaluate()));
+Debug.Assert("だ".Equals(new Expression(@"'\u3060'").Evaluate()));
+Debug.Assert("\u0100".Equals(new Expression(@"'\u0100'").Evaluate()));
 ```
 
 ### Parameters (variables) - Static and Dynamic
@@ -122,14 +127,14 @@ expression.DynamicParameters["Pi"] = _ => {
     return 3.14;
 };
 
-Debug.Assert(117.07 == expression.Evaluate());
+Debug.Assert(117.07.Equals(expression.Evaluate()));
 ```
 
 ### Lambda Expressions
 ```cs
 var expression = new Expression("1 + 2");
 Func<int> function = expression.ToLambda<int>();
-Debug.Assert(function()); //3
+Debug.Assert(function() == 3);
 ```
 
 ### Comments
@@ -145,6 +150,6 @@ Note that when C-style comments are enabled, the "//" operator used in Python fo
 
 ### Recursive and non-recursive evaluation
 
-By default, the evaluator works by recursively traversing the expression tree. Note that even linear expressions like "1+2+...+99+100" would be parsed into a tree with plenty of nodes (about 200 nodes in the given example). This can cause a StackOverflow error.
+By default, the evaluator works by recursively traversing the expression tree. Note that even linear expressions like "1+2+...+99+100" would be parsed into a tree with plenty of nodes (about 200 nodes in the given example), nested as deeply as the expression is long. When the stack runs low, the recursive evaluator throws an <xref:NCalc.Exceptions.NCalcEvaluationException> that advises the non-recursive evaluator (it does not crash the process with a `StackOverflowException`).
 If you need to evaluate such long or deeply nested expressions, you can enable the non-recursive evaluator by setting the <xref:NCalc.ExpressionOptions.UseNonRecursiveEvaluator> flag in <xref:NCalc.ExpressionOptions> passed when creating an instance of the <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> class.
-This non-recursive evaluator is slower than the recursive one, so it is disabled by default.
+This non-recursive evaluator is slower than the recursive one, so it is disabled by default. See [Choosing an evaluator](options.md#choosing-an-evaluator) for details.

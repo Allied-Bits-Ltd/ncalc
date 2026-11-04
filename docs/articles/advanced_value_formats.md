@@ -13,6 +13,7 @@ Some of the behavior and support for advanced parsing features is controlled by 
 * Percent calculations
 * Complex number calculations
 * Vector calculations
+* Extra identifier characters
 
 Advanced options are configured by assigning an instance of the <xref:NCalc.AdvancedExpressionOptions> class to the 
 `AdvancedOptions` property of <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression> that you create and adjusting its properties:
@@ -23,7 +24,9 @@ expression.AdvancedOptions = new NCalc.AdvancedExpressionOptions();
 expression.AdvancedOptions. ... = ...;
 ```
 
-When advanced options are used, an expression is evaluated using a new parser, which is created each time. This means that options are applied during the evaluation and may be changed between evaluations.
+The `AdvancedOptions` property stores a copy of the assigned instance, which gets the culture of the expression (the `CultureInfo` property of <xref:NCalc.AdvancedExpressionOptions>, used where an option takes a value from the culture, is replaced with the culture of the expression). Change the options of an expression through the property (`expression.AdvancedOptions.Flags |= ...`); later changes to the instance that you assigned do not affect the expression. Use <xref:NCalc.AdvancedExpressionOptions.Clone> to copy an instance.
+
+A parser is built once for each combination of options, culture and advanced options and then reused, and parsed expressions are cached with these settings as part of the key, so the options may be changed between evaluations. An expression that has already been parsed keeps the options it was parsed with.
 
 ## Advanced Date and Time Parsing
 
@@ -43,14 +46,19 @@ The <xref:NCalc.AdvancedExpressionOptions.DateSeparatorType> property lets you c
 When <xref:NCalc.AdvancedExpressionOptions.DateSeparatorType> is set to `FromCulture` or `Custom`, the parser will try to parse the value using the corresponding format and optionally try the built-in format. Whether the built-in format is tried or skipped in this case, is defined by the <xref:NCalc.AdvExpressionOptions.SkipBuiltInDateSeparator> flag. To skip the built-in format, include the <xref:NCalc.AdvExpressionOptions.SkipBuiltInDateSeparator> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class.
 
 ```c#
-var expression = new NCalc.Expression("10 * 2%");
+var expression = new NCalc.Expression("#31.01.2024#");
 expression.AdvancedOptions = new NCalc.AdvancedExpressionOptions();
+expression.AdvancedOptions.DateSeparatorType = NCalc.AdvancedExpressionOptions.SeparatorType.Custom;
+expression.AdvancedOptions.DateSeparator = ".";
+expression.AdvancedOptions.DateOrder = NCalc.AdvancedExpressionOptions.DateOrderKind.DMY;
 expression.AdvancedOptions.Flags |= NCalc.AdvExpressionOptions.SkipBuiltInDateSeparator;
 ```
 
+Date literals are always read in the Gregorian calendar, whatever the calendar of the culture.
+
 #### Order of Values in Dates
 
-When <xref:NCalc.AdvancedExpressionOptions.DateSeparatorType> is set to `FromCulture`, the order of day, month, and year parts is defined by the culture. When it is set to `Custom`, the order is defined by the `DateOrder` property and can be one of `YMD`, `DMY`, or `MDY`. This order tells the parser how to build a custom pattern for parsing a date.
+When <xref:NCalc.AdvancedExpressionOptions.DateSeparatorType> is set to `FromCulture`, the order of day, month, and year parts is defined by the culture. When it is set to `Custom`, the order is defined by the `DateOrder` property and can be one of `YMD`, `DMY`, or `MDY` (the default is the order of the short date pattern of the culture of the options). This order tells the parser how to build a custom pattern for parsing a date.
 
 **NOTE:** if a `Custom` format or a `FromCulture` format with a custom culture is used and it has a different year-month-day order than the system-current culture format, the parser will likely recognize the date as the one matching a custom format first and will not try the built-in format, which can lead to unexpected results. So, it is recommended that the <xref:NCalc.AdvExpressionOptions.SkipBuiltInDateSeparator> flag is set when you use a format type different from `BuiltIn`. To put it simply, don't mix the regular and US formats in one configuration.
 
@@ -59,11 +67,11 @@ When <xref:NCalc.AdvancedExpressionOptions.DateSeparatorType> is set to `FromCul
 <xref:NCalc.AdvancedExpressionOptions> let one specify, which format to use for parsing times. 
 
 The <xref:NCalc.AdvancedExpressionOptions.TimeSeparatorType> property lets you choose between 
-* `BuiltIn` : parsing of times is done as if there were no AdvancedExpressionOptions set, i.e., times are expected in #H:m:s# format and the string is parsed using current culture.
-* `CurrentCulture` : the separator defined in the current culture (which is either CultureInfo.CurrentCulture or a custom culture that you specify in the constructor or the <xref:NCalc.AdvancedExpressionOptions.CultureInfo> property) is used.
+* `BuiltIn` : parsing of times is done as if there were no AdvancedExpressionOptions set, i.e., times are expected in #H:m:s# format.
+* `FromCulture` : the separator defined in the current culture (which is either CultureInfo.CurrentCulture or a custom culture that you specify in the constructor or the <xref:NCalc.AdvancedExpressionOptions.CultureInfo> property) is used.
 * `Custom` : the separator defined in the <xref:NCalc.AdvancedExpressionOptions.TimeSeparator> property
 
-When <xref:NCalc.AdvancedExpressionOptions.TimeSeparatorType> is set to `CurrentCulture` or `Custom`, the parser will try to parse the value using the corresponding format and optionally try the built-in format. Whether the built-in format is tried or skipped in this case, is defined by the <xref:NCalc.AdvExpressionOptions.SkipBuiltInTimeSeparator> flag. To skip the built-in format, include the <xref:NCalc.AdvExpressionOptions.SkipBuiltInTimeSeparator> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class.
+When <xref:NCalc.AdvancedExpressionOptions.TimeSeparatorType> is set to `FromCulture` or `Custom`, the parser will try to parse the value using the corresponding format and optionally try the built-in format. Whether the built-in format is tried or skipped in this case, is defined by the <xref:NCalc.AdvExpressionOptions.SkipBuiltInTimeSeparator> flag. To skip the built-in format, include the <xref:NCalc.AdvExpressionOptions.SkipBuiltInTimeSeparator> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class.
 
 #### 12-hour and 24-hour times
 
@@ -71,7 +79,7 @@ When <xref:NCalc.AdvancedExpressionOptions.TimeSeparatorType> is set to `Current
 
 The <xref:NCalc.AdvancedExpressionOptions.HoursFormat> property lets you choose between 
 * `BuiltIn` : The ShortTimeFormat property of the CultureInfo.CurrentCulture's date/time information is used to determine if 12-hour format is to be used. 
-* `CurrentCulture` : The ShortTimeFormat property of the  date/time information of either the custom culture or CultureInfo.CurrentCulture is used to determine if 12-hour format is to be used. 
+* `FromCulture` : The ShortTimeFormat property of the  date/time information of either the custom culture or CultureInfo.CurrentCulture is used to determine if 12-hour format is to be used. 
 * `Always12Hour` : use 12-hour format
 * `Always24Hour` : use 24-hour format
 
@@ -85,7 +93,9 @@ A time-only 12-hour literal is a `TimeSpan`, like a 24-hour one: with en-US, `#1
 
 The result of such parsing is expressed as a DateTime or a TimeSpan respectively, suitable for date and timespan operations (see the next section).
 
-The expression #today# evaluates to current local date with time set to 00:00, while the expression #now# evaluates to current local date and time. In both cases, the result is an instance of DateTime.
+The expression #today# evaluates to current local date with time set to 00:00, while the expression #now# evaluates to current local date and time; #yesterday# and #tomorrow# are the dates before and after today. In all cases, the result is an instance of DateTime. Relative dates are computed each time the expression is evaluated (not when it is parsed), so a cached expression always gives the current date, and they stay relative when the expression is written with `ToString()` or serialized to JSON.
+
+In a period, years and months are converted to fixed numbers of days (a month is 30 days), so `#1 month#` is a `TimeSpan` of 30 days rather than a calendar month. An unknown period indicator is reported as a parse error.
 
 To enable Humane Period Expressions, include the <xref:NCalc.AdvExpressionOptions.ParseHumanePeriods> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class:
 ```c#
@@ -111,8 +121,10 @@ For current and relative dates, the following time relation indicators are recog
 
 readonly List<string> _periodNowIndicators = ["now"];
 readonly List<string> _periodTodayIndicators = ["today"];
+readonly List<string> _periodYesterdayIndicators = ["yesterday"];
+readonly List<string> _periodTomorrowIndicators = ["tomorrow"];
 
-readonly List<string> _periodPastIndicators = ["before", "earlier", "ago"];
+readonly List<string> _periodPastIndicators = ["ago", "before", "earlier"];
 readonly List<string> _periodFutureIndicators = ["after", "in", "later"];
 ```
 
@@ -153,19 +165,20 @@ expression.AdvancedOptions.PeriodMSecIndicators.Add("ms");
 
 ## Basic Calculations with Dates and Time Spans
 
-This version of NCalc supports basic operations (add, subtract) between a DateTime and a TimeSpan, as well as between two TimeSpans. Also, one can subtract one DateTime from another DateTime.
+This version of NCalc supports basic operations (add, subtract) between a DateTime and a TimeSpan, as well as between two TimeSpans. Also, one can subtract one DateTime from another DateTime, add or subtract a number of ticks, multiply or divide a TimeSpan by a number, and divide a TimeSpan by another TimeSpan (which gives a `double`). The same operations work with `DateTimeOffset` and `TimeOnly` values passed as parameters.
 To enable date and timespan calculations, include the <xref:NCalc.ExpressionOptions.SupportTimeOperations> flag into <xref:NCalc.ExpressionOptions> of an <xref:NCalc.Expression> or <xref:NCalc.AsyncExpression>:
 ```c#
-var expression = new NCalc.Expression("#11:00:00# - #3:00:00#", ExpressionOptions.SupportTimeOpertions);
+var expression = new NCalc.Expression("#11:00:00# - #3:00:00#", ExpressionOptions.SupportTimeOperations);
 ```
 
-When the calculations are enabled, you can write expressions like "#11:00:00# - #3:00:00#" or "#01/01/2001# + #1yr 3mon 5days#", and they will produce a new TimeSpan or DateTime depending on the type of the left operand.
+When the calculations are enabled, you can write expressions like "#11:00:00# - #3:00:00#" or "#01/01/2001# + #1yr 3mon 5days#", and they will produce a new TimeSpan or DateTime depending on the type of the left operand. A TimeSpan multiplied or divided by a number is rounded to the nearest tick, and a result outside the range of its type throws <xref:NCalc.Exceptions.NCalcEvaluationException>. Without the flag, such operations fail.
 
 ## Currency Support 
 
 This version of NCalc supports parsing of currency values (i.e., the numbers accompanied by the currency symbol, the currency name, and, in the case of Euro, by "EUR" specifically). 
 To enable currency support, include the <xref:NCalc.AdvExpressionOptions.AcceptCurrencySymbol> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class:
 ```c#
+// With a culture whose currency is the euro, e.g. de-DE
 var expression = new NCalc.Expression("10000000 EUR / 2");
 expression.AdvancedOptions = new NCalc.AdvancedExpressionOptions();
 expression.AdvancedOptions.Flags |= NCalc.AdvExpressionOptions.AcceptCurrencySymbol;
@@ -176,18 +189,20 @@ The parser supports three currency symbols (used for a currency symbol, a curren
 The <xref:NCalc.AdvancedExpressionOptions.CurrencySymbolsType> type property lets you choose between 
 * `CurrentCulture` : The symbol defined in CultureInfo.CurrentCulture is used. If the symbol is for Euro and EUR is not detected as a second symbol, "EUR" is used as a third symbol.
 * `FromCulture` : The symbol defined in the current culture (which is either CultureInfo.CurrentCulture or a custom culture that you specify in the constructor or the `CultureInfo` property) is used. If the symbol is for Euro and EUR is not detected as a second symbol, "EUR" is used as a third symbol.
-* `Custom` : Two symbols can be set via the <xref:NCalc.AdvancedExpressionOptions.CurrencySymbol>, <xref:NCalc.AdvancedExpressionOptions.CurrencySymbol2>,and <xref:NCalc.AdvancedExpressionOptions.CurrencySymbol3> properties.
+* `Custom` : Up to three symbols can be set via the <xref:NCalc.AdvancedExpressionOptions.CurrencySymbol>, <xref:NCalc.AdvancedExpressionOptions.CurrencySymbol2>,and <xref:NCalc.AdvancedExpressionOptions.CurrencySymbol3> properties.
+
+A currency value is a `decimal` (`$0.1 + $0.2 = $0.3` is true with en-US). The currency decimal and group separators are set separately from the number separators (see below).
 
 ## Underscores in Numbers and Currency
 
-This version of NCalc supports underscore characters (`_`) in numeric literals. Such characters are treated as whitespace and are stripped when the value is converted into a number. Modern programming languages support this notation for better readability of large numbers.
+This version of NCalc supports underscore characters (`_`) in numeric literals. Such characters are stripped when the value is converted into a number. Modern programming languages support this notation for better readability of large numbers. As in C#, an underscore may only stand between two digits, or after the prefix of a hexadecimal, octal or binary number: `_1` is an identifier, and `1_`, `1_.5` and `1e_5` are errors.
 
-**NOTE:** Support for underscores requires [a custom version of the Parlot parser as provided by Allied Bits Ltd](https://github.com/Allied-Bits-Ltd/parlot) in the `ws_in_num2` or `ABCalc` branches.
+Underscores in decimal numbers rely on the [AlliedBits.Parlot](https://github.com/Allied-Bits-Ltd/parlot) parser library, which the AlliedBits.NCalc package references.
 
 To enable underscores in numbers, include the <xref:NCalc.AdvExpressionOptions.AcceptUnderscoresInNumbers> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class:
 
 ```c#
-var expression = new NCalc.Expression("100_000 * 2 + 0x_DEAD_BEAF");
+var expression = new NCalc.Expression("100_000 * 2 + 0x_DEAD_BEEF");
 expression.AdvancedOptions = new NCalc.AdvancedExpressionOptions();
 expression.AdvancedOptions.Flags |= NCalc.AdvExpressionOptions.AcceptUnderscoresInNumbers;
 ```
@@ -198,12 +213,15 @@ expression.AdvancedOptions.Flags |= NCalc.AdvExpressionOptions.AcceptUnderscores
 
 The <xref:NCalc.AdvancedExpressionOptions.DecimalSeparatorType> and <xref:NCalc.AdvancedExpressionOptions.CurrencyDecimalSeparatorType> properties lets you choose between 
 * `BuiltIn` : the separator defined in the default parser (Parlot), which is a dot (`.`)
-* `CurrentCulture` : the separator defined in the current culture (which is either CultureInfo.CurrentCulture or a custom culture that you specify in the constructor or the `CultureInfo` property) 
+* `FromCulture` : the separator defined in the current culture (which is either CultureInfo.CurrentCulture or a custom culture that you specify in the constructor or the `CultureInfo` property) 
 * `Custom` : the separator defined in the `DecimalSeparator` and `CurrencyDecimalSeparator` property respectively
 
+The default is `BuiltIn`. In addition, the <xref:NCalc.AdvancedExpressionOptions.SecondaryDecimalSeparator> property sets a second character that is accepted as a decimal separator in numbers (e.g. `","` together with the built-in `.`). A decimal separator makes a number fractional only when a digit follows it, so with a comma as both the decimal and the list separator, `Max(1, 2)` has two integer arguments.
+
 The <xref:NCalc.AdvancedExpressionOptions.NumberGroupSeparatorType> and <xref:NCalc.AdvancedExpressionOptions.CurrencyNumberGroupSeparatorType> property lets you choose between 
+* `Skip` (the default) : numbers have no group separator
 * `BuiltIn` : the separator defined in the default parser (Parlot), which is a comma (`,`)
-* `CurrentCulture` : the separator defined in the current culture (which is either CultureInfo.CurrentCulture or a custom culture that you specify in the constructor or the `CultureInfo` property) 
+* `FromCulture` : the separator defined in the current culture (which is either CultureInfo.CurrentCulture or a custom culture that you specify in the constructor or the `CultureInfo` property) 
 * `Custom` : the separator defined in the <xref:NCalc.AdvancedExpressionOptions.NumberGroupSeparator> and <xref:NCalc.AdvancedExpressionOptions.CurrencyNumberGroupSeparator> property respectively
 
 A number group separator may be empty. A group separator must differ from the decimal separator it is used with: when the number group separator equals the decimal separator, or the currency group separator equals the currency decimal separator, parsing throws <xref:NCalc.Exceptions.NCalcParserException>.
@@ -246,9 +264,10 @@ expression.AdvancedOptions.Flags |= NCalc.AdvExpressionOptions.CalculatePercent;
 
 The following operations with percent are supported:
 * `a * b%` : Multiply a by b per cent ( a * b / 100 )
-* `a / b%` : Multiply a by b per cent ( a * 100 / b )
+* `a / b%` : Divide a by b per cent ( a * 100 / b )
 * `a + b%` : Add b per cent to a ( a  + ( a * b / 100 ) )
 * `a - b%` : Subtract b per cent from a ( a  - ( a * b / 100 ) )
+* `a ** b%` : Raise a to the power of b per cent ( a ** (b / 100) )
 
 * `a% * b` : multiply the numeric value of percent a by b ( a * b ) with a result becoming a percent. E.g.: 5% * 2 = 10%
 * `a% / b` : divide the numeric value of percent a by b ( a / b ) with a result becoming a percent. E.g.: 10% / 2 = 5%
@@ -258,7 +277,13 @@ The following operations with percent are supported:
 * `a% + b%` : add the numeric value of percent b to the numeric value of percent a ( a + b ) with a result becoming a percent. E.g.: 5% + 2% = 7%
 * `a% - b%` : subtract the numeric value of percent b from the numeric value of percent a ( a - b ) with a result becoming a percent. E.g.: 5% - 2% = 3%
 
-Operations that produce percent as a result return an instance of the <xref:NCalc.Domain.Percent> type, whose <xref:NCalc.Domain.Percent.Value> property contains the value of a percent (e.g., 5 for 5% and so on). 
+Operations that produce percent as a result return an instance of the <xref:NCalc.Domain.Percent> type, whose <xref:NCalc.Domain.Percent.Value> property contains the value of a percent (e.g., 5 for 5% and so on).
+
+The left side of `+` and `-` cannot be a percent unless the right side is a percent too: `10% + 5` throws <xref:NCalc.Exceptions.NCalcEvaluationException>. Percents can be negated (`-10%`), compared with each other (`10% < 20%`), and passed to `Abs`, `Round`, `Ceiling`, `Floor`, `Truncate`, `Sign`, `Sqrt`, `Max` and `Min` (see [Functions](functions.md)).
+
+The result of `a * b%`, `a / b%`, `a + b%` and `a - b%` is a `double`, or a `decimal` when an operand is a `decimal` (e.g. with <xref:NCalc.ExpressionOptions.DecimalAsDefault>); with <xref:NCalc.ExpressionOptions.UseBigNumbers>, a result that a `double` cannot hold exactly is a `BigDecimal`. So `100 * 5%` is the double 5. Division by a zero percent follows the `/` operator for doubles (`200 / 0%` is infinity). A percent of a `TimeSpan` (with <xref:NCalc.ExpressionOptions.SupportTimeOperations>) is a `TimeSpan` rounded to the nearest tick: `#01:00:00# + 10%` is 01:06:00.
+
+With `CalculatePercent`, the `%` character is no longer the modulus operator; use `mod` instead. The `%(a, b)` function is a short form of `PercentOf(a, b)`.
 
 ## Complex Number Calculations
 
@@ -310,8 +335,14 @@ The following operators are supported between two complex numbers, or between a 
 * `-a` : negation
 * `a * b` : multiplication
 * `a / b` : division
+* `a ** b` : exponentiation (an integer exponent up to 64 in magnitude is applied exactly, so `(1+2i) ** 2 == -3+4i` is true)
+* `a == b`, `a != b` : equality; a complex number with no imaginary part equals the real number
 
-All of these work with any combination of two <xref:NCalc.Domain.ComplexNumber> values, or a <xref:NCalc.Domain.ComplexNumber> and a `double` or `BigDecimal` scalar.
+All of these work with any combination of two <xref:NCalc.Domain.ComplexNumber> values, or a <xref:NCalc.Domain.ComplexNumber> and a real number (scalar). Ordering (`<`, `>` and the like), `%` and `//` of complex numbers, and division by zero throw <xref:NCalc.Exceptions.NCalcEvaluationException>.
+
+A complex number whose imaginary part is zero, or at most `ComplexNumber.Tolerance` (1E-10 by default) times its real part, is used as a real number in arithmetic and functions: `Exp(3.141592653589793 * i) + 1` is 0, and `Sqrt(-1 + 0i)` is NaN like `Sqrt(-1)`. The tolerance also applies to `IsReal`, `IsZero` and equality.
+
+The built-in functions `Abs` (the modulus), `Sqrt`, `Pow`, `Exp`, `Ln`, `Log`, the trigonometric functions and the rounding functions accept complex numbers in expressions; `Sign` and `IEEERemainder` do not.
 
 ### Mathematical Functions
 
@@ -399,6 +430,14 @@ The following arithmetic operations are supported between two vectors, or betwee
 * `-a` : negation (element-wise)
 * `a * s` or `s * a` : multiplication of a vector by a scalar
 * `a / s` : division of a vector by a scalar
+* `a % s` : element-wise remainder of the division by a scalar
+* `a ** s` : element-wise power
+* `a & b`, `a | b`, `a ^ b`, `a << s`, `a >> s` : element-wise bitwise operations and shifts, with the rules of the scalar operators (the components must be whole numbers)
+* `a == b`, `a != b` : equality of all components
+
+Vectors of different dimensions, division by zero, NaN or infinite components and ordering (`<`, `>` and the like) throw <xref:NCalc.Exceptions.NCalcEvaluationException>. The product of two vectors (`[1; 2] * [3; 4]`), the sum of a vector and a scalar, and the division of a vector by a vector are not supported and throw <xref:System.InvalidOperationException>; use `Dot()` or `Cross()` for vector products.
+
+The built-in functions `Abs`, `Floor`, `Ceiling`, `Truncate`, `Round`, `Sign`, `Sqrt`, `Pow` (with a scalar exponent), `Max` and `Min` are computed element-wise; they use the options of the evaluation, so with <xref:NCalc.ExpressionOptions.UseBigNumbers> they have big-number precision.
 
 In addition, the <xref:NCalc.Domain.Vector> struct provides the following methods for use in custom function handlers or host code:
 
@@ -412,4 +451,9 @@ In addition, the <xref:NCalc.Domain.Vector> struct provides the following method
 * `DistanceSquared(a, b)` : squared Euclidean distance (no square root, cheaper)
 * `Lerp(a, b, t)` : linear interpolation between `a` and `b`
 * `Min(a, b)`, `Max(a, b)` : element-wise minimum and maximum
-* `Abs(v)`, `Floor(v)`, `Ceiling(v)`, `Round(v)` : element-wise rounding operations
+* `Abs(v)`, `Floor(v)`, `Ceiling(v)`, `Round(v)`, `Truncate(v)` : element-wise rounding operations
+* `Magnitude`, `MaxByMagnitude(a, b)`, `MinByMagnitude(a, b)` : the Euclidean length, and the vector with the larger or smaller length
+
+## Extra Identifier Characters
+
+On .NET 8 and later, the `ExtraIdentifierChars` property of <xref:NCalc.AdvancedExpressionOptions> lists characters that may be used in identifiers in addition to letters, digits and `_`. The default is `"φϕπ"`, so names such as `π` or `2*π*r` can be used for parameters.

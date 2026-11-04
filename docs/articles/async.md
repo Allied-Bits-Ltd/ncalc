@@ -8,7 +8,7 @@ In Allied Bits NCalc, asynchronous classes are included in the same package and 
 
 # Install
 ```shell
-dotnet add package NCalc
+dotnet add package AlliedBits.NCalc
 ```
 
 # Usage
@@ -23,5 +23,14 @@ expression.Functions["database_operation"] = async (args) => {
 };
 
 var result = await expression.EvaluateAsync();
-Debug.Assert(true,result);
+Debug.Assert(true.Equals(result));
 ```
+
+<xref:NCalc.AsyncExpression> supports the same syntax, options, operators and built-in functions as <xref:NCalc.Expression> and gives the same results. The differences are:
+
+* Custom functions (`Functions`), dynamic parameters (`DynamicParameters`) and the events (`EvaluateFunctionAsync`, `EvaluateParameterAsync`, `UpdateParameterAsync`, `MatchStringAsync`) are asynchronous; all handlers of an event are awaited.
+* The static limits are separate: `AsyncExpression.MaxLoopIterations`, `AsyncExpression.MaxUserFunctionCallDepth` and `AsyncExpression.CheckExecutionStack` (see [Limits](options.md#limits)).
+* `EvaluateAsync()` reports a parse error and an already cancelled token through the returned task instead of throwing from the call.
+* A synchronous <xref:NCalc.Expression> can be the value of a parameter of an `AsyncExpression`; an `AsyncExpression` used as a parameter of a synchronous `Expression` throws <xref:NCalc.Exceptions.NCalcEvaluationException>.
+
+`ToLambda()` is available only for the synchronous <xref:NCalc.Expression>.

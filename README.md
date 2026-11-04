@@ -34,10 +34,10 @@ This version of NCalc contains a number of advanced features compared to the ori
 * Parsing of humane period expressions like "3 weeks 2 days 5 hours" (period identifiers are customizable and multiple identifiers per period are supported).
 * Basic calculations with dates and time spans - one can add and subtract dates and times, multiply and divide time periods.
 * Currency support, which takes into account culture settings (current or specific culture or custom symbols) and produces decimal result from the currency value.
-* Optional use of BigInteger and BigDecimal types for basic math operations and most built-in funcitons.
-* Underscores in numbers and currency values. Modern programming languages support underscores for readability. Support is built-in with binary, octal, and hex numbers, while support in decimal numbers requires a [custom branch of Parlot](https://github.com/Allied-Bits-Ltd/parlot/tree/ABCalc). 
+* Optional use of BigInteger and BigDecimal types for basic math operations and most built-in functions.
+* Underscores in numbers and currency values. Modern programming languages support underscores for readability. 
 * Custom decimal and group separators in numbers and currency.
-* An optional secondary decimal number separator (requires a [custom branch of Parlot](https://github.com/Allied-Bits-Ltd/parlot/tree/ABCalc) ). 
+* An optional secondary decimal number separator. 
 * Raw strings which are not parsed for escape sequences.
 * C-Style octal literals.
 * Result Reference character. A pseudo-function that would let a user application return some value, such as the result of a previous calculation. This is handy when an expression should include this result multiple times.
@@ -78,25 +78,25 @@ using NCalc;
 
 ```c#
 var expression = new Expression("2 + 3 * 5");
-Debug.Assert(17 == expression.Evaluate());
+Debug.Assert(17.Equals(expression.Evaluate()));
 ```
 
 **Evaluates .NET data types**
 
 ```c#
-Debug.Assert(123456 == new Expression("123456").Evaluate()); // integers
-Debug.Assert(new DateTime(2001, 01, 01) == new Expression("#01/01/2001#").Evaluate()); // date and times
-Debug.Assert(123.456 == new Expression("123.456").Evaluate()); // floating point numbers
-Debug.Assert(true == new Expression("true").Evaluate()); // booleans
-Debug.Assert("azerty" == new Expression("'azerty'").Evaluate()); // strings
+Debug.Assert(123456.Equals(new Expression("123456").Evaluate())); // integers
+Debug.Assert(new DateTime(2001, 01, 01).Equals(new Expression("#01/01/2001#").Evaluate())); // date and times
+Debug.Assert(123.456.Equals(new Expression("123.456").Evaluate())); // floating point numbers
+Debug.Assert(true.Equals(new Expression("true").Evaluate())); // booleans
+Debug.Assert("azerty".Equals(new Expression("'azerty'").Evaluate())); // strings
 ```
 
 **Handles mathematical functional from System.Math**
 
 ```c#
-Debug.Assert(0 == new Expression("Sin(0)").Evaluate());
-Debug.Assert(2 == new Expression("Sqrt(4)").Evaluate());
-Debug.Assert(0 == new Expression("Tan(0)").Evaluate());
+Debug.Assert(0.0.Equals(new Expression("Sin(0)").Evaluate()));
+Debug.Assert(2.0.Equals(new Expression("Sqrt(4)").Evaluate()));
+Debug.Assert(0.0.Equals(new Expression("Tan(0)").Evaluate()));
 ```
 
 **Evaluates custom functions**
@@ -107,16 +107,16 @@ expression.Functions["SecretOperation"] = (args) => {
     return (int)args[0].Evaluate() + (int)args[1].Evaluate();
 };
 
-Debug.Assert(9 == expression.Evaluate());
+Debug.Assert(9.Equals(expression.Evaluate()));
 ```
 
 **Handles unicode characters**
 
 ```c#
-Debug.Assert("経済協力開発機構" == new Expression("'経済協力開発機構'").Evaluate());
-Debug.Assert("Hello" == new Expression(@"'\u0048\u0065\u006C\u006C\u006F'").Evaluate());
-Debug.Assert("だ" == new Expression(@"'\u3060'").Evaluate());
-Debug.Assert("\u0100" == new Expression(@"'\u0100'").Evaluate());
+Debug.Assert("経済協力開発機構".Equals(new Expression("'経済協力開発機構'").Evaluate()));
+Debug.Assert("Hello".Equals(new Expression(@"'\u0048\u0065\u006C\u006C\u006F'").Evaluate()));
+Debug.Assert("だ".Equals(new Expression(@"'\u3060'").Evaluate()));
+Debug.Assert("\u0100".Equals(new Expression(@"'\u0100'").Evaluate()));
 ```
 
 **Define parameters, even dynamic or expressions**
@@ -132,7 +132,7 @@ expression.DynamicParameters["Pi"] = _ => {
     return 3.14;
 };
 
-Debug.Assert(117.07 == expression.Evaluate());
+Debug.Assert(117.07.Equals(expression.Evaluate()));
 ```
 
 **JSON Serialization**
@@ -162,7 +162,7 @@ var result = expression.Evaluate();
 ```cs
 var expression = new Expression("1 + 2");
 Func<int> function = expression.ToLambda<int>();
-Debug.Assert(function()); //3
+Debug.Assert(function() == 3);
 ```
 
 ## Related projects

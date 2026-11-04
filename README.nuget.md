@@ -27,10 +27,10 @@ This version of NCalc contains a number of advanced features compared to the ori
 * Parsing of humane period expressions like "3 weeks 2 days 5 hours" (period identifiers are customizable and multiple identifiers per period are supported).
 * Basic calculations with dates and time spans - one can add and subtract dates and times, multiply and divide time periods.
 * Currency support, which takes into account culture settings (current or specific culture or custom symbols) and produces decimal result from the currency value.
-* Optional use of BigInteger and BigDecimal types for basic math operations and most built-in funcitons.
-* Underscores in numbers and currency values. Modern programming languages support underscores for readability. Support is built-in with binary, octal, and hex numbers, while support in decimal numbers requires a [custom branch of Parlot](https://github.com/Allied-Bits-Ltd/parlot/tree/ABCalc). 
+* Optional use of BigInteger and BigDecimal types for basic math operations and most built-in functions.
+* Underscores in numbers and currency values. Modern programming languages support underscores for readability. 
 * Custom decimal and group separators in numbers and currency.
-* An optional secondary decimal number separator (requires a [custom branch of Parlot](https://github.com/Allied-Bits-Ltd/parlot/tree/ABCalc) ). 
+* An optional secondary decimal number separator. 
 * Raw strings which are not parsed for escape sequences.
 * C-Style octal literals.
 * Result Reference character. A pseudo-function that would let a user application return some value, such as the result of a previous calculation. This is handy when an expression should include this result multiple times.
@@ -41,7 +41,7 @@ This version of NCalc contains a number of advanced features compared to the ori
 * Optional non-recursive evaluator for large and complex expressions.
 * The possibility to reuse a pre-created parser or parsers when parsing multiple expressions.
 * Flags in ExpressionOptions to skip date and GUID parsers in order to speed up parsing.
-* Minor improvements in the asyncrhonous code (CancellationToken and ConfigureAwait(false) are present in all calls).
+* Minor improvements in the asynchronous code (CancellationToken and ConfigureAwait(false) are present in all calls).
 * The main projects have been combined into one project.
 * The AOT-compatible version of the library.
 

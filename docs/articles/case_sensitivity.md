@@ -5,6 +5,8 @@ By default, the evaluation process is case-sensitive.
 This means every parameter and function evaluation will match with case sensitivity. 
 This behavior can be overriden for both using an `IDictionary` implementation with a custom `StringComparer`.
 
+Names are compared ordinally, independently of the culture.
+
 Also, when lowercase lookup of identifiers is enabled using the <xref:NCalc.ExpressionOptions.LowerCaseIdentifierLookup> flag in <xref:NCalc.ExpressionOptions>, the evaluation engine looks for parameters and functions by first converting the identifier to all lowercase. 
 This approach enables one to implement the case-insensitive mode by populating those dictionaries with all lowercase names. 
 
@@ -41,9 +43,9 @@ You can also change the comparison of string values using <xref:NCalc.Expression
 ```c#
 var expression = new Expression("{PageState} == 'list'");
 expression.Parameters["PageState"] = "List";
-Debug.Assert(false, expression.Evaluate());
+Debug.Assert(false.Equals(expression.Evaluate()));
 
 expression = new Expression("{PageState} == 'list'", ExpressionOptions.CaseInsensitiveStringComparer);
 expression.Parameters["PageState"] = "List";
-Debug.Assert(true, expression.Evaluate());
+Debug.Assert(true.Equals(expression.Evaluate()));
 ```

@@ -24,4 +24,6 @@ builder.Services.AddNCalc().WithMemoryCache(options =>
 })
 ```
 
+If the `IMemoryCache` of the application has a `SizeLimit`, every entry must have a size; set it with `options.EntrySize` (1 by default).
+
 After this, simply create expressions from <xref:NCalc.Factories.IExpressionFactory>. For more information see [this article](../dependency_injection.md).

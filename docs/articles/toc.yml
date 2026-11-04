@@ -10,6 +10,8 @@
   href: advanced_value_formats.md
 - name: Parameters
   href: parameters.md
+- name: Expression Options
+  href: options.md
 - name: Expression Context
   href: expression_context.md
 - name: Handling Errors
