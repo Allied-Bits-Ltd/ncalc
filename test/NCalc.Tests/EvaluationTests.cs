@@ -296,7 +296,8 @@ public class EvaluationTests : TestBase
     [InlineData("-(1+2i)", AdvExpressionOptions.ParseComplexNumbers, "-1 - 2i")]
     [InlineData("-10%", AdvExpressionOptions.CalculatePercent, "-10%")]
     [InlineData("Abs(-10%)", AdvExpressionOptions.CalculatePercent, "10%")]
-    [InlineData("Pow(i, 0.5)", AdvExpressionOptions.ParseComplexNumbers, "0.7071067811865476 + 0.7071067811865476i")]
+    // Rounded, because the last digit of Sin and Cos differs between platforms (0.7071067811865475 with glibc on Linux)
+    [InlineData("Round(Pow(i, 0.5), 15)", AdvExpressionOptions.ParseComplexNumbers, "0.707106781186548 + 0.707106781186548i")]
     public void ComplexVectorAndPercentOperationsShouldWork(string expression, AdvExpressionOptions advancedOptions, string expected)
     {
         var e = new Expression(expression, ExpressionOptions.NoCache) { AdvancedOptions = new AdvancedExpressionOptions(advancedOptions) };
@@ -596,7 +597,9 @@ public class DeepEvaluationThreadTests
 {
     private const ExpressionOptions DeepOptions = ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator;
 
-    private static readonly string Text = string.Concat(Enumerable.Repeat("id(", 500)) + "1" + new string(')', 500);
+    // Far deeper than the small stack can hold (frames are smaller on Linux than on Windows, where 500 levels were enough), yet within
+    // what the parser handles on a stack of DeepExpressionStackSize bytes (about 1700 levels)
+    private static readonly string Text = string.Concat(Enumerable.Repeat("id(", 1200)) + "1" + new string(')', 1200);
 
     // Runs the action on a thread with a small stack, so that the evaluation needs another thread after a few levels
     private static void RunOnSmallStack(Action action)

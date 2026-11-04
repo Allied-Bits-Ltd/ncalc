@@ -350,7 +350,8 @@ public class DeepExpressionStackSizeExceptionsTests
     [Fact]
     public void DeeplyNestedExpressionShouldThrowParserExceptionWhenLargerStackIsOff()
     {
-        var expression = new string('(', 1000) + "1" + new string(')', 1000);
+        // Far deeper than any thread's stack can hold: frames are smaller and the default stack is larger on Linux than on Windows
+        var expression = new string('(', 100_000) + "1" + new string(')', 100_000);
         var stackSize = LogicalExpressionParser.DeepExpressionStackSize;
         LogicalExpressionParser.DeepExpressionStackSize = 0;
         try

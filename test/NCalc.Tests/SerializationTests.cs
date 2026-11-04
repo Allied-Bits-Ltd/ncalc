@@ -797,15 +797,18 @@ public class SerializationTests
         Assert.True(elapsed < 10_000, $"Serialization took {elapsed} ms");
 
         // On a small stack, a tree within MaxDepth but too deep for the stack fails with a JsonException, not a stack overflow
-        // (and so does an invalid node deep in a document)
+        // (and so does an invalid node deep in a document); the trees are far deeper than the stack can hold, because frames are smaller on Linux
+        var smallStackOptions = new System.Text.Json.JsonSerializerOptions { MaxDepth = 1_000_000 };
+        var deepSum = LogicalExpressionFactory.Create(string.Join(" + ", Enumerable.Range(0, 50_000)), null, culture);
+        string deeperJson = string.Concat(Enumerable.Repeat("""{"$type":"unary","Type":0,"Expression":""", 50_000)) + """{"$type":"value","Value":1,"Type":1}""" + new string('}', 50_000);
         Exception? writeError = null, readError = null, invalidError = null;
         string sumJson = JsonSerializer.Serialize(LogicalExpressionFactory.Create(string.Join(" + ", Enumerable.Range(0, 50)), null, culture));
         string invalidJson = string.Concat(Enumerable.Repeat("""{"$type":"unary","Type":0,"Expression":""", 150)) + """{"$type":"unknown"}""" + new string('}', 150);
         var smallThread = new Thread(() =>
         {
-            try { JsonSerializer.Serialize(sum, options); }
+            try { JsonSerializer.Serialize(deepSum, smallStackOptions); }
             catch (Exception e) { writeError = e; }
-            try { JsonSerializer.Deserialize<LogicalExpression>(deepJson, options); }
+            try { JsonSerializer.Deserialize<LogicalExpression>(deeperJson, smallStackOptions); }
             catch (Exception e) { readError = e; }
             try { JsonSerializer.Deserialize<LogicalExpression>(invalidJson, options); }
             catch (Exception e) { invalidError = e; }
