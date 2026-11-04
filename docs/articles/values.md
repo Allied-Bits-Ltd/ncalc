@@ -8,7 +8,7 @@ A value is a terminal token representing a concrete element. This can be:
 - A <xref:NCalc.Domain.Percent>
 - A <xref:NCalc.Domain.ComplexNumber> (can be converted to and from System.Numeric.Complex)
 - A <xref:NCalc.Domain.Vector>  (can be converted to and from System.Numeric.Vector<T> and System.Numeric.Vector[1..4])
-- A <xref:System.DateTime> or <xref:System.TimeSpan> (and <xref:System.DateTimeOffset> or `TimeOnly` values passed as parameters)
+- A <xref:System.DateTime> or <xref:System.TimeSpan> (and [DateTimeOffset](https://learn.microsoft.com/dotnet/api/system.datetimeoffset) or `TimeOnly` values passed as parameters)
 - A <xref:System.Boolean>
 - A <xref:System.String>
 - A <xref:System.Char>
