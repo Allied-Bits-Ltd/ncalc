@@ -54,3 +54,9 @@ Over the years, several variants of NCalc have evolved from the original library
 Have a bug or a feature request?
 Please first search for existing and closed issues.</br>
 If your problem or idea is not addressed yet, [please open a new issue](https://github.com/Allied-Bits-Ltd/ncalc/issues/new).
+
+## NCalc is Used
+
+NCalc is known to be used in the following applications:
+
+* [ABCalc](https://alliedbits.com/abcalc/) - an advanced programmable calculator
