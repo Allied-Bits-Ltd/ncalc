@@ -175,6 +175,56 @@ public static class LogicalExpressionParser
         => check is null ? parser : new CheckedNumberParser<T>(parser, check);
 
     /// <summary>
+    /// Wraps a number parser that uses the primary decimal separator and fails, without consuming input, when the parser read only
+    /// an integer part (no decimal separator and no exponent) and the secondary decimal separator followed by a digit comes next:
+    /// "1,5" with ',' as the secondary separator is then left to the number parser that uses the secondary separator (see
+    /// <see cref="FloatNumber{T}"/>). A number that has a fraction or an exponent is kept, so "1.5,3" is still 1.5 followed by ",3".
+    /// </summary>
+    private sealed class PrimarySeparatorNumberParser<T>(Parser<T> parser, char decimalSeparator, char secondaryDecimalSeparator) : Parser<T>
+    {
+        public override bool Parse(ParseContext context, ref ParseResult<T> result)
+        {
+            var startPosition = context.Scanner.Cursor.Position;
+            context.SkipWhiteSpace();
+            int start = context.Scanner.Cursor.Offset;
+
+            if (!parser.Parse(context, ref result))
+            {
+                context.Scanner.Cursor.ResetPosition(startPosition);
+                return false;
+            }
+
+            var cursor = context.Scanner.Cursor;
+            if (cursor.Current == secondaryDecimalSeparator && IsAsciiDigit(cursor.PeekNext()))
+            {
+                var text = context.Scanner.Buffer.AsSpan(start, cursor.Offset - start);
+                if (text.IndexOf(decimalSeparator) < 0 && text.IndexOfAny('e', 'E') < 0)
+                {
+                    cursor.ResetPosition(startPosition);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public override string ToString() => parser.ToString() ?? nameof(PrimarySeparatorNumberParser<T>);
+    }
+
+    /// <summary>
+    /// Combines the parsers of a fractional number that use the primary and the secondary decimal separator: the number is read by the
+    /// primary parser or else by the secondary one, so a number contains only one decimal separator, either one. Without a secondary
+    /// separator (<paramref name="secondary"/> is null), the primary parser is returned.
+    /// </summary>
+    private static Parser<T> FloatNumber<T>(Parser<T> primary, Parser<T>? secondary, char decimalSeparator, char secondaryDecimalSeparator)
+    {
+        if (secondary is null)
+            return primary;
+
+        return new PrimarySeparatorNumberParser<T>(primary, decimalSeparator, secondaryDecimalSeparator).Or(secondary);
+    }
+
+    /// <summary>
     /// With <see cref="AdvExpressionOptions.AcceptUnderscoresInNumbers"/>, an underscore separates digits, as in C#: it may only stand
     /// between two digits ("1_000", "1__000"), so "_1" is an identifier and "1_", "1_.5" or "1e_5" are not numbers.
     /// </summary>
@@ -947,13 +997,24 @@ public static class LogicalExpressionParser
         NumberTextCheck<decimal>? decimalCheck = options.HasFlag(ExpressionOptions.DecimalAsDefault)
             ? (text, _) => (!acceptUnderscores || HasUnderscoresOnlyBetweenDigits(text)) && DecimalKeepsDigits(text, decimalSeparator, decimalSeparator2)
             : decimalUnderscoreCheck;
-        var decimalNumber = CheckedNumber(Terms.Number<decimal>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals, decimalSeparator, numGroupSeparator, decimalSeparator2), decimalCheck)
+
+        // A number with the secondary decimal separator is read by its own parser, tried after the one with the primary separator
+        NumberOptions floatNumberOptions = NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals;
+        bool useDecimalSeparator2 = decimalSeparator2 != '\0' && decimalSeparator2 != decimalSeparator;
+
+        var decimalNumber = CheckedNumber(FloatNumber(
+                Terms.Number<decimal>(floatNumberOptions, decimalSeparator, numGroupSeparator),
+                useDecimalSeparator2 ? Terms.Number<decimal>(floatNumberOptions, decimalSeparator2, numGroupSeparator) : null,
+                decimalSeparator, decimalSeparator2), decimalCheck)
             .Then<LogicalExpression>(static (ctx, val) =>
             {
                 return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
             });
 
-        var doubleNumber = CheckedNumber(Terms.Number<double>(NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals, decimalSeparator, numGroupSeparator, decimalSeparator2), doubleUnderscoreCheck)
+        var doubleNumber = CheckedNumber(FloatNumber(
+                Terms.Number<double>(floatNumberOptions, decimalSeparator, numGroupSeparator),
+                useDecimalSeparator2 ? Terms.Number<double>(floatNumberOptions, decimalSeparator2, numGroupSeparator) : null,
+                decimalSeparator, decimalSeparator2), doubleUnderscoreCheck)
             .Then<LogicalExpression>(static (ctx, val) =>
             {
                 return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
@@ -1105,7 +1166,13 @@ public static class LogicalExpressionParser
                 Parser<LogicalExpression>? currency1 = null;
                 Parser<LogicalExpression>? currency2 = null;
 
-                var decimalCurrencyNumber = CheckedNumber(Terms.Number<decimal>((NumberOptions.Float & ~NumberOptions.AllowExponent) | currencyGroupSeparatorFlag | useUnderscoreFlag, currencyDecimalSeparator, currencyNumGroupSeparator, currencyDecimalSeparator2), decimalUnderscoreCheck)
+                NumberOptions currencyNumberOptions = (NumberOptions.Float & ~NumberOptions.AllowExponent) | currencyGroupSeparatorFlag | useUnderscoreFlag;
+                bool useCurrencyDecimalSeparator2 = currencyDecimalSeparator2 != '\0' && currencyDecimalSeparator2 != currencyDecimalSeparator;
+
+                var decimalCurrencyNumber = CheckedNumber(FloatNumber(
+                        Terms.Number<decimal>(currencyNumberOptions, currencyDecimalSeparator, currencyNumGroupSeparator),
+                        useCurrencyDecimalSeparator2 ? Terms.Number<decimal>(currencyNumberOptions, currencyDecimalSeparator2, currencyNumGroupSeparator) : null,
+                        currencyDecimalSeparator, currencyDecimalSeparator2), decimalUnderscoreCheck)
                     .Then<LogicalExpression>(static (ctx, val) => new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx)));
 
                 currency1 = OneOf(currencyCharsArray).SkipAnd(SkipWhiteSpace(OneOf(decimalCurrencyNumber, intNumber, longNumber)))
