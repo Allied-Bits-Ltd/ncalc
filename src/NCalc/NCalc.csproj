@@ -10,7 +10,7 @@
         <IsAotCompatible>false</IsAotCompatible>
         <!-- PolySharp: also generate the trimming attributes ([DynamicallyAccessedMembers]) for net472 and netstandard2.0 -->
         <PolySharpIncludeRuntimeSupportedAttributes>true</PolySharpIncludeRuntimeSupportedAttributes>
-        <RepositoryUrl>https://github.com/Allied-Bits-ltd/ncalc.git</RepositoryUrl> 
+        <RepositoryUrl>https://github.com/Allied-Bits-ltd/ncalc.git</RepositoryUrl>
     </PropertyGroup>
 
     <ItemGroup>
@@ -21,9 +21,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="AlliedBits.Parlot" Version="2.4.*" />
+        <PackageReference Include="Parlot" Version="2.4.*" />
         <PackageReference Include="FastExpressionCompiler" Version="5.3.0" />
-        <PackageReference Include="ExtendedNumerics.BigDecimal" Version="3003.*" />
+        <PackageReference Include="ExtendedNumerics.BigDecimal" Version="3004.*" />
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="System.Collections.Immutable" Version="10.*" />
