@@ -141,7 +141,7 @@ namespace NCalc.Helpers
                     float asFloat = (float)asDouble;
                     if (asFloat == 0)
                         return 0;
-                    value = Math.Abs(asFloat) < 7.9e28f ? new BigDecimal((decimal)asFloat) : MathHelper.DoubleToBigDecimal(asFloat);
+                    value = Math.Abs(asFloat) < 7.9e28f ? MathHelper.DecimalToBigDecimal(MathHelper.FloatToDecimal(asFloat)) : MathHelper.DoubleToBigDecimal(asFloat);
                     break;
             }
 

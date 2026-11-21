@@ -392,7 +392,7 @@ internal static partial class LambdaRuntime
         LinqExpression body;
         try
         {
-            body = value.Type == to ? value : isChecked ? LinqExpression.ConvertChecked(value, to) : LinqExpression.Convert(value, to);
+            body = value.Type == to ? value : ConvertNumber(value, to, isChecked);
         }
         catch (InvalidOperationException)
         {
@@ -400,6 +400,24 @@ internal static partial class LambdaRuntime
         }
 
         return LinqExpression.Lambda<Func<object, object?>>(LinqExpression.Convert(body, typeof(object)), parameter).Compile();
+    }
+
+    /// <summary>
+    /// Converts a value as a cast does, but a double or float to decimal with the significant digits it has on every runtime
+    /// (<see cref="MathHelper.DoubleToDecimal"/>): since .NET 11 the cast keeps the exact binary value (6.908000000000001 is not 6.908m).
+    /// </summary>
+    internal static LinqExpression ConvertNumber(LinqExpression value, Type to, bool isChecked)
+    {
+        if ((Nullable.GetUnderlyingType(to) ?? to) == typeof(decimal) && (value.Type == typeof(double) || value.Type == typeof(float)))
+        {
+            var method = typeof(MathHelper).GetMethod(value.Type == typeof(double) ? nameof(MathHelper.DoubleToDecimal) : nameof(MathHelper.FloatToDecimal),
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            value = LinqExpression.Call(method, value);
+            if (value.Type == to)
+                return value;
+        }
+
+        return isChecked ? LinqExpression.ConvertChecked(value, to) : LinqExpression.Convert(value, to);
     }
 
     private static bool IsIntegerType(Type type)

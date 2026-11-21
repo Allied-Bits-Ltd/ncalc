@@ -154,7 +154,9 @@ public class ArithmeticAudit5Tests
         => value switch
         {
             decimal m => Rational.Of(m),
-            double d when partner is decimal && Math.Floor(d) != d => Rational.Of((decimal)d),
+            // 15 significant digits, as NCalc converts a fractional double to decimal (the cast keeps the exact value since .NET 11)
+            double d when partner is decimal && Math.Floor(d) != d
+                => Rational.Of(decimal.Parse(d.ToString("G15", CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture)),
             double d => Rational.Of(d),
             BigInteger bi => Rational.Of(bi),
             BigDecimal bd => Rational.Of(bd),

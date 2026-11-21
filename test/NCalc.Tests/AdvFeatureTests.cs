@@ -119,19 +119,22 @@ public class AdvFeatureTests : TestBase
             Assert.True(Math.Truncate((double) result) == expectedWhole);
     }
 
+    // The expected values are text: xUnit converts a double argument to a decimal parameter with the runtime's cast, which since .NET 11
+    // keeps the exact binary value (0.05 becomes 0.0500000000000000027755575616m)
     [Theory]
-    [InlineData(".05", 0.05)]
-    [InlineData("0.05", 0.05)]
-    [InlineData("-0.05", -0.05)]
-    [InlineData("0.005", 0.005)]
-    [InlineData("-0.005", -0.005)]
-    [InlineData(".0", 0d)]
-    public void ShouldParseBigFloatingPointNumbers(string formula, decimal expectedValue)
+    [InlineData(".05", "0.05")]
+    [InlineData("0.05", "0.05")]
+    [InlineData("-0.05", "-0.05")]
+    [InlineData("0.005", "0.005")]
+    [InlineData("-0.005", "-0.005")]
+    [InlineData(".0", "0")]
+    public void ShouldParseBigFloatingPointNumbers(string formula, string expectedValue)
     {
         var expr = new Expression(formula, ExpressionOptions.UseBigNumbers | ExpressionOptions.DecimalAsDefault, CultureInfo.InvariantCulture);
         var res = expr.Evaluate(TestContext.Current.CancellationToken);
 
-        Assert.Equal(0, EvaluationHelper.Compare(expectedValue, res, new ComparisonOptions(), new MathHelperOptions()));
+        decimal expected = decimal.Parse(expectedValue, NumberStyles.Float, CultureInfo.InvariantCulture);
+        Assert.Equal(0, EvaluationHelper.Compare(expected, res, new ComparisonOptions(), new MathHelperOptions()));
     }
 
     [Theory]

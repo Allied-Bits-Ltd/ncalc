@@ -1,3 +1,10 @@
+# 9.1.1 (Allied Bits)
+
+* Results on .NET 11 are the same as on .NET 10 and earlier. .NET 11 converts a `double` or `float` to `decimal` exactly (0.1 becomes 0.1000000000000000055511151231 instead of 0.1), which changed the results of `decimal` arithmetic with doubles, of comparisons, of `Round()` of doubles and of the conversion of lambda results to `decimal`. NCalc now converts doubles and floats to `decimal` with 15 (float: 7) significant digits on every runtime, exactly as the cast of .NET 10 does. The check is made at run time, so the builds for older target frameworks behave the same when they run on .NET 11.
+* Decimals with more than 22 decimal places are converted to `BigDecimal` exactly on .NET 11. The conversion of ExtendedNumerics.BigDecimal lost the last digits of such values on .NET 11, and turned `-0.0000000000000000000000000001` into 0, so `7 // -0.0000000000000000000000000001` threw "Division by zero" and `%` with such a decimal gave a wrong remainder.
+* The time literals `#24:00#` and `#24:00:00#` are a day on .NET 11 too; `DateTime.TryParse` of .NET 11 reads them as midnight of the next day, which made them 0.
+* A `double` converted to a `decimal` parameter or member of a compiled lambda is compared with the nearest `double` of the decimal, so the result no longer depends on the runtime: `Dec(123456789.123456789 * 1)` is converted to `123456789.12345679` instead of throwing `NCalcEvaluationException` on .NET 10 and earlier.
+
 # 9.1.0 (Allied Bits)
 
 * Deeply nested or very long expressions no longer crash the process with an uncatchable `StackOverflowException`. When the stack runs low, the parser throws `NCalcParserException` and the recursive evaluators (sync and async) throw `NCalcEvaluationException`; use `ExpressionOptions.UseNonRecursiveEvaluator` to evaluate very long expressions. The evaluator check can be turned off with `Expression.CheckExecutionStack`/`AsyncExpression.CheckExecutionStack` when all expressions are known to be small.

@@ -361,11 +361,11 @@ internal static partial class LambdaRuntime
         switch (value)
         {
             case double d:
-                if (!decimal.TryParse(d.ToString("R", CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out m) || (double)m != d)
+                if (!decimal.TryParse(d.ToString("R", CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out m) || MathHelper.DecimalToNearestDouble(m) != d)
                     return false;
                 break;
             case float f:
-                if (!decimal.TryParse(f.ToString("R", CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out m) || (float)m != f)
+                if (!decimal.TryParse(f.ToString("R", CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out m) || float.Parse(m.ToString(CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture) != f)
                     return false;
                 break;
             case BigDecimal bd:
@@ -373,7 +373,7 @@ internal static partial class LambdaRuntime
                 if (Math.Abs((long)bd.Exponent) > MathHelper.MaxPowResultDigits)
                     return false;
                 m = MathHelper.BigDecimalToDecimal(bd);
-                if (new BigDecimal(m).CompareTo(bd) != 0)
+                if (MathHelper.DecimalToBigDecimal(m).CompareTo(bd) != 0)
                     return false;
                 break;
             case BigInteger bi:

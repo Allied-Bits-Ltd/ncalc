@@ -1089,7 +1089,7 @@ public static class LogicalExpressionParser
                     if (decimalDefault && (value >= decimal.MinValue && value <= decimal.MaxValue))
                     {
                         decimal decValue = NCalc.Helpers.MathHelper.BigDecimalToDecimal(value.Value);
-                        if (value == decValue)
+                        if (value == NCalc.Helpers.MathHelper.DecimalToBigDecimal(decValue))
                             return new ValueExpression(decValue).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
@@ -1104,7 +1104,7 @@ public static class LogicalExpressionParser
                     if (!decimalDefault && (value >= decimal.MinValue && value <= decimal.MaxValue))
                     {
                         decimal decValue = NCalc.Helpers.MathHelper.BigDecimalToDecimal(value.Value);
-                        if (value == decValue)
+                        if (value == NCalc.Helpers.MathHelper.DecimalToBigDecimal(decValue))
                             return new ValueExpression(decValue).SetLocation(new ParlotExpressionLocation(ctx));
                     }
 
@@ -1861,9 +1861,11 @@ public static class LogicalExpressionParser
                 string customTimeSepForDT = timeDateTimeFormat.TimeSeparator;
                 if (useSecondTime || onlyCustomTimeTranslation)
                 {
-                    if (DateTime.TryParse($"{time.Item3}{customTimeSepForDT}{time.Item4}{customTimeSepForDT}{time.Item5}", timeDateTimeFormat, DateTimeStyles.None, out var result))
+                    // Without a date, the time is read on 1 January of year 1, so that 24:00:00, which DateTime.TryParse reads since .NET 11
+                    // as midnight of the next day, is a day as on the other paths
+                    if (DateTime.TryParse($"{time.Item3}{customTimeSepForDT}{time.Item4}{customTimeSepForDT}{time.Item5}", timeDateTimeFormat, DateTimeStyles.NoCurrentDateDefault, out var result))
                     {
-                        TimeSpan tsResult = result.TimeOfDay + GetSecondFraction(time.Item6);
+                        TimeSpan tsResult = new TimeSpan(result.Ticks) + GetSecondFraction(time.Item6);
 
                         if (time.Item2.Length > 0)
                         {
@@ -1909,9 +1911,11 @@ public static class LogicalExpressionParser
                 string customTimeSepForDT = timeDateTimeFormat.TimeSeparator;
                 if (useSecondTime || onlyCustomTimeTranslation)
                 {
-                    if (DateTime.TryParse($"{time.Item3}{customTimeSepForDT}{time.Item4}", timeDateTimeFormat, DateTimeStyles.None, out var result))
+                    // Without a date, the time is read on 1 January of year 1, so that 24:00, which DateTime.TryParse reads since .NET 11 as
+                    // midnight of the next day, is a day as on the other paths
+                    if (DateTime.TryParse($"{time.Item3}{customTimeSepForDT}{time.Item4}", timeDateTimeFormat, DateTimeStyles.NoCurrentDateDefault, out var result))
                     {
-                        TimeSpan tsResult = result.TimeOfDay;
+                        TimeSpan tsResult = new TimeSpan(result.Ticks);
 
                         if (time.Item2.Length > 0)
                         {

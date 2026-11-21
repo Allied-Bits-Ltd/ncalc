@@ -490,9 +490,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
             return ConvertAtRuntime(body, resultType);
 
         // With OverflowProtection, a result that does not fit in the result type throws instead of being truncated
-        return _options.HasFlag(ExpressionOptions.OverflowProtection)
-            ? LinqExpression.ConvertChecked(body, resultType)
-            : LinqExpression.Convert(body, resultType);
+        return LambdaRuntime.ConvertNumber(body, resultType, _options.HasFlag(ExpressionOptions.OverflowProtection));
     }
 
     private LinqExpression ConvertAtRuntime(LinqExpression value, Type type)
@@ -772,7 +770,7 @@ public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpr
     private Linq.MethodCallExpression CallWhenCompiled(ContextMethodCandidate method, LinqExpression[] args)
     {
         static LinqExpression ConvertTo(LinqExpression argument, Type type)
-            => argument.Type == type ? argument : LinqExpression.Convert(argument, type);
+            => argument.Type == type ? argument : LambdaRuntime.ConvertNumber(argument, type, false);
 
         var fixedCount = method.FixedParameterCount;
         var arguments = new LinqExpression[method.ParameterTypes.Length];

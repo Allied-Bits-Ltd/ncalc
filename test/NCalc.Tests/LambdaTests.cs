@@ -1437,7 +1437,6 @@ public class LambdaTests
     // NCALC-319: a double is converted to a decimal parameter or member only when the decimal has the same value
     [Theory]
     [InlineData("Dec(1e-30 * 1)")]
-    [InlineData("Dec(123456789.123456789 * 1)")]
     [InlineData("M := 1e-30")]
     public void LambdaShouldNotConvertDoublesToDecimalsWithLoss(string input)
     {
@@ -1453,6 +1452,8 @@ public class LambdaTests
     [InlineData("Dec(0.5 * 1)", "Dec:0.5")]
     [InlineData("Dec(0.1 * 1)", "Dec:0.1")]
     [InlineData("Dec(0.1 + 0.2)", "Dec:0.30000000000000004")]
+    // The shortest text of the double gives it back (the cast of the decimal to double before .NET 11 was not the nearest double)
+    [InlineData("Dec(123456789.123456789 * 1)", "Dec:123456789.12345679")]
     [InlineData("Dec(1e20 * 1)", "Dec:100000000000000000000")]
     [InlineData("Dec(I)", "Dec:7")]
     public void LambdaShouldConvertDoublesToDecimalsWithoutLoss(string input, string expected)

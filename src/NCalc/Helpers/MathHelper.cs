@@ -2913,7 +2913,7 @@ public static class MathHelper
                 return WholeQuotient(FloorDivide(ConvertToBigInteger(a), ConvertToBigInteger(b)), a, b, reduceTypes ? null : t, options);
 
             if (a is decimal decimalA && b is decimal decimalB)
-                return WholeQuotient(FloorDivide(new BigDecimal(decimalA), new BigDecimal(decimalB)), a, b, reduceTypes ? null : t, options);
+                return WholeQuotient(FloorDivide(DecimalToBigDecimal(decimalA), DecimalToBigDecimal(decimalB)), a, b, reduceTypes ? null : t, options);
 
             // With UseBigNumbers, doubles are divided as the BigDecimals they are converted to (a float with its own value, not that of
             // the double it was widened to: 1e-30f is 1E-30, not 1.0000000031710769E-30)
@@ -3389,7 +3389,7 @@ public static class MathHelper
         {
             // decimal % overflows when the quotient exceeds the range of decimal, but the remainder is smaller than the divisor and fits
             if (a is decimal decimalA && b is decimal decimalB)
-                return BigDecimalToDecimal(Remainder(new BigDecimal(decimalA), new BigDecimal(decimalB)));
+                return BigDecimalToDecimal(Remainder(DecimalToBigDecimal(decimalA), DecimalToBigDecimal(decimalB)));
 
             if (!TryExpandAfterOverflow(ref a, ref b, options))
                 throw;
@@ -3817,7 +3817,7 @@ public static class MathHelper
         {
             try
             {
-                b = Convert.ChangeType(b, typeCodeA, options.CultureInfo);
+                b = ChangeNumericType(b, typeCodeA, options.CultureInfo);
                 typesWereExpanded = true;
                 return typeCodeA;
             }
@@ -3837,7 +3837,7 @@ public static class MathHelper
         {
             try
             {
-                a = Convert.ChangeType(a, typeCodeB, options.CultureInfo);
+                a = ChangeNumericType(a, typeCodeB, options.CultureInfo);
                 typesWereExpanded = true;
                 return typeCodeB;
             }
@@ -3961,7 +3961,7 @@ public static class MathHelper
 
             try
             {
-                a = Convert.ChangeType(a, result, options.CultureInfo);
+                a = ChangeNumericType(a, result, options.CultureInfo);
             }
             catch (Exception icex) when (icex is InvalidCastException or FormatException)
             {
@@ -3970,7 +3970,7 @@ public static class MathHelper
 
             try
             {
-                b = Convert.ChangeType(b, result, options.CultureInfo);
+                b = ChangeNumericType(b, result, options.CultureInfo);
             }
             catch (Exception icex) when (icex is InvalidCastException or FormatException)
             {
@@ -4038,12 +4038,195 @@ public static class MathHelper
     {
         double d = value is float f ? f : Convert.ToDouble(value, cultureInfo);
         if (Math.Floor(d) != d)
-            return Convert.ToDecimal(value, cultureInfo);
+            return ConvertToDecimalKeepingDigits(value, cultureInfo);
         // Every whole double below 2^53 is exact as a long
         if (Math.Abs(d) <= 9007199254740992.0)
             return (long)d;
         string text = value is float single ? single.ToString("R", CultureInfo.InvariantCulture) : d.ToString("R", CultureInfo.InvariantCulture);
         return decimal.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Converts a double to decimal with 15 significant digits, as the cast does on .NET 10 and earlier and on .NET Framework, so that
+    /// 0.1 is 0.1m on every runtime. Since .NET 11 the cast converts the exact binary value (0.1 is 0.1000000000000000055511151231m).
+    /// </summary>
+    /// <exception cref="OverflowException">The value is NaN, infinite or out of the range of decimal.</exception>
+    internal static decimal DoubleToDecimal(double value)
+        => FloatingToDecimalCast.IsExact ? FloatingToDecimalCast.FromDouble(value) : (decimal)value;
+
+    /// <summary>
+    /// Converts a float to decimal with 7 significant digits, as the cast does on .NET 10 and earlier and on .NET Framework, so that
+    /// 3.959f is 3.959m on every runtime. Since .NET 11 the cast converts the exact binary value (3.959000110626220703125m).
+    /// </summary>
+    /// <exception cref="OverflowException">The value is NaN, infinite or out of the range of decimal.</exception>
+    internal static decimal FloatToDecimal(float value)
+        => FloatingToDecimalCast.IsExact ? FloatingToDecimalCast.FromSingle(value) : (decimal)value;
+
+    /// <summary>
+    /// Converts a value to decimal as <see cref="Convert.ToDecimal(object, IFormatProvider)"/> does, but a double or float with the
+    /// significant digits of <see cref="DoubleToDecimal"/> and <see cref="FloatToDecimal"/>, whatever the runtime.
+    /// </summary>
+    internal static decimal ConvertToDecimalKeepingDigits(object? value, IFormatProvider? provider)
+        => value switch
+        {
+            double d => DoubleToDecimal(d),
+            float f => FloatToDecimal(f),
+            _ => Convert.ToDecimal(value, provider)
+        };
+
+    /// <summary>
+    /// <see cref="Convert.ChangeType(object, TypeCode, IFormatProvider)"/>, but a double or float is converted to decimal with the
+    /// significant digits of <see cref="DoubleToDecimal"/> and <see cref="FloatToDecimal"/>, whatever the runtime.
+    /// </summary>
+    private static object ChangeNumericType(object value, TypeCode typeCode, IFormatProvider? provider)
+        => typeCode == TypeCode.Decimal && value is double or float
+            ? ConvertToDecimalKeepingDigits(value, provider)
+            : Convert.ChangeType(value, typeCode, provider);
+
+    /// <summary>
+    /// The casts of double and float to decimal of .NET 10 and earlier (VarDecFromR8 and VarDecFromR4 of System.Decimal.DecCalc), which
+    /// .NET 11 replaced by exact conversions. The value is scaled by a power of ten in double to an integer of 15 (float: 7) digits,
+    /// rounded half to even, and some of the trailing zeros of the integer are then removed (0.00001 can be 0.000010m), so that the
+    /// results are those of the older runtimes to the last digit and scale.
+    /// </summary>
+    private static class FloatingToDecimalCast
+    {
+        // Whether the runtime converts the exact binary value of a double or float to decimal (.NET 11 and later)
+        internal static readonly bool IsExact = Convert.ToDecimal(0.1) != 0.1m;
+
+        private const int MaxScale = 28;
+
+        private static readonly double[] DoublePowersOfTen =
+        [
+            1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20,
+            1e21, 1e22, 1e23, 1e24, 1e25, 1e26, 1e27, 1e28
+        ];
+
+        internal static decimal FromDouble(double input)
+        {
+            // The most a value can be scaled by is 10^28, a bit more than 2^93, so that a value below 2^-95 is 0
+            int exponent = (int)((BitConverter.DoubleToInt64Bits(input) >> 52) & 0x7FF) - 1022;
+            if (exponent < -94)
+                return 0m;
+            if (exponent > 96)
+                throw new OverflowException("Value was either too large or too small for a Decimal.");
+
+            bool negative = input < 0;
+            double scaled = Math.Abs(input);
+
+            // The power of ten that gives 15 digits, from the exponent times log10(2) (19728.3 / 2^16)
+            int power = 14 - ((exponent * 19728) >> 16);
+            if (power >= 0)
+            {
+                if (power > MaxScale)
+                    power = MaxScale;
+                scaled *= DoublePowersOfTen[power];
+            }
+            else if (power != -1 || scaled >= 1E15)
+                scaled /= DoublePowersOfTen[-power];
+            else
+                power = 0;
+
+            if (scaled < 1E14 && power < MaxScale)
+            {
+                scaled *= 10;
+                power++;
+            }
+
+            ulong mantissa = (ulong)(long)scaled;
+            scaled -= (long)mantissa;
+            if (scaled > 0.5 || (scaled == 0.5 && (mantissa & 1) != 0))
+                mantissa++;
+            if (mantissa == 0)
+                return 0m;
+
+            if (power < 0)
+            {
+                // A whole value of up to 29 digits: the product is exact
+                decimal whole = (decimal)mantissa * DecimalPowerOfTen(-power);
+                return negative ? -whole : whole;
+            }
+
+            // At most 14 trailing zeros are removed, and not more than the scale
+            int removable = Math.Min(power, 14);
+            RemoveTrailingZeros(ref mantissa, ref power, ref removable, (mantissa & 0xFF) == 0, 8, 100000000);
+            RemoveTrailingZeros(ref mantissa, ref power, ref removable, (mantissa & 0xF) == 0, 4, 10000);
+            RemoveTrailingZeros(ref mantissa, ref power, ref removable, (mantissa & 3) == 0, 2, 100);
+            RemoveTrailingZeros(ref mantissa, ref power, ref removable, (mantissa & 1) == 0, 1, 10);
+            return new decimal((int)(uint)mantissa, (int)(uint)(mantissa >> 32), 0, negative, (byte)power);
+        }
+
+        internal static decimal FromSingle(float input)
+        {
+            // The exponent of a float is that of the same value as a double, and a subnormal float is below 2^-95 as a double too
+            double scaled = input;
+            int exponent = (int)((BitConverter.DoubleToInt64Bits(scaled) >> 52) & 0x7FF) - 1022;
+            if (exponent < -94)
+                return 0m;
+            if (exponent > 96)
+                throw new OverflowException("Value was either too large or too small for a Decimal.");
+
+            bool negative = input < 0;
+            scaled = Math.Abs(scaled);
+
+            // The power of ten that gives 7 digits
+            int power = 6 - ((exponent * 19728) >> 16);
+            if (power >= 0)
+            {
+                if (power > MaxScale)
+                    power = MaxScale;
+                scaled *= DoublePowersOfTen[power];
+            }
+            else if (power != -1 || scaled >= 1E7)
+                scaled /= DoublePowersOfTen[-power];
+            else
+                power = 0;
+
+            if (scaled < 1E6 && power < MaxScale)
+            {
+                scaled *= 10;
+                power++;
+            }
+
+            ulong mantissa = (uint)(int)scaled;
+            scaled -= (int)mantissa;
+            if (scaled > 0.5 || (scaled == 0.5 && (mantissa & 1) != 0))
+                mantissa++;
+            if (mantissa == 0)
+                return 0m;
+
+            if (power < 0)
+            {
+                // A whole value of up to 29 digits: the product is exact
+                decimal whole = (decimal)mantissa * DecimalPowerOfTen(-power);
+                return negative ? -whole : whole;
+            }
+
+            // At most 6 trailing zeros are removed, and not more than the scale
+            int removable = Math.Min(power, 6);
+            RemoveTrailingZeros(ref mantissa, ref power, ref removable, (mantissa & 0xF) == 0, 4, 10000);
+            RemoveTrailingZeros(ref mantissa, ref power, ref removable, (mantissa & 3) == 0, 2, 100);
+            RemoveTrailingZeros(ref mantissa, ref power, ref removable, (mantissa & 1) == 0, 1, 10);
+            return new decimal((int)(uint)mantissa, 0, 0, negative, (byte)power);
+        }
+
+        // Removes a number of trailing zeros if the mantissa has them; its low bits are checked first, as the cast checks them
+        private static void RemoveTrailingZeros(ref ulong mantissa, ref int power, ref int removable, bool lowBitsAreZero, int count, uint divisor)
+        {
+            if (!lowBitsAreZero || removable < count || mantissa % divisor != 0)
+                return;
+            mantissa /= divisor;
+            power -= count;
+            removable -= count;
+        }
+
+        private static decimal DecimalPowerOfTen(int power)
+        {
+            decimal result = 1m;
+            for (int i = 0; i < power; i++)
+                result *= 10m;
+            return result;
+        }
     }
 
     private static bool IsNaNOrInfinity(object value)
@@ -4265,7 +4448,7 @@ public static class MathHelper
         if (value == 0 || Math.Abs(value) >= limit)
             return true;
 
-        decimal converted = (decimal)value;
+        decimal converted = DoubleToDecimal(value);
         return converted != 0 && ((decimal.GetBits(converted)[3] >> 16) & 0xFF) < 28;
     }
 
@@ -4749,7 +4932,7 @@ public static class MathHelper
             ConvertArgumentToDouble(b, "Pow", options));
         // A decimal base keeps its type only when the result fits in decimal; NaN, infinity and huge results stay double
         if (typeA == typeof(decimal) && !double.IsNaN(result) && !double.IsInfinity(result) && Math.Abs(result) < (double)decimal.MaxValue)
-            return (decimal)result;
+            return DoubleToDecimal(result);
 
         return result;
     }
@@ -4790,7 +4973,7 @@ public static class MathHelper
                 return true;
             case decimal m:
                 if (m != Math.Truncate(m)) return false;
-                exponent = GetWholeValue(new BigDecimal(m));
+                exponent = GetWholeValue(DecimalToBigDecimal(m));
                 return true;
             default:
                 return false;
@@ -5157,7 +5340,7 @@ public static class MathHelper
             decimal decimal_a = ConvertToDecimal(a, "Round", options.CultureInfo, null);
             if (precision < 0)
             {
-                var roundedDecimal = RoundBigDecimal(new BigDecimal(decimal_a), precision, rounding);
+                var roundedDecimal = RoundBigDecimal(DecimalToBigDecimal(decimal_a), precision, rounding);
                 return roundedDecimal >= (BigDecimal)decimal.MinValue && roundedDecimal <= (BigDecimal)decimal.MaxValue
                     ? BigDecimalToDecimal(roundedDecimal)
                     : BigDecimalToDouble(roundedDecimal);
@@ -5369,7 +5552,7 @@ public static class MathHelper
         if (double.IsNaN(value) || double.IsInfinity(value) || Math.Abs(value) >= DecimalRoundLimit)
             return value;
 
-        return (double)RoundToPrecision((decimal)value, digits, mode);
+        return (double)RoundToPrecision(DoubleToDecimal(value), digits, mode);
     }
 
     /// <summary>
@@ -5861,7 +6044,7 @@ public static class MathHelper
             BigDecimal bigD => BigDecimalToDecimal(bigD),
             decimal @decimal => @decimal,
             char ch => Convert.ToDecimal(ch.ToString(), options.CultureInfo),
-            _ => Convert.ToDecimal(value, options.CultureInfo)
+            _ => ConvertToDecimalKeepingDigits(value, options.CultureInfo)
         };
     }
 
@@ -5876,7 +6059,7 @@ public static class MathHelper
                 BigDecimal bigD => BigDecimalToDecimal(bigD),
                 decimal @decimal => @decimal,
                 char ch => Convert.ToDecimal(ch.ToString(), cultureInfo),
-                _ => Convert.ToDecimal(value, cultureInfo)
+                _ => ConvertToDecimalKeepingDigits(value, cultureInfo)
             };
         }
         catch (Exception icex) when (icex is InvalidCastException or FormatException)
@@ -6203,7 +6386,7 @@ public static class MathHelper
             case ulong value: return a * value;
             case float value: return a * SingleToBigDecimal(value);
             case double value: return a * DoubleToBigDecimal(value);
-            case decimal value: return a * value;
+            case decimal value: return a * DecimalToBigDecimal(value);
             case BigInteger value: return a * new BigDecimal(value);
             case BigDecimal value: return a * value;
             default:
@@ -6253,7 +6436,7 @@ public static class MathHelper
             case ulong value: return a + value;
             case float value: return a + SingleToBigDecimal(value);
             case double value: return a + DoubleToBigDecimal(value);
-            case decimal value: return a + value;
+            case decimal value: return a + DecimalToBigDecimal(value);
             case BigInteger value: return a + new BigDecimal(value);
             case BigDecimal value: return a + value;
             default:
@@ -6293,7 +6476,7 @@ public static class MathHelper
             case ulong value: return a - value;
             case float value: return a - SingleToBigDecimal(value);
             case double value: return a - DoubleToBigDecimal(value);
-            case decimal value: return a - value;
+            case decimal value: return a - DecimalToBigDecimal(value);
             case BigInteger value: return a - new BigDecimal(value);
             case BigDecimal value: return a - value;
             default:
@@ -6433,7 +6616,7 @@ public static class MathHelper
             case ulong value: return a / value;
             case float value: return a / SingleToBigDecimal(value);
             case double value: return a / DoubleToBigDecimal(value);
-            case decimal value: return a / value;
+            case decimal value: return a / DecimalToBigDecimal(value);
             case BigInteger value: return a / new BigDecimal(value);
             case BigDecimal value: return a / value;
             default:
@@ -6651,12 +6834,26 @@ public static class MathHelper
             case ulong value: return new BigDecimal(new BigInteger(value));
             case float value: return SingleToBigDecimal(value);
             case double value: return DoubleToBigDecimal(value);
-            case decimal value: return new BigDecimal(value);
+            case decimal value: return DecimalToBigDecimal(value);
             case BigInteger value: return new BigDecimal(value);
             case BigDecimal value: return value;
             default:
                 throw new NCalcConversionException("The source of the conversion to a BigDecimal must be a boxed numeric type (byte, sbyte, short, ushort, int, uint, long, ulong, float, double, decimal, BigInteger, BigDecimal).", a.ToString() ?? string.Empty, a.GetType(), typeof(BigDecimal));
         }
+    }
+
+    /// <summary>
+    /// Converts a decimal to BigDecimal exactly, from its 96-bit integer and scale. The conversion of BigDecimal itself scales the value
+    /// by (decimal)Math.Pow(10, scale), which since .NET 11 is not an exact power of ten for a scale above 22 (the cast of a double to
+    /// decimal is exact there), so that -1E-28m became 0 and other values with many decimal places lost their last digits.
+    /// </summary>
+    internal static BigDecimal DecimalToBigDecimal(decimal value)
+    {
+        int[] bits = decimal.GetBits(value);
+        BigInteger mantissa = (new BigInteger((uint)bits[2]) << 64) | (new BigInteger((uint)bits[1]) << 32) | (uint)bits[0];
+        if (bits[3] < 0)
+            mantissa = -mantissa;
+        return new BigDecimal(mantissa, -((bits[3] >> 16) & 0xFF));
     }
 
     // The operands follow the rules of the bitwise operators: a whole floating-point value is accepted (BigInteger 12 & 4.0 is 4),
@@ -7138,8 +7335,8 @@ public static class MathHelper
             case uint ui: return (decimal)ui;
             case long l: return (decimal)l;
             case ulong ul: return (decimal)ul;
-            case float fl: return (decimal)fl;
-            case double db: return (decimal)db;
+            case float fl: return FloatToDecimal(fl);
+            case double db: return DoubleToDecimal(db);
             case decimal dd: return dd;
             case BigInteger bi: return (decimal)(long)bi;
             case BigDecimal bd: return BigDecimalToDecimal(bd);
@@ -7595,7 +7792,7 @@ public static class MathHelper
         if (restrictToType is null && options.Value.DecimalAsDefault && value >= decimal.MinValue && value <= decimal.MaxValue)
         {
             decimal decimalValue = BigDecimalToDecimal(value);
-            if (new BigDecimal(decimalValue) == value)
+            if (DecimalToBigDecimal(decimalValue) == value)
                 return decimalValue;
         }
 
