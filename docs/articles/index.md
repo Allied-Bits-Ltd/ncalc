@@ -21,10 +21,9 @@ NCalc is a mathematical expression evaluator in .NET. NCalc can parse any expres
 - [Architecture](architecture.md): Check this article to learn how NCalc works.
 - [Benchmarks](benchmarks.md): Check some numbers about the speed of some NCalc components.
 
-## NCalc versions
+## Native AOT and trimming
 
-Allied Bits NCalc comes in two versions - regular and AOT-compatible. The second can be used in AOT-enabled applications.
-Both versions are included in the same package, and the AOT-compatible assembly is named "NCalc.AOT".
+On .NET 9 and later, the NCalc assembly can be used in applications published with Native AOT (`PublishAot`) or trimming (`PublishTrimmed`); no separate assembly or `UseAotMode` property is needed. In such applications, NCalc does not apply operators through dynamic code: it computes as with the <xref:NCalc.ExpressionOptions.AvoidDynamicFunctions> option, which gives the same results for the built-in types, and operators defined by other types are not supported. Compilation to lambdas (`ToLambda`) needs dynamic code: the compiler warns about calls to it, and under Native AOT it throws `NotSupportedException`.
 
 ## Functionalities
 

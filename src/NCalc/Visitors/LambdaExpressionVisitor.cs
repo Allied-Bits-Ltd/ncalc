@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using ExtendedNumerics;
 
@@ -20,6 +21,8 @@ namespace NCalc.Visitors;
 /// Assignments (which need a context object to assign to), loops, <c>return</c>, indexes and function declarations are not supported
 /// and throw <see cref="NotSupportedException"/> when the lambda is created.
 /// </summary>
+[RequiresDynamicCode(Expression.LambdaCompilationMessage)]
+[RequiresUnreferencedCode(Expression.LambdaCompilationMessage)]
 public sealed class LambdaExpressionVisitor : ILogicalExpressionVisitor<LinqExpression>
 {
     private readonly IDictionary<string, object?>? _parameters;

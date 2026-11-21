@@ -702,30 +702,31 @@ public static class MathHelper
     }
 
     // unchecked
-#if !AOT_COMPILATION
+    // Called only when DynamicArithmetic.IsDynamicCodeSupported and DynamicArithmetic.IsEnabled are true
+    [RequiresDynamicCode(DynamicArithmetic.Message)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = DynamicArithmetic.TrimmingJustification)]
     private static object DynamicAddFunc(dynamic a, dynamic b) => unchecked(a + b);
+    [RequiresDynamicCode(DynamicArithmetic.Message)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = DynamicArithmetic.TrimmingJustification)]
     private static object DynamicSubtractFunc(dynamic a, dynamic b) => unchecked(a - b);
+    [RequiresDynamicCode(DynamicArithmetic.Message)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = DynamicArithmetic.TrimmingJustification)]
     private static object DynamicMultiplyFunc(dynamic a, dynamic b) => unchecked(a * b);
+    [RequiresDynamicCode(DynamicArithmetic.Message)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = DynamicArithmetic.TrimmingJustification)]
     private static object DynamicDivideFunc(dynamic a, dynamic b) => unchecked(a / b);
+    [RequiresDynamicCode(DynamicArithmetic.Message)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = DynamicArithmetic.TrimmingJustification)]
     private static object DynamicModuloFunc(dynamic a, dynamic b) => unchecked(a % b);
-#endif
-
-#if AOT_COMPILATION
-    public static T AddGeneric<T>(T left, T right) where T : IAdditionOperators<T, T, T>
-    {
-        return left + right;
-    }
-#endif
 
     private static object? AddFunc(object a, object b, MathHelperOptions options)
     {
-        // Dates and time spans are computed with their own operators in NCalc, NCalc.AOT and with AvoidDynamicFunctions alike
+        // Dates and time spans are computed with their own operators with and without dynamic arithmetic (Native AOT, AvoidDynamicFunctions) alike
         if (TimeOperation(a, b, false) is { } timeResult)
             return timeResult;
 
         object? result = null;
-#if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions)
+        if (DynamicArithmetic.IsDynamicCodeSupported && DynamicArithmetic.IsEnabled && !options.AvoidDynamicFunctions)
         {
             if (options.OverflowProtection)
                 result = AddFuncChecked(a, b);
@@ -733,7 +734,6 @@ public static class MathHelper
                 result = DynamicAddFunc(a, b);
         }
         else
-#endif
         if (a is char ca && b is char cb)
         {
             if (options.OverflowProtection)
@@ -845,28 +845,23 @@ public static class MathHelper
         }
         else
         {
-#if !AOT_COMPILATION
-            var method = FindOperator(a.GetType(), "op_Addition");
-            if (method is null)
-                throw new InvalidOperationException($"No overloaded addition function found for operands of type '{a.GetType()}'");
-            return method.Invoke(null, new[] { a, b });
-#else
+            if (DynamicArithmetic.IsDynamicCodeSupported && DynamicArithmetic.IsEnabled && FindOperator(a.GetType(), "op_Addition") is { } method)
+                return method.Invoke(null, new[] { a, b });
             throw new InvalidOperationException($"No overloaded addition function found for operands of type '{a.GetType()}'");
-#endif
         }
 
         return result;
     }
 
-#if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> AddFuncChecked = (a, b) =>
+    [RequiresDynamicCode(DynamicArithmetic.Message)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = DynamicArithmetic.TrimmingJustification)]
+    private static object AddFuncChecked(dynamic a, dynamic b)
     {
         var res = checked(a + b);
         CheckOverflow(res);
 
         return res;
-    };
-#endif
+    }
 
     // a + b or a - b of dates and time spans: TimeSpan ± TimeSpan, DateTimeOffset ± TimeSpan, DateTime - DateTime,
     // DateTimeOffset - DateTimeOffset and TimeOnly - TimeOnly; null for other operands. A result outside the range of its type
@@ -924,7 +919,7 @@ public static class MathHelper
     }
 
     // a + b% = a * (100 + b) / 100, a - b% = a * (100 - b) / 100, a * b% = a * b / 100 and a / b% = 100 * a / b.
-    // NCalc and NCalc.AOT (or AvoidDynamicFunctions) use this same implementation, so that they give the same results.
+    // Dynamic and non-dynamic arithmetic (Native AOT, AvoidDynamicFunctions) use this same implementation, so that they give the same results.
     // Ordinary numbers are converted to the result type (double or decimal) before the formula is applied, so that an integer
     // product such as 300000000 * 10 cannot wrap around in the operand type. Big numbers (and every operand with UseBigNumbers),
     // complex numbers and vectors are computed exactly with the arithmetic operations and converted to the result type afterwards.
@@ -1112,18 +1107,16 @@ public static class MathHelper
 
     private static object? SubtractFunc(object a, object b, MathHelperOptions options)
     {
-        // Time spans and dates are computed with their own operators in NCalc, NCalc.AOT and with AvoidDynamicFunctions alike
+        // Time spans and dates are computed with their own operators with and without dynamic arithmetic (Native AOT, AvoidDynamicFunctions) alike
         if (TimeOperation(a, b, true) is { } timeResult)
             return timeResult;
 
         object? result = null;
-#if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions)
+        if (DynamicArithmetic.IsDynamicCodeSupported && DynamicArithmetic.IsEnabled && !options.AvoidDynamicFunctions)
         {
             result =  options.OverflowProtection ? SubtractFuncChecked(a, b) : DynamicSubtractFunc(a, b);
         }
         else
-#endif
         if (a is char ca && b is char cb)
         {
             if (options.OverflowProtection)
@@ -1235,28 +1228,23 @@ public static class MathHelper
         }
         else
         {
-#if !AOT_COMPILATION
-            var method = FindOperator(a.GetType(), "op_Subtraction");
-            if (method is null)
-                throw new InvalidOperationException($"No overloaded subtraction function found for operands of type '{a.GetType()}'");
-            return method.Invoke(null, new[] { a, b });
-#else
+            if (DynamicArithmetic.IsDynamicCodeSupported && DynamicArithmetic.IsEnabled && FindOperator(a.GetType(), "op_Subtraction") is { } method)
+                return method.Invoke(null, new[] { a, b });
             throw new InvalidOperationException($"No overloaded subtraction function found for operands of type '{a.GetType()}'");
-#endif
         }
 
             return result;
     }
 
-#if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> SubtractFuncChecked = (a, b) =>
+    [RequiresDynamicCode(DynamicArithmetic.Message)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = DynamicArithmetic.TrimmingJustification)]
+    private static object SubtractFuncChecked(dynamic a, dynamic b)
     {
         var res = checked(a - b);
         CheckOverflow(res);
 
         return res;
-    };
-#endif
+    }
 
     private static object SubtractPercentFunc(object a, object b, MathHelperOptions options)
     {
@@ -1278,8 +1266,7 @@ public static class MathHelper
     private static object? MultiplyFunc(object a, object b, MathHelperOptions options)
     {
         object? result = null;
-#if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions)
+        if (DynamicArithmetic.IsDynamicCodeSupported && DynamicArithmetic.IsEnabled && !options.AvoidDynamicFunctions)
         {
             if (options.OverflowProtection)
                 result = MultiplyFuncChecked(a, b);
@@ -1287,7 +1274,6 @@ public static class MathHelper
                 result = DynamicMultiplyFunc(a, b);
         }
         else
-#endif
         if (a is char ca && b is char cb)
         {
             if (options.OverflowProtection)
@@ -1399,28 +1385,23 @@ public static class MathHelper
         }
         else
         {
-#if !AOT_COMPILATION
-            var method = FindOperator(a.GetType(), "op_Multiply");
-            if (method is null)
-                throw new InvalidOperationException($"No overloaded multiplication function found for operands of type '{a.GetType()}'");
-            return method.Invoke(null, new[] { a, b });
-#else
+            if (DynamicArithmetic.IsDynamicCodeSupported && DynamicArithmetic.IsEnabled && FindOperator(a.GetType(), "op_Multiply") is { } method)
+                return method.Invoke(null, new[] { a, b });
             throw new InvalidOperationException($"No overloaded multiplication function found for operands of type '{a.GetType()}'");
-#endif
         }
 
         return result;
     }
 
-#if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> MultiplyFuncChecked = (a, b) =>
+    [RequiresDynamicCode(DynamicArithmetic.Message)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = DynamicArithmetic.TrimmingJustification)]
+    private static object MultiplyFuncChecked(dynamic a, dynamic b)
     {
         var res = checked(a * b);
         CheckOverflow(res);
 
         return res;
-    };
-#endif
+    }
     private static object MultiplyPercentFunc(object a, object b, MathHelperOptions options)
     {
         object? im2 = Multiply(a, b, false, options);
@@ -1436,19 +1417,17 @@ public static class MathHelper
 
     private static object? DivideFunc(object a, object b, MathHelperOptions options)
     {
-        // The ratio of two time spans is a double, as TimeSpan / TimeSpan gives in .NET, in NCalc, NCalc.AOT and with
+        // The ratio of two time spans is a double, as TimeSpan / TimeSpan gives in .NET, with and without dynamic arithmetic and with
         // AvoidDynamicFunctions alike (and also on the targets whose TimeSpan has no such operator)
         if (a is TimeSpan timeSpanA && b is TimeSpan timeSpanB)
             return timeSpanA.Ticks / (double)timeSpanB.Ticks;
 
         object? result = null;
-#if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions)
+        if (DynamicArithmetic.IsDynamicCodeSupported && DynamicArithmetic.IsEnabled && !options.AvoidDynamicFunctions)
         {
             result = options.OverflowProtection ? DivideFuncChecked(a, b) : DynamicDivideFunc(a, b);
         }
         else
-#endif
         if (a is char ca && b is char cb)
         {
             if (options.OverflowProtection)
@@ -1560,28 +1539,23 @@ public static class MathHelper
         }
         else
         {
-#if !AOT_COMPILATION
-            var method = FindOperator(a.GetType(), "op_Division");
-            if (method is null)
-                throw new InvalidOperationException($"No overloaded division function found for operands of type '{a.GetType()}'");
-            return method.Invoke(null, new[] { a, b });
-#else
+            if (DynamicArithmetic.IsDynamicCodeSupported && DynamicArithmetic.IsEnabled && FindOperator(a.GetType(), "op_Division") is { } method)
+                return method.Invoke(null, new[] { a, b });
             throw new InvalidOperationException($"No overloaded division function found for operands of type '{a.GetType()}'");
-#endif
         }
 
         return result;
     }
 
-#if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> DivideFuncChecked = (a, b) =>
+    [RequiresDynamicCode(DynamicArithmetic.Message)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = DynamicArithmetic.TrimmingJustification)]
+    private static object DivideFuncChecked(dynamic a, dynamic b)
     {
         var res = checked(a / b);
         CheckOverflow(res);
 
         return res;
-    };
-#endif
+    }
     private static object DividePercentFunc(object a, object b, MathHelperOptions options)
     {
         object? im2 = Multiply(a, 100m, false, options);
@@ -1598,8 +1572,7 @@ public static class MathHelper
     private static object? ModuloFunc(object a, object b, MathHelperOptions options)
     {
         object? result = null;
-#if !AOT_COMPILATION
-        if (!options.AvoidDynamicFunctions)
+        if (DynamicArithmetic.IsDynamicCodeSupported && DynamicArithmetic.IsEnabled && !options.AvoidDynamicFunctions)
         {
             if (options.OverflowProtection)
                 result = ModuloFuncChecked(a, b);
@@ -1607,7 +1580,6 @@ public static class MathHelper
                 result = DynamicModuloFunc(a, b);
         }
         else
-#endif
         if (a is char ca && b is char cb)
         {
             if (options.OverflowProtection)
@@ -1719,28 +1691,23 @@ public static class MathHelper
         }
         else
         {
-#if !AOT_COMPILATION
-            var method = FindOperator(a.GetType(), "op_Modulus");
-            if (method is null)
-                throw new InvalidOperationException($"No overloaded modulus function found for operands of type '{a.GetType()}'");
-            return method.Invoke(null, new[] { a, b });
-#else
+            if (DynamicArithmetic.IsDynamicCodeSupported && DynamicArithmetic.IsEnabled && FindOperator(a.GetType(), "op_Modulus") is { } method)
+                return method.Invoke(null, new[] { a, b });
             throw new InvalidOperationException($"No overloaded modulus function found for operands of type '{a.GetType()}'");
-#endif
         }
 
         return result;
     }
 
-#if !AOT_COMPILATION
-    private static readonly Func<dynamic, dynamic, object> ModuloFuncChecked = (a, b) =>
+    [RequiresDynamicCode(DynamicArithmetic.Message)]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = DynamicArithmetic.TrimmingJustification)]
+    private static object ModuloFuncChecked(dynamic a, dynamic b)
     {
         var res = checked(a % b);
         CheckOverflow(res);
 
         return res;
-    };
-#endif
+    }
 
     public static object? AddPercent(object? a, object? b)
     {
@@ -7842,7 +7809,7 @@ public static class MathHelper
         return value;
     }
 
-#if !AOT_COMPILATION
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = DynamicArithmetic.TrimmingJustification)]
     private static MethodInfo? FindOperator(
         Type opType,
         string opName)
@@ -7859,5 +7826,4 @@ public static class MathHelper
                 m.GetParameters()[1].ParameterType.IsAssignableFrom(opType)
             );
     }
-#endif
 }

@@ -1,9 +1,12 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using NCalc.Helpers;
 using LinqExpression = System.Linq.Expressions.Expression;
 
 namespace NCalc.Reflection;
 
+[RequiresDynamicCode(Expression.LambdaCompilationMessage)]
+[RequiresUnreferencedCode(Expression.LambdaCompilationMessage)]
 public static class LinqUtils
 {
     /// <summary>

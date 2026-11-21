@@ -9,8 +9,8 @@
 
 NCalc is a fast and lightweight expression evaluator library for .NET, designed for flexibility and high performance. It
 supports a wide range of mathematical and logical operations. NCalc can parse any expression and evaluate the result,
-including static or dynamic parameters and custom functions. NCalc targets .NET 10, .NET 9, .NET 8, .NET Standard 2.0, 
-and NET Framework 4.6.2 and later.
+including static or dynamic parameters and custom functions. NCalc targets .NET 11, .NET 10, .NET 9, .NET 8, 
+.NET Standard 2.0, and NET Framework 4.7.2 and later.
 
 ## Advanced features
 
@@ -50,7 +50,7 @@ This version of NCalc contains a number of advanced features compared to the ori
 * Flags in ExpressionOptions to skip date and GUID parsers in order to speed up parsing.
 * Minor improvements in the asynchronous code (CancellationToken and ConfigureAwait(false) are present in all calls).
 * The main projects have been combined into one project.
-* The AOT-compatible version of the library.
+* Support for Native AOT and trimmed applications (.NET 9 and later) in the same assembly.
 
 If you are interested in seeing those features in action, check our [ABCalc product](https://alliedbits.com/abcalc/).
 
@@ -167,8 +167,7 @@ Debug.Assert(function() == 3);
 
 ## Related projects
 
-### [Parlot](https://github.com/sebastienros/parlot) (Main project)
-### [AlliedBits.Parlot](https://github.com/Allied-Bits-Ltd/parlot) (the fork with improvements required for Allied Bits enhancements of NCalc)
+### [Parlot](https://github.com/sebastienros/parlot)
 
 Fast and lightweight parser creation tools by [Sébastien Ros](https://github.com/sebastienros) that NCalc uses for its
 parser.

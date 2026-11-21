@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using ExtendedNumerics;
 
@@ -18,6 +19,8 @@ namespace NCalc.Visitors;
 /// (<see cref="EvaluationVisitor"/>), with the same helper methods and the options of the expression, so that a lambda
 /// computes the same value as Evaluate().
 /// </summary>
+[RequiresDynamicCode(Expression.LambdaCompilationMessage)]
+[RequiresUnreferencedCode(Expression.LambdaCompilationMessage)]
 internal static partial class LambdaRuntime
 {
     /// <summary>Returned by <see cref="LogicalLeft"/> when the result depends on the right operand.</summary>

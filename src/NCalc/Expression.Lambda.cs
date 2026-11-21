@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 
 using FastExpressionCompiler;
 
@@ -12,6 +13,9 @@ namespace NCalc;
 
 public partial class Expression
 {
+    internal const string LambdaCompilationMessage =
+        "Compiling NCalc expressions to LINQ expression trees requires dynamic code and the metadata that trimming removes, so it is not available under Native AOT. Use Evaluate() instead.";
+
     internal static readonly bool UseSystemLinqCompiler;
 
     static Expression()
@@ -22,6 +26,8 @@ public partial class Expression
     private readonly struct Void;
     protected record struct LinqExpressionWithParameter(LinqExpression Expression, LinqParameterExpression? Parameter);
 
+    [RequiresDynamicCode(LambdaCompilationMessage)]
+    [RequiresUnreferencedCode(LambdaCompilationMessage)]
     private LinqExpressionWithParameter ToLinqExpressionInternal<TContext, TResult>(CancellationToken cancellationToken)
     {
         LogicalExpression ??= GetLogicalExpression(cancellationToken);
@@ -85,6 +91,8 @@ public partial class Expression
     [ThreadStatic]
     private static int _compiledDepth;
 
+    [RequiresDynamicCode(LambdaCompilationMessage)]
+    [RequiresUnreferencedCode(LambdaCompilationMessage)]
     private static TDelegate CompileLambda<TDelegate>(System.Linq.Expressions.Expression<TDelegate> lambda) where TDelegate : Delegate
     {
         if (_compiledDepth > MaxLambdaDepth)
@@ -96,31 +104,50 @@ public partial class Expression
         return lambda.CompileFast();
     }
 
+    [RequiresDynamicCode(LambdaCompilationMessage)]
+    [RequiresUnreferencedCode(LambdaCompilationMessage)]
     protected virtual LinqExpression ToLinqExpression<TResult>(CancellationToken cancellationToken = default)
     {
         return ToLinqExpressionInternal<Void, TResult>(cancellationToken).Expression;
     }
 
+    [RequiresDynamicCode(LambdaCompilationMessage)]
+    [RequiresUnreferencedCode(LambdaCompilationMessage)]
     protected virtual LinqExpressionWithParameter ToLinqExpression<TContext, TResult>(CancellationToken cancellationToken = default)
     {
         return ToLinqExpressionInternal<TContext, TResult>(cancellationToken);
     }
 
+    [RequiresDynamicCode(LambdaCompilationMessage)]
+    [RequiresUnreferencedCode(LambdaCompilationMessage)]
     public Func<TResult> ToLambda<TResult>(CancellationToken cancellationToken = default)
     {
+        ThrowIfDynamicCodeIsNotSupported();
         _compiledDepth = 0;
         var body = ToLinqExpression<TResult>(cancellationToken);
         return CompileLambda(LinqExpression.Lambda<Func<TResult>>(body));
     }
 
+    [RequiresDynamicCode(LambdaCompilationMessage)]
+    [RequiresUnreferencedCode(LambdaCompilationMessage)]
     public Func<TContext, TResult> ToLambda<TContext, TResult>(CancellationToken cancellationToken = default)
     {
+        ThrowIfDynamicCodeIsNotSupported();
         _compiledDepth = 0;
         var linqExp = ToLinqExpression<TContext, TResult>(cancellationToken);
         if (linqExp.Parameter != null)
             return CompileLambda(LinqExpression.Lambda<Func<TContext, TResult>>(linqExp.Expression, linqExp.Parameter));
 
         throw new NCalcException("Linq expression parameter cannot be null");
+    }
+
+    // Under Native AOT, ToLambda throws the same exception as the stubs of the former AOT-compatible build did
+    private static void ThrowIfDynamicCodeIsNotSupported()
+    {
+#if NET
+        if (!RuntimeFeature.IsDynamicCodeSupported)
+            throw new NotSupportedException(LambdaCompilationMessage);
+#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

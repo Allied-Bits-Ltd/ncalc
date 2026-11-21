@@ -837,9 +837,7 @@ public class AdvFeatureTests : TestBase
     [InlineData("1234.5_6", 1234.56)]
     public void ShouldHandleUnderscoresInDecimal(string formula, object expectedValue)
     {
-        // Support of underscores in decimal literals requires a patch in Parlot,
-        // currently available in https://github.com/Allied-Bits-Ltd/parlot
-        // and offered to the main project as a pull request https://github.com/sebastienros/parlot/pull/221
+        // Underscores in decimal literals use NumberOptions.AllowUnderscore of Parlot 2.4 and later
 
         var expression = new Expression(formula, CultureInfo.InvariantCulture);
             expression.AdvancedOptions = new AdvancedExpressionOptions();

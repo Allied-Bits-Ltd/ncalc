@@ -7,7 +7,8 @@
         <SignAssembly>true</SignAssembly>
         <AssemblyOriginatorKeyFile>../../NCalc.snk</AssemblyOriginatorKeyFile>
         <RootNamespace>NCalc</RootNamespace>
-        <IsAotCompatible>false</IsAotCompatible>
+        <!-- Native AOT and trimming: from .NET 9, whose FeatureGuard and FeatureSwitchDefinition attributes guard the dynamic code -->
+        <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net9.0'))">true</IsAotCompatible>
         <!-- PolySharp: also generate the trimming attributes ([DynamicallyAccessedMembers]) for net472 and netstandard2.0 -->
         <PolySharpIncludeRuntimeSupportedAttributes>true</PolySharpIncludeRuntimeSupportedAttributes>
         <RepositoryUrl>https://github.com/Allied-Bits-ltd/ncalc.git</RepositoryUrl>

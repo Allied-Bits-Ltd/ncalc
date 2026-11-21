@@ -197,7 +197,7 @@ A currency value is a `decimal` (`$0.1 + $0.2 = $0.3` is true with en-US). The c
 
 This version of NCalc supports underscore characters (`_`) in numeric literals. Such characters are stripped when the value is converted into a number. Modern programming languages support this notation for better readability of large numbers. As in C#, an underscore may only stand between two digits, or after the prefix of a hexadecimal, octal or binary number: `_1` is an identifier, and `1_`, `1_.5` and `1e_5` are errors.
 
-Underscores in decimal numbers rely on the [AlliedBits.Parlot](https://github.com/Allied-Bits-Ltd/parlot) parser library, which the AlliedBits.NCalc package references.
+Underscores in decimal numbers rely on the `NumberOptions.AllowUnderscore` option of the [Parlot](https://github.com/sebastienros/parlot) parser library (version 2.4 and later), which the AlliedBits.NCalc package references.
 
 To enable underscores in numbers, include the <xref:NCalc.AdvExpressionOptions.AcceptUnderscoresInNumbers> flag to the <xref:NCalc.AdvancedExpressionOptions.Flags> property of an instance of the <xref:NCalc.AdvancedExpressionOptions> class:
 

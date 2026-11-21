@@ -1,7 +1,5 @@
 ﻿# Dependency Injection
 
-Dependency Injection is not available in the AOT version.
-
 ## Introduction to Dependency Injection (DI)
 
 Dependency Injection (DI) is a design pattern used to implement Inversion of Control (IoC) between classes and their

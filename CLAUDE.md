@@ -9,7 +9,7 @@ NCalc is a mathematical and logical expression evaluator library for .NET. It pa
 ## Build & Test
 
 ```bash
-# Build the main library (multi-targeted: net462, netstandard2.0, net8.0, net9.0, net10.0)
+# Build the main library (multi-targeted: net472, netstandard2.0, net8.0, net9.0, net10.0, net11.0)
 dotnet build src/NCalc/NCalc.csproj
 
 # Run the full test suite (xUnit v3, net10.0)
@@ -40,7 +40,6 @@ src/
     Cache/                        # WeakReference-based expression cache
     Exceptions/                   # NCalc-specific exception types
     Reflection/                   # Reflection utilities (.NET targets only)
-  NCalc.AOT/                      # AOT-compatible variant (net9.0, net10.0 only)
   Plugins/
     NCalc.MemoryCache/            # Microsoft.Extensions.Caching.Memory cache plugin
     NCalc.Antlr/                  # Alternative ANTLR-based parser plugin
@@ -95,10 +94,11 @@ When adding a new operator or type dispatch to evaluation, all 4 variants must b
 
 ### Multi-Targeting & AOT
 
-- **Regular NCalc**: `net462`, `netstandard2.0`, `net8.0`, `net9.0`, `net10.0`
-- **NCalc.AOT**: `net9.0`, `net10.0` only; defines `AOT_COMPILATION` constant; no FastExpressionCompiler or reflection
+- **NCalc**: `net472`, `netstandard2.0`, `net8.0`, `net9.0`, `net10.0`, `net11.0`
+- Native AOT and trimming are supported by the same assembly from net9.0 (`IsAotCompatible`): `ToLambda` and the lambda compiler are annotated `[RequiresDynamicCode]`/`[RequiresUnreferencedCode]`, and dynamic arithmetic (C# runtime binder, user-defined operators by reflection) is guarded by `DynamicArithmetic.IsDynamicCodeSupported && DynamicArithmetic.IsEnabled`; the switch `NCalc.DynamicArithmetic.IsSupported` is set to false in trimmed apps by `targets/AlliedBits.NCalc.targets`. Without dynamic arithmetic, `MathHelperOptions.AvoidDynamicFunctions` is true
+- `NCalc.Tests.AOT` runs a subset of the tests with that switch off (and can be published with Native AOT); its `AOT_COMPILATION` symbol only skips tests
 - `#if NET` guards modern .NET features (JSON polymorphism, `[JsonConstructor]`, etc.)
-- `PolySharp` provides polyfills for `net462`/`netstandard2.0` targets
+- `PolySharp` provides polyfills for `net472`/`netstandard2.0` targets
 
 ## Code Conventions
 
@@ -131,8 +131,8 @@ When adding a new operator or type dispatch to evaluation, all 4 variants must b
 
 ## Key Dependencies
 
-- **AlliedBits.Parlot** - Parser combinator library for expression parsing
-- **FastExpressionCompiler** - Lambda compilation (not in AOT variant)
+- **Parlot** - Parser combinator library for expression parsing
+- **FastExpressionCompiler** - Lambda compilation (not available under Native AOT)
 - **ExtendedNumerics.BigDecimal** - Arbitrary-precision decimal arithmetic
 - **Roslynator** - Code analysis (warnings treated as errors)
 

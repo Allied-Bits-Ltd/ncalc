@@ -242,7 +242,7 @@ When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignme
 
 When Unicode characters are enabled, they can also be used for multiplication with assignment and division with assignment.
 
-The non-AOT version of NCalc can perform multiplication, division, and modulus operations on any types which have these operations defined (overloaded). This includes non-numeric types.  The AOT version can handle only numbers (including BigInteger and BigDecimal) and multiplication and division of TimeSpan values by numbers.
+NCalc can perform multiplication, division, and modulus operations on any types which have these operations defined (overloaded). This includes non-numeric types. Under Native AOT and in trimmed applications (and with the `AvoidDynamicFunctions` option), it can handle only numbers (including BigInteger and BigDecimal) and multiplication and division of TimeSpan values by numbers.
 
 ## Additive
 
@@ -271,7 +271,7 @@ When assignments are enabled using the <xref:NCalc.ExpressionOptions.UseAssignme
 * `+=` : Addition with assignment of the result to the left operand
 * `-=` : Subtraction with assignment of the result to the left operand
 
-The non-AOT version of NCalc can perform addition and subtraction operations on any types which have these operations defined (overloaded). This includes non-numeric types. The AOT version can handle numbers (including BigInteger and BigDecimal), dates and times (where the operations make sense), char variables, as well as add (concatenate)  strings.
+NCalc can perform addition and subtraction operations on any types which have these operations defined (overloaded). This includes non-numeric types. Under Native AOT and in trimmed applications (and with the `AvoidDynamicFunctions` option), it can handle numbers (including BigInteger and BigDecimal), dates and times (where the operations make sense), char variables, as well as add (concatenate)  strings.
 
 ## Shift
 

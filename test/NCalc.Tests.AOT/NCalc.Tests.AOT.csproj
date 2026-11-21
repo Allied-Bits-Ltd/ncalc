@@ -15,8 +15,11 @@
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
-    <UseAotMode>true</UseAotMode>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- The tests use the code path of Native AOT and trimmed applications (no dynamic arithmetic) also when they run under the JIT -->
+    <RuntimeHostConfigurationOption Include="NCalc.DynamicArithmetic.IsSupported" Value="false" Trim="true" />
+  </ItemGroup>
   <PropertyGroup>
     <DefineConstants>$(DefineConstants);AOT_COMPILATION</DefineConstants>
     <StartupObject>NCalc.Tests.AOT.Program</StartupObject>
@@ -55,7 +58,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\NCalc.AOT\NCalc.AOT.csproj" />
+    <ProjectReference Include="..\..\src\NCalc\NCalc.csproj" />
   </ItemGroup>
 
   <ItemGroup>

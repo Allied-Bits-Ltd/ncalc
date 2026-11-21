@@ -6,7 +6,7 @@ Using it, you can write complex functions and improve performance of expression 
 
 Special thanks to the [NCalc2 fork](https://github.com/sklose/NCalc2) for the original implementation.
 
-Lambda compilation is not available in the AOT version as these two features are mutually exclusive.
+Lambda compilation needs dynamic code, so it is not available under Native AOT: `ToLambda` throws `NotSupportedException` there, and the compiler warns about calls to it in projects that use Native AOT or trimming.
 
 ## Functionality
 

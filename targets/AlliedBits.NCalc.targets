@@ -1,0 +1,11 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    In a trimmed application (PublishTrimmed, and PublishAot, which trims too), NCalc does not apply operators through the C# runtime
+    binder (dynamic) or find user-defined operators by reflection, as trimming may remove what they need. The switch lets trimming
+    remove that code, and NCalc computes as with ExpressionOptions.AvoidDynamicFunctions, which gives the same results for the
+    built-in types. An application can set NCalcDynamicArithmetic to true to keep the dynamic code anyway.
+  -->
+  <ItemGroup Condition="('$(PublishTrimmed)' == 'true' or '$(PublishAot)' == 'true') and '$(NCalcDynamicArithmetic)' != 'true'">
+    <RuntimeHostConfigurationOption Include="NCalc.DynamicArithmetic.IsSupported" Value="false" Trim="true" />
+  </ItemGroup>
+</Project>

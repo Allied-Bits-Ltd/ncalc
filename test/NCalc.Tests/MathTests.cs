@@ -2346,7 +2346,7 @@ public class MathsTests : TestBase
     [Fact]
     public void PercentArithmeticShouldNotDependOnDynamicFunctions()
     {
-        // NCalc.AOT always computes percentages without dynamic code, as AvoidDynamicFunctions does
+        // Without dynamic arithmetic (Native AOT), NCalc computes percentages as AvoidDynamicFunctions does
         object[] values = [200, 200L, 200f, 200.0, 200m, new BigInteger(200), new BigDecimal(200)];
         var expected = new Dictionary<string, double> { ["+"] = 220, ["-"] = 180, ["*"] = 20, ["/"] = 2000 };
         foreach (var baseOptions in new[] { ExpressionOptions.None, ExpressionOptions.DecimalAsDefault })
@@ -2603,7 +2603,7 @@ public class MathsTests : TestBase
         }
     }
 
-    // NCALC-201: NCalc.AOT computes percentages as NCalc does with AvoidDynamicFunctions; every operand gives the same outcome either way
+    // NCALC-201: without dynamic arithmetic (Native AOT), NCalc computes percentages as with AvoidDynamicFunctions; every operand gives the same outcome either way
     [Fact]
     public void PercentArithmeticShouldGiveTheSameOutcomeWithAndWithoutDynamicFunctions()
     {

@@ -71,7 +71,7 @@ All flags are off by default (`ExpressionOptions.None`). An expression parsed wi
 |------|--------|
 | `UseNonRecursiveEvaluator` | Uses the non-recursive evaluator; see [Choosing an evaluator](#choosing-an-evaluator). |
 | `NoCache` | The parsed expression is neither taken from nor stored in the cache. |
-| `AvoidDynamicFunctions` | Does not use dynamic code for operators on non-numeric types (required for AOT; the NCalc.AOT assembly behaves this way always). |
+| `AvoidDynamicFunctions` | Does not use dynamic code for operators on non-numeric types (always in effect under Native AOT and in trimmed applications). |
 
 ## Choosing an evaluator
 
