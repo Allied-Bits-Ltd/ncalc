@@ -135,7 +135,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="AlliedBits.Parlot" Version="1.6.*" />
+        <PackageReference Include="AlliedBits.Parlot" Version="2.4.*" />
         <PackageReference Include="ExtendedNumerics.BigDecimal" Version="3003.*" />
     </ItemGroup>
     <ItemGroup>

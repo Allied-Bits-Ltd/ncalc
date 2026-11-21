@@ -21,7 +21,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="AlliedBits.Parlot" Version="1.6.*" />
+        <PackageReference Include="AlliedBits.Parlot" Version="2.4.*" />
         <PackageReference Include="FastExpressionCompiler" Version="5.3.0" />
         <PackageReference Include="ExtendedNumerics.BigDecimal" Version="3003.*" />
     </ItemGroup>

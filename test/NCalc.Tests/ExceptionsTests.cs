@@ -167,8 +167,6 @@ public class ExceptionsTests
         string.Concat(Enumerable.Repeat("Abs(", UnparseableDepth)) + "1" + new string(')', UnparseableDepth),
         string.Concat(Enumerable.Repeat("Max(1, ", UnparseableDepth)) + "1" + new string(')', UnparseableDepth),
         string.Concat(Enumerable.Repeat("(true ? ", UnparseableDepth)) + "1" + string.Concat(Enumerable.Repeat(" : 0)", UnparseableDepth)),
-        new string('-', UnparseableDepth) + "1",
-        string.Concat(Enumerable.Repeat("not ", UnparseableDepth)) + "true",
     };
 
     [Theory]
@@ -177,6 +175,16 @@ public class ExceptionsTests
     {
         // Parsing is recursive regardless of the evaluator in use
         Assert.Throws<NCalcParserException>(() => new Expression(expression, ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator).Evaluate(TestContext.Current.CancellationToken));
+    }
+
+    // The prefix operators are read in a loop by Parlot 2.x, so a long chain of them does not consume the stack of the parser
+    [Fact]
+    public void LongChainsOfPrefixOperatorsShouldBeParsedWithoutRecursion()
+    {
+        const ExpressionOptions options = ExpressionOptions.NoCache | ExpressionOptions.UseNonRecursiveEvaluator;
+
+        Assert.Equal(1, new Expression(new string('-', UnparseableDepth) + "1", options).Evaluate(TestContext.Current.CancellationToken));
+        Assert.Equal(true, new Expression(string.Concat(Enumerable.Repeat("not ", UnparseableDepth)) + "true", options).Evaluate(TestContext.Current.CancellationToken));
     }
 
     public static TheoryData<string, object> LargeStackExpressions => new()

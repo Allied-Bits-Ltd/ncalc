@@ -29,9 +29,8 @@ public static class LogicalExpressionParser
 
     private const string InvalidTokenMessage = "Invalid token in expression";
 
-    // Support of underscores in decimal literals requires a patch in Parlot,
-    // currently available in https://github.com/Allied-Bits-Ltd/parlot
-    // and offered to the main project as a pull request https://github.com/sebastienros/parlot/pull/221
+    // Underscores in number literals are read by Parlot (NumberOptions.AllowUnderscore, Parlot 2.x): an underscore is accepted
+    // only between two digits, so "1_000" is a number, while "1_" and "1_.5" read as "1" and "_1" is not a number.
 
     const string errFailedToParsePeriodIndicator = "Failed to parse the element '{0}' of a period definition.";
     const string errDuplicatePeriodIndicator = "Period indicator '{0}' has been already used in the period definition";
@@ -140,6 +139,14 @@ public static class LogicalExpressionParser
     }
 
     private static Parser<T> StackGuarded<T>(Parser<T> parser) => new StackGuardParser<T>(parser);
+
+    // ZeroOrOne of Parlot 2.x returns a list. The grammar uses the value of the optional parser, or a default one when it does not match,
+    // as ZeroOrOne of Parlot 1.x did.
+    private static Parser<T> ZeroOrOne<T>(Parser<T> parser) where T : notnull
+        => parser.Optional().Then(static option => option.HasValue ? option.Value : default!);
+
+    private static Parser<T> ZeroOrOne<T>(Parser<T> parser, T defaultValue)
+        => parser.Optional().Then(option => option.HasValue ? option.Value : defaultValue);
 
     /// <summary>
     /// Tells whether the text of a number literal (without the leading whitespace) and its value are accepted.
@@ -952,13 +959,6 @@ public static class LogicalExpressionParser
         if (decimalSeparator2 != '\0' && decimalSeparator2 == numGroupSeparator)
             useNumberGroupSeparatorFlag = 0;
 
-        // With AcceptUnderscoresInNumbers, an underscore may only stand between digits ("_1" is an identifier, "1_" is not a number)
-        NumberTextCheck<int>? intUnderscoreCheck = acceptUnderscores ? static (text, _) => HasUnderscoresOnlyBetweenDigits(text) : null;
-        NumberTextCheck<long>? longUnderscoreCheck = acceptUnderscores ? static (text, _) => HasUnderscoresOnlyBetweenDigits(text) : null;
-        NumberTextCheck<BigInteger>? bigIntegerUnderscoreCheck = acceptUnderscores ? static (text, _) => HasUnderscoresOnlyBetweenDigits(text) : null;
-        NumberTextCheck<decimal>? decimalUnderscoreCheck = acceptUnderscores ? static (text, _) => HasUnderscoresOnlyBetweenDigits(text) : null;
-        NumberTextCheck<double>? doubleUnderscoreCheck = acceptUnderscores ? static (text, _) => HasUnderscoresOnlyBetweenDigits(text) : null;
-
         // The exclusions must match right after the digits (Literals, not Terms): a separator or a word such as "else" after whitespace does not make the literal fractional.
         // A decimal separator makes the literal fractional only when a digit follows it: with a comma as both the decimal and the list
         // separator, "1, 2" are two integers. An exponent is "E" followed by a digit or a sign.
@@ -970,11 +970,11 @@ public static class LogicalExpressionParser
             : [Literals.Text(decimalSeparator.ToString()).AndSkip(digitChar), exponentStart];
 
         //var intNumberParser
-        var intNumber = CheckedNumber(Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator), intUnderscoreCheck)
+        var intNumber = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
             .AndSkip(Not(OneOf(floatNumExclusions)))
             .Then<LogicalExpression>(static (ctx, d) => new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx)));
 
-        var longNumber = CheckedNumber(Terms.Number<long>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator), longUnderscoreCheck)
+        var longNumber = Terms.Number<long>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
             .AndSkip(Not(OneOf(floatNumExclusions)))
             .Then<LogicalExpression>(static (ctx, d) => new ValueExpression(d).SetLocation(new ParlotExpressionLocation(ctx)));
 
@@ -982,7 +982,7 @@ public static class LogicalExpressionParser
 
         if (useBigNumbers)
         {
-            bigIntNumber = CheckedNumber(Terms.Number<BigInteger>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator), bigIntegerUnderscoreCheck)
+            bigIntNumber = Terms.Number<BigInteger>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
                 .AndSkip(Not(OneOf(floatNumExclusions)))
                 .Then<LogicalExpression>(static (ctx, d) =>
                     {
@@ -995,8 +995,8 @@ public static class LogicalExpressionParser
 
         // With DecimalAsDefault, a literal that decimal could keep only with fewer digits than double (1e-30) is read as a double
         NumberTextCheck<decimal>? decimalCheck = options.HasFlag(ExpressionOptions.DecimalAsDefault)
-            ? (text, _) => (!acceptUnderscores || HasUnderscoresOnlyBetweenDigits(text)) && DecimalKeepsDigits(text, decimalSeparator, decimalSeparator2)
-            : decimalUnderscoreCheck;
+            ? (text, _) => DecimalKeepsDigits(text, decimalSeparator, decimalSeparator2)
+            : null;
 
         // A number with the secondary decimal separator is read by its own parser, tried after the one with the primary separator
         NumberOptions floatNumberOptions = NumberOptions.Float | useNumberGroupSeparatorFlag | useUnderscoreFlag | NumberOptions.RequireFractionalPartForDecimals;
@@ -1011,10 +1011,10 @@ public static class LogicalExpressionParser
                 return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
             });
 
-        var doubleNumber = CheckedNumber(FloatNumber(
+        var doubleNumber = FloatNumber(
                 Terms.Number<double>(floatNumberOptions, decimalSeparator, numGroupSeparator),
                 useDecimalSeparator2 ? Terms.Number<double>(floatNumberOptions, decimalSeparator2, numGroupSeparator) : null,
-                decimalSeparator, decimalSeparator2), doubleUnderscoreCheck)
+                decimalSeparator, decimalSeparator2)
             .Then<LogicalExpression>(static (ctx, val) =>
             {
                 return new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx));
@@ -1169,10 +1169,10 @@ public static class LogicalExpressionParser
                 NumberOptions currencyNumberOptions = (NumberOptions.Float & ~NumberOptions.AllowExponent) | currencyGroupSeparatorFlag | useUnderscoreFlag;
                 bool useCurrencyDecimalSeparator2 = currencyDecimalSeparator2 != '\0' && currencyDecimalSeparator2 != currencyDecimalSeparator;
 
-                var decimalCurrencyNumber = CheckedNumber(FloatNumber(
+                var decimalCurrencyNumber = FloatNumber(
                         Terms.Number<decimal>(currencyNumberOptions, currencyDecimalSeparator, currencyNumGroupSeparator),
                         useCurrencyDecimalSeparator2 ? Terms.Number<decimal>(currencyNumberOptions, currencyDecimalSeparator2, currencyNumGroupSeparator) : null,
-                        currencyDecimalSeparator, currencyDecimalSeparator2), decimalUnderscoreCheck)
+                        currencyDecimalSeparator, currencyDecimalSeparator2)
                     .Then<LogicalExpression>(static (ctx, val) => new ValueExpression(val).SetLocation(new ParlotExpressionLocation(ctx)));
 
                 currency1 = OneOf(currencyCharsArray).SkipAnd(SkipWhiteSpace(OneOf(decimalCurrencyNumber, intNumber, longNumber)))
@@ -2250,7 +2250,7 @@ public static class LogicalExpressionParser
             {
                 Parser<string>? alphaText = Terms.Pattern(c => char.IsLetter(c) || c == '\'').Then<string>(x => x.ToString() ?? string.Empty);
 
-                var intNumberForPeriod = CheckedNumber(Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator), intUnderscoreCheck)
+                var intNumberForPeriod = Terms.Number<int>(NumberOptions.Integer | useNumberGroupSeparatorFlag | useUnderscoreFlag, decimalSeparator, numGroupSeparator)
                     .AndSkip(Not(OneOf(floatNumExclusions)))
                     .Then<int>(d => d);
 
