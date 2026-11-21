@@ -169,12 +169,11 @@ Debug.Assert(function() == 3);
 
 ### [Parlot](https://github.com/sebastienros/parlot)
 
-Fast and lightweight parser creation tools by [Sébastien Ros](https://github.com/sebastienros) that NCalc uses for its
-parser.
+Fast and lightweight parser creation tools by [Sébastien Ros](https://github.com/sebastienros) that NCalc uses for its parser.
 
 ### [BigDecimal](https://github.com/AdamWhiteHat/BigDecimal)
 
-An arbitrary-precision decimal (base 10) floating-point number class by Adam White.
+An arbitrary-precision decimal (base 10) floating-point number class by [Adam White](https://github.com/AdamWhiteHat).
 
 ### [ABCalc](https://alliedbits.com/abcalc)
 
