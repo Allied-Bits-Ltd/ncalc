@@ -6,6 +6,7 @@
 /**/packages/
 /**/bin/
 /**/obj/
+vendor-reports/
 _site
 lib
 log.txt
